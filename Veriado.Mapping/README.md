@@ -6,7 +6,6 @@ The mapping project encapsulates all AutoMapper profiles and anti-corruption com
 
 - `Profiles/` defines read projections (`FileReadProfiles`), write conversions (`FileWriteProfiles`) and metadata conversions (`MetadataProfiles`) shared across the solution.
 - `AC/` contains anti-corruption helpers such as the `Parsers`, DTO guards and the `WriteMappingPipeline` orchestrating request-to-command mapping with validation.
-- `EF/QueryableMappingHelpers` provides LINQ expressions that can be safely translated by EF Core without materializing large binary payloads.
 - `DependencyInjection/MappingServiceCollectionExtensions` registers all mapping services, validators and the pipeline with `AssertConfigurationIsValid()` executed in DEBUG builds.
 
 The project targets .NET 8, uses AutoMapper for transformations and FluentValidation for command validation.

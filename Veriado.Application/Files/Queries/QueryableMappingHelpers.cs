@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Mapping.EF;
+namespace Veriado.Application.Files.Queries;
 
 /// <summary>
 /// Provides reusable Entity Framework friendly projections for file aggregates.
@@ -74,7 +74,7 @@ public static class QueryableMappingHelpers
             file.SystemMetadata.OwnerSid,
             file.SystemMetadata.HardLinkCount,
             file.SystemMetadata.AlternateDataStreamCount),
-        ExtendedMetadata = new ExtendedMetadataItemDto[0],
+        ExtendedMetadata = Array.Empty<ExtendedMetadataItemDto>(),
         Validity = file.Validity == null
             ? null
             : new FileValidityDto(

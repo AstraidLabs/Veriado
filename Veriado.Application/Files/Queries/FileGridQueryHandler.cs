@@ -12,7 +12,6 @@ using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
-using Veriado.Mapping.EF;
 
 namespace Veriado.Application.Files.Queries;
 
