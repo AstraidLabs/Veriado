@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Veriado (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Veriado (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
