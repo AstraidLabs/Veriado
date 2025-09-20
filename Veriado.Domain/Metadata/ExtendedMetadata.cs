@@ -25,7 +25,8 @@ public sealed class ExtendedMetadata : IEquatable<ExtendedMetadata>
     /// <summary>
     /// Gets an empty metadata collection.
     /// </summary>
-    public static ExtendedMetadata Empty { get; } = new(new Dictionary<PropertyKey, MetadataValue>());
+    public static ExtendedMetadata Empty { get; } =
+        new((IDictionary<PropertyKey, MetadataValue>)new Dictionary<PropertyKey, MetadataValue>());
 
     /// <summary>
     /// Creates a new builder initialized with the current metadata values.
@@ -136,6 +137,7 @@ public sealed class ExtendedMetadata : IEquatable<ExtendedMetadata>
         /// Builds an immutable <see cref="ExtendedMetadata"/> instance representing the current state of the builder.
         /// </summary>
         /// <returns>The immutable metadata collection.</returns>
-        public ExtendedMetadata Build() => new(_mutable);
+        public ExtendedMetadata Build() =>
+            new((IDictionary<PropertyKey, MetadataValue>)_mutable);
     }
 }
