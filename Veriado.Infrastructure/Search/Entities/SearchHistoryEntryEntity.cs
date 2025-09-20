@@ -2,7 +2,7 @@ using System;
 
 namespace Veriado.Infrastructure.Search.Entities;
 
-internal sealed class SearchHistoryEntryEntity
+public sealed class SearchHistoryEntryEntity
 {
     public Guid Id { get; set; }
 
