@@ -86,4 +86,9 @@ public sealed record FileSummaryDto
     /// Gets the indexed content hash if known.
     /// </summary>
     public string? IndexedContentHash { get; init; }
+
+    /// <summary>
+    /// Gets the optional relevance score returned from full-text search queries.
+    /// </summary>
+    public double? Score { get; init; }
 }

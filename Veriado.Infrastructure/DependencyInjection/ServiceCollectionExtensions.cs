@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Veriado.Application.Abstractions;
+using Veriado.Application.Search.Abstractions;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Persistence;
@@ -64,12 +65,15 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IWriteQueue, WriteQueue>();
         services.AddSingleton<ISearchIndexer, SqliteFts5Indexer>();
-        services.AddSingleton<ISearchQueryService>(sp => (SqliteFts5Indexer)sp.GetRequiredService<ISearchIndexer>());
+        services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
+        services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
+        services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
         services.AddSingleton<ITextExtractor, TextExtractor>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
         services.AddSingleton<IEventPublisher, NullEventPublisher>();
 
         services.AddScoped<IFileRepository, FileRepository>();
+        services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
         services.AddScoped<FileReadRepository>();
 
         services.AddHostedService<WriteWorker>();

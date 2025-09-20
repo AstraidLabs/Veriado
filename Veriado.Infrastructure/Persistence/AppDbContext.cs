@@ -8,6 +8,7 @@ using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Infrastructure.Persistence.Configurations;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Search.Outbox;
+using Veriado.Infrastructure.Search.Entities;
 
 namespace Veriado.Infrastructure.Persistence;
 
@@ -35,6 +36,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<ExtMetadataEntry> ExtendedMetadataEntries => Set<ExtMetadataEntry>();
 
     public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
+
+    public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
+
+    public DbSet<SearchFavoriteEntity> SearchFavorites => Set<SearchFavoriteEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
