@@ -50,13 +50,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton<SqlitePragmaInterceptor>();
 
-        services.AddDbContextPool<AppDbContext>(optionsBuilderAction: (serviceProvider, builder) =>
+        services.AddDbContextPool<AppDbContext>((serviceProvider, builder) =>
         {
             builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(serviceProvider.GetRequiredService<SqlitePragmaInterceptor>());
         }, poolSize: 128);
 
-        services.AddDbContextPool<ReadOnlyDbContext>(optionsBuilderAction: (serviceProvider, builder) =>
+        services.AddDbContextPool<ReadOnlyDbContext>((serviceProvider, builder) =>
         {
             builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(serviceProvider.GetRequiredService<SqlitePragmaInterceptor>());

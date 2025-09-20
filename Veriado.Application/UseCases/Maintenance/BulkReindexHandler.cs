@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
+using Veriado.Domain.Files;
 
 namespace Veriado.Application.UseCases.Maintenance;
 

@@ -46,8 +46,10 @@ internal static class Converters
         value => UtcTimestamp.From(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
 
     public static readonly ValueConverter<UtcTimestamp?, string?> NullableUtcTimestampToString = new(
-        timestamp => timestamp?.Value.ToString("O", CultureInfo.InvariantCulture),
-        value => value is null
+        timestamp => timestamp.HasValue
+            ? timestamp.Value.Value.ToString("O", CultureInfo.InvariantCulture)
+            : null,
+        value => value == null
             ? null
             : UtcTimestamp.From(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
 
@@ -56,8 +58,10 @@ internal static class Converters
         text => DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
 
     public static readonly ValueConverter<DateTimeOffset?, string?> NullableDateTimeOffsetToString = new(
-        value => value?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
-        text => text is null
+        value => value.HasValue
+            ? value.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+            : null,
+        text => text == null
             ? null
             : DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
 
