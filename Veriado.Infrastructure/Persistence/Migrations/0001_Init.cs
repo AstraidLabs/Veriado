@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using Microsoft.EntityFrameworkCore.Migrations;
 
@@ -184,7 +185,35 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 table: "outbox_events",
                 column: "processed_utc");
 
-            var schemaSql = File.ReadAllText("Schema/Fts5.sql");
+            var schemaRelativePath = Path.Combine("Persistence", "Schema", "Fts5.sql");
+            var baseDirectory = AppContext.BaseDirectory;
+            var currentDirectory = baseDirectory;
+            string schemaPath = null;
+
+            while (!string.IsNullOrEmpty(currentDirectory))
+            {
+                var candidate = Path.Combine(currentDirectory, schemaRelativePath);
+                if (File.Exists(candidate))
+                {
+                    schemaPath = candidate;
+                    break;
+                }
+
+                var parentDirectory = Directory.GetParent(currentDirectory);
+                if (parentDirectory is null)
+                {
+                    break;
+                }
+
+                currentDirectory = parentDirectory.FullName;
+            }
+
+            if (schemaPath is null)
+            {
+                throw new FileNotFoundException($"Unable to locate the schema script '{schemaRelativePath}' relative to base directory '{baseDirectory}'.");
+            }
+
+            var schemaSql = File.ReadAllText(schemaPath);
             migrationBuilder.Sql(schemaSql);
         }
 
