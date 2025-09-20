@@ -5,10 +5,4 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>12.0</LangVersion>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="11.7.1" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
-  </ItemGroup>
 </Project>

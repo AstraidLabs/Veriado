@@ -6,21 +6,14 @@ using Veriado.Domain.Primitives;
 namespace Veriado.Application.Abstractions;
 
 /// <summary>
-/// Defines a publisher capable of dispatching domain events raised by aggregates.
+/// Provides an abstraction for publishing domain events raised by aggregates.
 /// </summary>
 public interface IEventPublisher
 {
     /// <summary>
-    /// Publishes a single domain event.
+    /// Publishes the supplied domain events to their respective handlers.
     /// </summary>
-    /// <param name="domainEvent">The domain event to publish.</param>
+    /// <param name="events">The events to publish.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Publishes a collection of domain events.
-    /// </summary>
-    /// <param name="domainEvents">The events to publish.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    Task PublishAsync(IEnumerable<IDomainEvent> domainEvents, CancellationToken cancellationToken);
+    Task PublishAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken);
 }
