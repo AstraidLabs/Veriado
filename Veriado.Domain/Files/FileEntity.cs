@@ -572,7 +572,7 @@ public sealed class FileEntity : AggregateRoot
         MarkSearchDirty(ReindexReason.SchemaUpgrade);
     }
 
-    private static string NormalizeAuthor(string value)
+    private static string NormalizeAuthor(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
