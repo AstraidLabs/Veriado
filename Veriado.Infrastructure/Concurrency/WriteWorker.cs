@@ -214,15 +214,16 @@ internal sealed class WriteWorker : BackgroundService
             batch[index].TrySetResult(results[index]);
         }
 
-        foreach (var domainEvent in domainEvents)
+        if (domainEvents.Count > 0)
         {
             try
             {
-                await _eventPublisher.PublishAsync(domainEvent, cancellationToken).ConfigureAwait(false);
+                await _eventPublisher.PublishAsync(domainEvents, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Domain event publication failed for {EventType}", domainEvent.GetType().Name);
+                var eventTypes = string.Join(", ", domainEvents.Select(domainEvent => domainEvent.GetType().Name));
+                _logger.LogError(ex, "Domain event publication failed for {EventTypes}", eventTypes);
             }
         }
     }
