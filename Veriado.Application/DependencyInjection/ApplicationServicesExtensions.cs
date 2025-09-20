@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
+using Veriado.Application.Files.Configuration;
+using Veriado.Application.Files.Validation;
 using Veriado.Application.Pipeline;
 using Veriado.Application.Pipeline.Idempotency;
 
@@ -34,6 +36,12 @@ public static class ApplicationServicesExtensions
 
         services.TryAddSingleton(new ImportPolicy(options.MaxContentLengthBytes));
         services.TryAddSingleton(new ValidityReminderPolicy(options.ValidityReminderLeadTime));
+        services.TryAddSingleton(new FileGridQueryOptions
+        {
+            MaxPageSize = options.MaxGridPageSize,
+            MaxCandidateResults = options.MaxFulltextCandidates,
+        });
+        services.AddTransient<FileGridQueryValidator>();
 
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
@@ -75,4 +83,14 @@ public sealed class ApplicationOptions
     /// Gets or sets the lead time before expiration used for reminder queries.
     /// </summary>
     public TimeSpan ValidityReminderLeadTime { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Gets or sets the maximum allowed page size for grid queries.
+    /// </summary>
+    public int MaxGridPageSize { get; set; } = 200;
+
+    /// <summary>
+    /// Gets or sets the maximum number of FTS candidates retrieved before applying filters.
+    /// </summary>
+    public int MaxFulltextCandidates { get; set; } = 2_000;
 }
