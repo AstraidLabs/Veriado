@@ -32,48 +32,80 @@ public sealed class MetadataProfiles : Profile
 
     private static MetadataValueDto ConvertMetadataValueToDto(MetadataValue source, MetadataValueDto destination, ResolutionContext context)
     {
-        var dto = new MetadataValueDto
-        {
-            Kind = source.Kind,
-        };
-
+        var kind = ConvertKind(source.Kind);
         var raw = ValueField.GetValue(source);
-        switch (source.Kind)
-        {
-            case MetadataValueKind.Null:
-                break;
-            case MetadataValueKind.String:
-                dto.StringValue = raw as string;
-                break;
-            case MetadataValueKind.StringArray:
-                dto.StringArrayValue = raw is string[] array ? array.ToArray() : Array.Empty<string>();
-                break;
-            case MetadataValueKind.UInt32:
-                dto.UInt32Value = raw is uint u ? u : null;
-                break;
-            case MetadataValueKind.Int32:
-                dto.Int32Value = raw is int i ? i : null;
-                break;
-            case MetadataValueKind.Double:
-                dto.DoubleValue = raw is double d ? d : null;
-                break;
-            case MetadataValueKind.Boolean:
-                dto.BooleanValue = raw is bool b ? b : null;
-                break;
-            case MetadataValueKind.Guid:
-                dto.GuidValue = raw is Guid g ? g : null;
-                break;
-            case MetadataValueKind.FileTime:
-                dto.FileTimeValue = raw is DateTimeOffset time ? time : null;
-                break;
-            case MetadataValueKind.Binary:
-                dto.BinaryValue = raw is byte[] bytes ? bytes.ToArray() : null;
-                break;
-            default:
-                throw new NotSupportedException($"Unsupported metadata value kind '{source.Kind}'.");
-        }
 
-        return dto;
+        return kind switch
+        {
+            MetadataValueDtoKind.Null => new MetadataValueDto
+            {
+                Kind = kind,
+            },
+            MetadataValueDtoKind.String => new MetadataValueDto
+            {
+                Kind = kind,
+                StringValue = raw as string,
+            },
+            MetadataValueDtoKind.StringArray => new MetadataValueDto
+            {
+                Kind = kind,
+                StringArrayValue = raw is string[] array ? array.ToArray() : Array.Empty<string>(),
+            },
+            MetadataValueDtoKind.UInt32 => new MetadataValueDto
+            {
+                Kind = kind,
+                UInt32Value = raw is uint u ? u : null,
+            },
+            MetadataValueDtoKind.Int32 => new MetadataValueDto
+            {
+                Kind = kind,
+                Int32Value = raw is int i ? i : null,
+            },
+            MetadataValueDtoKind.Double => new MetadataValueDto
+            {
+                Kind = kind,
+                DoubleValue = raw is double d ? d : null,
+            },
+            MetadataValueDtoKind.Boolean => new MetadataValueDto
+            {
+                Kind = kind,
+                BooleanValue = raw is bool b ? b : null,
+            },
+            MetadataValueDtoKind.Guid => new MetadataValueDto
+            {
+                Kind = kind,
+                GuidValue = raw is Guid g ? g : null,
+            },
+            MetadataValueDtoKind.FileTime => new MetadataValueDto
+            {
+                Kind = kind,
+                FileTimeValue = raw is DateTimeOffset time ? time : null,
+            },
+            MetadataValueDtoKind.Binary => new MetadataValueDto
+            {
+                Kind = kind,
+                BinaryValue = raw is byte[] bytes ? bytes.ToArray() : null,
+            },
+            _ => throw new NotSupportedException($"Unsupported metadata value kind '{source.Kind}'."),
+        };
+    }
+
+    private static MetadataValueDtoKind ConvertKind(MetadataValueKind kind)
+    {
+        return kind switch
+        {
+            MetadataValueKind.Null => MetadataValueDtoKind.Null,
+            MetadataValueKind.String => MetadataValueDtoKind.String,
+            MetadataValueKind.StringArray => MetadataValueDtoKind.StringArray,
+            MetadataValueKind.UInt32 => MetadataValueDtoKind.UInt32,
+            MetadataValueKind.Int32 => MetadataValueDtoKind.Int32,
+            MetadataValueKind.Double => MetadataValueDtoKind.Double,
+            MetadataValueKind.Boolean => MetadataValueDtoKind.Boolean,
+            MetadataValueKind.Guid => MetadataValueDtoKind.Guid,
+            MetadataValueKind.FileTime => MetadataValueDtoKind.FileTime,
+            MetadataValueKind.Binary => MetadataValueDtoKind.Binary,
+            _ => throw new NotSupportedException($"Unsupported metadata value kind '{kind}'."),
+        };
     }
 
     private static MetadataValue ConvertMetadataValueFromDto(MetadataValueDto source, MetadataValue destination, ResolutionContext context)
