@@ -3,10 +3,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
-using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Application.Search.Abstractions;
 
 namespace Veriado.Application.UseCases.Search;
 

@@ -38,6 +38,7 @@ public static class QueryableMappingHelpers
         IndexedTitle = file.SearchIndex.IndexedTitle,
         IndexSchemaVersion = file.SearchIndex.SchemaVersion,
         IndexedContentHash = file.SearchIndex.IndexedContentHash,
+        Score = null,
     };
 
     /// <summary>
