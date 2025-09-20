@@ -1,42 +1,12 @@
-using System;
-
 namespace Veriado.Domain.Search;
 
 /// <summary>
-/// Provides hints for configuring FTS5 indexes (tokenizer, diacritic handling, ...).
+/// Represents the configuration for the FTS5 tokenizer used by the offline search engine.
 /// </summary>
-public sealed class Fts5Policy
+public sealed record Fts5Policy(bool RemoveDiacritics, string Tokenizer, string TokenChars)
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="Fts5Policy"/> class.
+    /// Gets the default policy tuned for Unicode text without tag fields.
     /// </summary>
-    /// <param name="tokenizer">Tokenizer hint (e.g. "unicode61").</param>
-    /// <param name="tokenizerArguments">Optional arguments for the tokenizer.</param>
-    /// <param name="removeDiacritics">Indicates whether diacritics should be removed.</param>
-    public Fts5Policy(string? tokenizer = "unicode61", string? tokenizerArguments = null, bool removeDiacritics = true)
-    {
-        Tokenizer = tokenizer;
-        TokenizerArguments = tokenizerArguments;
-        RemoveDiacritics = removeDiacritics;
-    }
-
-    /// <summary>
-    /// Gets the tokenizer hint.
-    /// </summary>
-    public string? Tokenizer { get; }
-
-    /// <summary>
-    /// Gets optional tokenizer arguments.
-    /// </summary>
-    public string? TokenizerArguments { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether diacritics should be removed.
-    /// </summary>
-    public bool RemoveDiacritics { get; }
-
-    /// <summary>
-    /// Gets a default FTS5 policy (unicode61 tokenizer with diacritic stripping).
-    /// </summary>
-    public static Fts5Policy Default { get; } = new();
+    public static Fts5Policy Default { get; } = new(true, "unicode61", "-_.");
 }

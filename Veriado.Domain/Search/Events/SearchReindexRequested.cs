@@ -4,42 +4,72 @@ using Veriado.Domain.Primitives;
 namespace Veriado.Domain.Search.Events;
 
 /// <summary>
-/// Domain event requesting that a file be reindexed for full-text search purposes.
+/// Domain event signaling that a file requires search reindexing.
 /// </summary>
-public sealed record SearchReindexRequested(Guid FileId, SearchReindexReason Reason, DateTimeOffset RequestedAtUtc) : IDomainEvent;
-
-/// <summary>
-/// Enumerates reasons that can trigger a search reindex operation.
-/// </summary>
-public enum SearchReindexReason
+public sealed class SearchReindexRequested : IDomainEvent
 {
     /// <summary>
-    /// File was created and has never been indexed before.
+    /// Initializes a new instance of the <see cref="SearchReindexRequested"/> class.
+    /// </summary>
+    /// <param name="fileId">The identifier of the file to reindex.</param>
+    /// <param name="reason">The reason for reindexing.</param>
+    public SearchReindexRequested(Guid fileId, ReindexReason reason)
+    {
+        FileId = fileId;
+        Reason = reason;
+        EventId = Guid.NewGuid();
+        OccurredOnUtc = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Gets the file identifier.
+    /// </summary>
+    public Guid FileId { get; }
+
+    /// <summary>
+    /// Gets the reason for reindexing the file.
+    /// </summary>
+    public ReindexReason Reason { get; }
+
+    /// <inheritdoc />
+    public Guid EventId { get; }
+
+    /// <inheritdoc />
+    public DateTimeOffset OccurredOnUtc { get; }
+}
+
+/// <summary>
+/// Represents the reason for requesting a search index rebuild for a file.
+/// </summary>
+public enum ReindexReason
+{
+    /// <summary>
+    /// The file has been created.
     /// </summary>
     Created,
 
     /// <summary>
-    /// Non-content metadata relevant for search was changed.
+    /// The file metadata has changed.
     /// </summary>
     MetadataChanged,
 
     /// <summary>
-    /// File content changed and needs reindexing.
+    /// The file content has changed.
     /// </summary>
     ContentChanged,
 
     /// <summary>
-    /// Validity information changed and should be reindexed.
+    /// The validity period has changed.
     /// </summary>
     ValidityChanged,
 
     /// <summary>
-    /// Manual reindex was requested (e.g. administrative action).
+    /// A manual reindex was requested.
     /// </summary>
     Manual,
 
     /// <summary>
-    /// Search schema version increased requiring reindex.
+    /// The search schema version increased and requires reindexing.
     /// </summary>
-    SchemaUpgrade
+    SchemaUpgrade,
 }

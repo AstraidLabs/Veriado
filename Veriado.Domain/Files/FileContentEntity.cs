@@ -1,80 +1,58 @@
 using System;
-using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Files;
 
 /// <summary>
-/// Represents the binary content of a file along with its SHA-256 hash.
+/// Represents the binary content of a file along with its derived metadata.
 /// </summary>
-public sealed class FileContentEntity : EntityBase
+public sealed class FileContentEntity
 {
-    private byte[] _data;
-
-    private FileContentEntity(Guid fileId, byte[] data, FileHash hash)
-        : base(fileId)
+    private FileContentEntity(byte[] bytes, FileHash hash)
     {
-        _data = data;
+        Bytes = bytes;
         Hash = hash;
-        Size = ByteSize.From(data.LongLength);
+        Length = ByteSize.From(bytes.LongLength);
     }
 
     /// <summary>
-    /// Gets the binary content of the file.
+    /// Gets the raw file content bytes.
     /// </summary>
-    public ReadOnlyMemory<byte> Data => _data;
+    public byte[] Bytes { get; }
 
     /// <summary>
     /// Gets the SHA-256 hash of the content.
     /// </summary>
-    public FileHash Hash { get; private set; }
+    public FileHash Hash { get; }
 
     /// <summary>
-    /// Gets the size of the content in bytes.
+    /// Gets the length of the content in bytes.
     /// </summary>
-    public ByteSize Size { get; private set; }
+    public ByteSize Length { get; }
 
     /// <summary>
-    /// Creates a <see cref="FileContentEntity"/> from raw bytes.
+    /// Creates a <see cref="FileContentEntity"/> from the provided byte array.
     /// </summary>
-    /// <param name="fileId">Identifier of the owning file aggregate.</param>
-    /// <param name="bytes">Binary content.</param>
-    /// <param name="maxBytes">Optional maximum allowed size.</param>
-    public static FileContentEntity FromBytes(Guid fileId, ReadOnlySpan<byte> bytes, int? maxBytes = null)
+    /// <param name="bytes">The content bytes.</param>
+    /// <param name="maxBytes">Optional maximum content size constraint.</param>
+    /// <returns>The created content entity.</returns>
+    public static FileContentEntity FromBytes(byte[] bytes, int? maxBytes = null)
     {
-        ValidateLength(bytes, maxBytes);
+        ArgumentNullException.ThrowIfNull(bytes);
 
-        var dataCopy = bytes.ToArray();
-        var hash = FileHash.Compute(dataCopy);
-        return new FileContentEntity(fileId, dataCopy, hash);
-    }
-
-    /// <summary>
-    /// Replaces the existing content with new bytes.
-    /// </summary>
-    /// <param name="bytes">New binary content.</param>
-    /// <param name="maxBytes">Optional maximum allowed size.</param>
-    public void ReplaceWith(ReadOnlySpan<byte> bytes, int? maxBytes = null)
-    {
-        ValidateLength(bytes, maxBytes);
-
-        var dataCopy = bytes.ToArray();
-        var hash = FileHash.Compute(dataCopy);
-        _data = dataCopy;
-        Hash = hash;
-        Size = ByteSize.From(dataCopy.LongLength);
-    }
-
-    private static void ValidateLength(ReadOnlySpan<byte> bytes, int? maxBytes)
-    {
-        if (maxBytes is < 0)
+        if (maxBytes.HasValue && maxBytes.Value < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxBytes), maxBytes, "Maximum bytes cannot be negative.");
+            throw new ArgumentOutOfRangeException(nameof(maxBytes), maxBytes.Value, "Maximum bytes must be non-negative.");
         }
 
-        if (maxBytes.HasValue && bytes.Length > maxBytes.Value)
+        if (maxBytes.HasValue && bytes.LongLength > maxBytes.Value)
         {
-            throw new ArgumentException("File content exceeds the allowed size limit.", nameof(bytes));
+            throw new ArgumentOutOfRangeException(nameof(bytes), bytes.LongLength, "Content exceeds the configured maximum size.");
         }
+
+        var copy = new byte[bytes.Length];
+        Array.Copy(bytes, copy, bytes.Length);
+        var hash = FileHash.Compute(copy);
+        return new FileContentEntity(copy, hash);
     }
 }

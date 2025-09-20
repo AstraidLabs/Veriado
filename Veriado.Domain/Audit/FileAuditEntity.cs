@@ -4,65 +4,108 @@ using Veriado.Domain.ValueObjects;
 namespace Veriado.Domain.Audit;
 
 /// <summary>
-/// Represents an auditable record of aggregate-level file changes.
+/// Represents an audit record capturing high-level file events.
 /// </summary>
 public sealed class FileAuditEntity
 {
-    private FileAuditEntity(Guid fileId, string action, DateTimeOffset occurredAtUtc, string? actor, string? comment)
+    private FileAuditEntity(Guid fileId, FileAuditAction action, string description, UtcTimestamp occurredUtc)
     {
         FileId = fileId;
-        Action = action ?? throw new ArgumentNullException(nameof(action));
-        OccurredAtUtc = occurredAtUtc.ToUniversalTime();
-        Actor = actor;
-        Comment = comment;
+        Action = action;
+        Description = description;
+        OccurredUtc = occurredUtc;
     }
 
     /// <summary>
-    /// Gets the identifier of the file affected by the audited action.
+    /// Gets the identifier of the audited file.
     /// </summary>
     public Guid FileId { get; }
 
     /// <summary>
-    /// Gets a short action label.
+    /// Gets the audit action.
     /// </summary>
-    public string Action { get; }
+    public FileAuditAction Action { get; }
 
     /// <summary>
-    /// Gets optional actor information.
+    /// Gets the audit description.
     /// </summary>
-    public string? Actor { get; }
+    public string Description { get; }
 
     /// <summary>
-    /// Gets optional comments describing the change.
+    /// Gets the timestamp when the audit entry was recorded.
     /// </summary>
-    public string? Comment { get; }
+    public UtcTimestamp OccurredUtc { get; }
 
     /// <summary>
-    /// Gets the UTC timestamp when the action occurred.
+    /// Creates an audit entry representing file creation.
     /// </summary>
-    public DateTimeOffset OccurredAtUtc { get; }
+    /// <param name="fileId">The file identifier.</param>
+    /// <param name="name">The file name.</param>
+    /// <returns>The created audit entry.</returns>
+    public static FileAuditEntity Created(Guid fileId, FileName name)
+    {
+        return new FileAuditEntity(fileId, FileAuditAction.Created, $"Created as '{name.Value}'", UtcTimestamp.Now());
+    }
 
     /// <summary>
-    /// Records a file creation audit entry.
+    /// Creates an audit entry representing a file rename.
     /// </summary>
-    public static FileAuditEntity Created(Guid fileId, FileName name, FileExtension extension, string author, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "Created", occurredAtUtc, actor, $"Name={name.Value}.{extension.Value};Author={author}");
+    /// <param name="fileId">The file identifier.</param>
+    /// <param name="oldName">The previous name.</param>
+    /// <param name="newName">The new name.</param>
+    /// <returns>The created audit entry.</returns>
+    public static FileAuditEntity Renamed(Guid fileId, FileName oldName, FileName newName)
+    {
+        return new FileAuditEntity(fileId, FileAuditAction.Renamed, $"Renamed from '{oldName.Value}' to '{newName.Value}'", UtcTimestamp.Now());
+    }
 
     /// <summary>
-    /// Records a rename audit entry.
+    /// Creates an audit entry representing a metadata update.
     /// </summary>
-    public static FileAuditEntity Renamed(Guid fileId, FileName oldName, FileExtension oldExtension, FileName newName, FileExtension newExtension, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "Renamed", occurredAtUtc, actor, $"{oldName.Value}.{oldExtension.Value} -> {newName.Value}.{newExtension.Value}");
+    /// <param name="fileId">The file identifier.</param>
+    /// <param name="mime">The MIME type after the update.</param>
+    /// <param name="author">The author after the update.</param>
+    /// <returns>The created audit entry.</returns>
+    public static FileAuditEntity MetadataUpdated(Guid fileId, MimeType mime, string author)
+    {
+        return new FileAuditEntity(fileId, FileAuditAction.MetadataUpdated, $"Metadata updated (MIME: {mime.Value}, Author: {author})", UtcTimestamp.Now());
+    }
 
     /// <summary>
-    /// Records metadata changes.
+    /// Creates an audit entry representing a read-only flag change.
     /// </summary>
-    public static FileAuditEntity MetadataChanged(Guid fileId, MimeType oldMime, MimeType newMime, string oldAuthor, string newAuthor, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "MetadataChanged", occurredAtUtc, actor, $"Mime: {oldMime.Value} -> {newMime.Value}; Author: {oldAuthor} -> {newAuthor}");
+    /// <param name="fileId">The file identifier.</param>
+    /// <param name="isReadOnly">The new read-only state.</param>
+    /// <returns>The created audit entry.</returns>
+    public static FileAuditEntity ReadOnlyChanged(Guid fileId, bool isReadOnly)
+    {
+        var state = isReadOnly ? "enabled" : "disabled";
+        return new FileAuditEntity(fileId, FileAuditAction.ReadOnlyChanged, $"Read-only {state}", UtcTimestamp.Now());
+    }
+}
+
+/// <summary>
+/// Enumerates supported audit actions for file-level events.
+/// </summary>
+public enum FileAuditAction
+{
+    /// <summary>
+    /// Indicates that the file was created.
+    /// </summary>
+    Created,
 
     /// <summary>
-    /// Records read-only state changes.
+    /// Indicates that the file was renamed.
     /// </summary>
-    public static FileAuditEntity ReadOnlyToggled(Guid fileId, bool isReadOnly, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "ReadOnlyChanged", occurredAtUtc, actor, isReadOnly ? "ReadOnly=1" : "ReadOnly=0");
+    Renamed,
+
+    /// <summary>
+    /// Indicates that metadata was updated.
+    /// </summary>
+    MetadataUpdated,
+
+    /// <summary>
+    /// Indicates that the read-only flag changed.
+    /// </summary>
+    ReadOnlyChanged,
 }

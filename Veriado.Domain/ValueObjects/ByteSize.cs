@@ -7,26 +7,29 @@ namespace Veriado.Domain.ValueObjects;
 /// </summary>
 public readonly record struct ByteSize
 {
-    private ByteSize(long value) => Value = value;
+    private ByteSize(long value)
+    {
+        Value = value;
+    }
 
     /// <summary>
-    /// Gets the byte size value.
+    /// Gets the number of bytes represented by this value object.
     /// </summary>
     public long Value { get; }
 
     /// <summary>
-    /// Creates a <see cref="ByteSize"/> from the provided numeric value.
+    /// Creates a <see cref="ByteSize"/> from a non-negative integer value.
     /// </summary>
-    /// <param name="value">Raw byte count.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="value"/> is negative.</exception>
-    public static ByteSize From(long value)
+    /// <param name="bytes">The number of bytes.</param>
+    /// <returns>The created value object.</returns>
+    public static ByteSize From(long bytes)
     {
-        if (value < 0)
+        if (bytes < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(value), value, "Byte size cannot be negative.");
+            throw new ArgumentOutOfRangeException(nameof(bytes), bytes, "Size must be non-negative.");
         }
 
-        return new ByteSize(value);
+        return new ByteSize(bytes);
     }
 
     /// <inheritdoc />

@@ -4,24 +4,27 @@ using System.Security.Cryptography;
 namespace Veriado.Domain.ValueObjects;
 
 /// <summary>
-/// Represents a SHA-256 hash encoded as 64 uppercase hexadecimal characters.
+/// Represents a SHA-256 hash value encoded in uppercase hexadecimal.
 /// </summary>
 public readonly record struct FileHash
 {
-    private const int HashLength = 64;
+    private const int ExpectedLength = 64;
 
-    private FileHash(string value) => Value = value;
+    private FileHash(string value)
+    {
+        Value = value;
+    }
 
     /// <summary>
-    /// Gets the hash value.
+    /// Gets the uppercase hexadecimal representation of the hash.
     /// </summary>
     public string Value { get; }
 
     /// <summary>
-    /// Creates a <see cref="FileHash"/> from a precomputed hexadecimal representation.
+    /// Creates a <see cref="FileHash"/> from a hexadecimal string.
     /// </summary>
-    /// <param name="value">Hexadecimal hash string.</param>
-    /// <exception cref="ArgumentException">Thrown when the input is not a valid SHA-256 hash.</exception>
+    /// <param name="value">The hexadecimal string.</param>
+    /// <returns>The created hash value.</returns>
     public static FileHash From(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -29,53 +32,36 @@ public readonly record struct FileHash
             throw new ArgumentException("Hash cannot be null or whitespace.", nameof(value));
         }
 
-        var normalized = value.Trim();
-
-        if (normalized.Length != HashLength)
+        var trimmed = value.Trim();
+        if (trimmed.Length != ExpectedLength)
         {
-            throw new ArgumentException($"Hash must be {HashLength} characters long.", nameof(value));
+            throw new ArgumentOutOfRangeException(nameof(value), trimmed.Length, $"Hash must be {ExpectedLength} characters long.");
         }
 
-        for (var i = 0; i < normalized.Length; i++)
+        for (var i = 0; i < trimmed.Length; i++)
         {
-            var c = normalized[i];
-            var isHex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F');
+            var c = trimmed[i];
+            var isHex = c is >= '0' and <= '9' or >= 'A' and <= 'F';
             if (!isHex)
             {
-                throw new ArgumentException("Hash must contain only uppercase hexadecimal characters.", nameof(value));
+                throw new ArgumentException("Hash must be uppercase hexadecimal.", nameof(value));
             }
         }
 
-        return new FileHash(normalized);
+        return new FileHash(trimmed);
     }
 
     /// <summary>
-    /// Computes the SHA-256 hash for the provided binary data.
+    /// Computes a SHA-256 hash for the provided binary content.
     /// </summary>
-    /// <param name="data">Binary data to hash.</param>
-    public static FileHash Compute(ReadOnlySpan<byte> data)
+    /// <param name="bytes">The binary content.</param>
+    /// <returns>The resulting hash value.</returns>
+    public static FileHash Compute(ReadOnlySpan<byte> bytes)
     {
-        Span<byte> hashBytes = stackalloc byte[32];
-        if (!SHA256.TryComputeHash(data, hashBytes, out _))
-        {
-            throw new InvalidOperationException("Failed to compute SHA-256 hash.");
-        }
-
-        Span<char> chars = stackalloc char[HashLength];
-        var position = 0;
-        for (var i = 0; i < hashBytes.Length; i++)
-        {
-            var b = hashBytes[i];
-            chars[position++] = GetHexValue((int)(b >> 4));
-            chars[position++] = GetHexValue((int)(b & 0xF));
-        }
-
-        return new FileHash(new string(chars));
+        var buffer = SHA256.HashData(bytes);
+        var hex = Convert.ToHexString(buffer);
+        return new FileHash(hex);
     }
-
-    private static char GetHexValue(int value) => value < 10
-        ? (char)('0' + value)
-        : (char)('A' + (value - 10));
 
     /// <inheritdoc />
     public override string ToString() => Value;

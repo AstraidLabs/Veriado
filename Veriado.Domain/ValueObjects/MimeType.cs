@@ -1,25 +1,27 @@
 using System;
-using System.Globalization;
 
 namespace Veriado.Domain.ValueObjects;
 
 /// <summary>
-/// Represents a MIME type value that must contain a forward slash.
+/// Represents a MIME type value.
 /// </summary>
 public readonly record struct MimeType
 {
-    private MimeType(string value) => Value = value;
+    private MimeType(string value)
+    {
+        Value = value;
+    }
 
     /// <summary>
-    /// Gets the MIME type value.
+    /// Gets the canonical MIME type string.
     /// </summary>
     public string Value { get; }
 
     /// <summary>
-    /// Creates a <see cref="MimeType"/> after validating the input.
+    /// Creates a MIME type value object from the provided string.
     /// </summary>
-    /// <param name="value">Raw MIME type string.</param>
-    /// <exception cref="ArgumentException">Thrown when validation fails.</exception>
+    /// <param name="value">The MIME type string.</param>
+    /// <returns>The created value object.</returns>
     public static MimeType From(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -27,15 +29,13 @@ public readonly record struct MimeType
             throw new ArgumentException("MIME type cannot be null or whitespace.", nameof(value));
         }
 
-        var normalized = value.Trim();
-        normalized = normalized.ToLower(CultureInfo.InvariantCulture);
-
-        if (!normalized.Contains('/', StringComparison.Ordinal))
+        var trimmed = value.Trim();
+        if (!trimmed.Contains('/'))
         {
-            throw new ArgumentException("MIME type must contain a forward slash.", nameof(value));
+            throw new ArgumentException("MIME type must contain a slash separator.", nameof(value));
         }
 
-        return new MimeType(normalized);
+        return new MimeType(trimmed);
     }
 
     /// <inheritdoc />

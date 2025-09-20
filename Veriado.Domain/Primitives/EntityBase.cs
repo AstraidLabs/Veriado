@@ -1,22 +1,24 @@
 using System;
+using System.Collections.Generic;
 
 namespace Veriado.Domain.Primitives;
 
 /// <summary>
-/// Base type for domain entities enforcing identity equality through a non-empty <see cref="Guid"/> identifier.
+/// Provides the base functionality shared by all entities, including domain event tracking.
 /// </summary>
-public abstract class EntityBase : IEquatable<EntityBase>
+public abstract class EntityBase
 {
+    private readonly List<IDomainEvent> _domainEvents = new();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="EntityBase"/> class.
     /// </summary>
-    /// <param name="id">Unique identifier of the entity.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="id"/> is empty.</exception>
+    /// <param name="id">The unique identifier of the entity.</param>
     protected EntityBase(Guid id)
     {
         if (id == Guid.Empty)
         {
-            throw new ArgumentException("Entity identifier cannot be empty.", nameof(id));
+            throw new ArgumentException("Identifier must be a non-empty GUID.", nameof(id));
         }
 
         Id = id;
@@ -27,22 +29,23 @@ public abstract class EntityBase : IEquatable<EntityBase>
     /// </summary>
     public Guid Id { get; }
 
-    /// <inheritdoc />
-    public override bool Equals(object? obj) => obj is EntityBase other && Equals(other);
-
-    /// <inheritdoc />
-    public bool Equals(EntityBase? other) => other is not null && Id.Equals(other.Id);
-
-    /// <inheritdoc />
-    public override int GetHashCode() => Id.GetHashCode();
+    /// <summary>
+    /// Gets the domain events that have been raised by this entity.
+    /// </summary>
+    public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
     /// <summary>
-    /// Equality operator comparing entity identity.
+    /// Clears all domain events emitted by this entity.
     /// </summary>
-    public static bool operator ==(EntityBase? left, EntityBase? right) => Equals(left, right);
+    public void ClearDomainEvents() => _domainEvents.Clear();
 
     /// <summary>
-    /// Inequality operator comparing entity identity.
+    /// Raises a domain event produced by the entity.
     /// </summary>
-    public static bool operator !=(EntityBase? left, EntityBase? right) => !Equals(left, right);
+    /// <param name="domainEvent">The event to record.</param>
+    protected void RaiseDomainEvent(IDomainEvent domainEvent)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        _domainEvents.Add(domainEvent);
+    }
 }
