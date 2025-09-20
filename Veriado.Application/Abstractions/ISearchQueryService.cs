@@ -14,9 +14,8 @@ public interface ISearchQueryService
     /// Executes a search query and returns the matching documents.
     /// </summary>
     /// <param name="query">The search query text.</param>
-    /// <param name="skip">The number of results to skip.</param>
-    /// <param name="take">The maximum number of results to return.</param>
+    /// <param name="limit">The optional maximum number of results to return.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The matched search documents.</returns>
-    Task<IReadOnlyList<SearchDocument>> QueryAsync(string query, int skip, int take, CancellationToken cancellationToken);
+    /// <returns>The matched search hits.</returns>
+    Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int? limit, CancellationToken cancellationToken);
 }

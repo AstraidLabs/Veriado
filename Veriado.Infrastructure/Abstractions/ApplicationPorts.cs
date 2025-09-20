@@ -44,7 +44,7 @@ public interface ISearchIndexer
 /// </summary>
 public interface ISearchQueryService
 {
-    Task<IReadOnlyList<SearchDocument>> SearchAsync(string query, int limit, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int? limit, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
