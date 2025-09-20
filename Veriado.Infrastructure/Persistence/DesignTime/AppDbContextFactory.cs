@@ -31,7 +31,11 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 
     private static InfrastructureOptions BuildInfrastructureOptions()
     {
-        var options = new InfrastructureOptions();
+        var options = new InfrastructureOptions
+        {
+            UseKvMetadata = true,
+            FtsIndexingMode = FtsIndexingMode.Outbox,
+        };
 
         if (string.IsNullOrWhiteSpace(options.DbPath))
         {
