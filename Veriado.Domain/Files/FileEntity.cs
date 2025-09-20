@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using Veriado.Domain.Files.Events;
+using Veriado.Domain.Metadata;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search;
 using Veriado.Domain.Search.Events;
@@ -8,12 +10,11 @@ using Veriado.Domain.ValueObjects;
 namespace Veriado.Domain.Files;
 
 /// <summary>
-/// Aggregate root representing a managed file with metadata, content, and validity information.
+/// Represents a rich aggregate root for managing file metadata, content and full-text indexing state.
 /// </summary>
 public sealed class FileEntity : AggregateRoot
 {
     private const int InitialVersion = 1;
-    private string _author;
 
     private FileEntity(
         Guid id,
@@ -22,33 +23,36 @@ public sealed class FileEntity : AggregateRoot
         MimeType mime,
         string author,
         FileContentEntity content,
-        DateTimeOffset createdUtc,
-        Fts5Policy ftsPolicy)
+        UtcTimestamp createdUtc,
+        FileSystemMetadata systemMetadata,
+        ExtendedMetadata extendedMetadata)
         : base(id)
     {
         Name = name;
         Extension = extension;
         Mime = mime;
-        _author = author;
-        Content = content ?? throw new ArgumentNullException(nameof(content));
-        Size = content.Size;
+        Author = author;
+        Content = content;
+        Size = content.Length;
+        CreatedUtc = createdUtc;
+        LastModifiedUtc = createdUtc;
         Version = InitialVersion;
         IsReadOnly = false;
-        CreatedUtc = createdUtc.ToUniversalTime();
-        LastModifiedUtc = CreatedUtc;
-        SearchIndex = new SearchIndexState(isStale: true);
-        FtsPolicy = ftsPolicy ?? throw new ArgumentNullException(nameof(ftsPolicy));
+        SystemMetadata = systemMetadata;
+        ExtendedMetadata = extendedMetadata;
+        SearchIndex = new SearchIndexState(schemaVersion: 1);
+        FtsPolicy = Fts5Policy.Default;
     }
 
     /// <summary>
-    /// Gets the file name.
+    /// Gets the file name without extension.
     /// </summary>
     public FileName Name { get; private set; }
 
     /// <summary>
     /// Gets the file extension.
     /// </summary>
-    public FileExtension Extension { get; private set; }
+    public FileExtension Extension { get; }
 
     /// <summary>
     /// Gets the MIME type.
@@ -56,14 +60,14 @@ public sealed class FileEntity : AggregateRoot
     public MimeType Mime { get; private set; }
 
     /// <summary>
-    /// Gets the file size in bytes.
+    /// Gets the file size.
     /// </summary>
     public ByteSize Size { get; private set; }
 
     /// <summary>
-    /// Gets the author metadata.
+    /// Gets the file author stored in the core metadata.
     /// </summary>
-    public string Author => _author;
+    public string Author { get; private set; }
 
     /// <summary>
     /// Gets a value indicating whether the file is read-only.
@@ -71,126 +75,129 @@ public sealed class FileEntity : AggregateRoot
     public bool IsReadOnly { get; private set; }
 
     /// <summary>
-    /// Gets the content version number. Starts at 1 and increments on each replacement.
+    /// Gets the version number of the file content.
     /// </summary>
     public int Version { get; private set; }
 
     /// <summary>
-    /// Gets the creation timestamp in UTC.
+    /// Gets the creation timestamp of the file.
     /// </summary>
-    public DateTimeOffset CreatedUtc { get; }
+    public UtcTimestamp CreatedUtc { get; }
 
     /// <summary>
-    /// Gets the last modification timestamp in UTC.
+    /// Gets the last modification timestamp of the file.
     /// </summary>
-    public DateTimeOffset LastModifiedUtc { get; private set; }
+    public UtcTimestamp LastModifiedUtc { get; private set; }
 
     /// <summary>
-    /// Gets the associated file content (1:1 relationship).
+    /// Gets the file content entity.
     /// </summary>
     public FileContentEntity Content { get; private set; }
 
     /// <summary>
-    /// Gets the associated validity entity, if present (0..1:1 relationship).
+    /// Gets the optional document validity information.
     /// </summary>
     public FileDocumentValidityEntity? Validity { get; private set; }
 
     /// <summary>
-    /// Gets the search indexing state for full-text readiness.
+    /// Gets the latest file system metadata snapshot.
     /// </summary>
-    public SearchIndexState SearchIndex { get; }
+    public FileSystemMetadata SystemMetadata { get; private set; }
 
     /// <summary>
-    /// Gets the full-text policy hints.
+    /// Gets the extended metadata collection.
+    /// </summary>
+    public ExtendedMetadata ExtendedMetadata { get; private set; }
+
+    /// <summary>
+    /// Gets the search index state.
+    /// </summary>
+    public SearchIndexState SearchIndex { get; private set; }
+
+    /// <summary>
+    /// Gets the FTS5 tokenizer policy.
     /// </summary>
     public Fts5Policy FtsPolicy { get; }
 
     /// <summary>
-    /// Creates a new file aggregate root.
+    /// Creates a new file aggregate from the provided core information and binary content.
     /// </summary>
+    /// <param name="name">The file name.</param>
+    /// <param name="extension">The file extension.</param>
+    /// <param name="mime">The MIME type.</param>
+    /// <param name="author">The document author.</param>
+    /// <param name="bytes">The file content bytes.</param>
+    /// <param name="maxContentSize">Optional maximum content length.</param>
+    /// <returns>The created aggregate root.</returns>
     public static FileEntity CreateNew(
-        string name,
-        string extension,
-        string mime,
+        FileName name,
+        FileExtension extension,
+        MimeType mime,
         string author,
-        ReadOnlySpan<byte> bytes,
-        int? maxContentSize = null,
-        Fts5Policy? ftsPolicy = null)
+        byte[] bytes,
+        int? maxContentSize = null)
     {
-        var fileName = FileName.From(name);
-        var fileExtension = FileExtension.From(extension);
-        var mimeType = MimeType.From(mime);
         var normalizedAuthor = NormalizeAuthor(author);
-        var policy = ftsPolicy ?? Fts5Policy.Default;
-        var id = Guid.NewGuid();
-        var content = FileContentEntity.FromBytes(id, bytes, maxContentSize);
-        var createdUtc = DateTimeOffset.UtcNow;
+        var content = FileContentEntity.FromBytes(bytes, maxContentSize);
+        var now = UtcTimestamp.Now();
+        var systemMetadata = new FileSystemMetadata(FileAttributesFlags.Normal, now, now, now, null, null, null);
+        var metadataBuilder = ExtendedMetadata.Empty.ToBuilder();
+        metadataBuilder.Set(WindowsPropertyIds.Author, MetadataValue.FromString(normalizedAuthor));
+        var extendedMetadata = metadataBuilder.Build();
 
-        var file = new FileEntity(id, fileName, fileExtension, mimeType, normalizedAuthor, content, createdUtc, policy);
-
-        file.RaiseDomainEvent(new FileCreated(id, fileName, fileExtension, mimeType, normalizedAuthor, content.Hash, content.Size, createdUtc));
-        file.MarkSearchDirty(SearchReindexReason.Created);
-
-        return file;
+        var entity = new FileEntity(Guid.NewGuid(), name, extension, mime, normalizedAuthor, content, now, systemMetadata, extendedMetadata);
+        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.Content.Hash));
+        entity.MarkSearchDirty(ReindexReason.Created);
+        return entity;
     }
 
     /// <summary>
-    /// Renames the file (optionally changing extension).
+    /// Renames the file, emitting metadata and search reindex events.
     /// </summary>
-    /// <param name="name">New name.</param>
-    /// <param name="extension">Optional new extension; when null the current extension is preserved.</param>
-    public void Rename(string name, string? extension = null)
+    /// <param name="newName">The new file name.</param>
+    public void Rename(FileName newName)
     {
-        EnsureMutable();
-
-        var newName = FileName.From(name);
-        var newExtension = extension is null ? Extension : FileExtension.From(extension);
-
-        if (newName == Name && newExtension == Extension)
+        EnsureWritable();
+        if (newName == Name)
         {
             return;
         }
 
-        var oldName = Name;
-        var oldExtension = Extension;
+        var previous = Name;
         Name = newName;
-        Extension = newExtension;
-
         Touch();
-        RaiseDomainEvent(new FileRenamed(Id, oldName, oldExtension, Name, Extension, LastModifiedUtc));
-        MarkSearchDirty(SearchReindexReason.MetadataChanged);
+        RaiseDomainEvent(new FileRenamed(Id, previous, newName));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
+        MarkSearchDirty(ReindexReason.MetadataChanged);
     }
 
     /// <summary>
-    /// Updates mutable metadata such as MIME type and author.
+    /// Updates core descriptive metadata such as MIME type and author.
     /// </summary>
-    /// <param name="mime">Optional MIME type override.</param>
-    /// <param name="author">Optional author override.</param>
-    public void UpdateMetadata(string? mime = null, string? author = null)
+    /// <param name="mime">The optional new MIME type.</param>
+    /// <param name="author">The optional new author.</param>
+    public void UpdateMetadata(MimeType? mime = null, string? author = null)
     {
-        EnsureMutable();
-
-        var oldMime = Mime;
-        var oldAuthor = _author;
-
+        EnsureWritable();
         var changed = false;
 
-        if (mime is not null)
+        if (mime.HasValue && mime.Value != Mime)
         {
-            var newMime = MimeType.From(mime);
-            if (newMime != Mime)
-            {
-                Mime = newMime;
-                changed = true;
-            }
+            Mime = mime.Value;
+            changed = true;
         }
 
         if (author is not null)
         {
-            var newAuthor = NormalizeAuthor(author);
-            if (!string.Equals(newAuthor, _author, StringComparison.Ordinal))
+            var normalized = NormalizeAuthor(author);
+            if (!string.Equals(Author, normalized, StringComparison.Ordinal))
             {
-                _author = newAuthor;
+                Author = normalized;
+                changed = true;
+            }
+
+            if (SetMetadataStringInternal(WindowsPropertyIds.Author, normalized))
+            {
                 changed = true;
             }
         }
@@ -201,47 +208,36 @@ public sealed class FileEntity : AggregateRoot
         }
 
         Touch();
-        RaiseDomainEvent(new FileMetadataUpdated(Id, oldMime, Mime, oldAuthor, _author, LastModifiedUtc));
-        MarkSearchDirty(SearchReindexReason.MetadataChanged);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
+        MarkSearchDirty(ReindexReason.MetadataChanged);
     }
 
     /// <summary>
-    /// Replaces the file content, enforcing read-only and version invariants.
+    /// Replaces the file content and bumps the version if the hash changes.
     /// </summary>
-    /// <param name="bytes">New binary content.</param>
-    /// <param name="maxContentSize">Optional maximum allowed size.</param>
-    public void ReplaceContent(ReadOnlySpan<byte> bytes, int? maxContentSize = null)
+    /// <param name="bytes">The new content bytes.</param>
+    /// <param name="maxContentSize">Optional maximum content length.</param>
+    public void ReplaceContent(byte[] bytes, int? maxContentSize = null)
     {
-        EnsureMutable();
-
-        var newContent = FileContentEntity.FromBytes(Id, bytes, maxContentSize);
-
-        if (newContent.Hash == Content.Hash && newContent.Size == Content.Size)
+        EnsureWritable();
+        var newContent = FileContentEntity.FromBytes(bytes, maxContentSize);
+        if (newContent.Hash == Content.Hash)
         {
             return;
         }
 
-        if (Version == int.MaxValue)
-        {
-            throw new InvalidOperationException("File version cannot exceed Int32.MaxValue.");
-        }
-
-        var oldHash = Content.Hash;
-        var oldSize = Content.Size;
-
         Content = newContent;
-        Size = newContent.Size;
-        Version++;
-
+        Size = newContent.Length;
+        BumpVersion();
         Touch();
-        RaiseDomainEvent(new FileContentReplaced(Id, oldHash, newContent.Hash, oldSize, newContent.Size, Version, LastModifiedUtc));
-        MarkSearchDirty(SearchReindexReason.ContentChanged);
+        RaiseDomainEvent(new FileContentReplaced(Id, newContent.Hash, newContent.Length, Version));
+        MarkSearchDirty(ReindexReason.ContentChanged);
     }
 
     /// <summary>
-    /// Sets or clears the read-only flag.
+    /// Sets the read-only flag for the file.
     /// </summary>
-    /// <param name="isReadOnly">Desired read-only state.</param>
+    /// <param name="isReadOnly">The new read-only state.</param>
     public void SetReadOnly(bool isReadOnly)
     {
         if (IsReadOnly == isReadOnly)
@@ -251,43 +247,39 @@ public sealed class FileEntity : AggregateRoot
 
         IsReadOnly = isReadOnly;
         Touch();
-        RaiseDomainEvent(new FileReadOnlyChanged(Id, IsReadOnly, LastModifiedUtc));
+        RaiseDomainEvent(new FileReadOnlyChanged(Id, IsReadOnly));
     }
 
     /// <summary>
-    /// Adds or updates the document validity information.
+    /// Sets or updates the document validity information.
     /// </summary>
-    public void SetValidity(DateTimeOffset issuedAtUtc, DateTimeOffset validUntilUtc, bool hasPhysicalCopy, bool hasElectronicCopy)
+    /// <param name="issuedAt">The issue timestamp.</param>
+    /// <param name="validUntil">The expiration timestamp.</param>
+    /// <param name="hasPhysicalCopy">Whether a physical copy exists.</param>
+    /// <param name="hasElectronicCopy">Whether an electronic copy exists.</param>
+    public void SetValidity(UtcTimestamp issuedAt, UtcTimestamp validUntil, bool hasPhysicalCopy, bool hasElectronicCopy)
     {
-        EnsureMutable();
-
-        var issued = issuedAtUtc.ToUniversalTime();
-        var valid = validUntilUtc.ToUniversalTime();
-
+        EnsureWritable();
         var changed = false;
-
         if (Validity is null)
         {
-            Validity = FileDocumentValidityEntity.Create(Id, issued, valid, hasPhysicalCopy, hasElectronicCopy);
+            Validity = new FileDocumentValidityEntity(issuedAt, validUntil, hasPhysicalCopy, hasElectronicCopy);
             changed = true;
         }
         else
         {
-            var oldIssued = Validity.IssuedAtUtc;
-            var oldValid = Validity.ValidUntilUtc;
-            var oldPhysical = Validity.HasPhysicalCopy;
-            var oldElectronic = Validity.HasElectronicCopy;
+            var previousIssued = Validity.IssuedAt;
+            var previousValid = Validity.ValidUntil;
+            var previousPhysical = Validity.HasPhysicalCopy;
+            var previousElectronic = Validity.HasElectronicCopy;
 
-            Validity.SetPeriod(issued, valid);
+            Validity.SetPeriod(issuedAt, validUntil);
             Validity.SetCopies(hasPhysicalCopy, hasElectronicCopy);
 
-            if (Validity.IssuedAtUtc != oldIssued ||
-                Validity.ValidUntilUtc != oldValid ||
-                Validity.HasPhysicalCopy != oldPhysical ||
-                Validity.HasElectronicCopy != oldElectronic)
-            {
-                changed = true;
-            }
+            changed = previousIssued != Validity.IssuedAt
+                || previousValid != Validity.ValidUntil
+                || previousPhysical != Validity.HasPhysicalCopy
+                || previousElectronic != Validity.HasElectronicCopy;
         }
 
         if (!changed)
@@ -296,90 +288,367 @@ public sealed class FileEntity : AggregateRoot
         }
 
         Touch();
-        RaiseDomainEvent(new FileValidityChanged(
-            Id,
-            LastModifiedUtc,
-            Validity?.IssuedAtUtc,
-            Validity?.ValidUntilUtc,
-            Validity?.HasPhysicalCopy ?? false,
-            Validity?.HasElectronicCopy ?? false));
-        MarkSearchDirty(SearchReindexReason.ValidityChanged);
+        RaiseDomainEvent(new FileValidityChanged(Id, Validity?.IssuedAt, Validity?.ValidUntil, Validity?.HasPhysicalCopy ?? false, Validity?.HasElectronicCopy ?? false));
+        MarkSearchDirty(ReindexReason.ValidityChanged);
     }
 
     /// <summary>
-    /// Removes validity information when present.
+    /// Clears the document validity information if present.
     /// </summary>
     public void ClearValidity()
     {
-        EnsureMutable();
-
+        EnsureWritable();
         if (Validity is null)
         {
             return;
         }
 
         Validity = null;
+        Touch();
+        RaiseDomainEvent(new FileValidityChanged(Id, null, null, false, false));
+        MarkSearchDirty(ReindexReason.ValidityChanged);
+    }
+
+    /// <summary>
+    /// Applies a file system metadata snapshot to the aggregate.
+    /// </summary>
+    /// <param name="metadata">The new system metadata snapshot.</param>
+    public void ApplySystemMetadata(FileSystemMetadata metadata)
+    {
+        EnsureWritable();
+        if (SystemMetadata == metadata)
+        {
+            return;
+        }
+
+        SystemMetadata = metadata;
+        Touch();
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
+        MarkSearchDirty(ReindexReason.MetadataChanged);
+    }
+
+    /// <summary>
+    /// Mutates the extended metadata using a builder callback.
+    /// </summary>
+    /// <param name="configure">The builder configuration action.</param>
+    public void SetExtendedMetadata(Action<ExtendedMetadata.Builder> configure)
+    {
+        EnsureWritable();
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var builder = ExtendedMetadata.ToBuilder();
+        configure(builder);
+        var updated = builder.Build();
+        if (ExtendedMetadata.Equals(updated))
+        {
+            return;
+        }
+
+        ExtendedMetadata = updated;
+        AlignAuthorWithMetadata();
+        Touch();
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
+        MarkSearchDirty(ReindexReason.MetadataChanged);
+    }
+
+    /// <summary>
+    /// Gets the document title from extended metadata if available.
+    /// </summary>
+    /// <returns>The stored title or <see langword="null"/>.</returns>
+    public string? GetTitle() => GetMetadataString(WindowsPropertyIds.Title);
+
+    /// <summary>
+    /// Sets the document title and marks the search index for reindexing.
+    /// </summary>
+    /// <param name="title">The new title value.</param>
+    public void SetTitle(string? title) => SetMetadataString(WindowsPropertyIds.Title, title);
+
+    /// <summary>
+    /// Gets the document subject from extended metadata if available.
+    /// </summary>
+    /// <returns>The stored subject or <see langword="null"/>.</returns>
+    public string? GetSubject() => GetMetadataString(WindowsPropertyIds.Subject);
+
+    /// <summary>
+    /// Sets the document subject and marks the search index for reindexing.
+    /// </summary>
+    /// <param name="subject">The new subject value.</param>
+    public void SetSubject(string? subject) => SetMetadataString(WindowsPropertyIds.Subject, subject);
+
+    /// <summary>
+    /// Gets the company metadata value if available.
+    /// </summary>
+    /// <returns>The stored company or <see langword="null"/>.</returns>
+    public string? GetCompany() => GetMetadataString(WindowsPropertyIds.Company);
+
+    /// <summary>
+    /// Sets the company metadata value.
+    /// </summary>
+    /// <param name="company">The new company value.</param>
+    public void SetCompany(string? company) => SetMetadataString(WindowsPropertyIds.Company, company);
+
+    /// <summary>
+    /// Gets the manager metadata value if available.
+    /// </summary>
+    /// <returns>The stored manager or <see langword="null"/>.</returns>
+    public string? GetManager() => GetMetadataString(WindowsPropertyIds.Manager);
+
+    /// <summary>
+    /// Sets the manager metadata value.
+    /// </summary>
+    /// <param name="manager">The new manager value.</param>
+    public void SetManager(string? manager) => SetMetadataString(WindowsPropertyIds.Manager, manager);
+
+    /// <summary>
+    /// Gets the comments metadata value if available.
+    /// </summary>
+    /// <returns>The stored comments or <see langword="null"/>.</returns>
+    public string? GetComments() => GetMetadataString(WindowsPropertyIds.Comments);
+
+    /// <summary>
+    /// Sets the comments metadata value.
+    /// </summary>
+    /// <param name="comments">The new comments value.</param>
+    public void SetComments(string? comments) => SetMetadataString(WindowsPropertyIds.Comments, comments);
+
+    /// <summary>
+    /// Gets the author metadata value, preferring extended metadata over the core value.
+    /// </summary>
+    /// <returns>The author metadata value.</returns>
+    public string GetAuthor()
+    {
+        var metadataAuthor = GetMetadataString(WindowsPropertyIds.Author);
+        return metadataAuthor ?? Author;
+    }
+
+    /// <summary>
+    /// Sets the author metadata value, synchronizing the core property and extended metadata.
+    /// </summary>
+    /// <param name="author">The new author value.</param>
+    public void SetAuthor(string author)
+    {
+        EnsureWritable();
+        var normalized = NormalizeAuthor(author);
+        var changed = false;
+
+        if (!string.Equals(Author, normalized, StringComparison.Ordinal))
+        {
+            Author = normalized;
+            changed = true;
+        }
+
+        if (SetMetadataStringInternal(WindowsPropertyIds.Author, normalized))
+        {
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return;
+        }
 
         Touch();
-        RaiseDomainEvent(new FileValidityChanged(Id, LastModifiedUtc, null, null, false, false));
-        MarkSearchDirty(SearchReindexReason.ValidityChanged);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
+        MarkSearchDirty(ReindexReason.MetadataChanged);
     }
 
     /// <summary>
-    /// Creates a search document representation of the file.
+    /// Gets the last author metadata value if available.
     /// </summary>
-    /// <param name="extractedText">Optional extracted textual content.</param>
+    /// <returns>The stored last author or <see langword="null"/>.</returns>
+    public string? GetLastAuthor() => GetMetadataString(WindowsPropertyIds.LastAuthor);
+
+    /// <summary>
+    /// Sets the last author metadata value.
+    /// </summary>
+    /// <param name="lastAuthor">The new last author value.</param>
+    public void SetLastAuthor(string? lastAuthor) => SetMetadataString(WindowsPropertyIds.LastAuthor, lastAuthor);
+
+    /// <summary>
+    /// Gets the category metadata value if available.
+    /// </summary>
+    /// <returns>The stored category or <see langword="null"/>.</returns>
+    public string? GetCategory() => GetMetadataString(WindowsPropertyIds.Category);
+
+    /// <summary>
+    /// Sets the category metadata value.
+    /// </summary>
+    /// <param name="category">The new category value.</param>
+    public void SetCategory(string? category) => SetMetadataString(WindowsPropertyIds.Category, category);
+
+    /// <summary>
+    /// Gets the template metadata value if available.
+    /// </summary>
+    /// <returns>The stored template or <see langword="null"/>.</returns>
+    public string? GetTemplate() => GetMetadataString(WindowsPropertyIds.Template);
+
+    /// <summary>
+    /// Sets the template metadata value.
+    /// </summary>
+    /// <param name="template">The new template value.</param>
+    public void SetTemplate(string? template) => SetMetadataString(WindowsPropertyIds.Template, template);
+
+    /// <summary>
+    /// Gets the revision number metadata value if available.
+    /// </summary>
+    /// <returns>The stored revision number or <see langword="null"/>.</returns>
+    public string? GetRevisionNumber() => GetMetadataString(WindowsPropertyIds.RevisionNumber);
+
+    /// <summary>
+    /// Sets the revision number metadata value.
+    /// </summary>
+    /// <param name="revision">The new revision number value.</param>
+    public void SetRevisionNumber(string? revision) => SetMetadataString(WindowsPropertyIds.RevisionNumber, revision);
+
+    /// <summary>
+    /// Builds a search document representation of the file for full-text indexing.
+    /// </summary>
+    /// <param name="extractedText">Optional extracted body text.</param>
+    /// <returns>The search document.</returns>
     public SearchDocument ToSearchDocument(string? extractedText = null)
     {
-        var validity = Validity;
-        return new SearchDocument(
-            Id,
-            ComposeTitle(),
-            Extension.Value,
-            Mime.Value,
-            Author,
-            extractedText,
-            CreatedUtc,
-            LastModifiedUtc,
-            Content.Hash.Value,
-            Size.Value,
-            validity?.HasPhysicalCopy ?? false,
-            validity?.HasElectronicCopy ?? false,
-            validity?.IssuedAtUtc,
-            validity?.ValidUntilUtc,
-            Version);
+        var title = GetTitle() ?? Name.Value;
+        var authorText = string.IsNullOrWhiteSpace(Author) ? null : Author;
+        var subject = GetSubject();
+        var comments = GetComments();
+
+        var contentParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(extractedText))
+        {
+            contentParts.Add(extractedText!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            contentParts.Add(title);
+        }
+
+        if (!string.IsNullOrWhiteSpace(subject))
+        {
+            contentParts.Add(subject!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(comments))
+        {
+            contentParts.Add(comments!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(authorText))
+        {
+            contentParts.Add(authorText!);
+        }
+
+        var contentText = contentParts.Count == 0 ? null : string.Join(Environment.NewLine, contentParts);
+        return new SearchDocument(Id, title, Mime.Value, authorText, CreatedUtc.Value, LastModifiedUtc.Value, contentText);
     }
 
     /// <summary>
-    /// Confirms that the file has been indexed with the provided schema version.
+    /// Confirms that the file has been indexed with the specified schema version and timestamp.
     /// </summary>
+    /// <param name="schemaVersion">The applied schema version.</param>
+    /// <param name="whenUtc">The time of indexing.</param>
     public void ConfirmIndexed(int schemaVersion, DateTimeOffset whenUtc)
     {
-        SearchIndex.ConfirmIndexed(schemaVersion, Content.Hash.Value, ComposeTitle(), whenUtc);
+        SearchIndex.ApplyIndexed(schemaVersion, whenUtc, Content.Hash.Value, GetTitle());
     }
 
     /// <summary>
-    /// Bumps the desired search schema version, marking the index as stale when increased.
+    /// Marks the search state as requiring an upgrade to a new schema version.
     /// </summary>
+    /// <param name="newSchemaVersion">The new schema version.</param>
     public void BumpSchemaVersion(int newSchemaVersion)
     {
-        if (SearchIndex.BumpSchemaVersion(newSchemaVersion))
+        if (newSchemaVersion <= SearchIndex.SchemaVersion)
         {
-            MarkSearchDirty(SearchReindexReason.SchemaUpgrade);
+            return;
         }
+
+        SearchIndex = new SearchIndexState(
+            newSchemaVersion,
+            SearchIndex.IsStale,
+            SearchIndex.LastIndexedUtc,
+            SearchIndex.IndexedContentHash,
+            SearchIndex.IndexedTitle);
+        MarkSearchDirty(ReindexReason.SchemaUpgrade);
     }
 
-    private static string NormalizeAuthor(string author)
+    private static string NormalizeAuthor(string value)
     {
-        if (string.IsNullOrWhiteSpace(author))
+        if (string.IsNullOrWhiteSpace(value))
         {
-            throw new ArgumentException("Author cannot be null or whitespace.", nameof(author));
+            throw new ArgumentException("Author cannot be null or whitespace.", nameof(value));
         }
 
-        return author.Trim();
+        return value.Trim();
     }
 
-    private void EnsureMutable()
+    private static string? NormalizeOptionalMetadata(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    private string? GetMetadataString(PropertyKey key)
+    {
+        return ExtendedMetadata.TryGet(key, out var metadata) && metadata.TryGetString(out var value)
+            ? value
+            : null;
+    }
+
+    private void SetMetadataString(PropertyKey key, string? value)
+    {
+        EnsureWritable();
+        var normalized = NormalizeOptionalMetadata(value);
+        if (!SetMetadataStringInternal(key, normalized))
+        {
+            return;
+        }
+
+        if (key == WindowsPropertyIds.Author)
+        {
+            AlignAuthorWithMetadata();
+        }
+
+        Touch();
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
+        MarkSearchDirty(ReindexReason.MetadataChanged);
+    }
+
+    private bool SetMetadataStringInternal(PropertyKey key, string? value)
+    {
+        return ApplyExtendedMetadataMutation(builder =>
+        {
+            if (value is null)
+            {
+                builder.Remove(key);
+            }
+            else
+            {
+                builder.Set(key, MetadataValue.FromString(value));
+            }
+        });
+    }
+
+    private bool ApplyExtendedMetadataMutation(Action<ExtendedMetadata.Builder> configure)
+    {
+        var builder = ExtendedMetadata.ToBuilder();
+        configure(builder);
+        var updated = builder.Build();
+        if (ExtendedMetadata.Equals(updated))
+        {
+            return false;
+        }
+
+        ExtendedMetadata = updated;
+        return true;
+    }
+
+    private void EnsureWritable()
     {
         if (IsReadOnly)
         {
@@ -389,14 +658,35 @@ public sealed class FileEntity : AggregateRoot
 
     private void Touch()
     {
-        LastModifiedUtc = DateTimeOffset.UtcNow;
+        LastModifiedUtc = UtcTimestamp.Now();
     }
 
-    private string ComposeTitle() => $"{Name.Value}.{Extension.Value}";
+    private void BumpVersion()
+    {
+        if (Version == int.MaxValue)
+        {
+            throw new InvalidOperationException("File version overflow.");
+        }
 
-    private void MarkSearchDirty(SearchReindexReason reason)
+        Version += 1;
+    }
+
+    private void MarkSearchDirty(ReindexReason reason)
     {
         SearchIndex.MarkStale();
-        RaiseDomainEvent(new SearchReindexRequested(Id, reason, DateTimeOffset.UtcNow));
+        RaiseDomainEvent(new SearchReindexRequested(Id, reason));
+    }
+
+    private void AlignAuthorWithMetadata()
+    {
+        if (ExtendedMetadata.TryGet(WindowsPropertyIds.Author, out var metadata) && metadata.TryGetString(out var value))
+        {
+            var normalized = NormalizeAuthor(value);
+            Author = normalized;
+        }
+        else
+        {
+            SetMetadataStringInternal(WindowsPropertyIds.Author, Author);
+        }
     }
 }

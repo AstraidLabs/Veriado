@@ -3,25 +3,28 @@ using System;
 namespace Veriado.Domain.ValueObjects;
 
 /// <summary>
-/// Represents a validated file name (1-255 characters, trimmed, non-empty).
+/// Represents the file name without its extension.
 /// </summary>
 public readonly record struct FileName
 {
     private const int MinLength = 1;
     private const int MaxLength = 255;
 
-    private FileName(string value) => Value = value;
+    private FileName(string value)
+    {
+        Value = value;
+    }
 
     /// <summary>
-    /// Gets the value of the file name.
+    /// Gets the normalized name value.
     /// </summary>
     public string Value { get; }
 
     /// <summary>
-    /// Creates a <see cref="FileName"/> from the provided raw string.
+    /// Creates a new <see cref="FileName"/> instance from the provided string.
     /// </summary>
-    /// <param name="value">Raw file name value.</param>
-    /// <exception cref="ArgumentException">Thrown when validation fails.</exception>
+    /// <param name="value">The raw file name.</param>
+    /// <returns>The created value object.</returns>
     public static FileName From(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -30,10 +33,9 @@ public readonly record struct FileName
         }
 
         var trimmed = value.Trim();
-
-        if (trimmed.Length < MinLength || trimmed.Length > MaxLength)
+        if (trimmed.Length is < MinLength or > MaxLength)
         {
-            throw new ArgumentException($"File name must be between {MinLength} and {MaxLength} characters.", nameof(value));
+            throw new ArgumentOutOfRangeException(nameof(value), trimmed.Length, $"File name must be between {MinLength} and {MaxLength} characters.");
         }
 
         return new FileName(trimmed);

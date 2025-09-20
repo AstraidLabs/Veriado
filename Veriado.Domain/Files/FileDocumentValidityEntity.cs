@@ -1,36 +1,38 @@
 using System;
-using Veriado.Domain.Primitives;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Files;
 
 /// <summary>
-/// Represents validity information associated with a file.
+/// Represents the validity information associated with a file-based document.
 /// </summary>
-public sealed class FileDocumentValidityEntity : EntityBase
+public sealed class FileDocumentValidityEntity
 {
-    private FileDocumentValidityEntity(
-        Guid fileId,
-        DateTimeOffset issuedAtUtc,
-        DateTimeOffset validUntilUtc,
-        bool hasPhysicalCopy,
-        bool hasElectronicCopy)
-        : base(fileId)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FileDocumentValidityEntity"/> class.
+    /// </summary>
+    /// <param name="issuedAt">The timestamp when the document became valid.</param>
+    /// <param name="validUntil">The timestamp when the document expires.</param>
+    /// <param name="hasPhysicalCopy">Whether a physical copy exists.</param>
+    /// <param name="hasElectronicCopy">Whether an electronic copy exists.</param>
+    public FileDocumentValidityEntity(UtcTimestamp issuedAt, UtcTimestamp validUntil, bool hasPhysicalCopy, bool hasElectronicCopy)
     {
-        IssuedAtUtc = issuedAtUtc;
-        ValidUntilUtc = validUntilUtc;
+        EnsurePeriod(issuedAt, validUntil);
+        IssuedAt = issuedAt;
+        ValidUntil = validUntil;
         HasPhysicalCopy = hasPhysicalCopy;
         HasElectronicCopy = hasElectronicCopy;
     }
 
     /// <summary>
-    /// Gets the timestamp when the document was issued (UTC).
+    /// Gets the timestamp when the document becomes valid.
     /// </summary>
-    public DateTimeOffset IssuedAtUtc { get; private set; }
+    public UtcTimestamp IssuedAt { get; private set; }
 
     /// <summary>
-    /// Gets the timestamp until which the document remains valid (UTC).
+    /// Gets the timestamp when the document expires.
     /// </summary>
-    public DateTimeOffset ValidUntilUtc { get; private set; }
+    public UtcTimestamp ValidUntil { get; private set; }
 
     /// <summary>
     /// Gets a value indicating whether a physical copy exists.
@@ -43,36 +45,22 @@ public sealed class FileDocumentValidityEntity : EntityBase
     public bool HasElectronicCopy { get; private set; }
 
     /// <summary>
-    /// Creates a new validity entity ensuring invariants.
+    /// Sets the validity period, enforcing that the end is not before the start.
     /// </summary>
-    public static FileDocumentValidityEntity Create(
-        Guid fileId,
-        DateTimeOffset issuedAtUtc,
-        DateTimeOffset validUntilUtc,
-        bool hasPhysicalCopy,
-        bool hasElectronicCopy)
+    /// <param name="issuedAt">The new start timestamp.</param>
+    /// <param name="validUntil">The new end timestamp.</param>
+    public void SetPeriod(UtcTimestamp issuedAt, UtcTimestamp validUntil)
     {
-        var issued = EnsureUtc(issuedAtUtc);
-        var valid = EnsureUtc(validUntilUtc);
-        EnsureValidPeriod(issued, valid);
-        return new FileDocumentValidityEntity(fileId, issued, valid, hasPhysicalCopy, hasElectronicCopy);
+        EnsurePeriod(issuedAt, validUntil);
+        IssuedAt = issuedAt;
+        ValidUntil = validUntil;
     }
 
     /// <summary>
-    /// Sets a new validity period while preserving invariants.
+    /// Sets the flags indicating the presence of physical and electronic copies.
     /// </summary>
-    public void SetPeriod(DateTimeOffset issuedAtUtc, DateTimeOffset validUntilUtc)
-    {
-        var issued = EnsureUtc(issuedAtUtc);
-        var valid = EnsureUtc(validUntilUtc);
-        EnsureValidPeriod(issued, valid);
-        IssuedAtUtc = issued;
-        ValidUntilUtc = valid;
-    }
-
-    /// <summary>
-    /// Sets the availability of physical and electronic copies.
-    /// </summary>
+    /// <param name="hasPhysicalCopy">Whether a physical copy exists.</param>
+    /// <param name="hasElectronicCopy">Whether an electronic copy exists.</param>
     public void SetCopies(bool hasPhysicalCopy, bool hasElectronicCopy)
     {
         HasPhysicalCopy = hasPhysicalCopy;
@@ -80,51 +68,43 @@ public sealed class FileDocumentValidityEntity : EntityBase
     }
 
     /// <summary>
-    /// Determines whether the document is valid on the specified instant.
+    /// Determines whether the document is valid at the specified timestamp.
     /// </summary>
-    public bool IsValidOn(DateTimeOffset momentUtc)
+    /// <param name="moment">The timestamp to evaluate.</param>
+    /// <returns><see langword="true"/> if the document is valid; otherwise <see langword="false"/>.</returns>
+    public bool IsValidOn(DateTimeOffset moment)
     {
-        var moment = EnsureUtc(momentUtc);
-        return moment >= IssuedAtUtc && moment <= ValidUntilUtc;
+        var instant = moment.ToUniversalTime();
+        return instant >= IssuedAt.Value && instant <= ValidUntil.Value;
     }
 
     /// <summary>
-    /// Calculates the total number of days between issuance and expiration (rounded up).
+    /// Gets the total number of days in the validity period.
     /// </summary>
-    public int DaysTotal()
-    {
-        var span = ValidUntilUtc - IssuedAtUtc;
-        return span <= TimeSpan.Zero ? 0 : (int)Math.Ceiling(span.TotalDays);
-    }
+    /// <returns>The total number of days.</returns>
+    public double DaysTotal() => (ValidUntil.Value - IssuedAt.Value).TotalDays;
 
     /// <summary>
-    /// Calculates remaining days from a reference instant until expiration (rounded up).
+    /// Gets the number of days remaining from the specified timestamp until expiration.
     /// </summary>
-    public int DaysRemaining(DateTimeOffset referenceUtc)
+    /// <param name="moment">The reference timestamp.</param>
+    /// <returns>The number of days remaining, or zero if already expired.</returns>
+    public double DaysRemaining(DateTimeOffset moment)
     {
-        var reference = EnsureUtc(referenceUtc);
-
-        if (reference <= IssuedAtUtc)
+        var instant = moment.ToUniversalTime();
+        if (instant >= ValidUntil.Value)
         {
-            return DaysTotal();
+            return 0d;
         }
 
-        if (reference >= ValidUntilUtc)
-        {
-            return 0;
-        }
-
-        var span = ValidUntilUtc - reference;
-        return span <= TimeSpan.Zero ? 0 : (int)Math.Ceiling(span.TotalDays);
+        return (ValidUntil.Value - instant).TotalDays;
     }
 
-    private static DateTimeOffset EnsureUtc(DateTimeOffset timestamp) => timestamp.ToUniversalTime();
-
-    private static void EnsureValidPeriod(DateTimeOffset issuedAtUtc, DateTimeOffset validUntilUtc)
+    private static void EnsurePeriod(UtcTimestamp issuedAt, UtcTimestamp validUntil)
     {
-        if (validUntilUtc < issuedAtUtc)
+        if (validUntil.Value < issuedAt.Value)
         {
-            throw new ArgumentException("Valid-until timestamp must be greater than or equal to issued-at timestamp.");
+            throw new ArgumentException("Valid-until must be greater than or equal to issued-at.", nameof(validUntil));
         }
     }
 }

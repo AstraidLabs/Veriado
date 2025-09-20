@@ -1,87 +1,69 @@
 using System;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Audit;
 
 /// <summary>
-/// Represents an auditable snapshot of validity information changes.
+/// Represents an audit entry describing changes to document validity.
 /// </summary>
 public sealed class FileDocumentValidityAuditEntity
 {
-    private FileDocumentValidityAuditEntity(
-        Guid fileId,
-        string action,
-        DateTimeOffset occurredAtUtc,
-        string? actor,
-        DateTimeOffset? issuedAtUtc,
-        DateTimeOffset? validUntilUtc,
-        bool hasPhysicalCopy,
-        bool hasElectronicCopy)
+    private FileDocumentValidityAuditEntity(Guid fileId, UtcTimestamp? issuedAt, UtcTimestamp? validUntil, bool hasPhysicalCopy, bool hasElectronicCopy, UtcTimestamp occurredUtc)
     {
         FileId = fileId;
-        Action = action ?? throw new ArgumentNullException(nameof(action));
-        OccurredAtUtc = occurredAtUtc.ToUniversalTime();
-        Actor = actor;
-        IssuedAtUtc = issuedAtUtc?.ToUniversalTime();
-        ValidUntilUtc = validUntilUtc?.ToUniversalTime();
+        IssuedAt = issuedAt;
+        ValidUntil = validUntil;
         HasPhysicalCopy = hasPhysicalCopy;
         HasElectronicCopy = hasElectronicCopy;
+        OccurredUtc = occurredUtc;
     }
 
     /// <summary>
-    /// Gets the affected file identifier.
+    /// Gets the identifier of the file whose validity changed.
     /// </summary>
     public Guid FileId { get; }
 
     /// <summary>
-    /// Gets the action label.
+    /// Gets the issue timestamp after the change, if any.
     /// </summary>
-    public string Action { get; }
+    public UtcTimestamp? IssuedAt { get; }
 
     /// <summary>
-    /// Gets the UTC timestamp of the audit entry.
+    /// Gets the expiration timestamp after the change, if any.
     /// </summary>
-    public DateTimeOffset OccurredAtUtc { get; }
+    public UtcTimestamp? ValidUntil { get; }
 
     /// <summary>
-    /// Gets optional actor information.
-    /// </summary>
-    public string? Actor { get; }
-
-    /// <summary>
-    /// Gets the issuance timestamp, if any.
-    /// </summary>
-    public DateTimeOffset? IssuedAtUtc { get; }
-
-    /// <summary>
-    /// Gets the expiration timestamp, if any.
-    /// </summary>
-    public DateTimeOffset? ValidUntilUtc { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether a physical copy exists.
+    /// Gets a value indicating whether a physical copy exists after the change.
     /// </summary>
     public bool HasPhysicalCopy { get; }
 
     /// <summary>
-    /// Gets a value indicating whether an electronic copy exists.
+    /// Gets a value indicating whether an electronic copy exists after the change.
     /// </summary>
     public bool HasElectronicCopy { get; }
 
     /// <summary>
-    /// Records addition of validity information.
+    /// Gets the timestamp when the audit entry was recorded.
     /// </summary>
-    public static FileDocumentValidityAuditEntity Added(Guid fileId, DateTimeOffset issuedAtUtc, DateTimeOffset validUntilUtc, bool hasPhysicalCopy, bool hasElectronicCopy, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "Added", occurredAtUtc, actor, issuedAtUtc, validUntilUtc, hasPhysicalCopy, hasElectronicCopy);
+    public UtcTimestamp OccurredUtc { get; }
 
     /// <summary>
-    /// Records an update to existing validity information.
+    /// Creates an audit entry for a validity change.
     /// </summary>
-    public static FileDocumentValidityAuditEntity Updated(Guid fileId, DateTimeOffset issuedAtUtc, DateTimeOffset validUntilUtc, bool hasPhysicalCopy, bool hasElectronicCopy, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "Updated", occurredAtUtc, actor, issuedAtUtc, validUntilUtc, hasPhysicalCopy, hasElectronicCopy);
+    /// <param name="fileId">The file identifier.</param>
+    /// <param name="issuedAt">The new issue timestamp.</param>
+    /// <param name="validUntil">The new expiration timestamp.</param>
+    /// <param name="hasPhysicalCopy">Whether a physical copy exists after the change.</param>
+    /// <param name="hasElectronicCopy">Whether an electronic copy exists after the change.</param>
+    /// <returns>The created audit entry.</returns>
+    public static FileDocumentValidityAuditEntity Changed(Guid fileId, UtcTimestamp? issuedAt, UtcTimestamp? validUntil, bool hasPhysicalCopy, bool hasElectronicCopy)
+    {
+        if (issuedAt.HasValue && validUntil.HasValue && validUntil.Value.Value < issuedAt.Value.Value)
+        {
+            throw new ArgumentException("Valid-until must be greater than or equal to issued-at.", nameof(validUntil));
+        }
 
-    /// <summary>
-    /// Records removal of validity information.
-    /// </summary>
-    public static FileDocumentValidityAuditEntity Removed(Guid fileId, DateTimeOffset occurredAtUtc, string? actor = null)
-        => new(fileId, "Removed", occurredAtUtc, actor, null, null, false, false);
+        return new FileDocumentValidityAuditEntity(fileId, issuedAt, validUntil, hasPhysicalCopy, hasElectronicCopy, UtcTimestamp.Now());
+    }
 }

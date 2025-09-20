@@ -1,28 +1,30 @@
 using System;
-using System.Globalization;
 
 namespace Veriado.Domain.ValueObjects;
 
 /// <summary>
-/// Represents a validated lowercase file extension without a leading dot (1-16 characters).
+/// Represents the normalized file extension without a leading dot.
 /// </summary>
 public readonly record struct FileExtension
 {
     private const int MinLength = 1;
     private const int MaxLength = 16;
 
-    private FileExtension(string value) => Value = value;
+    private FileExtension(string value)
+    {
+        Value = value;
+    }
 
     /// <summary>
-    /// Gets the value of the extension.
+    /// Gets the extension in lowercase form.
     /// </summary>
     public string Value { get; }
 
     /// <summary>
-    /// Creates a <see cref="FileExtension"/> by validating and normalizing the provided input.
+    /// Creates a new <see cref="FileExtension"/> from the supplied extension string.
     /// </summary>
-    /// <param name="value">Raw extension text.</param>
-    /// <exception cref="ArgumentException">Thrown when validation fails.</exception>
+    /// <param name="value">The extension without the leading dot.</param>
+    /// <returns>The created value object.</returns>
     public static FileExtension From(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -31,19 +33,17 @@ public readonly record struct FileExtension
         }
 
         var trimmed = value.Trim();
-
-        if (trimmed.Contains('.', StringComparison.Ordinal))
+        if (trimmed.StartsWith('.'))
         {
-            throw new ArgumentException("File extension must not contain dots.", nameof(value));
+            throw new ArgumentException("File extension must not include a leading dot.", nameof(value));
         }
 
-        if (trimmed.Length < MinLength || trimmed.Length > MaxLength)
+        if (trimmed.Length is < MinLength or > MaxLength)
         {
-            throw new ArgumentException($"File extension must be between {MinLength} and {MaxLength} characters.", nameof(value));
+            throw new ArgumentOutOfRangeException(nameof(value), trimmed.Length, $"File extension must be between {MinLength} and {MaxLength} characters.");
         }
 
-        var normalized = trimmed.ToLower(CultureInfo.InvariantCulture);
-
+        var normalized = trimmed.ToLowerInvariant();
         return new FileExtension(normalized);
     }
 
