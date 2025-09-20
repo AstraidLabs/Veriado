@@ -6,6 +6,7 @@ using Veriado.Application.Abstractions;
 using Veriado.Application.DTO;
 using Veriado.Domain.Files;
 using Veriado.Domain.Metadata;
+using Veriado.Domain.Search;
 
 namespace Veriado.Application.Mapping;
 
