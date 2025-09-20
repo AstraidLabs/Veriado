@@ -115,45 +115,41 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
                 .HasMaxLength(300);
         });
 
-        builder.OwnsOne(file => file.SystemMetadata, owned =>
+        builder.ComplexProperty(file => file.SystemMetadata, complex =>
         {
-            owned.Property(metadata => metadata.Attributes)
+            complex.Property(metadata => metadata.Attributes)
                 .HasColumnName("fs_attr")
                 .HasConversion(Converters.FileAttributesToInt)
                 .IsRequired();
 
-            owned.Property(metadata => metadata.CreatedUtc)
+            complex.Property(metadata => metadata.CreatedUtc)
                 .HasColumnName("fs_created_utc")
                 .HasColumnType("TEXT")
                 .HasConversion(Converters.UtcTimestampToString)
                 .IsRequired();
 
-            owned.Property(metadata => metadata.LastWriteUtc)
+            complex.Property(metadata => metadata.LastWriteUtc)
                 .HasColumnName("fs_write_utc")
                 .HasColumnType("TEXT")
                 .HasConversion(Converters.UtcTimestampToString)
                 .IsRequired();
 
-            owned.Property(metadata => metadata.LastAccessUtc)
+            complex.Property(metadata => metadata.LastAccessUtc)
                 .HasColumnName("fs_access_utc")
                 .HasColumnType("TEXT")
                 .HasConversion(Converters.UtcTimestampToString)
                 .IsRequired();
 
-            owned.Property(metadata => metadata.OwnerSid)
+            complex.Property(metadata => metadata.OwnerSid)
                 .HasColumnName("fs_owner_sid")
                 .HasMaxLength(256);
 
-            owned.Property(metadata => metadata.HardLinkCount)
+            complex.Property(metadata => metadata.HardLinkCount)
                 .HasColumnName("fs_links");
 
-            owned.Property(metadata => metadata.AlternateDataStreamCount)
+            complex.Property(metadata => metadata.AlternateDataStreamCount)
                 .HasColumnName("fs_ads");
         });
-
-        if (options.UseKvMetadata)
-        {
-            builder.Navigation(file => file.ExtendedMetadata).IsRequired();
-        }
     }
-}
+ }
+
