@@ -80,20 +80,20 @@ internal sealed class FileRepository : IFileRepository
     public async Task AddAsync(FileEntity entity, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        await _writeQueue.EnqueueAsync(async (AppDbContext db, CancellationToken ct) =>
+        await _writeQueue.EnqueueAsync((AppDbContext db, CancellationToken ct) =>
         {
             db.Files.Add(entity);
-            return true;
+            return Task.FromResult(true);
         }, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateAsync(FileEntity entity, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        await _writeQueue.EnqueueAsync(async (AppDbContext db, CancellationToken ct) =>
+        await _writeQueue.EnqueueAsync((AppDbContext db, CancellationToken ct) =>
         {
             db.Files.Update(entity);
-            return true;
+            return Task.FromResult(true);
         }, cancellationToken).ConfigureAwait(false);
     }
 
