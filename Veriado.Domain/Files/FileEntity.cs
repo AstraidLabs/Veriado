@@ -16,6 +16,11 @@ public sealed class FileEntity : AggregateRoot
 {
     private const int InitialVersion = 1;
 
+    private FileEntity(Guid id)
+        : base(id)
+    {
+    }
+
     private FileEntity(
         Guid id,
         FileName name,
@@ -52,7 +57,7 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the file extension.
     /// </summary>
-    public FileExtension Extension { get; }
+    public FileExtension Extension { get; private set; }
 
     /// <summary>
     /// Gets the MIME type.
@@ -67,7 +72,7 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the file author stored in the core metadata.
     /// </summary>
-    public string Author { get; private set; }
+    public string Author { get; private set; } = null!;
 
     /// <summary>
     /// Gets a value indicating whether the file is read-only.
@@ -82,7 +87,7 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the creation timestamp of the file.
     /// </summary>
-    public UtcTimestamp CreatedUtc { get; }
+    public UtcTimestamp CreatedUtc { get; private set; }
 
     /// <summary>
     /// Gets the last modification timestamp of the file.
@@ -92,7 +97,7 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the file content entity.
     /// </summary>
-    public FileContentEntity Content { get; private set; }
+    public FileContentEntity Content { get; private set; } = null!;
 
     /// <summary>
     /// Gets the optional document validity information.
@@ -107,17 +112,17 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the extended metadata collection.
     /// </summary>
-    public ExtendedMetadata ExtendedMetadata { get; private set; }
+    public ExtendedMetadata ExtendedMetadata { get; private set; } = null!;
 
     /// <summary>
     /// Gets the search index state.
     /// </summary>
-    public SearchIndexState SearchIndex { get; private set; }
+    public SearchIndexState SearchIndex { get; private set; } = null!;
 
     /// <summary>
     /// Gets the FTS5 tokenizer policy.
     /// </summary>
-    public Fts5Policy FtsPolicy { get; }
+    public Fts5Policy FtsPolicy { get; private set; } = null!;
 
     /// <summary>
     /// Creates a new file aggregate from the provided core information and binary content.
