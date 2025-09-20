@@ -11,7 +11,7 @@ namespace Veriado.Infrastructure.Persistence.Interceptors;
 /// </summary>
 public sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
 {
-    public override async ValueTask ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
+    public override async Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
     {
         if (connection is not SqliteConnection sqlite)
         {
