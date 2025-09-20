@@ -250,7 +250,7 @@ internal sealed class WriteWorker : BackgroundService
         var now = DateTimeOffset.UtcNow;
         foreach (var file in filesToIndex)
         {
-            var text = await _textExtractor.ExtractAsync(file, cancellationToken).ConfigureAwait(false);
+            var text = await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
             var document = file.ToSearchDocument(text);
             await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, cancellationToken).ConfigureAwait(false);
             file.ConfirmIndexed(file.SearchIndex.SchemaVersion, now);

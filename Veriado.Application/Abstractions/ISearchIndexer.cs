@@ -15,12 +15,12 @@ public interface ISearchIndexer
     /// </summary>
     /// <param name="document">The search document projection.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task UpsertAsync(SearchDocument document, CancellationToken cancellationToken);
+    Task IndexAsync(SearchDocument document, CancellationToken cancellationToken);
 
     /// <summary>
     /// Removes the search index entry associated with the supplied file identifier.
     /// </summary>
     /// <param name="fileId">The identifier of the file.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task RemoveAsync(Guid fileId, CancellationToken cancellationToken);
+    Task DeleteAsync(Guid fileId, CancellationToken cancellationToken);
 }

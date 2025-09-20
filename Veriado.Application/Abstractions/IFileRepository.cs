@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Files;
@@ -17,6 +18,21 @@ public interface IFileRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The loaded aggregate or <see langword="null"/> when it does not exist.</returns>
     Task<FileEntity?> GetAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads multiple file aggregates by their identifiers in a single call.
+    /// </summary>
+    /// <param name="ids">The identifiers of the files to retrieve.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The loaded aggregates. Missing identifiers are omitted from the result.</returns>
+    Task<IReadOnlyList<FileEntity>> GetManyAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams all file aggregates from the persistence store.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An asynchronous sequence of file aggregates.</returns>
+    IAsyncEnumerable<FileEntity> StreamAllAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds a newly created file aggregate to the persistence store.

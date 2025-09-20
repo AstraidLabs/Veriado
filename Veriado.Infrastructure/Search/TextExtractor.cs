@@ -20,7 +20,7 @@ internal sealed class TextExtractor : ITextExtractor
         "application/json",
     };
 
-    public Task<string?> ExtractAsync(FileEntity file, CancellationToken cancellationToken = default)
+    public Task<string?> ExtractTextAsync(FileEntity file, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
         cancellationToken.ThrowIfCancellationRequested();

@@ -15,5 +15,5 @@ public interface ITextExtractor
     /// <param name="file">The file aggregate whose content should be analyzed.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The extracted text or <see langword="null"/> when no text could be extracted.</returns>
-    Task<string?> ExtractAsync(FileEntity file, CancellationToken cancellationToken);
+    Task<string?> ExtractTextAsync(FileEntity file, CancellationToken cancellationToken);
 }
