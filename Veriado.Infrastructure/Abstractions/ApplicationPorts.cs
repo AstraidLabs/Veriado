@@ -16,6 +16,10 @@ public interface IFileRepository
 {
     Task<FileEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<FileEntity>> GetManyAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+
+    IAsyncEnumerable<FileEntity> StreamAllAsync(CancellationToken cancellationToken = default);
+
     Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken = default);
 
     Task AddAsync(FileEntity entity, CancellationToken cancellationToken = default);
@@ -48,7 +52,7 @@ public interface ISearchQueryService
 /// </summary>
 public interface ITextExtractor
 {
-    Task<string?> ExtractAsync(FileEntity file, CancellationToken cancellationToken = default);
+    Task<string?> ExtractTextAsync(FileEntity file, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

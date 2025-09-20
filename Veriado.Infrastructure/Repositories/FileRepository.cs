@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +35,40 @@ internal sealed class FileRepository : IFileRepository
             .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<FileEntity>> GetManyAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var idList = ids.Distinct().ToArray();
+        if (idList.Length == 0)
+        {
+            return Array.Empty<FileEntity>();
+        }
+
+        await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        return await context.Files
+            .Include(f => f.Validity)
+            .Include(f => f.Content)
+            .Where(f => idList.Contains(f.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async IAsyncEnumerable<FileEntity> StreamAllAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var query = context.Files
+            .Include(f => f.Validity)
+            .Include(f => f.Content)
+            .AsAsyncEnumerable()
+            .WithCancellation(cancellationToken);
+
+        await foreach (var file in query.ConfigureAwait(false))
+        {
+            yield return file;
+        }
     }
 
     public async Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken = default)

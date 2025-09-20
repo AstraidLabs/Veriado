@@ -14,9 +14,9 @@ internal static class FileIndexingHelper
         ISearchIndexer searchIndexer,
         CancellationToken cancellationToken)
     {
-        var text = await textExtractor.ExtractAsync(file, cancellationToken).ConfigureAwait(false);
+        var text = await textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
         var document = file.ToSearchDocument(text);
-        await searchIndexer.UpsertAsync(document, cancellationToken).ConfigureAwait(false);
+        await searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
         file.SearchIndex.ApplyIndexed(
             file.SearchIndex.SchemaVersion,
             DateTimeOffset.UtcNow,

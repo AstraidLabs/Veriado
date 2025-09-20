@@ -115,7 +115,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return;
         }
 
-        var text = await _textExtractor.ExtractAsync(file, cancellationToken).ConfigureAwait(false);
+        var text = await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
         var document = file.ToSearchDocument(text);
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
 
