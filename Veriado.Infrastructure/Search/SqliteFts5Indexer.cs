@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -41,45 +42,48 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer, ISearchQueryService
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<SearchDocument>> SearchAsync(string query, int limit, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int? limit, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        if (limit <= 0)
+        var resultLimit = limit.GetValueOrDefault(10);
+        if (resultLimit <= 0)
         {
-            limit = 10;
+            resultLimit = 10;
         }
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT m.file_id, s.title, s.mime, s.author, f.created_utc, f.modified_utc, snippet(s, 3, '[', ']', '…', 10) as snippet " +
+            "SELECT m.file_id, " +
+            "       COALESCE(s.title, ''), " +
+            "       COALESCE(s.mime, 'application/octet-stream'), " +
+            "       snippet(s, 3, '[', ']', '…', 10) AS snippet, " +
+            "       1.0 / (1.0 + bm25(s)) AS score, " +
+            "       f.modified_utc " +
             "FROM file_search s " +
             "JOIN file_search_map m ON s.rowid = m.rowid " +
             "JOIN files f ON f.id = m.file_id " +
             "WHERE file_search MATCH $query " +
-            "ORDER BY rank " +
+            "ORDER BY score DESC " +
             "LIMIT $limit;";
         command.Parameters.AddWithValue("$query", query);
-        command.Parameters.AddWithValue("$limit", limit);
+        command.Parameters.AddWithValue("$limit", resultLimit);
 
-        var results = new List<SearchDocument>();
+        var results = new List<SearchHit>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var fileIdBlob = (byte[])reader[0];
             var fileId = new Guid(fileIdBlob);
-            var title = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-            var mime = reader.IsDBNull(2) ? "application/octet-stream" : reader.GetString(2);
-            var author = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var created = reader.GetString(4);
+            var title = reader.GetString(1);
+            var mime = reader.GetString(2);
+            var snippet = reader.IsDBNull(3) ? null : reader.GetString(3);
+            var score = reader.IsDBNull(4) ? 0d : reader.GetDouble(4);
             var modified = reader.GetString(5);
-            var snippet = reader.IsDBNull(6) ? null : reader.GetString(6);
-
-            var createdUtc = DateTimeOffset.Parse(created, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind);
-            var modifiedUtc = DateTimeOffset.Parse(modified, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind);
-            var document = new SearchDocument(fileId, title, mime, author, createdUtc, modifiedUtc, snippet);
-            results.Add(document);
+            var modifiedUtc = DateTimeOffset.Parse(modified, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            var hit = new SearchHit(fileId, title, mime, snippet, score, modifiedUtc);
+            results.Add(hit);
         }
 
         return results;
