@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.WinUI", "Veriado.Wi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.Domain", "Veriado.Domain\Veriado.Domain.csproj", "{86B8F682-4E4A-4E11-804A-3513C85B8ADB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.Infrastructure", "MyApp.Infrastructure\Veriado.Infrastructure.csproj", "{6FA76EE3-8C55-4176-AF31-CA4AD7DA6777}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.Infrastructure", "Veriado.Infrastructure\Veriado.Infrastructure.csproj", "{6FA76EE3-8C55-4176-AF31-CA4AD7DA6777}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Source", "Source", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 EndProject
