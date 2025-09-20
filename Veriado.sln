@@ -1,9 +1,9 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36429.23
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.WinUI", "Veriado.WinUI.csproj", "{DD7E39A9-548E-4BF2-918B-FFB26FF05BA0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.WinUI", "Veriado.WinUI\Veriado.WinUI.csproj", "{DD7E39A9-548E-4BF2-918B-FFB26FF05BA0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.Domain", "Veriado.Domain\Veriado.Domain.csproj", "{86B8F682-4E4A-4E11-804A-3513C85B8ADB}"
 EndProject
