@@ -13,6 +13,5 @@
   <ItemGroup>
     <ProjectReference Include="..\Veriado.Contracts\Veriado.Contracts.csproj" />
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
-    <ProjectReference Include="..\Veriado.Mapping\Veriado.Mapping.csproj" />
   </ItemGroup>
 </Project>
