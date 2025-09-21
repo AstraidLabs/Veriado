@@ -10,6 +10,7 @@ namespace Veriado.Application.Files.Handlers;
 /// <summary>
 /// Handles <see cref="RenameFileCommand"/> operations.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.RenameFile.RenameFileHandler instead.")]
 public sealed class RenameFileHandler
 {
     private readonly IFileRepository _repository;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -31,6 +32,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, Action<InfrastructureOptions>? configure = null)
     {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
         var options = new InfrastructureOptions();
         configure?.Invoke(options);
 
@@ -75,7 +78,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
-        services.AddSingleton<ITextExtractor, TextExtractor>();
+        services.AddSingleton<PlainTextExtractor>();
+        services.AddSingleton<PdfTextExtractor>();
+        services.AddSingleton<DocxTextExtractor>();
+        services.AddSingleton<PptxTextExtractor>();
+        services.AddSingleton<XlsxTextExtractor>();
+        services.AddSingleton<OdtTextExtractor>();
+        services.AddSingleton<OdpTextExtractor>();
+        services.AddSingleton<OdsTextExtractor>();
+        services.AddSingleton<ITextExtractor, CompositeTextExtractor>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
         services.AddSingleton<IEventPublisher, NullEventPublisher>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();

@@ -11,6 +11,7 @@ namespace Veriado.Application.Files.Commands;
 /// <param name="ValidUntil">The timestamp when the document expires.</param>
 /// <param name="HasPhysicalCopy">Indicates whether a physical copy exists.</param>
 /// <param name="HasElectronicCopy">Indicates whether an electronic copy exists.</param>
+[Obsolete("Use Veriado.Application.UseCases.Files.SetFileValidity.SetFileValidityCommand instead.")]
 public sealed record SetValidityCommand(
     Guid FileId,
     UtcTimestamp IssuedAt,

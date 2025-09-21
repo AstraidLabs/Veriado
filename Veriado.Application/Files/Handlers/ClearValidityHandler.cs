@@ -10,6 +10,7 @@ namespace Veriado.Application.Files.Handlers;
 /// <summary>
 /// Handles <see cref="ClearValidityCommand"/> operations.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.ClearFileValidity.ClearFileValidityHandler instead.")]
 public sealed class ClearValidityHandler
 {
     private readonly IFileRepository _repository;

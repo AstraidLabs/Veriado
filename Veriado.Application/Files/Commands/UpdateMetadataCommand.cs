@@ -14,6 +14,7 @@ namespace Veriado.Application.Files.Commands;
 /// <param name="IsReadOnly">An optional flag indicating whether the file should be read-only.</param>
 /// <param name="SystemMetadata">An optional system metadata snapshot.</param>
 /// <param name="ExtendedMetadata">Optional extended metadata patches.</param>
+[Obsolete("Use Veriado.Application.UseCases.Files.UpdateFileMetadata.UpdateFileMetadataCommand and related use cases instead.")]
 public sealed record UpdateMetadataCommand(
     Guid FileId,
     MimeType? Mime,

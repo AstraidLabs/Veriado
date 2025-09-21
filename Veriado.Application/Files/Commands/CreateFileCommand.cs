@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
@@ -16,6 +17,7 @@ namespace Veriado.Application.Files.Commands;
 /// <param name="ExtendedMetadata">Optional extended metadata patches to apply.</param>
 /// <param name="SystemMetadata">Optional system metadata snapshot.</param>
 /// <param name="IsReadOnly">Indicates whether the file should be marked read-only.</param>
+[Obsolete("Use Veriado.Application.UseCases.Files.CreateFile.CreateFileCommand instead.")]
 public sealed record CreateFileCommand(
     FileName Name,
     FileExtension Extension,

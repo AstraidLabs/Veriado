@@ -7,6 +7,7 @@ namespace Veriado.Application.Files.Validation;
 /// <summary>
 /// Validates <see cref="UpdateMetadataCommand"/> instances.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.Validation.UpdateFileMetadataCommandValidator instead.")]
 public sealed class UpdateMetadataRequestValidator : AbstractValidator<UpdateMetadataCommand>
 {
     /// <summary>

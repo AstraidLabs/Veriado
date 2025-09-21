@@ -10,6 +10,7 @@ namespace Veriado.Application.Files.Handlers;
 /// <summary>
 /// Handles <see cref="ReplaceContentCommand"/> operations.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.ReplaceFileContent.ReplaceFileContentHandler instead.")]
 public sealed class ReplaceContentHandler
 {
     private readonly IFileRepository _repository;

@@ -8,4 +8,5 @@ namespace Veriado.Application.Files.Commands;
 /// </summary>
 /// <param name="FileId">The identifier of the file to rename.</param>
 /// <param name="NewName">The new file name without extension.</param>
+[Obsolete("Use Veriado.Application.UseCases.Files.RenameFile.RenameFileCommand instead.")]
 public sealed record RenameFileCommand(Guid FileId, FileName NewName);

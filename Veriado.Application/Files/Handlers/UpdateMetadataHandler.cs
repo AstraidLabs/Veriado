@@ -11,6 +11,7 @@ namespace Veriado.Application.Files.Handlers;
 /// <summary>
 /// Handles <see cref="UpdateMetadataCommand"/> operations.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.UpdateFileMetadata.UpdateFileMetadataHandler instead.")]
 public sealed class UpdateMetadataHandler
 {
     private readonly IFileRepository _repository;

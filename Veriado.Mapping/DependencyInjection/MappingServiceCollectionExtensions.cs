@@ -2,8 +2,16 @@ using System;
 using AutoMapper;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
-using Veriado.Application.Files.Commands;
-using Veriado.Application.Files.Validation;
+using Veriado.Application.UseCases.Files.ApplySystemMetadata;
+using Veriado.Application.UseCases.Files.ClearFileValidity;
+using Veriado.Application.UseCases.Files.CreateFile;
+using Veriado.Application.UseCases.Files.ReplaceFileContent;
+using Veriado.Application.UseCases.Files.RenameFile;
+using Veriado.Application.UseCases.Files.SetExtendedMetadata;
+using Veriado.Application.UseCases.Files.SetFileReadOnly;
+using Veriado.Application.UseCases.Files.SetFileValidity;
+using Veriado.Application.UseCases.Files.UpdateFileMetadata;
+using Veriado.Application.UseCases.Files.Validation;
 using Veriado.Mapping.AC;
 using Veriado.Mapping.Profiles;
 
@@ -43,12 +51,15 @@ public static class MappingServiceCollectionExtensions
             return configuration.CreateMapper(provider.GetService);
         });
 
-        services.AddTransient<IValidator<CreateFileCommand>, CreateFileRequestValidator>();
-        services.AddTransient<IValidator<ReplaceContentCommand>, ReplaceContentRequestValidator>();
-        services.AddTransient<IValidator<UpdateMetadataCommand>, UpdateMetadataRequestValidator>();
-        services.AddTransient<IValidator<RenameFileCommand>, RenameFileRequestValidator>();
-        services.AddTransient<IValidator<SetValidityCommand>, SetValidityRequestValidator>();
-        services.AddTransient<IValidator<ClearValidityCommand>, ClearValidityRequestValidator>();
+        services.AddTransient<IValidator<CreateFileCommand>, CreateFileCommandValidator>();
+        services.AddTransient<IValidator<ReplaceFileContentCommand>, ReplaceFileContentCommandValidator>();
+        services.AddTransient<IValidator<UpdateFileMetadataCommand>, UpdateFileMetadataCommandValidator>();
+        services.AddTransient<IValidator<RenameFileCommand>, RenameFileCommandValidator>();
+        services.AddTransient<IValidator<SetFileValidityCommand>, SetFileValidityCommandValidator>();
+        services.AddTransient<IValidator<ClearFileValidityCommand>, ClearFileValidityCommandValidator>();
+        services.AddTransient<IValidator<ApplySystemMetadataCommand>, ApplySystemMetadataCommandValidator>();
+        services.AddTransient<IValidator<SetExtendedMetadataCommand>, SetExtendedMetadataCommandValidator>();
+        services.AddTransient<IValidator<SetFileReadOnlyCommand>, SetFileReadOnlyCommandValidator>();
 
         services.AddTransient<WriteMappingPipeline>();
 

@@ -8,4 +8,5 @@ namespace Veriado.Application.Files.Commands;
 /// <param name="FileId">The identifier of the file to update.</param>
 /// <param name="ContentBytes">The new binary content.</param>
 /// <param name="MaxContentLength">An optional maximum content length constraint.</param>
+[Obsolete("Use Veriado.Application.UseCases.Files.ReplaceFileContent.ReplaceFileContentCommand instead.")]
 public sealed record ReplaceContentCommand(Guid FileId, byte[] ContentBytes, int? MaxContentLength);
