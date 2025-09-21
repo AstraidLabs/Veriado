@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly InfrastructureOptions _options;
     private readonly ITextExtractor _textExtractor;
     private readonly IEventPublisher _eventPublisher;
+    private readonly IClock _clock;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -37,7 +39,8 @@ internal sealed class WriteWorker : BackgroundService
         ILogger<WriteWorker> logger,
         InfrastructureOptions options,
         ITextExtractor textExtractor,
-        IEventPublisher eventPublisher)
+        IEventPublisher eventPublisher,
+        IClock clock)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -45,6 +48,7 @@ internal sealed class WriteWorker : BackgroundService
         _options = options;
         _textExtractor = textExtractor;
         _eventPublisher = eventPublisher;
+        _clock = clock;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -125,6 +129,7 @@ internal sealed class WriteWorker : BackgroundService
 
     private async Task ProcessBatchAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
     {
+        var batchStopwatch = Stopwatch.StartNew();
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
@@ -179,6 +184,12 @@ internal sealed class WriteWorker : BackgroundService
             }
         }
 
+        var staleCount = filesToIndex.Count;
+        if (staleCount > 0)
+        {
+            _logger.LogDebug("Processing {Count} stale search index entries", staleCount);
+        }
+
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
         var reindexEvents = domainEvents.OfType<SearchReindexRequested>().ToList();
 
@@ -203,6 +214,7 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        batchStopwatch.Stop();
 
         foreach (var entry in fileEntries)
         {
@@ -226,6 +238,12 @@ internal sealed class WriteWorker : BackgroundService
                 _logger.LogError(ex, "Domain event publication failed for {EventTypes}", eventTypes);
             }
         }
+
+        _logger.LogInformation(
+            "Processed write batch of {BatchSize} items in {ElapsedMilliseconds} ms (indexed {IndexedCount})",
+            batch.Count,
+            batchStopwatch.Elapsed.TotalMilliseconds,
+            staleCount);
     }
 
     private async Task ApplyFulltextUpdatesAsync(AppDbContext context, IReadOnlyList<FileEntity> filesToIndex, IReadOnlyList<Guid> filesToDelete, CancellationToken cancellationToken)
@@ -245,21 +263,71 @@ internal sealed class WriteWorker : BackgroundService
 
         foreach (var id in filesToDelete)
         {
-            await helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, cancellationToken).ConfigureAwait(false);
+            await ExecuteWithRetryAsync(
+                ct => helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, ct),
+                $"delete index for {id}",
+                cancellationToken).ConfigureAwait(false);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        if (filesToIndex.Count == 0)
+        {
+            return;
+        }
+
+        var now = _clock.UtcNow;
         foreach (var file in filesToIndex)
         {
+            var stopwatch = Stopwatch.StartNew();
             var text = await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
             var document = file.ToSearchDocument(text);
-            await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, cancellationToken).ConfigureAwait(false);
+            await ExecuteWithRetryAsync(
+                ct => helper.IndexAsync(document, sqliteConnection, sqliteTransaction, ct),
+                $"index file {file.Id}",
+                cancellationToken).ConfigureAwait(false);
+            stopwatch.Stop();
+            _logger.LogDebug("Indexed file {FileId} in {ElapsedMilliseconds} ms", file.Id, stopwatch.Elapsed.TotalMilliseconds);
             file.ConfirmIndexed(file.SearchIndex.SchemaVersion, now);
         }
 
-        if (filesToIndex.Count > 0)
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ExecuteWithRetryAsync(
+        Func<CancellationToken, Task> operation,
+        string description,
+        CancellationToken cancellationToken,
+        int maxAttempts = 3)
+    {
+        Exception? lastError = null;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await operation(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                lastError = ex;
+                _logger.LogWarning(
+                    ex,
+                    "{Operation} failed on attempt {Attempt}/{MaxAttempts}, retrying",
+                    description,
+                    attempt,
+                    maxAttempts);
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                break;
+            }
         }
+
+        throw lastError ?? new InvalidOperationException($"Operation '{description}' failed without emitting an exception.");
     }
 }

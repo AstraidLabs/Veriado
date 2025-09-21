@@ -23,6 +23,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private readonly ITextExtractor _textExtractor;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<FulltextIntegrityService> _logger;
+    private readonly IClock _clock;
 
     public FulltextIntegrityService(
         IDbContextFactory<ReadOnlyDbContext> readFactory,
@@ -30,7 +31,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         ISearchIndexer searchIndexer,
         ITextExtractor textExtractor,
         InfrastructureOptions options,
-        ILogger<FulltextIntegrityService> logger)
+        ILogger<FulltextIntegrityService> logger,
+        IClock clock)
     {
         _readFactory = readFactory;
         _writeFactory = writeFactory;
@@ -38,6 +40,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         _textExtractor = textExtractor;
         _options = options;
         _logger = logger;
+        _clock = clock;
     }
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
@@ -144,7 +147,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
         if (tracked is not null)
         {
-            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, DateTimeOffset.UtcNow);
+            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, _clock.UtcNow);
         }
     }
 

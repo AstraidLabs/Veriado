@@ -12,8 +12,7 @@ public abstract class FileWriteHandlerBase
 {
     private readonly IFileRepository _repository;
     private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexer _searchIndexer;
-    private readonly ITextExtractor _textExtractor;
+    private readonly ISearchIndexCoordinator _indexCoordinator;
     private readonly IClock _clock;
 
     protected IFileRepository Repository => _repository;
@@ -21,14 +20,12 @@ public abstract class FileWriteHandlerBase
     protected FileWriteHandlerBase(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         IClock clock)
     {
         _repository = repository;
         _eventPublisher = eventPublisher;
-        _searchIndexer = searchIndexer;
-        _textExtractor = textExtractor;
+        _indexCoordinator = indexCoordinator;
         _clock = clock;
     }
 
@@ -66,12 +63,12 @@ public abstract class FileWriteHandlerBase
 
     private async Task IndexAndUpdateAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
     {
-        var text = extractContent
-            ? await _textExtractor.ExtractTextAsync(file, cancellationToken)
-            : null;
-        var document = file.ToSearchDocument(text);
-        await _searchIndexer.IndexAsync(document, cancellationToken);
-        file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
+        var indexed = await _indexCoordinator.IndexAsync(file, extractContent, allowDeferred: true, cancellationToken)
+            .ConfigureAwait(false);
+        if (indexed)
+        {
+            file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
+        }
         await _repository.UpdateAsync(file, cancellationToken);
     }
 

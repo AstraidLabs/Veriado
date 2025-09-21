@@ -24,10 +24,9 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
     public ApplySystemMetadataHandler(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         IClock clock)
-        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
+        : base(repository, eventPublisher, indexCoordinator, clock)
     {
     }
 

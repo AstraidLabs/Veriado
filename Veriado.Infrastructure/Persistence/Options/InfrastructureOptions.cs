@@ -61,6 +61,16 @@ public sealed class InfrastructureOptions
     /// </summary>
     public bool RepairIntegrityAutomatically { get; set; } = false;
 
+    /// <summary>
+    /// Gets or sets the duration after which stored idempotency keys expire.
+    /// </summary>
+    public TimeSpan IdempotencyKeyTtl { get; set; } = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// Gets or sets the interval at which expired idempotency keys are purged.
+    /// </summary>
+    public TimeSpan IdempotencyCleanupInterval { get; set; } = TimeSpan.FromHours(1);
+
     private int _batchSize = DefaultBatchSize;
     private int _batchWindowMs = DefaultBatchWindowMs;
 

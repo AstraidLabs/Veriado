@@ -22,10 +22,9 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
     public ClearFileValidityHandler(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         IClock clock)
-        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
+        : base(repository, eventPublisher, indexCoordinator, clock)
     {
     }
 

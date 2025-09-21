@@ -15,8 +15,7 @@ namespace Veriado.Application.UseCases.Maintenance;
 public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRepairFulltextCommand, AppResult<int>>
 {
     private readonly IFileRepository _repository;
-    private readonly ISearchIndexer _searchIndexer;
-    private readonly ITextExtractor _textExtractor;
+    private readonly ISearchIndexCoordinator _indexCoordinator;
     private readonly IClock _clock;
 
     /// <summary>
@@ -24,13 +23,11 @@ public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRe
     /// </summary>
     public VerifyAndRepairFulltextHandler(
         IFileRepository repository,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         IClock clock)
     {
         _repository = repository;
-        _searchIndexer = searchIndexer;
-        _textExtractor = textExtractor;
+        _indexCoordinator = indexCoordinator;
         _clock = clock;
     }
 
@@ -46,10 +43,12 @@ public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRe
                 continue;
             }
 
-            var text = request.ExtractContent ? await _textExtractor.ExtractTextAsync(file, cancellationToken) : null;
-            var document = file.ToSearchDocument(text);
-            await _searchIndexer.IndexAsync(document, cancellationToken);
-            file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
+            var indexed = await _indexCoordinator.IndexAsync(file, request.ExtractContent, allowDeferred: false, cancellationToken)
+                .ConfigureAwait(false);
+            if (indexed)
+            {
+                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
+            }
             await _repository.UpdateAsync(file, cancellationToken);
             repaired++;
         }

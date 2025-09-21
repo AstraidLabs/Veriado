@@ -17,8 +17,7 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
 {
     private readonly IFileRepository _repository;
     private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexer _searchIndexer;
-    private readonly ITextExtractor _textExtractor;
+    private readonly ISearchIndexCoordinator _indexCoordinator;
     private readonly IClock _clock;
 
     /// <summary>
@@ -27,14 +26,12 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
     public BulkReindexHandler(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         IClock clock)
     {
         _repository = repository;
         _eventPublisher = eventPublisher;
-        _searchIndexer = searchIndexer;
-        _textExtractor = textExtractor;
+        _indexCoordinator = indexCoordinator;
         _clock = clock;
     }
 
@@ -58,10 +55,12 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
         foreach (var file in files)
         {
             await PublishDomainEventsAsync(file, cancellationToken);
-            var text = request.ExtractContent ? await _textExtractor.ExtractTextAsync(file, cancellationToken) : null;
-            var document = file.ToSearchDocument(text);
-            await _searchIndexer.IndexAsync(document, cancellationToken);
-            file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
+            var indexed = await _indexCoordinator.IndexAsync(file, request.ExtractContent, allowDeferred: false, cancellationToken)
+                .ConfigureAwait(false);
+            if (indexed)
+            {
+                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
+            }
             await _repository.UpdateAsync(file, cancellationToken);
         }
 
