@@ -15,6 +15,7 @@ using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
+using Veriado.Infrastructure.Maintenance;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Persistence.Options;
@@ -76,6 +77,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IWriteQueue, WriteQueue>();
         services.AddSingleton<ISearchIndexer, SqliteFts5Indexer>();
+        services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
+        services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
@@ -95,8 +98,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
         services.AddScoped<IFileReadRepository, FileReadRepository>();
+        services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();
 
         services.AddHostedService<WriteWorker>();
+        services.AddHostedService<IdempotencyCleanupWorker>();
         if (options.FtsIndexingMode == FtsIndexingMode.Outbox)
         {
             services.AddHostedService<OutboxWorker>();

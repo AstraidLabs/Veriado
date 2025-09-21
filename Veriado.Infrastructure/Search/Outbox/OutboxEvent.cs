@@ -18,7 +18,7 @@ public sealed class OutboxEvent
         = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
-        = DateTimeOffset.UtcNow;
+        = default;
 
     public DateTimeOffset? ProcessedUtc { get; set; }
         = null;

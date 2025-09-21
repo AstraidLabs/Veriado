@@ -34,13 +34,50 @@ internal sealed class FileReadRepository : IFileReadRepository
     {
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var entity = await context.Files
+        var projection = await context.Files
             .AsNoTracking()
-            .Include(file => file.Validity)
-            .FirstOrDefaultAsync(file => file.Id == id, cancellationToken)
+            .Where(file => file.Id == id)
+            .Select(file => new
+            {
+                file.Id,
+                Name = file.Name.Value,
+                Extension = file.Extension.Value,
+                Mime = file.Mime.Value,
+                file.Author,
+                Size = file.Size.Value,
+                file.Version,
+                file.IsReadOnly,
+                CreatedUtc = file.CreatedUtc.Value,
+                LastModifiedUtc = file.LastModifiedUtc.Value,
+                Validity = file.Validity,
+                file.SystemMetadata,
+                file.ExtendedMetadata,
+            })
+            .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return entity is null ? null : MapToDetail(entity);
+        if (projection is null)
+        {
+            return null;
+        }
+
+        var validity = MapValidity(projection.Validity);
+        var metadata = MapExtendedMetadata(projection.ExtendedMetadata);
+
+        return new FileDetailReadModel(
+            projection.Id,
+            projection.Name,
+            projection.Extension,
+            projection.Mime,
+            projection.Author,
+            projection.Size,
+            projection.Version,
+            projection.IsReadOnly,
+            projection.CreatedUtc,
+            projection.LastModifiedUtc,
+            validity,
+            projection.SystemMetadata,
+            metadata);
     }
 
     public async Task<Page<FileListItemReadModel>> ListAsync(PageRequest request, CancellationToken cancellationToken)
@@ -51,16 +88,25 @@ internal sealed class FileReadRepository : IFileReadRepository
 
         var totalCount = await baseQuery.CountAsync(cancellationToken).ConfigureAwait(false);
 
-        var entities = await baseQuery
-            .Include(file => file.Validity)
+        var items = await baseQuery
             .OrderByDescending(file => file.LastModifiedUtc.Value)
             .ThenBy(file => file.Id)
             .Skip(request.Skip)
             .Take(request.PageSize)
+            .Select(file => new FileListItemReadModel(
+                file.Id,
+                file.Name.Value,
+                file.Extension.Value,
+                file.Mime.Value,
+                file.Author,
+                file.Size.Value,
+                file.Version,
+                file.IsReadOnly,
+                file.CreatedUtc.Value,
+                file.LastModifiedUtc.Value,
+                file.Validity == null ? (DateTimeOffset?)null : file.Validity.ValidUntil.Value))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-
-        var items = entities.Select(MapToListItem).ToList();
 
         return new Page<FileListItemReadModel>(items, request.PageNumber, request.PageSize, totalCount);
     }
@@ -70,53 +116,27 @@ internal sealed class FileReadRepository : IFileReadRepository
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var threshold = validUntilUtc.ToUniversalTime();
 
-        var entities = await context.Files
+        var items = await context.Files
             .AsNoTracking()
-            .Include(file => file.Validity)
             .Where(file => file.Validity != null && file.Validity.ValidUntil.Value <= threshold)
             .OrderBy(file => file.Validity!.ValidUntil.Value)
             .ThenBy(file => file.Id)
+            .Select(file => new FileListItemReadModel(
+                file.Id,
+                file.Name.Value,
+                file.Extension.Value,
+                file.Mime.Value,
+                file.Author,
+                file.Size.Value,
+                file.Version,
+                file.IsReadOnly,
+                file.CreatedUtc.Value,
+                file.LastModifiedUtc.Value,
+                file.Validity!.ValidUntil.Value))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return entities.Select(MapToListItem).ToArray();
-    }
-
-    private static FileDetailReadModel MapToDetail(FileEntity file)
-    {
-        var validity = MapValidity(file.Validity);
-        var metadata = MapExtendedMetadata(file.ExtendedMetadata);
-
-        return new FileDetailReadModel(
-            file.Id,
-            file.Name.Value,
-            file.Extension.Value,
-            file.Mime.Value,
-            file.Author,
-            file.Size.Value,
-            file.Version,
-            file.IsReadOnly,
-            file.CreatedUtc.Value,
-            file.LastModifiedUtc.Value,
-            validity,
-            file.SystemMetadata,
-            metadata);
-    }
-
-    private static FileListItemReadModel MapToListItem(FileEntity file)
-    {
-        return new FileListItemReadModel(
-            file.Id,
-            file.Name.Value,
-            file.Extension.Value,
-            file.Mime.Value,
-            file.Author,
-            file.Size.Value,
-            file.Version,
-            file.IsReadOnly,
-            file.CreatedUtc.Value,
-            file.LastModifiedUtc.Value,
-            file.Validity?.ValidUntil.Value);
+        return items;
     }
 
     private static FileDocumentValidityReadModel? MapValidity(FileDocumentValidityEntity? validity)

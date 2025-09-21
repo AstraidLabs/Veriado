@@ -25,11 +25,10 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
     public ReplaceFileContentHandler(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         ImportPolicy importPolicy,
         IClock clock)
-        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
+        : base(repository, eventPublisher, indexCoordinator, clock)
     {
         _importPolicy = importPolicy;
     }

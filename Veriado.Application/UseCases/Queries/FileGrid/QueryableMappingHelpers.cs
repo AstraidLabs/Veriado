@@ -65,7 +65,10 @@ public static class QueryableMappingHelpers
         LastModifiedUtc = file.LastModifiedUtc.Value,
         IsReadOnly = file.IsReadOnly,
         Version = file.Version,
-        Content = new FileContentDto(file.Content.Hash.Value, file.Content.Length.Value, null),
+        Content = new FileContentDto(
+            file.SearchIndex.IndexedContentHash ?? string.Empty,
+            file.Size.Value,
+            null),
         SystemMetadata = new FileSystemMetadataDto(
             (int)file.SystemMetadata.Attributes,
             file.SystemMetadata.CreatedUtc.Value,

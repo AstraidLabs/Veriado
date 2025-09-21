@@ -25,6 +25,7 @@ internal sealed class OutboxWorker : BackgroundService
     private readonly ITextExtractor _textExtractor;
     private readonly ILogger<OutboxWorker> _logger;
     private readonly InfrastructureOptions _options;
+    private readonly IClock _clock;
 
     public OutboxWorker(
         IDbContextFactory<AppDbContext> writeFactory,
@@ -32,7 +33,8 @@ internal sealed class OutboxWorker : BackgroundService
         ISearchIndexer searchIndexer,
         ITextExtractor textExtractor,
         ILogger<OutboxWorker> logger,
-        InfrastructureOptions options)
+        InfrastructureOptions options,
+        IClock clock)
     {
         _writeFactory = writeFactory;
         _readFactory = readFactory;
@@ -40,6 +42,7 @@ internal sealed class OutboxWorker : BackgroundService
         _textExtractor = textExtractor;
         _logger = logger;
         _options = options;
+        _clock = clock;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -91,12 +94,12 @@ internal sealed class OutboxWorker : BackgroundService
                 if (!payload.RootElement.TryGetProperty("FileId", out var fileIdElement) || !Guid.TryParse(fileIdElement.GetString(), out var fileId))
                 {
                     _logger.LogWarning("Outbox event {EventId} missing file identifier", outbox.Id);
-                    outbox.ProcessedUtc = DateTimeOffset.UtcNow;
+                    outbox.ProcessedUtc = _clock.UtcNow;
                     continue;
                 }
 
                 await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
-                outbox.ProcessedUtc = DateTimeOffset.UtcNow;
+                outbox.ProcessedUtc = _clock.UtcNow;
             }
             catch (Exception ex)
             {
@@ -129,7 +132,7 @@ internal sealed class OutboxWorker : BackgroundService
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
         if (tracked is not null)
         {
-            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, DateTimeOffset.UtcNow);
+            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, _clock.UtcNow);
         }
     }
 }

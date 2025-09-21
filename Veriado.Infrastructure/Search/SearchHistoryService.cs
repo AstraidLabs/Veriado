@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Veriado.Application.Abstractions;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -12,10 +13,12 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SearchHistoryService : ISearchHistoryService
 {
     private readonly InfrastructureOptions _options;
+    private readonly IClock _clock;
 
-    public SearchHistoryService(InfrastructureOptions options)
+    public SearchHistoryService(InfrastructureOptions options, IClock clock)
     {
         _options = options;
+        _clock = clock;
     }
 
     public async Task AddAsync(string? queryText, string matchQuery, int totalCount, bool isFuzzy, CancellationToken cancellationToken)
@@ -24,7 +27,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var now = DateTimeOffset.UtcNow.ToString("O");
+        var now = _clock.UtcNow.ToString("O");
 
         await using (var update = connection.CreateCommand())
         {

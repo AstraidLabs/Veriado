@@ -24,11 +24,10 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
     public CreateFileHandler(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         ImportPolicy importPolicy,
         IClock clock)
-        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
+        : base(repository, eventPublisher, indexCoordinator, clock)
     {
         _importPolicy = importPolicy;
     }

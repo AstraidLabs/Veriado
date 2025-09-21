@@ -23,10 +23,9 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
     public SetFileValidityHandler(
         IFileRepository repository,
         IEventPublisher eventPublisher,
-        ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator indexCoordinator,
         IClock clock)
-        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
+        : base(repository, eventPublisher, indexCoordinator, clock)
     {
     }
 

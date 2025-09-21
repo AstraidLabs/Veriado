@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Veriado.Application.Abstractions;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -13,10 +14,12 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SearchFavoritesService : ISearchFavoritesService
 {
     private readonly InfrastructureOptions _options;
+    private readonly IClock _clock;
 
-    public SearchFavoritesService(InfrastructureOptions options)
+    public SearchFavoritesService(InfrastructureOptions options, IClock clock)
     {
         _options = options;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<SearchFavoriteItem>> GetAllAsync(CancellationToken cancellationToken)
@@ -70,7 +73,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         insert.Parameters.Add("$queryText", SqliteType.Text).Value = (object?)queryText ?? DBNull.Value;
         insert.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
         insert.Parameters.Add("$position", SqliteType.Integer).Value = maxPosition + 1;
-        insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = DateTimeOffset.UtcNow.ToString("O");
+        insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = _clock.UtcNow.ToString("O");
         insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = isFuzzy ? 1 : 0;
         await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
