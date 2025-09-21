@@ -191,11 +191,11 @@ internal sealed class XlsxTextExtractor
 
         return cell.DataType.Value switch
         {
-            CellValues.SharedString => TryResolveSharedString(raw, sharedStrings),
-            CellValues.Boolean => raw == "1" ? "TRUE" : "FALSE",
-            CellValues.Date => raw,
-            CellValues.Number => raw,
-            CellValues.InlineString => cell.InnerText,
+            var dataType when dataType == CellValues.SharedString => TryResolveSharedString(raw, sharedStrings),
+            var dataType when dataType == CellValues.Boolean => raw == "1" ? "TRUE" : "FALSE",
+            var dataType when dataType == CellValues.Date => raw,
+            var dataType when dataType == CellValues.Number => raw,
+            var dataType when dataType == CellValues.InlineString => cell.InnerText,
             _ => raw,
         };
     }

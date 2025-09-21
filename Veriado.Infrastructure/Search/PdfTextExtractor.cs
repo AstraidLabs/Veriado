@@ -36,7 +36,7 @@ internal sealed class PdfTextExtractor
 
         try
         {
-            using var document = PdfDocument.Open(content, ParsingOptions.LenientParsing);
+            using var document = PdfDocument.Open(content, new ParsingOptions { UseLenientParsing = true });
             var builder = new StringBuilder();
             var processedPages = 0;
 
