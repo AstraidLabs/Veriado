@@ -544,7 +544,15 @@ public sealed class FileEntity : AggregateRoot
         }
 
         var contentText = contentParts.Count == 0 ? null : string.Join(Environment.NewLine, contentParts);
-        return new SearchDocument(Id, title, Mime.Value, authorText, CreatedUtc.Value, LastModifiedUtc.Value, contentText);
+        return new SearchDocument(
+            Id,
+            title,
+            Mime.Value,
+            authorText,
+            subject,
+            CreatedUtc.Value,
+            LastModifiedUtc.Value,
+            contentText);
     }
 
     /// <summary>

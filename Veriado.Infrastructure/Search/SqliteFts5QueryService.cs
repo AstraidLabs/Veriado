@@ -66,6 +66,53 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         return results;
     }
 
+    public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
+        string matchQuery,
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
+        if (take <= 0)
+        {
+            return Array.Empty<(Guid, double)>();
+        }
+
+        if (skip < 0)
+        {
+            skip = 0;
+        }
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT m.file_id, bm25(t) AS score " +
+            "FROM file_trgm t " +
+            "JOIN file_trgm_map m ON t.rowid = m.rowid " +
+            "WHERE file_trgm MATCH $query " +
+            "ORDER BY bm25(t) ASC " +
+            "LIMIT $take OFFSET $skip;";
+        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
+        command.Parameters.Add("$take", SqliteType.Integer).Value = take;
+        command.Parameters.Add("$skip", SqliteType.Integer).Value = skip;
+
+        var results = new List<(Guid, double)>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var idBytes = (byte[])reader[0];
+            var id = new Guid(idBytes);
+            var rawScore = reader.IsDBNull(1) ? double.PositiveInfinity : reader.GetDouble(1);
+            var score = double.IsInfinity(rawScore)
+                ? 0d
+                : 1d / (1d + Math.Max(0d, rawScore));
+            results.Add((id, score));
+        }
+
+        return results;
+    }
+
     public async Task<int> CountAsync(string matchQuery, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);

@@ -45,22 +45,44 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var fileIds = await readContext.Files.Select(f => f.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var indexIds = new List<Guid>();
+        var searchIndexIds = new HashSet<Guid>();
+        var trigramIndexIds = new HashSet<Guid>();
         await using (var connection = CreateConnection())
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT file_id FROM file_search_map;";
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using (var command = connection.CreateCommand())
             {
-                var blob = (byte[])reader[0];
-                indexIds.Add(new Guid(blob));
+                command.CommandText = "SELECT file_id FROM file_search_map;";
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    var blob = (byte[])reader[0];
+                    searchIndexIds.Add(new Guid(blob));
+                }
+            }
+
+            await using (var trigramCommand = connection.CreateCommand())
+            {
+                trigramCommand.CommandText = "SELECT file_id FROM file_trgm_map;";
+                await using var reader = await trigramCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    var blob = (byte[])reader[0];
+                    trigramIndexIds.Add(new Guid(blob));
+                }
             }
         }
 
-        var missing = fileIds.Except(indexIds).ToArray();
-        var orphans = indexIds.Except(fileIds).ToArray();
+        var missing = fileIds
+            .Except(searchIndexIds)
+            .Union(fileIds.Except(trigramIndexIds))
+            .Distinct()
+            .ToArray();
+        var orphans = searchIndexIds
+            .Except(fileIds)
+            .Union(trigramIndexIds.Except(fileIds))
+            .Distinct()
+            .ToArray();
 
         return new IntegrityReport(missing, orphans);
     }

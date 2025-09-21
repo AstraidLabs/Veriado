@@ -18,7 +18,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         _options = options;
     }
 
-    public async Task AddAsync(string? queryText, string matchQuery, int totalCount, CancellationToken cancellationToken)
+    public async Task AddAsync(string? queryText, string matchQuery, int totalCount, bool isFuzzy, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
         await using var connection = CreateConnection();
@@ -31,12 +31,13 @@ internal sealed class SearchHistoryService : ISearchHistoryService
             update.Transaction = (SqliteTransaction)transaction;
             update.CommandText =
                 "UPDATE search_history " +
-                "SET query_text = $queryText, created_utc = $createdUtc, executions = executions + 1, last_total_hits = $hits " +
+                "SET query_text = $queryText, created_utc = $createdUtc, executions = executions + 1, last_total_hits = $hits, is_fuzzy = $isFuzzy " +
                 "WHERE match = $match;";
             update.Parameters.Add("$queryText", SqliteType.Text).Value = (object?)queryText ?? DBNull.Value;
             update.Parameters.Add("$createdUtc", SqliteType.Text).Value = now;
             update.Parameters.Add("$hits", SqliteType.Integer).Value = totalCount;
             update.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
+            update.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = isFuzzy ? 1 : 0;
             var affected = await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             if (affected == 0)
@@ -44,13 +45,14 @@ internal sealed class SearchHistoryService : ISearchHistoryService
                 await using var insert = connection.CreateCommand();
                 insert.Transaction = (SqliteTransaction)transaction;
                 insert.CommandText =
-                    "INSERT INTO search_history(id, query_text, match, created_utc, executions, last_total_hits) " +
-                    "VALUES ($id, $queryText, $match, $createdUtc, 1, $hits);";
+                    "INSERT INTO search_history(id, query_text, match, created_utc, executions, last_total_hits, is_fuzzy) " +
+                    "VALUES ($id, $queryText, $match, $createdUtc, 1, $hits, $isFuzzy);";
                 insert.Parameters.Add("$id", SqliteType.Blob).Value = Guid.NewGuid().ToByteArray();
                 insert.Parameters.Add("$queryText", SqliteType.Text).Value = (object?)queryText ?? DBNull.Value;
                 insert.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
                 insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = now;
                 insert.Parameters.Add("$hits", SqliteType.Integer).Value = totalCount;
+                insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = isFuzzy ? 1 : 0;
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
         }
@@ -69,7 +71,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT id, query_text, match, created_utc, executions, last_total_hits " +
+            "SELECT id, query_text, match, created_utc, executions, last_total_hits, is_fuzzy " +
             "FROM search_history " +
             "ORDER BY created_utc DESC, id DESC " +
             "LIMIT $limit;";
@@ -86,7 +88,8 @@ internal sealed class SearchHistoryService : ISearchHistoryService
             var createdUtc = DateTimeOffset.Parse(created, null, DateTimeStyles.RoundtripKind);
             var executions = reader.GetInt32(4);
             var lastTotal = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
-            entries.Add(new SearchHistoryEntry(id, text, match, createdUtc, executions, lastTotal));
+            var fuzzy = !reader.IsDBNull(6) && reader.GetBoolean(6);
+            entries.Add(new SearchHistoryEntry(id, text, match, createdUtc, executions, lastTotal, fuzzy));
         }
 
         return entries;

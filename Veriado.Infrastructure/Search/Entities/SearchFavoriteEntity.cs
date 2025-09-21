@@ -15,4 +15,6 @@ public sealed class SearchFavoriteEntity
     public int Position { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
+
+    public bool IsFuzzy { get; set; }
 }
