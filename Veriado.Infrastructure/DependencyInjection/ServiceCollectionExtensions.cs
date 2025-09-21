@@ -6,9 +6,12 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Search.Abstractions;
+using Veriado.Application.Pipeline.Idempotency;
 using Veriado.Infrastructure.Concurrency;
+using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Interceptors;
@@ -16,6 +19,7 @@ using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Repositories;
 using Veriado.Infrastructure.Search;
 using Veriado.Infrastructure.Search.Outbox;
+using Veriado.Infrastructure.Time;
 using Veriado.Domain.Primitives;
 
 namespace Veriado.Infrastructure.DependencyInjection;
@@ -64,6 +68,8 @@ public static class ServiceCollectionExtensions
             builder.AddInterceptors(serviceProvider.GetRequiredService<SqlitePragmaInterceptor>());
         }, poolSize: 256);
 
+        services.TryAddSingleton<IClock, SystemClock>();
+
         services.AddSingleton<IWriteQueue, WriteQueue>();
         services.AddSingleton<ISearchIndexer, SqliteFts5Indexer>();
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
@@ -72,6 +78,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITextExtractor, TextExtractor>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
         services.AddSingleton<IEventPublisher, NullEventPublisher>();
+        services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();

@@ -240,6 +240,22 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("file_ext_metadata", (string)null);
                 });
 
+            modelBuilder.Entity("Veriado.Infrastructure.Idempotency.Entities.IdempotencyKeyEntity", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("key");
+
+                    b.Property<string>("CreatedUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_utc");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("idempotency_keys", (string)null);
+                });
+
             modelBuilder.Entity("Veriado.Infrastructure.Search.Entities.SearchFavoriteEntity", b =>
                 {
                     b.Property<byte[]>("Id")
