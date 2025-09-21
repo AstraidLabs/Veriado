@@ -4,7 +4,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
-using Veriado.Application.Files.Commands;
+using MediatR;
+using Veriado.Application.Common;
+using Veriado.Application.DTO;
+using Veriado.Application.UseCases.Files.ApplySystemMetadata;
+using Veriado.Application.UseCases.Files.ClearFileValidity;
+using Veriado.Application.UseCases.Files.CreateFile;
+using Veriado.Application.UseCases.Files.ReplaceFileContent;
+using Veriado.Application.UseCases.Files.RenameFile;
+using Veriado.Application.UseCases.Files.SetExtendedMetadata;
+using Veriado.Application.UseCases.Files.SetFileReadOnly;
+using Veriado.Application.UseCases.Files.SetFileValidity;
+using Veriado.Application.UseCases.Files.UpdateFileMetadata;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
@@ -13,27 +24,27 @@ using Veriado.Domain.ValueObjects;
 namespace Veriado.Mapping.AC;
 
 /// <summary>
-/// Coordinates DTO-to-command mapping, value object parsing and validation.
+/// Coordinates DTO-to-command mapping, value object parsing and validation for write operations.
 /// </summary>
 public sealed class WriteMappingPipeline
 {
     private readonly IValidator<CreateFileCommand> _createValidator;
-    private readonly IValidator<ReplaceContentCommand> _replaceValidator;
-    private readonly IValidator<UpdateMetadataCommand> _updateValidator;
+    private readonly IValidator<ReplaceFileContentCommand> _replaceValidator;
+    private readonly IValidator<UpdateFileMetadataCommand> _updateValidator;
     private readonly IValidator<RenameFileCommand> _renameValidator;
-    private readonly IValidator<SetValidityCommand> _setValidityValidator;
-    private readonly IValidator<ClearValidityCommand> _clearValidityValidator;
+    private readonly IValidator<SetFileValidityCommand> _setValidityValidator;
+    private readonly IValidator<ClearFileValidityCommand> _clearValidityValidator;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WriteMappingPipeline"/> class.
     /// </summary>
     public WriteMappingPipeline(
         IValidator<CreateFileCommand> createValidator,
-        IValidator<ReplaceContentCommand> replaceValidator,
-        IValidator<UpdateMetadataCommand> updateValidator,
+        IValidator<ReplaceFileContentCommand> replaceValidator,
+        IValidator<UpdateFileMetadataCommand> updateValidator,
         IValidator<RenameFileCommand> renameValidator,
-        IValidator<SetValidityCommand> setValidityValidator,
-        IValidator<ClearValidityCommand> clearValidityValidator)
+        IValidator<SetFileValidityCommand> setValidityValidator,
+        IValidator<ClearFileValidityCommand> clearValidityValidator)
     {
         _createValidator = createValidator ?? throw new ArgumentNullException(nameof(createValidator));
         _replaceValidator = replaceValidator ?? throw new ArgumentNullException(nameof(replaceValidator));
@@ -44,9 +55,9 @@ public sealed class WriteMappingPipeline
     }
 
     /// <summary>
-    /// Maps a create request to a validated command.
+    /// Maps a create request to a validated command with follow-up instructions.
     /// </summary>
-    public async Task<ApiResponse<CreateFileCommand>> MapCreateAsync(CreateFileRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<CreateFileMappedRequest>> MapCreateAsync(CreateFileRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         var errors = new List<ApiError>();
@@ -54,7 +65,7 @@ public sealed class WriteMappingPipeline
         var nameResult = Parsers.ParseFileName(request.Name, nameof(request.Name));
         var extensionResult = Parsers.ParseFileExtension(request.Extension, nameof(request.Extension));
         var mimeResult = Parsers.ParseMimeType(request.Mime, nameof(request.Mime));
-        var metadataPatches = Parsers.ParseMetadataPatches(request.ExtendedMetadata, nameof(request.ExtendedMetadata), errors);
+        var metadataEntries = Parsers.ParseMetadataPatches(request.ExtendedMetadata, nameof(request.ExtendedMetadata), errors);
         var systemMetadata = Parsers.ParseOptionalMetadata(request.SystemMetadata, nameof(request.SystemMetadata), errors);
 
         CollectError(nameResult, errors);
@@ -63,94 +74,111 @@ public sealed class WriteMappingPipeline
 
         if (errors.Count > 0)
         {
-            return ApiResponse<CreateFileCommand>.Failure(errors);
+            return ApiResponse<CreateFileMappedRequest>.Failure(errors);
         }
 
         var command = new CreateFileCommand(
-            nameResult.Value,
-            extensionResult.Value,
-            mimeResult.Value,
+            nameResult.Value.Value,
+            extensionResult.Value.Value,
+            mimeResult.Value.Value,
             request.Author ?? string.Empty,
-            request.Content ?? Array.Empty<byte>(),
-            request.MaxContentLength,
-            metadataPatches,
-            systemMetadata,
-            request.IsReadOnly);
+            request.Content ?? Array.Empty<byte>());
 
         var validation = await _createValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
             AddValidationErrors(errors, validation);
-            return ApiResponse<CreateFileCommand>.Failure(errors);
+            return ApiResponse<CreateFileMappedRequest>.Failure(errors);
         }
 
-        return ApiResponse<CreateFileCommand>.Success(command);
+        var mapped = new CreateFileMappedRequest(command, metadataEntries, systemMetadata, request.IsReadOnly);
+        return ApiResponse<CreateFileMappedRequest>.Success(mapped);
     }
 
     /// <summary>
     /// Maps a replace content request to a validated command.
     /// </summary>
-    public async Task<ApiResponse<ReplaceContentCommand>> MapReplaceContentAsync(ReplaceContentRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<ReplaceFileContentCommand>> MapReplaceContentAsync(ReplaceContentRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var command = new ReplaceContentCommand(request.FileId, request.Content ?? Array.Empty<byte>(), request.MaxContentLength);
+        var command = new ReplaceFileContentCommand(request.FileId, request.Content ?? Array.Empty<byte>());
         var validation = await _replaceValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
             var errors = new List<ApiError>();
             AddValidationErrors(errors, validation);
-            return ApiResponse<ReplaceContentCommand>.Failure(errors);
+            return ApiResponse<ReplaceFileContentCommand>.Failure(errors);
         }
 
-        return ApiResponse<ReplaceContentCommand>.Success(command);
+        return ApiResponse<ReplaceFileContentCommand>.Success(command);
     }
 
     /// <summary>
-    /// Maps an update metadata request to a validated command.
+    /// Maps an update metadata request to a set of commands executed in sequence.
     /// </summary>
-    public async Task<ApiResponse<UpdateMetadataCommand>> MapUpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<UpdateFileMetadataMappedRequest>> MapUpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         var errors = new List<ApiError>();
 
-        MimeType? mime = null;
+        string? mime = null;
         if (!string.IsNullOrWhiteSpace(request.Mime))
         {
             var mimeResult = Parsers.ParseMimeType(request.Mime, nameof(request.Mime));
             if (!mimeResult.IsSuccess)
             {
-                errors.Add(mimeResult.Error!);
+                CollectError(mimeResult, errors);
             }
             else
             {
-                mime = mimeResult.Value;
+                mime = mimeResult.Value.Value;
             }
         }
 
         var systemMetadata = Parsers.ParseOptionalMetadata(request.SystemMetadata, nameof(request.SystemMetadata), errors);
-        var metadataPatches = Parsers.ParseMetadataPatches(request.ExtendedMetadata, nameof(request.ExtendedMetadata), errors);
+        var metadataEntries = Parsers.ParseMetadataPatches(request.ExtendedMetadata, nameof(request.ExtendedMetadata), errors);
 
         if (errors.Count > 0)
         {
-            return ApiResponse<UpdateMetadataCommand>.Failure(errors);
+            return ApiResponse<UpdateFileMetadataMappedRequest>.Failure(errors);
         }
 
-        var command = new UpdateMetadataCommand(
-            request.FileId,
-            mime,
-            request.Author,
-            request.IsReadOnly,
-            systemMetadata,
-            metadataPatches);
-
-        var validation = await _updateValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
-        if (!validation.IsValid)
+        UpdateFileMetadataCommand? metadataCommand = null;
+        if (mime is not null || request.Author is not null)
         {
-            AddValidationErrors(errors, validation);
-            return ApiResponse<UpdateMetadataCommand>.Failure(errors);
+            metadataCommand = new UpdateFileMetadataCommand(request.FileId, mime, request.Author);
+            var validation = await _updateValidator.ValidateAsync(metadataCommand, cancellationToken).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                AddValidationErrors(errors, validation);
+            }
         }
 
-        return ApiResponse<UpdateMetadataCommand>.Success(command);
+        ApplySystemMetadataCommand? systemCommand = systemMetadata is null
+            ? null
+            : CreateSystemMetadataCommand(request.FileId, systemMetadata);
+
+        SetExtendedMetadataCommand? metadataSetCommand = metadataEntries.Count == 0
+            ? null
+            : new SetExtendedMetadataCommand(request.FileId, metadataEntries);
+
+        SetFileReadOnlyCommand? readOnlyCommand = request.IsReadOnly.HasValue
+            ? new SetFileReadOnlyCommand(request.FileId, request.IsReadOnly.Value)
+            : null;
+
+        if (errors.Count > 0)
+        {
+            return ApiResponse<UpdateFileMetadataMappedRequest>.Failure(errors);
+        }
+
+        if (metadataCommand is null && systemCommand is null && metadataSetCommand is null && readOnlyCommand is null)
+        {
+            errors.Add(ApiError.ForValue(nameof(UpdateMetadataRequest), "At least one metadata change must be provided."));
+            return ApiResponse<UpdateFileMetadataMappedRequest>.Failure(errors);
+        }
+
+        var mapped = new UpdateFileMetadataMappedRequest(metadataCommand, systemCommand, metadataSetCommand, readOnlyCommand);
+        return ApiResponse<UpdateFileMetadataMappedRequest>.Success(mapped);
     }
 
     /// <summary>
@@ -172,7 +200,7 @@ public sealed class WriteMappingPipeline
             return ApiResponse<RenameFileCommand>.Failure(errors);
         }
 
-        var command = new RenameFileCommand(fileId, nameResult.Value);
+        var command = new RenameFileCommand(fileId, nameResult.Value.Value);
         var validation = await _renameValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
@@ -186,7 +214,7 @@ public sealed class WriteMappingPipeline
     /// <summary>
     /// Maps a set-validity request to a validated command.
     /// </summary>
-    public async Task<ApiResponse<SetValidityCommand>> MapSetValidityAsync(SetValidityRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<SetFileValidityCommand>> MapSetValidityAsync(SetValidityRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         var issuedResult = Parsers.ParseUtcTimestamp(request.IssuedAt);
@@ -197,13 +225,13 @@ public sealed class WriteMappingPipeline
 
         if (errors.Count > 0)
         {
-            return ApiResponse<SetValidityCommand>.Failure(errors);
+            return ApiResponse<SetFileValidityCommand>.Failure(errors);
         }
 
-        var command = new SetValidityCommand(
+        var command = new SetFileValidityCommand(
             request.FileId,
-            issuedResult.Value,
-            untilResult.Value,
+            issuedResult.Value.Value,
+            untilResult.Value.Value,
             request.HasPhysicalCopy,
             request.HasElectronicCopy);
 
@@ -211,28 +239,41 @@ public sealed class WriteMappingPipeline
         if (!validation.IsValid)
         {
             AddValidationErrors(errors, validation);
-            return ApiResponse<SetValidityCommand>.Failure(errors);
+            return ApiResponse<SetFileValidityCommand>.Failure(errors);
         }
 
-        return ApiResponse<SetValidityCommand>.Success(command);
+        return ApiResponse<SetFileValidityCommand>.Success(command);
     }
 
     /// <summary>
     /// Maps a clear-validity request to a validated command.
     /// </summary>
-    public async Task<ApiResponse<ClearValidityCommand>> MapClearValidityAsync(ClearValidityRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<ClearFileValidityCommand>> MapClearValidityAsync(ClearValidityRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var command = new ClearValidityCommand(request.FileId);
+        var command = new ClearFileValidityCommand(request.FileId);
         var validation = await _clearValidityValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
             var errors = new List<ApiError>();
             AddValidationErrors(errors, validation);
-            return ApiResponse<ClearValidityCommand>.Failure(errors);
+            return ApiResponse<ClearFileValidityCommand>.Failure(errors);
         }
 
-        return ApiResponse<ClearValidityCommand>.Success(command);
+        return ApiResponse<ClearFileValidityCommand>.Success(command);
+    }
+
+    private static ApplySystemMetadataCommand CreateSystemMetadataCommand(Guid fileId, FileSystemMetadata metadata)
+    {
+        return new ApplySystemMetadataCommand(
+            fileId,
+            metadata.Attributes,
+            metadata.CreatedUtc.Value,
+            metadata.LastWriteUtc.Value,
+            metadata.LastAccessUtc.Value,
+            metadata.OwnerSid,
+            metadata.HardLinkCount,
+            metadata.AlternateDataStreamCount);
     }
 
     private static void CollectError<T>(ParserResult<T> result, ICollection<ApiError> errors)
@@ -248,6 +289,75 @@ public sealed class WriteMappingPipeline
         foreach (var failure in validation.Errors)
         {
             errors.Add(ApiError.ForValue(failure.PropertyName, failure.ErrorMessage));
+        }
+    }
+}
+
+/// <summary>
+/// Represents a mapped create-file request with follow-up commands.
+/// </summary>
+public sealed record CreateFileMappedRequest(
+    CreateFileCommand Command,
+    IReadOnlyCollection<ExtendedMetadataEntry> ExtendedMetadata,
+    FileSystemMetadata? SystemMetadata,
+    bool SetReadOnly)
+{
+    public IEnumerable<IRequest<AppResult<FileDto>>> BuildFollowUpCommands(Guid fileId)
+    {
+        if (ExtendedMetadata.Count > 0)
+        {
+            yield return new SetExtendedMetadataCommand(fileId, ExtendedMetadata);
+        }
+
+        if (SystemMetadata is not null)
+        {
+            yield return new ApplySystemMetadataCommand(
+                fileId,
+                SystemMetadata.Attributes,
+                SystemMetadata.CreatedUtc.Value,
+                SystemMetadata.LastWriteUtc.Value,
+                SystemMetadata.LastAccessUtc.Value,
+                SystemMetadata.OwnerSid,
+                SystemMetadata.HardLinkCount,
+                SystemMetadata.AlternateDataStreamCount);
+        }
+
+        if (SetReadOnly)
+        {
+            yield return new SetFileReadOnlyCommand(fileId, true);
+        }
+    }
+}
+
+/// <summary>
+/// Represents mapped metadata updates decomposed into discrete commands.
+/// </summary>
+public sealed record UpdateFileMetadataMappedRequest(
+    UpdateFileMetadataCommand? MetadataCommand,
+    ApplySystemMetadataCommand? SystemMetadataCommand,
+    SetExtendedMetadataCommand? ExtendedMetadataCommand,
+    SetFileReadOnlyCommand? ReadOnlyCommand)
+{
+    public IEnumerable<IRequest<AppResult<FileDto>>> Commands()
+    {
+        if (MetadataCommand is not null)
+        {
+            yield return MetadataCommand;
+        }
+
+        if (SystemMetadataCommand is not null)
+        {
+            yield return SystemMetadataCommand;
+        }
+
+        if (ExtendedMetadataCommand is not null)
+        {
+            yield return ExtendedMetadataCommand;
+        }
+
+        if (ReadOnlyCommand is not null)
+        {
+            yield return ReadOnlyCommand;
         }
     }
 }

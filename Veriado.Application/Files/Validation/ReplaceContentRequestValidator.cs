@@ -7,6 +7,7 @@ namespace Veriado.Application.Files.Validation;
 /// <summary>
 /// Validates <see cref="ReplaceContentCommand"/> instances.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.Validation.ReplaceFileContentCommandValidator instead.")]
 public sealed class ReplaceContentRequestValidator : AbstractValidator<ReplaceContentCommand>
 {
     /// <summary>

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Veriado.Application.Files.Commands;
+using System.Globalization;
+using System.Linq;
+using Veriado.Application.UseCases.Files.SetExtendedMetadata;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
@@ -84,86 +86,87 @@ internal static class Parsers
         }
     }
 
-    internal static IReadOnlyCollection<MetadataPatch> ParseMetadataPatches(
+    internal static IReadOnlyCollection<ExtendedMetadataEntry> ParseMetadataPatches(
         IReadOnlyList<ExtendedMetadataItemDto>? items,
         string target,
         ICollection<ApiError> errors)
     {
         if (items is null || items.Count == 0)
         {
-            return Array.Empty<MetadataPatch>();
+            return Array.Empty<ExtendedMetadataEntry>();
         }
 
-        var patches = new List<MetadataPatch>(items.Count);
+        var entries = new List<ExtendedMetadataEntry>(items.Count);
         for (var i = 0; i < items.Count; i++)
         {
-            var result = ParseMetadataPatch(items[i], $"{target}[{i}]");
+            var result = ParseMetadataEntry(items[i], $"{target}[{i}]");
             if (!result.IsSuccess)
             {
                 errors.Add(result.Error!);
                 continue;
             }
 
-            patches.Add(result.Value);
+            entries.Add(result.Value);
         }
 
-        return patches;
+        return entries;
     }
 
-    internal static ParserResult<MetadataPatch> ParseMetadataPatch(ExtendedMetadataItemDto dto, string target)
+    internal static ParserResult<ExtendedMetadataEntry> ParseMetadataEntry(ExtendedMetadataItemDto dto, string target)
     {
         if (dto is null)
         {
-            return ParserResult<MetadataPatch>.Failure(ApiError.MissingValue(target));
+            return ParserResult<ExtendedMetadataEntry>.Failure(ApiError.MissingValue(target));
         }
 
         if (dto.FormatId == Guid.Empty)
         {
-            return ParserResult<MetadataPatch>.Failure(ApiError.ForValue($"{target}.FormatId", "Format identifier must be a non-empty GUID."));
+            return ParserResult<ExtendedMetadataEntry>.Failure(ApiError.ForValue($"{target}.FormatId", "Format identifier must be a non-empty GUID."));
         }
 
-        var key = new PropertyKey(dto.FormatId, dto.PropertyId);
         if (dto.Remove)
         {
-            return ParserResult<MetadataPatch>.Success(new MetadataPatch(key, null));
+            return ParserResult<ExtendedMetadataEntry>.Success(new ExtendedMetadataEntry(dto.FormatId, dto.PropertyId, null));
         }
 
         if (dto.Value is null)
         {
-            return ParserResult<MetadataPatch>.Failure(ApiError.MissingValue($"{target}.Value"));
+            return ParserResult<ExtendedMetadataEntry>.Failure(ApiError.MissingValue($"{target}.Value"));
         }
 
         var valueResult = ParseMetadataValue(dto.Value, $"{target}.Value");
         if (!valueResult.IsSuccess)
         {
-            return ParserResult<MetadataPatch>.Failure(valueResult.Error!);
+            return ParserResult<ExtendedMetadataEntry>.Failure(valueResult.Error!);
         }
 
-        return ParserResult<MetadataPatch>.Success(new MetadataPatch(key, valueResult.Value));
+        return ParserResult<ExtendedMetadataEntry>.Success(new ExtendedMetadataEntry(dto.FormatId, dto.PropertyId, valueResult.Value));
     }
 
-    internal static ParserResult<MetadataValue> ParseMetadataValue(MetadataValueDto dto, string target)
+    internal static ParserResult<string> ParseMetadataValue(MetadataValueDto dto, string target)
     {
         try
         {
-            return ParserResult<MetadataValue>.Success(dto.Kind switch
+            var value = dto.Kind switch
             {
-                MetadataValueDtoKind.Null => MetadataValue.Null,
-                MetadataValueDtoKind.String => MetadataValue.FromString(dto.StringValue ?? throw new ArgumentException("String value is required.")),
-                MetadataValueDtoKind.StringArray => MetadataValue.FromStringArray(dto.StringArrayValue ?? Array.Empty<string>()),
-                MetadataValueDtoKind.UInt32 => MetadataValue.FromUInt(dto.UInt32Value ?? throw new ArgumentException("UInt32 value is required.")),
-                MetadataValueDtoKind.Int32 => MetadataValue.FromInt(dto.Int32Value ?? throw new ArgumentException("Int32 value is required.")),
-                MetadataValueDtoKind.Double => MetadataValue.FromReal(dto.DoubleValue ?? throw new ArgumentException("Double value is required.")),
-                MetadataValueDtoKind.Boolean => MetadataValue.FromBool(dto.BooleanValue ?? throw new ArgumentException("Boolean value is required.")),
-                MetadataValueDtoKind.Guid => MetadataValue.FromGuid(dto.GuidValue ?? throw new ArgumentException("Guid value is required.")),
-                MetadataValueDtoKind.FileTime => MetadataValue.FromFileTime(dto.FileTimeValue ?? throw new ArgumentException("Timestamp value is required.")),
-                MetadataValueDtoKind.Binary => MetadataValue.FromBinary(dto.BinaryValue ?? Array.Empty<byte>()),
+                MetadataValueDtoKind.Null => string.Empty,
+                MetadataValueDtoKind.String => dto.StringValue ?? string.Empty,
+                MetadataValueDtoKind.StringArray => string.Join(", ", dto.StringArrayValue ?? Array.Empty<string>()),
+                MetadataValueDtoKind.UInt32 => (dto.UInt32Value ?? throw new ArgumentException("UInt32 value is required.")).ToString(CultureInfo.InvariantCulture),
+                MetadataValueDtoKind.Int32 => (dto.Int32Value ?? throw new ArgumentException("Int32 value is required.")).ToString(CultureInfo.InvariantCulture),
+                MetadataValueDtoKind.Double => (dto.DoubleValue ?? throw new ArgumentException("Double value is required.")).ToString(CultureInfo.InvariantCulture),
+                MetadataValueDtoKind.Boolean => (dto.BooleanValue ?? throw new ArgumentException("Boolean value is required.")).ToString(),
+                MetadataValueDtoKind.Guid => (dto.GuidValue ?? throw new ArgumentException("Guid value is required.")).ToString("D", CultureInfo.InvariantCulture),
+                MetadataValueDtoKind.FileTime => (dto.FileTimeValue ?? throw new ArgumentException("Timestamp value is required.")).ToString("O", CultureInfo.InvariantCulture),
+                MetadataValueDtoKind.Binary => Convert.ToBase64String(dto.BinaryValue ?? Array.Empty<byte>()),
                 _ => throw new NotSupportedException($"Unsupported metadata value kind '{dto.Kind}'."),
-            });
+            };
+
+            return ParserResult<string>.Success(value);
         }
         catch (Exception ex)
         {
-            return ParserResult<MetadataValue>.Failure(ApiError.ForValue(target, ex.Message));
+            return ParserResult<string>.Failure(ApiError.ForValue(target, ex.Message));
         }
     }
 

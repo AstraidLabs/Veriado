@@ -7,6 +7,7 @@ namespace Veriado.Application.Files.Validation;
 /// <summary>
 /// Validates <see cref="SetValidityCommand"/> instances.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.Validation.SetFileValidityCommandValidator instead.")]
 public sealed class SetValidityRequestValidator : AbstractValidator<SetValidityCommand>
 {
     /// <summary>

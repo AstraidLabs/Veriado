@@ -11,6 +11,7 @@ namespace Veriado.Application.Files.Handlers;
 /// <summary>
 /// Handles <see cref="CreateFileCommand"/> operations.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.CreateFile.CreateFileHandler instead.")]
 public sealed class CreateFileHandler
 {
     private readonly IFileRepository _repository;

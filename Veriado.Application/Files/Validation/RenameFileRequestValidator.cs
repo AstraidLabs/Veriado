@@ -7,6 +7,7 @@ namespace Veriado.Application.Files.Validation;
 /// <summary>
 /// Validates <see cref="RenameFileCommand"/> instances.
 /// </summary>
+[Obsolete("Use Veriado.Application.UseCases.Files.Validation.RenameFileCommandValidator instead.")]
 public sealed class RenameFileRequestValidator : AbstractValidator<RenameFileCommand>
 {
     /// <summary>

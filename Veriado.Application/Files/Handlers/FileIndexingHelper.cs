@@ -6,6 +6,7 @@ using Veriado.Domain.Files;
 
 namespace Veriado.Application.Files.Handlers;
 
+[Obsolete("Use the infrastructure indexing pipeline and MediatR handlers instead.")]
 internal static class FileIndexingHelper
 {
     public static async Task<bool> ReindexAsync(

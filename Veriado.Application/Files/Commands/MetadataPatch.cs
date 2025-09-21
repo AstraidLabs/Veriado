@@ -1,3 +1,4 @@
+using System;
 using Veriado.Domain.Metadata;
 
 namespace Veriado.Application.Files.Commands;
@@ -7,6 +8,7 @@ namespace Veriado.Application.Files.Commands;
 /// </summary>
 /// <param name="Key">The property key.</param>
 /// <param name="Value">The metadata value to assign, or <see langword="null"/> to remove the key.</param>
+[Obsolete("Use Veriado.Application.UseCases.Files.SetExtendedMetadata.SetExtendedMetadataCommand instead.")]
 public sealed record MetadataPatch(PropertyKey Key, MetadataValue? Value)
 {
     /// <summary>
