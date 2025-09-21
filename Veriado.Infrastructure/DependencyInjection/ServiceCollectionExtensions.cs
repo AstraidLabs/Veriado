@@ -12,6 +12,7 @@ using Veriado.Application.Abstractions;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Application.Pipeline.Idempotency;
 using Veriado.Infrastructure.Concurrency;
+using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Persistence;
@@ -88,7 +89,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<OdsTextExtractor>();
         services.AddSingleton<ITextExtractor, CompositeTextExtractor>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
-        services.AddSingleton<IEventPublisher, NullEventPublisher>();
+        services.AddSingleton<IEventPublisher, AuditEventPublisher>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
         services.AddScoped<IFileRepository, FileRepository>();
@@ -112,9 +113,4 @@ public static class ServiceCollectionExtensions
         await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
         await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);
     }
-}
-
-internal sealed class NullEventPublisher : IEventPublisher
-{
-    public Task PublishAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken) => Task.CompletedTask;
 }

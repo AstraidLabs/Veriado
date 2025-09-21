@@ -6,6 +6,7 @@ using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Application.UseCases.Files.Common;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 
@@ -14,13 +15,8 @@ namespace Veriado.Application.UseCases.Files.RenameFile;
 /// <summary>
 /// Handles renaming file aggregates.
 /// </summary>
-public sealed class RenameFileHandler : IRequestHandler<RenameFileCommand, AppResult<FileDto>>
+public sealed class RenameFileHandler : FileWriteHandlerBase, IRequestHandler<RenameFileCommand, AppResult<FileDto>>
 {
-    private readonly IFileRepository _repository;
-    private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexer _searchIndexer;
-    private readonly IClock _clock;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="RenameFileHandler"/> class.
     /// </summary>
@@ -28,12 +24,10 @@ public sealed class RenameFileHandler : IRequestHandler<RenameFileCommand, AppRe
         IFileRepository repository,
         IEventPublisher eventPublisher,
         ISearchIndexer searchIndexer,
+        ITextExtractor textExtractor,
         IClock clock)
+        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
     {
-        _repository = repository;
-        _eventPublisher = eventPublisher;
-        _searchIndexer = searchIndexer;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -41,7 +35,7 @@ public sealed class RenameFileHandler : IRequestHandler<RenameFileCommand, AppRe
     {
         try
         {
-            var file = await _repository.GetAsync(request.FileId, cancellationToken);
+            var file = await Repository.GetAsync(request.FileId, cancellationToken);
             if (file is null)
             {
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
@@ -66,28 +60,4 @@ public sealed class RenameFileHandler : IRequestHandler<RenameFileCommand, AppRe
         }
     }
 
-    private async Task PersistAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        await PublishDomainEventsAsync(file, cancellationToken);
-        await IndexAndUpdateAsync(file, cancellationToken);
-    }
-
-    private async Task IndexAndUpdateAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        var document = file.ToSearchDocument();
-        await _searchIndexer.IndexAsync(document, cancellationToken);
-        file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
-        await _repository.UpdateAsync(file, cancellationToken);
-    }
-
-    private async Task PublishDomainEventsAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        if (file.DomainEvents.Count == 0)
-        {
-            return;
-        }
-
-        await _eventPublisher.PublishAsync(file.DomainEvents, cancellationToken);
-        file.ClearDomainEvents();
-    }
 }

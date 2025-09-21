@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.Files.Queries;
+namespace Veriado.Application.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Provides reusable Entity Framework friendly projections for file aggregates.

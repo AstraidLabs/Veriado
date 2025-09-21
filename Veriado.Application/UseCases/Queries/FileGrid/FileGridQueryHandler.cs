@@ -5,15 +5,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
-using Veriado.Application.Files.Configuration;
-using Veriado.Application.Files.Services;
 using Veriado.Application.Search;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.Files.Queries;
+namespace Veriado.Application.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Handles the advanced file grid query.

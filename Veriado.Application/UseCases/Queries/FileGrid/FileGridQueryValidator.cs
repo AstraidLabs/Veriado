@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using FluentValidation;
-using Veriado.Application.Files.Configuration;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.Files.Validation;
+namespace Veriado.Application.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Validates <see cref="FileGridQueryDto"/> instances.

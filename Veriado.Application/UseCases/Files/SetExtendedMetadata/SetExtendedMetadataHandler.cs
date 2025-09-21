@@ -6,6 +6,7 @@ using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Application.UseCases.Files.Common;
 using Veriado.Domain.Files;
 using Veriado.Domain.Metadata;
 
@@ -14,13 +15,8 @@ namespace Veriado.Application.UseCases.Files.SetExtendedMetadata;
 /// <summary>
 /// Handles setting extended metadata values for files.
 /// </summary>
-public sealed class SetExtendedMetadataHandler : IRequestHandler<SetExtendedMetadataCommand, AppResult<FileDto>>
+public sealed class SetExtendedMetadataHandler : FileWriteHandlerBase, IRequestHandler<SetExtendedMetadataCommand, AppResult<FileDto>>
 {
-    private readonly IFileRepository _repository;
-    private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexer _searchIndexer;
-    private readonly IClock _clock;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="SetExtendedMetadataHandler"/> class.
     /// </summary>
@@ -28,12 +24,10 @@ public sealed class SetExtendedMetadataHandler : IRequestHandler<SetExtendedMeta
         IFileRepository repository,
         IEventPublisher eventPublisher,
         ISearchIndexer searchIndexer,
+        ITextExtractor textExtractor,
         IClock clock)
+        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
     {
-        _repository = repository;
-        _eventPublisher = eventPublisher;
-        _searchIndexer = searchIndexer;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -46,7 +40,7 @@ public sealed class SetExtendedMetadataHandler : IRequestHandler<SetExtendedMeta
                 return AppResult<FileDto>.Validation(new[] { "At least one metadata entry must be provided." });
             }
 
-            var file = await _repository.GetAsync(request.FileId, cancellationToken);
+            var file = await Repository.GetAsync(request.FileId, cancellationToken);
             if (file is null)
             {
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
@@ -85,28 +79,4 @@ public sealed class SetExtendedMetadataHandler : IRequestHandler<SetExtendedMeta
         }
     }
 
-    private async Task PersistAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        await PublishDomainEventsAsync(file, cancellationToken);
-        await IndexAndUpdateAsync(file, cancellationToken);
-    }
-
-    private async Task IndexAndUpdateAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        var document = file.ToSearchDocument();
-        await _searchIndexer.IndexAsync(document, cancellationToken);
-        file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
-        await _repository.UpdateAsync(file, cancellationToken);
-    }
-
-    private async Task PublishDomainEventsAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        if (file.DomainEvents.Count == 0)
-        {
-            return;
-        }
-
-        await _eventPublisher.PublishAsync(file.DomainEvents, cancellationToken);
-        file.ClearDomainEvents();
-    }
 }
