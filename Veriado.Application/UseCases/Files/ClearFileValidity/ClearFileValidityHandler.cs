@@ -19,12 +19,8 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
     /// <summary>
     /// Initializes a new instance of the <see cref="ClearFileValidityHandler"/> class.
     /// </summary>
-    public ClearFileValidityHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
-        : base(repository, eventPublisher, indexCoordinator, clock)
+    public ClearFileValidityHandler(IFileRepository repository)
+        : base(repository)
     {
     }
 

@@ -11,75 +11,41 @@ namespace Veriado.Application.UseCases.Files.Common;
 public abstract class FileWriteHandlerBase
 {
     private readonly IFileRepository _repository;
-    private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexCoordinator _indexCoordinator;
-    private readonly IClock _clock;
 
     protected IFileRepository Repository => _repository;
 
-    protected FileWriteHandlerBase(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
+    protected FileWriteHandlerBase(IFileRepository repository)
     {
         _repository = repository;
-        _eventPublisher = eventPublisher;
-        _indexCoordinator = indexCoordinator;
-        _clock = clock;
     }
 
     protected Task PersistNewAsync(FileEntity file, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: true, extractContent: true, cancellationToken);
+        => PersistInternalAsync(file, addFirst: true, cancellationToken);
 
     protected Task PersistNewAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: true, extractContent, cancellationToken);
+        => PersistInternalAsync(file, addFirst: true, cancellationToken);
 
     protected Task PersistAsync(FileEntity file, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: false, extractContent: true, cancellationToken);
+        => PersistInternalAsync(file, addFirst: false, cancellationToken);
 
     protected Task PersistAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: false, extractContent, cancellationToken);
+        => PersistInternalAsync(file, addFirst: false, cancellationToken);
 
-    private async Task PersistInternalAsync(
+    private Task PersistInternalAsync(
         FileEntity file,
         bool addFirst,
-        bool extractContent,
         CancellationToken cancellationToken)
     {
         if (addFirst)
         {
-            await _repository.AddAsync(file, cancellationToken);
+            return _repository.AddAsync(file, cancellationToken);
         }
 
-        if (!addFirst && file.DomainEvents.Count == 0 && !file.SearchIndex.IsStale)
+        if (file.DomainEvents.Count == 0 && !file.SearchIndex.IsStale)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await PublishDomainEventsAsync(file, cancellationToken);
-        await IndexAndUpdateAsync(file, extractContent, cancellationToken);
-    }
-
-    private async Task IndexAndUpdateAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-    {
-        var indexed = await _indexCoordinator.IndexAsync(file, extractContent, allowDeferred: true, cancellationToken)
-            .ConfigureAwait(false);
-        if (indexed)
-        {
-            file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
-        }
-        await _repository.UpdateAsync(file, cancellationToken);
-    }
-
-    private async Task PublishDomainEventsAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        if (file.DomainEvents.Count == 0)
-        {
-            return;
-        }
-
-        await _eventPublisher.PublishAsync(file.DomainEvents, cancellationToken);
-        file.ClearDomainEvents();
+        return _repository.UpdateAsync(file, cancellationToken);
     }
 }

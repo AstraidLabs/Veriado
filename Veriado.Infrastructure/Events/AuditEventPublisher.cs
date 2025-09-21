@@ -10,7 +10,6 @@ using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
-using Veriado.Infrastructure.Search.Outbox;
 
 namespace Veriado.Infrastructure.Events;
 
@@ -22,18 +21,15 @@ internal sealed class AuditEventPublisher : IEventPublisher
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AuditEventPublisher> _logger;
     private readonly InfrastructureOptions _options;
-    private readonly IClock _clock;
 
     public AuditEventPublisher(
         IServiceScopeFactory scopeFactory,
         ILogger<AuditEventPublisher> logger,
-        InfrastructureOptions options,
-        IClock clock)
+        InfrastructureOptions options)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _options = options;
-        _clock = clock;
     }
 
     public async Task PublishAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken)
@@ -88,15 +84,10 @@ internal sealed class AuditEventPublisher : IEventPublisher
                     break;
 
                 case SearchReindexRequested reindex when _options.FtsIndexingMode == FtsIndexingMode.Outbox:
-                    context.OutboxEvents.Add(OutboxEvent.From(
-                        nameof(SearchReindexRequested),
-                        new
-                        {
-                            reindex.FileId,
-                            Reason = reindex.Reason.ToString(),
-                        },
-                        _clock.UtcNow));
-                    hasChanges = true;
+                    _logger.LogDebug(
+                        "Search reindex request {EventId} for file {FileId} acknowledged by audit publisher",
+                        reindex.EventId,
+                        reindex.FileId);
                     break;
 
                 case SearchReindexRequested reindex:

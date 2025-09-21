@@ -20,12 +20,8 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
     /// <summary>
     /// Initializes a new instance of the <see cref="SetFileValidityHandler"/> class.
     /// </summary>
-    public SetFileValidityHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
-        : base(repository, eventPublisher, indexCoordinator, clock)
+    public SetFileValidityHandler(IFileRepository repository)
+        : base(repository)
     {
     }
 

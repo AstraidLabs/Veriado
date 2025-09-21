@@ -20,12 +20,8 @@ public sealed class SetExtendedMetadataHandler : FileWriteHandlerBase, IRequestH
     /// <summary>
     /// Initializes a new instance of the <see cref="SetExtendedMetadataHandler"/> class.
     /// </summary>
-    public SetExtendedMetadataHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
-        : base(repository, eventPublisher, indexCoordinator, clock)
+    public SetExtendedMetadataHandler(IFileRepository repository)
+        : base(repository)
     {
     }
 

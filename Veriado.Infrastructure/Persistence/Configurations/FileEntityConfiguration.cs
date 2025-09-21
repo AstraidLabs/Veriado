@@ -75,11 +75,18 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasConversion(Converters.FtsPolicyToJson)
             .IsRequired();
 
-        builder.Property(file => file.ExtendedMetadata)
-            .HasColumnName("metadata_json")
-            .HasColumnType("TEXT")
-            .HasConversion(Converters.ExtendedMetadataToJson)
-            .Metadata.SetValueComparer(Converters.ExtendedMetadataComparer);
+        if (options.UseKvMetadata)
+        {
+            builder.Ignore(file => file.ExtendedMetadata);
+        }
+        else
+        {
+            builder.Property(file => file.ExtendedMetadata)
+                .HasColumnName("metadata_json")
+                .HasColumnType("TEXT")
+                .HasConversion(Converters.ExtendedMetadataToJson)
+                .Metadata.SetValueComparer(Converters.ExtendedMetadataComparer);
+        }
 
         builder.Ignore(file => file.DomainEvents);
 

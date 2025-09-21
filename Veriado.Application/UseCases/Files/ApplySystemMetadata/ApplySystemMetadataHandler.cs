@@ -21,12 +21,8 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
     /// <summary>
     /// Initializes a new instance of the <see cref="ApplySystemMetadataHandler"/> class.
     /// </summary>
-    public ApplySystemMetadataHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
-        : base(repository, eventPublisher, indexCoordinator, clock)
+    public ApplySystemMetadataHandler(IFileRepository repository)
+        : base(repository)
     {
     }
 

@@ -556,6 +556,14 @@ public sealed class FileEntity : AggregateRoot
     }
 
     /// <summary>
+    /// Requests a manual rebuild of the search index entry for this file.
+    /// </summary>
+    public void RequestManualReindex()
+    {
+        MarkSearchDirty(ReindexReason.Manual);
+    }
+
+    /// <summary>
     /// Confirms that the file has been indexed with the specified schema version and timestamp.
     /// </summary>
     /// <param name="schemaVersion">The applied schema version.</param>
@@ -645,6 +653,12 @@ public sealed class FileEntity : AggregateRoot
                 builder.Set(key, MetadataValue.FromString(value));
             }
         });
+    }
+
+    internal void LoadExtendedMetadata(ExtendedMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        ExtendedMetadata = metadata;
     }
 
     private bool ApplyExtendedMetadataMutation(Action<ExtendedMetadata.Builder> configure)

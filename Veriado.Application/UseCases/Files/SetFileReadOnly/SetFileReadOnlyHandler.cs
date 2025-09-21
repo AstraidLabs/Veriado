@@ -19,12 +19,8 @@ public sealed class SetFileReadOnlyHandler : FileWriteHandlerBase, IRequestHandl
     /// <summary>
     /// Initializes a new instance of the <see cref="SetFileReadOnlyHandler"/> class.
     /// </summary>
-    public SetFileReadOnlyHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
-        : base(repository, eventPublisher, indexCoordinator, clock)
+    public SetFileReadOnlyHandler(IFileRepository repository)
+        : base(repository)
     {
     }
 
