@@ -23,8 +23,9 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
     /// </summary>
     public CreateFileHandler(
         IFileRepository repository,
+        IClock clock,
         ImportPolicy importPolicy)
-        : base(repository)
+        : base(repository, clock)
     {
         _importPolicy = importPolicy;
     }
@@ -40,9 +41,11 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             var name = FileName.From(request.Name);
             var extension = FileExtension.From(request.Extension);
             var mime = MimeType.From(request.Mime);
-            var file = FileEntity.CreateNew(name, extension, mime, request.Author, request.Content, _importPolicy.MaxContentLengthBytes);
+            var createdAt = CurrentTimestamp();
+            var file = FileEntity.CreateNew(name, extension, mime, request.Author, request.Content, createdAt, _importPolicy.MaxContentLengthBytes);
 
-            await PersistNewAsync(file, cancellationToken);
+            var options = new FilePersistenceOptions { ExtractContent = true };
+            await PersistNewAsync(file, options, cancellationToken);
             return AppResult<Guid>.Success(file.Id);
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

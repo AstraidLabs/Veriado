@@ -1,6 +1,8 @@
 using System;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
 using Veriado.Domain.Files;
@@ -30,21 +32,41 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         _logger = logger;
     }
 
-    public async Task<bool> IndexAsync(FileEntity file, bool extractContent, bool allowDeferred, CancellationToken cancellationToken)
+    public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && allowDeferred)
+        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && options.AllowDeferredIndexing)
         {
             _logger.LogDebug("Search indexing deferred to outbox for file {FileId}", file.Id);
             return false;
         }
 
-        var text = extractContent
+        if (transaction is not null && transaction is not SqliteTransaction)
+        {
+            throw new InvalidOperationException("SQLite transaction is required for full-text indexing operations.");
+        }
+
+        var sqliteTransaction = (SqliteTransaction?)transaction;
+
+        var text = options.ExtractContent
             ? await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false)
             : null;
 
         var document = file.ToSearchDocument(text);
+        if (sqliteTransaction is not null)
+        {
+            var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
+            var helper = new SqliteFts5Transactional();
+            await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        if (_options.FtsIndexingMode == FtsIndexingMode.SameTransaction)
+        {
+            throw new InvalidOperationException("SQLite transaction is required for same-transaction indexing.");
+        }
+
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
         return true;
     }

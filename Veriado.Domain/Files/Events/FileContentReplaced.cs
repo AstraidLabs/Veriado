@@ -16,14 +16,15 @@ public sealed class FileContentReplaced : IDomainEvent
     /// <param name="hash">The new content hash.</param>
     /// <param name="size">The new content size.</param>
     /// <param name="version">The incremented file version.</param>
-    public FileContentReplaced(Guid fileId, FileHash hash, ByteSize size, int version)
+    /// <param name="occurredUtc">The timestamp when the replacement occurred.</param>
+    public FileContentReplaced(Guid fileId, FileHash hash, ByteSize size, int version, UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         Hash = hash;
         Size = size;
         Version = version;
         EventId = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>

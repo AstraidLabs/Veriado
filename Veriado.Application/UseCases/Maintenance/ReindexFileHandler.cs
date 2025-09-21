@@ -7,6 +7,7 @@ using Veriado.Application.Common;
 using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
 using Veriado.Domain.Files;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Application.UseCases.Maintenance;
 
@@ -16,13 +17,15 @@ namespace Veriado.Application.UseCases.Maintenance;
 public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, AppResult<FileDto>>
 {
     private readonly IFileRepository _repository;
+    private readonly IClock _clock;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReindexFileHandler"/> class.
     /// </summary>
-    public ReindexFileHandler(IFileRepository repository)
+    public ReindexFileHandler(IFileRepository repository, IClock clock)
     {
         _repository = repository;
+        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -36,8 +39,10 @@ public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, App
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
-            file.RequestManualReindex();
-            await _repository.UpdateAsync(file, cancellationToken).ConfigureAwait(false);
+            var timestamp = UtcTimestamp.From(_clock.UtcNow);
+            file.RequestManualReindex(timestamp);
+            var options = new FilePersistenceOptions { ExtractContent = request.ExtractContent };
+            await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex)

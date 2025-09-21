@@ -1,11 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Domain.Files;
 
 namespace Veriado.Application.UseCases.Maintenance;
 
@@ -14,55 +12,31 @@ namespace Veriado.Application.UseCases.Maintenance;
 /// </summary>
 public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRepairFulltextCommand, AppResult<int>>
 {
-    private readonly IFileRepository _repository;
+    private readonly IFulltextIntegrityService _integrityService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="VerifyAndRepairFulltextHandler"/> class.
     /// </summary>
-    public VerifyAndRepairFulltextHandler(IFileRepository repository)
+    public VerifyAndRepairFulltextHandler(IFulltextIntegrityService integrityService)
     {
-        _repository = repository;
+        _integrityService = integrityService;
     }
 
     /// <inheritdoc />
     public async Task<AppResult<int>> Handle(VerifyAndRepairFulltextCommand request, CancellationToken cancellationToken)
     {
-        var repaired = 0;
+        var report = await _integrityService.VerifyAsync(cancellationToken).ConfigureAwait(false);
+        var inconsistencies = report.MissingCount + report.OrphanCount;
 
-        await foreach (var file in _repository.StreamAllAsync(cancellationToken))
+        if (!request.Force && inconsistencies == 0)
         {
-            if (!request.Force && !NeedsRepair(file))
-            {
-                continue;
-            }
-
-            file.RequestManualReindex();
-            await _repository.UpdateAsync(file, cancellationToken).ConfigureAwait(false);
-            repaired++;
+            return AppResult<int>.Success(0);
         }
+
+        var repaired = await _integrityService
+            .RepairAsync(request.Force, request.ExtractContent, cancellationToken)
+            .ConfigureAwait(false);
 
         return AppResult<int>.Success(repaired);
-    }
-
-    private static bool NeedsRepair(FileEntity file)
-    {
-        if (file.SearchIndex.IsStale)
-        {
-            return true;
-        }
-
-        var expectedHash = file.Content.Hash.Value;
-        if (!string.Equals(file.SearchIndex.IndexedContentHash, expectedHash, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        var expectedTitle = file.GetTitle() ?? file.Name.Value;
-        if (!string.Equals(file.SearchIndex.IndexedTitle, expectedTitle, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        return false;
     }
 }

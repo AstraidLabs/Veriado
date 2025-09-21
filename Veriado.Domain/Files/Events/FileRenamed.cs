@@ -15,13 +15,14 @@ public sealed class FileRenamed : IDomainEvent
     /// <param name="fileId">The identifier of the file.</param>
     /// <param name="oldName">The old file name.</param>
     /// <param name="newName">The new file name.</param>
-    public FileRenamed(Guid fileId, FileName oldName, FileName newName)
+    /// <param name="occurredUtc">The timestamp when the rename occurred.</param>
+    public FileRenamed(Guid fileId, FileName oldName, FileName newName, UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         OldName = oldName;
         NewName = newName;
         EventId = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>

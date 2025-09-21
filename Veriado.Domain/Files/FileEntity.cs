@@ -140,19 +140,19 @@ public sealed class FileEntity : AggregateRoot
         MimeType mime,
         string author,
         byte[] bytes,
+        UtcTimestamp createdUtc,
         int? maxContentSize = null)
     {
         var normalizedAuthor = NormalizeAuthor(author);
         var content = FileContentEntity.FromBytes(bytes, maxContentSize);
-        var now = UtcTimestamp.Now();
-        var systemMetadata = new FileSystemMetadata(FileAttributesFlags.Normal, now, now, now, null, null, null);
+        var systemMetadata = new FileSystemMetadata(FileAttributesFlags.Normal, createdUtc, createdUtc, createdUtc, null, null, null);
         var metadataBuilder = ExtendedMetadata.Empty.ToBuilder();
         metadataBuilder.Set(WindowsPropertyIds.Author, MetadataValue.FromString(normalizedAuthor));
         var extendedMetadata = metadataBuilder.Build();
 
-        var entity = new FileEntity(Guid.NewGuid(), name, extension, mime, normalizedAuthor, content, now, systemMetadata, extendedMetadata);
-        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.Content.Hash));
-        entity.MarkSearchDirty(ReindexReason.Created);
+        var entity = new FileEntity(Guid.NewGuid(), name, extension, mime, normalizedAuthor, content, createdUtc, systemMetadata, extendedMetadata);
+        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.Content.Hash, createdUtc));
+        entity.MarkSearchDirty(createdUtc, ReindexReason.Created);
         return entity;
     }
 
@@ -160,7 +160,7 @@ public sealed class FileEntity : AggregateRoot
     /// Renames the file, emitting metadata and search reindex events.
     /// </summary>
     /// <param name="newName">The new file name.</param>
-    public void Rename(FileName newName)
+    public void Rename(FileName newName, UtcTimestamp whenUtc)
     {
         EnsureWritable();
         if (newName == Name)
@@ -170,10 +170,10 @@ public sealed class FileEntity : AggregateRoot
 
         var previous = Name;
         Name = newName;
-        Touch();
-        RaiseDomainEvent(new FileRenamed(Id, previous, newName));
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
-        MarkSearchDirty(ReindexReason.MetadataChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileRenamed(Id, previous, newName, whenUtc));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
     /// <summary>
@@ -181,7 +181,7 @@ public sealed class FileEntity : AggregateRoot
     /// </summary>
     /// <param name="mime">The optional new MIME type.</param>
     /// <param name="author">The optional new author.</param>
-    public void UpdateMetadata(MimeType? mime = null, string? author = null)
+    public void UpdateMetadata(MimeType? mime, string? author, UtcTimestamp whenUtc)
     {
         EnsureWritable();
         var changed = false;
@@ -212,9 +212,9 @@ public sealed class FileEntity : AggregateRoot
             return;
         }
 
-        Touch();
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
-        MarkSearchDirty(ReindexReason.MetadataChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
     /// <summary>
@@ -222,7 +222,7 @@ public sealed class FileEntity : AggregateRoot
     /// </summary>
     /// <param name="bytes">The new content bytes.</param>
     /// <param name="maxContentSize">Optional maximum content length.</param>
-    public void ReplaceContent(byte[] bytes, int? maxContentSize = null)
+    public void ReplaceContent(byte[] bytes, UtcTimestamp whenUtc, int? maxContentSize = null)
     {
         EnsureWritable();
         var newContent = FileContentEntity.FromBytes(bytes, maxContentSize);
@@ -234,16 +234,16 @@ public sealed class FileEntity : AggregateRoot
         Content = newContent;
         Size = newContent.Length;
         BumpVersion();
-        Touch();
-        RaiseDomainEvent(new FileContentReplaced(Id, newContent.Hash, newContent.Length, Version));
-        MarkSearchDirty(ReindexReason.ContentChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileContentReplaced(Id, newContent.Hash, newContent.Length, Version, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.ContentChanged);
     }
 
     /// <summary>
     /// Sets the read-only flag for the file.
     /// </summary>
     /// <param name="isReadOnly">The new read-only state.</param>
-    public void SetReadOnly(bool isReadOnly)
+    public void SetReadOnly(bool isReadOnly, UtcTimestamp whenUtc)
     {
         if (IsReadOnly == isReadOnly)
         {
@@ -251,8 +251,8 @@ public sealed class FileEntity : AggregateRoot
         }
 
         IsReadOnly = isReadOnly;
-        Touch();
-        RaiseDomainEvent(new FileReadOnlyChanged(Id, IsReadOnly));
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileReadOnlyChanged(Id, IsReadOnly, whenUtc));
     }
 
     /// <summary>
@@ -262,7 +262,7 @@ public sealed class FileEntity : AggregateRoot
     /// <param name="validUntil">The expiration timestamp.</param>
     /// <param name="hasPhysicalCopy">Whether a physical copy exists.</param>
     /// <param name="hasElectronicCopy">Whether an electronic copy exists.</param>
-    public void SetValidity(UtcTimestamp issuedAt, UtcTimestamp validUntil, bool hasPhysicalCopy, bool hasElectronicCopy)
+    public void SetValidity(UtcTimestamp issuedAt, UtcTimestamp validUntil, bool hasPhysicalCopy, bool hasElectronicCopy, UtcTimestamp whenUtc)
     {
         EnsureWritable();
         var changed = false;
@@ -292,15 +292,15 @@ public sealed class FileEntity : AggregateRoot
             return;
         }
 
-        Touch();
-        RaiseDomainEvent(new FileValidityChanged(Id, Validity?.IssuedAt, Validity?.ValidUntil, Validity?.HasPhysicalCopy ?? false, Validity?.HasElectronicCopy ?? false));
-        MarkSearchDirty(ReindexReason.ValidityChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileValidityChanged(Id, Validity?.IssuedAt, Validity?.ValidUntil, Validity?.HasPhysicalCopy ?? false, Validity?.HasElectronicCopy ?? false, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.ValidityChanged);
     }
 
     /// <summary>
     /// Clears the document validity information if present.
     /// </summary>
-    public void ClearValidity()
+    public void ClearValidity(UtcTimestamp whenUtc)
     {
         EnsureWritable();
         if (Validity is null)
@@ -309,16 +309,16 @@ public sealed class FileEntity : AggregateRoot
         }
 
         Validity = null;
-        Touch();
-        RaiseDomainEvent(new FileValidityChanged(Id, null, null, false, false));
-        MarkSearchDirty(ReindexReason.ValidityChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileValidityChanged(Id, null, null, false, false, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.ValidityChanged);
     }
 
     /// <summary>
     /// Applies a file system metadata snapshot to the aggregate.
     /// </summary>
     /// <param name="metadata">The new system metadata snapshot.</param>
-    public void ApplySystemMetadata(FileSystemMetadata metadata)
+    public void ApplySystemMetadata(FileSystemMetadata metadata, UtcTimestamp whenUtc)
     {
         EnsureWritable();
         if (SystemMetadata == metadata)
@@ -327,16 +327,16 @@ public sealed class FileEntity : AggregateRoot
         }
 
         SystemMetadata = metadata;
-        Touch();
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
-        MarkSearchDirty(ReindexReason.MetadataChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
     /// <summary>
     /// Mutates the extended metadata using a builder callback.
     /// </summary>
     /// <param name="configure">The builder configuration action.</param>
-    public void SetExtendedMetadata(Action<ExtendedMetadata.Builder> configure)
+    public void SetExtendedMetadata(UtcTimestamp whenUtc, Action<ExtendedMetadata.Builder> configure)
     {
         EnsureWritable();
         ArgumentNullException.ThrowIfNull(configure);
@@ -351,9 +351,9 @@ public sealed class FileEntity : AggregateRoot
 
         ExtendedMetadata = updated;
         AlignAuthorWithMetadata();
-        Touch();
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
-        MarkSearchDirty(ReindexReason.MetadataChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
     /// <summary>
@@ -366,7 +366,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the document title and marks the search index for reindexing.
     /// </summary>
     /// <param name="title">The new title value.</param>
-    public void SetTitle(string? title) => SetMetadataString(WindowsPropertyIds.Title, title);
+    public void SetTitle(string? title, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Title, title, whenUtc);
 
     /// <summary>
     /// Gets the document subject from extended metadata if available.
@@ -378,7 +378,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the document subject and marks the search index for reindexing.
     /// </summary>
     /// <param name="subject">The new subject value.</param>
-    public void SetSubject(string? subject) => SetMetadataString(WindowsPropertyIds.Subject, subject);
+    public void SetSubject(string? subject, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Subject, subject, whenUtc);
 
     /// <summary>
     /// Gets the company metadata value if available.
@@ -390,7 +390,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the company metadata value.
     /// </summary>
     /// <param name="company">The new company value.</param>
-    public void SetCompany(string? company) => SetMetadataString(WindowsPropertyIds.Company, company);
+    public void SetCompany(string? company, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Company, company, whenUtc);
 
     /// <summary>
     /// Gets the manager metadata value if available.
@@ -402,7 +402,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the manager metadata value.
     /// </summary>
     /// <param name="manager">The new manager value.</param>
-    public void SetManager(string? manager) => SetMetadataString(WindowsPropertyIds.Manager, manager);
+    public void SetManager(string? manager, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Manager, manager, whenUtc);
 
     /// <summary>
     /// Gets the comments metadata value if available.
@@ -414,7 +414,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the comments metadata value.
     /// </summary>
     /// <param name="comments">The new comments value.</param>
-    public void SetComments(string? comments) => SetMetadataString(WindowsPropertyIds.Comments, comments);
+    public void SetComments(string? comments, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Comments, comments, whenUtc);
 
     /// <summary>
     /// Gets the author metadata value, preferring extended metadata over the core value.
@@ -430,7 +430,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the author metadata value, synchronizing the core property and extended metadata.
     /// </summary>
     /// <param name="author">The new author value.</param>
-    public void SetAuthor(string author)
+    public void SetAuthor(string author, UtcTimestamp whenUtc)
     {
         EnsureWritable();
         var normalized = NormalizeAuthor(author);
@@ -452,9 +452,9 @@ public sealed class FileEntity : AggregateRoot
             return;
         }
 
-        Touch();
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
-        MarkSearchDirty(ReindexReason.MetadataChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
     /// <summary>
@@ -467,7 +467,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the last author metadata value.
     /// </summary>
     /// <param name="lastAuthor">The new last author value.</param>
-    public void SetLastAuthor(string? lastAuthor) => SetMetadataString(WindowsPropertyIds.LastAuthor, lastAuthor);
+    public void SetLastAuthor(string? lastAuthor, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.LastAuthor, lastAuthor, whenUtc);
 
     /// <summary>
     /// Gets the category metadata value if available.
@@ -479,7 +479,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the category metadata value.
     /// </summary>
     /// <param name="category">The new category value.</param>
-    public void SetCategory(string? category) => SetMetadataString(WindowsPropertyIds.Category, category);
+    public void SetCategory(string? category, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Category, category, whenUtc);
 
     /// <summary>
     /// Gets the template metadata value if available.
@@ -491,7 +491,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the template metadata value.
     /// </summary>
     /// <param name="template">The new template value.</param>
-    public void SetTemplate(string? template) => SetMetadataString(WindowsPropertyIds.Template, template);
+    public void SetTemplate(string? template, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.Template, template, whenUtc);
 
     /// <summary>
     /// Gets the revision number metadata value if available.
@@ -503,7 +503,7 @@ public sealed class FileEntity : AggregateRoot
     /// Sets the revision number metadata value.
     /// </summary>
     /// <param name="revision">The new revision number value.</param>
-    public void SetRevisionNumber(string? revision) => SetMetadataString(WindowsPropertyIds.RevisionNumber, revision);
+    public void SetRevisionNumber(string? revision, UtcTimestamp whenUtc) => SetMetadataString(WindowsPropertyIds.RevisionNumber, revision, whenUtc);
 
     /// <summary>
     /// Builds a search document representation of the file for full-text indexing.
@@ -558,9 +558,9 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Requests a manual rebuild of the search index entry for this file.
     /// </summary>
-    public void RequestManualReindex()
+    public void RequestManualReindex(UtcTimestamp whenUtc)
     {
-        MarkSearchDirty(ReindexReason.Manual);
+        MarkSearchDirty(whenUtc, ReindexReason.Manual);
     }
 
     /// <summary>
@@ -568,16 +568,16 @@ public sealed class FileEntity : AggregateRoot
     /// </summary>
     /// <param name="schemaVersion">The applied schema version.</param>
     /// <param name="whenUtc">The time of indexing.</param>
-    public void ConfirmIndexed(int schemaVersion, DateTimeOffset whenUtc)
+    public void ConfirmIndexed(int schemaVersion, UtcTimestamp whenUtc)
     {
-        SearchIndex.ApplyIndexed(schemaVersion, whenUtc, Content.Hash.Value, GetTitle());
+        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Content.Hash.Value, GetTitle());
     }
 
     /// <summary>
     /// Marks the search state as requiring an upgrade to a new schema version.
     /// </summary>
     /// <param name="newSchemaVersion">The new schema version.</param>
-    public void BumpSchemaVersion(int newSchemaVersion)
+    public void BumpSchemaVersion(int newSchemaVersion, UtcTimestamp whenUtc)
     {
         if (newSchemaVersion <= SearchIndex.SchemaVersion)
         {
@@ -590,7 +590,7 @@ public sealed class FileEntity : AggregateRoot
             SearchIndex.LastIndexedUtc,
             SearchIndex.IndexedContentHash,
             SearchIndex.IndexedTitle);
-        MarkSearchDirty(ReindexReason.SchemaUpgrade);
+        MarkSearchDirty(whenUtc, ReindexReason.SchemaUpgrade);
     }
 
     private static string NormalizeAuthor(string? value)
@@ -621,7 +621,7 @@ public sealed class FileEntity : AggregateRoot
             : null;
     }
 
-    private void SetMetadataString(PropertyKey key, string? value)
+    private void SetMetadataString(PropertyKey key, string? value, UtcTimestamp whenUtc)
     {
         EnsureWritable();
         var normalized = NormalizeOptionalMetadata(value);
@@ -635,9 +635,9 @@ public sealed class FileEntity : AggregateRoot
             AlignAuthorWithMetadata();
         }
 
-        Touch();
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata));
-        MarkSearchDirty(ReindexReason.MetadataChanged);
+        Touch(whenUtc);
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
     private bool SetMetadataStringInternal(PropertyKey key, string? value)
@@ -683,9 +683,9 @@ public sealed class FileEntity : AggregateRoot
         }
     }
 
-    private void Touch()
+    private void Touch(UtcTimestamp whenUtc)
     {
-        LastModifiedUtc = UtcTimestamp.Now();
+        LastModifiedUtc = whenUtc;
     }
 
     private void BumpVersion()
@@ -698,10 +698,10 @@ public sealed class FileEntity : AggregateRoot
         Version += 1;
     }
 
-    private void MarkSearchDirty(ReindexReason reason)
+    private void MarkSearchDirty(UtcTimestamp whenUtc, ReindexReason reason)
     {
         SearchIndex.MarkStale();
-        RaiseDomainEvent(new SearchReindexRequested(Id, reason));
+        RaiseDomainEvent(new SearchReindexRequested(Id, reason, whenUtc));
     }
 
     private void AlignAuthorWithMetadata()

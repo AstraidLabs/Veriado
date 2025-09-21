@@ -21,8 +21,8 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
     /// <summary>
     /// Initializes a new instance of the <see cref="ApplySystemMetadataHandler"/> class.
     /// </summary>
-    public ApplySystemMetadataHandler(IFileRepository repository)
-        : base(repository)
+    public ApplySystemMetadataHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -46,8 +46,9 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
                 request.HardLinkCount,
                 request.AlternateDataStreamCount);
 
-            file.ApplySystemMetadata(metadata);
-            await PersistAsync(file, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.ApplySystemMetadata(metadata, timestamp);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

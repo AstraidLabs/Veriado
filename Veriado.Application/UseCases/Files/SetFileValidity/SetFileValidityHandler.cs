@@ -20,8 +20,8 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
     /// <summary>
     /// Initializes a new instance of the <see cref="SetFileValidityHandler"/> class.
     /// </summary>
-    public SetFileValidityHandler(IFileRepository repository)
-        : base(repository)
+    public SetFileValidityHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -38,8 +38,9 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
 
             var issued = UtcTimestamp.From(request.IssuedAtUtc);
             var validUntil = UtcTimestamp.From(request.ValidUntilUtc);
-            file.SetValidity(issued, validUntil, request.HasPhysicalCopy, request.HasElectronicCopy);
-            await PersistAsync(file, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.SetValidity(issued, validUntil, request.HasPhysicalCopy, request.HasElectronicCopy, timestamp);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

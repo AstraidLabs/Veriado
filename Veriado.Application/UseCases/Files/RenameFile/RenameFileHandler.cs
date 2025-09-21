@@ -20,8 +20,8 @@ public sealed class RenameFileHandler : FileWriteHandlerBase, IRequestHandler<Re
     /// <summary>
     /// Initializes a new instance of the <see cref="RenameFileHandler"/> class.
     /// </summary>
-    public RenameFileHandler(IFileRepository repository)
-        : base(repository)
+    public RenameFileHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -37,8 +37,9 @@ public sealed class RenameFileHandler : FileWriteHandlerBase, IRequestHandler<Re
             }
 
             var newName = FileName.From(request.Name);
-            file.Rename(newName);
-            await PersistAsync(file, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.Rename(newName, timestamp);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

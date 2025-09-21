@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Application.Abstractions;
 using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Integrity;
@@ -32,8 +33,9 @@ internal static class StartupIntegrityCheck
         logger.LogWarning("Full-text index inconsistencies detected: {Missing} missing, {Orphans} orphans", report.MissingCount, report.OrphanCount);
         if (options.RepairIntegrityAutomatically)
         {
-            await integrity.RepairAsync(cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("Full-text index repair completed");
+            var repaired = await integrity.RepairAsync(reindexAll: false, extractContent: true, cancellationToken)
+                .ConfigureAwait(false);
+            logger.LogInformation("Full-text index repair completed ({Repaired} entries)", repaired);
         }
     }
 }

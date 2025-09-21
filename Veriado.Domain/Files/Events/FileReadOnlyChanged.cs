@@ -1,5 +1,6 @@
 using System;
 using Veriado.Domain.Primitives;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Files.Events;
 
@@ -13,12 +14,13 @@ public sealed class FileReadOnlyChanged : IDomainEvent
     /// </summary>
     /// <param name="fileId">The identifier of the file.</param>
     /// <param name="isReadOnly">Indicates the current read-only state.</param>
-    public FileReadOnlyChanged(Guid fileId, bool isReadOnly)
+    /// <param name="occurredUtc">The timestamp when the change occurred.</param>
+    public FileReadOnlyChanged(Guid fileId, bool isReadOnly, UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         IsReadOnly = isReadOnly;
         EventId = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>

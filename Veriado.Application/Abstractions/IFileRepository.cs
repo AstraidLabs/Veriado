@@ -39,12 +39,12 @@ public interface IFileRepository
     /// </summary>
     /// <param name="file">The aggregate to add.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task AddAsync(FileEntity file, CancellationToken cancellationToken);
+    Task AddAsync(FileEntity file, FilePersistenceOptions options, CancellationToken cancellationToken);
 
     /// <summary>
     /// Persists the provided file aggregate updates.
     /// </summary>
     /// <param name="file">The aggregate to persist.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task UpdateAsync(FileEntity file, CancellationToken cancellationToken);
+    Task UpdateAsync(FileEntity file, FilePersistenceOptions options, CancellationToken cancellationToken);
 }

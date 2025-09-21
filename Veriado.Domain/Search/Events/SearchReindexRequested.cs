@@ -1,5 +1,6 @@
 using System;
 using Veriado.Domain.Primitives;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Search.Events;
 
@@ -13,12 +14,13 @@ public sealed class SearchReindexRequested : IDomainEvent
     /// </summary>
     /// <param name="fileId">The identifier of the file to reindex.</param>
     /// <param name="reason">The reason for reindexing.</param>
-    public SearchReindexRequested(Guid fileId, ReindexReason reason)
+    /// <param name="occurredUtc">The timestamp when the reindex was requested.</param>
+    public SearchReindexRequested(Guid fileId, ReindexReason reason, UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         Reason = reason;
         EventId = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>

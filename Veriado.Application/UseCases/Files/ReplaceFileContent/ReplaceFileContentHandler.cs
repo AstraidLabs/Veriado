@@ -24,8 +24,9 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
     /// </summary>
     public ReplaceFileContentHandler(
         IFileRepository repository,
+        IClock clock,
         ImportPolicy importPolicy)
-        : base(repository)
+        : base(repository, clock)
     {
         _importPolicy = importPolicy;
     }
@@ -44,8 +45,10 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
-            file.ReplaceContent(request.Content, _importPolicy.MaxContentLengthBytes);
-            await PersistAsync(file, extractContent: true, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.ReplaceContent(request.Content, timestamp, _importPolicy.MaxContentLengthBytes);
+            var options = new FilePersistenceOptions { ExtractContent = true };
+            await PersistAsync(file, options, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

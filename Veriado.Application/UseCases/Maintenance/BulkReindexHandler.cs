@@ -7,6 +7,7 @@ using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Domain.Files;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Application.UseCases.Maintenance;
 
@@ -16,13 +17,15 @@ namespace Veriado.Application.UseCases.Maintenance;
 public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, AppResult<int>>
 {
     private readonly IFileRepository _repository;
+    private readonly IClock _clock;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BulkReindexHandler"/> class.
     /// </summary>
-    public BulkReindexHandler(IFileRepository repository)
+    public BulkReindexHandler(IFileRepository repository, IClock clock)
     {
         _repository = repository;
+        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -42,10 +45,12 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
             return AppResult<int>.NotFound($"Files not found: {string.Join(", ", missing)}");
         }
 
+        var timestamp = UtcTimestamp.From(_clock.UtcNow);
+        var options = new FilePersistenceOptions { ExtractContent = request.ExtractContent };
         foreach (var file in files)
         {
-            file.RequestManualReindex();
-            await _repository.UpdateAsync(file, cancellationToken).ConfigureAwait(false);
+            file.RequestManualReindex(timestamp);
+            await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
         }
 
         return AppResult<int>.Success(files.Count);

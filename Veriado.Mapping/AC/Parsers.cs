@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using Veriado.Application.UseCases.Files.SetExtendedMetadata;
 using Veriado.Contracts.Common;
@@ -143,30 +142,30 @@ internal static class Parsers
         return ParserResult<ExtendedMetadataEntry>.Success(new ExtendedMetadataEntry(dto.FormatId, dto.PropertyId, valueResult.Value));
     }
 
-    internal static ParserResult<string> ParseMetadataValue(MetadataValueDto dto, string target)
+    internal static ParserResult<MetadataValue> ParseMetadataValue(MetadataValueDto dto, string target)
     {
         try
         {
             var value = dto.Kind switch
             {
-                MetadataValueDtoKind.Null => string.Empty,
-                MetadataValueDtoKind.String => dto.StringValue ?? string.Empty,
-                MetadataValueDtoKind.StringArray => string.Join(", ", dto.StringArrayValue ?? Array.Empty<string>()),
-                MetadataValueDtoKind.UInt32 => (dto.UInt32Value ?? throw new ArgumentException("UInt32 value is required.")).ToString(CultureInfo.InvariantCulture),
-                MetadataValueDtoKind.Int32 => (dto.Int32Value ?? throw new ArgumentException("Int32 value is required.")).ToString(CultureInfo.InvariantCulture),
-                MetadataValueDtoKind.Double => (dto.DoubleValue ?? throw new ArgumentException("Double value is required.")).ToString(CultureInfo.InvariantCulture),
-                MetadataValueDtoKind.Boolean => (dto.BooleanValue ?? throw new ArgumentException("Boolean value is required.")).ToString(),
-                MetadataValueDtoKind.Guid => (dto.GuidValue ?? throw new ArgumentException("Guid value is required.")).ToString("D", CultureInfo.InvariantCulture),
-                MetadataValueDtoKind.FileTime => (dto.FileTimeValue ?? throw new ArgumentException("Timestamp value is required.")).ToString("O", CultureInfo.InvariantCulture),
-                MetadataValueDtoKind.Binary => Convert.ToBase64String(dto.BinaryValue ?? Array.Empty<byte>()),
+                MetadataValueDtoKind.Null => MetadataValue.Null,
+                MetadataValueDtoKind.String => MetadataValue.FromString(dto.StringValue ?? throw new ArgumentException("String value is required.")),
+                MetadataValueDtoKind.StringArray => MetadataValue.FromStringArray(dto.StringArrayValue ?? throw new ArgumentException("String array value is required.")),
+                MetadataValueDtoKind.UInt32 => MetadataValue.FromUInt(dto.UInt32Value ?? throw new ArgumentException("UInt32 value is required.")),
+                MetadataValueDtoKind.Int32 => MetadataValue.FromInt(dto.Int32Value ?? throw new ArgumentException("Int32 value is required.")),
+                MetadataValueDtoKind.Double => MetadataValue.FromReal(dto.DoubleValue ?? throw new ArgumentException("Double value is required.")),
+                MetadataValueDtoKind.Boolean => MetadataValue.FromBool(dto.BooleanValue ?? throw new ArgumentException("Boolean value is required.")),
+                MetadataValueDtoKind.Guid => MetadataValue.FromGuid(dto.GuidValue ?? throw new ArgumentException("Guid value is required.")),
+                MetadataValueDtoKind.FileTime => MetadataValue.FromFileTime(dto.FileTimeValue ?? throw new ArgumentException("Timestamp value is required.")),
+                MetadataValueDtoKind.Binary => MetadataValue.FromBinary(dto.BinaryValue ?? throw new ArgumentException("Binary value is required.")),
                 _ => throw new NotSupportedException($"Unsupported metadata value kind '{dto.Kind}'."),
             };
 
-            return ParserResult<string>.Success(value);
+            return ParserResult<MetadataValue>.Success(value);
         }
         catch (Exception ex)
         {
-            return ParserResult<string>.Failure(ApiError.ForValue(target, ex.Message));
+            return ParserResult<MetadataValue>.Failure(ApiError.ForValue(target, ex.Message));
         }
     }
 

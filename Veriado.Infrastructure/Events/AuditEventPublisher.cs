@@ -8,6 +8,7 @@ using Veriado.Domain.Audit;
 using Veriado.Domain.Files.Events;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
+using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -49,27 +50,27 @@ internal sealed class AuditEventPublisher : IEventPublisher
             switch (domainEvent)
             {
                 case FileCreated created:
-                    context.FileAudits.Add(FileAuditEntity.Created(created.FileId, created.Name));
+                    context.FileAudits.Add(FileAuditEntity.Created(created.FileId, created.Name, UtcTimestamp.From(created.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 
                 case FileRenamed renamed:
-                    context.FileAudits.Add(FileAuditEntity.Renamed(renamed.FileId, renamed.OldName, renamed.NewName));
+                    context.FileAudits.Add(FileAuditEntity.Renamed(renamed.FileId, renamed.OldName, renamed.NewName, UtcTimestamp.From(renamed.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 
                 case FileMetadataUpdated metadata:
-                    context.FileAudits.Add(FileAuditEntity.MetadataUpdated(metadata.FileId, metadata.Mime, metadata.Author));
+                    context.FileAudits.Add(FileAuditEntity.MetadataUpdated(metadata.FileId, metadata.Mime, metadata.Author, UtcTimestamp.From(metadata.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 
                 case FileReadOnlyChanged readOnlyChanged:
-                    context.FileAudits.Add(FileAuditEntity.ReadOnlyChanged(readOnlyChanged.FileId, readOnlyChanged.IsReadOnly));
+                    context.FileAudits.Add(FileAuditEntity.ReadOnlyChanged(readOnlyChanged.FileId, readOnlyChanged.IsReadOnly, UtcTimestamp.From(readOnlyChanged.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 
                 case FileContentReplaced contentReplaced:
-                    context.FileContentAudits.Add(FileContentAuditEntity.Replaced(contentReplaced.FileId, contentReplaced.Hash));
+                    context.FileContentAudits.Add(FileContentAuditEntity.Replaced(contentReplaced.FileId, contentReplaced.Hash, UtcTimestamp.From(contentReplaced.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 
@@ -79,7 +80,8 @@ internal sealed class AuditEventPublisher : IEventPublisher
                         validityChanged.IssuedAt,
                         validityChanged.ValidUntil,
                         validityChanged.HasPhysicalCopy,
-                        validityChanged.HasElectronicCopy));
+                        validityChanged.HasElectronicCopy,
+                        UtcTimestamp.From(validityChanged.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 

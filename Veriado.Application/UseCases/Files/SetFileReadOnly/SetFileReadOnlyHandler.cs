@@ -19,8 +19,8 @@ public sealed class SetFileReadOnlyHandler : FileWriteHandlerBase, IRequestHandl
     /// <summary>
     /// Initializes a new instance of the <see cref="SetFileReadOnlyHandler"/> class.
     /// </summary>
-    public SetFileReadOnlyHandler(IFileRepository repository)
-        : base(repository)
+    public SetFileReadOnlyHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -35,8 +35,9 @@ public sealed class SetFileReadOnlyHandler : FileWriteHandlerBase, IRequestHandl
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
-            file.SetReadOnly(request.IsReadOnly);
-            await PersistAsync(file, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.SetReadOnly(request.IsReadOnly, timestamp);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (InvalidOperationException ex)

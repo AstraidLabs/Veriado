@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Infrastructure.Persistence;
@@ -14,14 +15,21 @@ internal sealed class WriteRequest
     private readonly TaskCompletionSource<object?> _completion;
     private readonly CancellationToken _requestCancellation;
 
-    public WriteRequest(Func<AppDbContext, CancellationToken, Task<object?>> work, TaskCompletionSource<object?> completion, CancellationToken requestCancellation)
+    public WriteRequest(
+        Func<AppDbContext, CancellationToken, Task<object?>> work,
+        TaskCompletionSource<object?> completion,
+        IReadOnlyList<QueuedFileWrite>? trackedFiles,
+        CancellationToken requestCancellation)
     {
         _work = work;
         _completion = completion;
+        TrackedFiles = trackedFiles;
         _requestCancellation = requestCancellation;
     }
 
     public TaskCompletionSource<object?> Completion => _completion;
+
+    public IReadOnlyList<QueuedFileWrite>? TrackedFiles { get; }
 
     public async Task<object?> ExecuteAsync(AppDbContext context, CancellationToken workerCancellation)
     {

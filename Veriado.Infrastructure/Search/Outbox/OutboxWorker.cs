@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
 using Veriado.Domain.Files;
+using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -98,7 +99,13 @@ internal sealed class OutboxWorker : BackgroundService
                     continue;
                 }
 
-                await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
+                var extractContent = true;
+                if (payload.RootElement.TryGetProperty("ExtractContent", out var extractElement) && extractElement.ValueKind == JsonValueKind.False)
+                {
+                    extractContent = false;
+                }
+
+                await ReindexFileAsync(writeContext, fileId, extractContent, cancellationToken).ConfigureAwait(false);
                 outbox.ProcessedUtc = _clock.UtcNow;
             }
             catch (Exception ex)
@@ -112,7 +119,7 @@ internal sealed class OutboxWorker : BackgroundService
         return true;
     }
 
-    private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
+    private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, bool extractContent, CancellationToken cancellationToken)
     {
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
@@ -125,14 +132,16 @@ internal sealed class OutboxWorker : BackgroundService
             return;
         }
 
-        var text = await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
+        var text = extractContent
+            ? await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false)
+            : null;
         var document = file.ToSearchDocument(text);
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
 
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
         if (tracked is not null)
         {
-            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, _clock.UtcNow);
+            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
         }
     }
 }

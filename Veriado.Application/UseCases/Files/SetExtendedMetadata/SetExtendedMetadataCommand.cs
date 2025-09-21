@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MediatR;
 using Veriado.Application.Common;
 using Veriado.Application.DTO;
+using Veriado.Domain.Metadata;
 
 namespace Veriado.Application.UseCases.Files.SetExtendedMetadata;
 
@@ -19,4 +20,4 @@ public sealed record SetExtendedMetadataCommand(Guid FileId, IReadOnlyCollection
 /// <param name="FormatId">The property set format identifier.</param>
 /// <param name="PropertyId">The property identifier.</param>
 /// <param name="Value">The value to set, or <see langword="null"/> to remove.</param>
-public sealed record ExtendedMetadataEntry(Guid FormatId, int PropertyId, string? Value);
+public sealed record ExtendedMetadataEntry(Guid FormatId, int PropertyId, MetadataValue? Value);
