@@ -82,7 +82,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
-        services.AddScoped<FileReadRepository>();
+        services.AddScoped<IFileReadRepository, FileReadRepository>();
 
         services.AddHostedService<WriteWorker>();
         if (options.FtsIndexingMode == FtsIndexingMode.Outbox)
