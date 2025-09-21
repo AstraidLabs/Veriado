@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.UseCases.Files.ApplySystemMetadata;
 using Veriado.Application.UseCases.Files.ClearFileValidity;
 using Veriado.Application.UseCases.Files.ReplaceFileContent;
@@ -14,8 +13,11 @@ using Veriado.Application.UseCases.Files.RenameFile;
 using Veriado.Application.UseCases.Files.SetFileReadOnly;
 using Veriado.Application.UseCases.Files.SetFileValidity;
 using Veriado.Application.UseCases.Maintenance;
+using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Mapping.AC;
+
+using AppFileDto = Veriado.Application.DTO.FileDto;
 
 namespace Veriado.Services.Files;
 
@@ -58,7 +60,7 @@ public sealed class FileOperationsService : IFileOperationsService
         }
 
         using var scope = BeginScope();
-        AppResult<FileDto>? lastResult = null;
+        AppResult<AppFileDto>? lastResult = null;
         foreach (var command in mapping.Data!.Commands())
         {
             var commandResult = await _mediator.Send(command, cancellationToken).ConfigureAwait(false);
@@ -93,8 +95,8 @@ public sealed class FileOperationsService : IFileOperationsService
         var request = new SetValidityRequest
         {
             FileId = fileId,
-            IssuedAt = validity.IssuedAtUtc,
-            ValidUntil = validity.ValidUntilUtc,
+            IssuedAt = validity.IssuedAt,
+            ValidUntil = validity.ValidUntil,
             HasElectronicCopy = validity.HasElectronicCopy,
             HasPhysicalCopy = validity.HasPhysicalCopy,
         };
@@ -150,7 +152,7 @@ public sealed class FileOperationsService : IFileOperationsService
         if (!extractContent)
         {
             var reindexResult = await _mediator
-                .Send(new ReindexFileCommand(fileId, extractContent: false), cancellationToken)
+                .Send(new ReindexFileCommand(fileId, ExtractContent: false), cancellationToken)
                 .ConfigureAwait(false);
             if (reindexResult.IsFailure)
             {
@@ -192,7 +194,7 @@ public sealed class FileOperationsService : IFileOperationsService
         return AppResult<Guid>.Validation(messages);
     }
 
-    private static AppResult<Guid> ToIdResult(AppResult<FileDto> result)
+    private static AppResult<Guid> ToIdResult(AppResult<AppFileDto> result)
     {
         return result.IsSuccess
             ? AppResult<Guid>.Success(result.Value.Id)
