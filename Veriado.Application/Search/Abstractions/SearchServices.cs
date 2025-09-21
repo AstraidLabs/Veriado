@@ -26,6 +26,20 @@ public interface ISearchQueryService
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Executes a trigram-based fuzzy match query and returns matching identifiers with scores.
+    /// </summary>
+    /// <param name="matchQuery">The trigram FTS5 match query.</param>
+    /// <param name="skip">The number of results to skip.</param>
+    /// <param name="take">The maximum number of results to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The matching identifiers ordered by relevance.</returns>
+    Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
+        string matchQuery,
+        int skip,
+        int take,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Counts the number of hits returned by the specified match query.
     /// </summary>
     /// <param name="matchQuery">The FTS5 match query.</param>
@@ -54,8 +68,9 @@ public interface ISearchHistoryService
     /// <param name="queryText">The user-supplied query text, if any.</param>
     /// <param name="matchQuery">The generated FTS5 match query.</param>
     /// <param name="totalCount">The number of hits returned by the query.</param>
+    /// <param name="isFuzzy">Indicates whether the query was executed using trigram fuzzy search.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task AddAsync(string? queryText, string matchQuery, int totalCount, CancellationToken cancellationToken);
+    Task AddAsync(string? queryText, string matchQuery, int totalCount, bool isFuzzy, CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets the most recent history entries ordered by recency.
@@ -90,8 +105,9 @@ public interface ISearchFavoritesService
     /// <param name="name">The unique display name and key.</param>
     /// <param name="matchQuery">The generated match query.</param>
     /// <param name="queryText">The original query text.</param>
+    /// <param name="isFuzzy">Indicates whether the favourite represents a trigram query.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task AddAsync(string name, string matchQuery, string? queryText, CancellationToken cancellationToken);
+    Task AddAsync(string name, string matchQuery, string? queryText, bool isFuzzy, CancellationToken cancellationToken);
 
     /// <summary>
     /// Renames an existing favourite.
@@ -133,13 +149,15 @@ public interface ISearchFavoritesService
 /// <param name="LastQueriedUtc">The timestamp of the most recent execution.</param>
 /// <param name="Executions">The number of times the query was executed.</param>
 /// <param name="LastTotalHits">The last recorded hit count.</param>
+/// <param name="IsFuzzy">Indicates whether the entry was produced by fuzzy search.</param>
 public sealed record SearchHistoryEntry(
     Guid Id,
     string? QueryText,
     string MatchQuery,
     DateTimeOffset LastQueriedUtc,
     int Executions,
-    int? LastTotalHits);
+    int? LastTotalHits,
+    bool IsFuzzy);
 
 /// <summary>
 /// Represents a saved search favourite definition.
@@ -150,10 +168,12 @@ public sealed record SearchHistoryEntry(
 /// <param name="MatchQuery">The FTS match query.</param>
 /// <param name="Position">The ordering position.</param>
 /// <param name="CreatedUtc">The creation timestamp.</param>
+/// <param name="IsFuzzy">Indicates whether the favourite uses trigram fuzzy search.</param>
 public sealed record SearchFavoriteItem(
     Guid Id,
     string Name,
     string? QueryText,
     string MatchQuery,
     int Position,
-    DateTimeOffset CreatedUtc);
+    DateTimeOffset CreatedUtc,
+    bool IsFuzzy);

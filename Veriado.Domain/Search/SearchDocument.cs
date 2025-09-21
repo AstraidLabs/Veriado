@@ -10,6 +10,7 @@ public sealed record SearchDocument(
     string Title,
     string Mime,
     string? Author,
+    string? Subject,
     DateTimeOffset CreatedUtc,
     DateTimeOffset ModifiedUtc,
     string? ContentText);
