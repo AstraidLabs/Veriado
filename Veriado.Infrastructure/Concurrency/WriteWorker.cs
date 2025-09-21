@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,7 @@ using Veriado.Application.Abstractions;
 using Veriado.Domain.Files;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
+using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Search;
@@ -206,6 +208,11 @@ internal sealed class WriteWorker : BackgroundService
             }
         }
 
+        if (_options.UseKvMetadata)
+        {
+            await SynchronizeExtendedMetadataAsync(context, fileEntries, cancellationToken).ConfigureAwait(false);
+        }
+
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         if (_options.FtsIndexingMode == FtsIndexingMode.SameTransaction)
@@ -290,6 +297,54 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task SynchronizeExtendedMetadataAsync(
+        AppDbContext context,
+        IReadOnlyList<EntityEntry<FileEntity>> fileEntries,
+        CancellationToken cancellationToken)
+    {
+        if (fileEntries.Count == 0)
+        {
+            return;
+        }
+
+        var processed = new HashSet<Guid>();
+        foreach (var entry in fileEntries)
+        {
+            if (!processed.Add(entry.Entity.Id))
+            {
+                continue;
+            }
+
+            var fileId = entry.Entity.Id;
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                case EntityState.Modified:
+                    await context.ExtendedMetadataEntries
+                        .Where(metadata => metadata.FileId == fileId)
+                        .ExecuteDeleteAsync(cancellationToken)
+                        .ConfigureAwait(false);
+
+                    var mapped = ExtMetadataMapper.ToEntries(fileId, entry.Entity.ExtendedMetadata);
+                    if (mapped.Count > 0)
+                    {
+                        await context.ExtendedMetadataEntries
+                            .AddRangeAsync(mapped, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+
+                    break;
+
+                case EntityState.Deleted:
+                    await context.ExtendedMetadataEntries
+                        .Where(metadata => metadata.FileId == fileId)
+                        .ExecuteDeleteAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+            }
+        }
     }
 
     private async Task ExecuteWithRetryAsync(

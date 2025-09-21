@@ -20,12 +20,8 @@ public sealed class UpdateFileMetadataHandler : FileWriteHandlerBase, IRequestHa
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdateFileMetadataHandler"/> class.
     /// </summary>
-    public UpdateFileMetadataHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
-        : base(repository, eventPublisher, indexCoordinator, clock)
+    public UpdateFileMetadataHandler(IFileRepository repository)
+        : base(repository)
     {
     }
 

@@ -16,23 +16,13 @@ namespace Veriado.Application.UseCases.Maintenance;
 public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, AppResult<int>>
 {
     private readonly IFileRepository _repository;
-    private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexCoordinator _indexCoordinator;
-    private readonly IClock _clock;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BulkReindexHandler"/> class.
     /// </summary>
-    public BulkReindexHandler(
-        IFileRepository repository,
-        IEventPublisher eventPublisher,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
+    public BulkReindexHandler(IFileRepository repository)
     {
         _repository = repository;
-        _eventPublisher = eventPublisher;
-        _indexCoordinator = indexCoordinator;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -54,27 +44,10 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
 
         foreach (var file in files)
         {
-            await PublishDomainEventsAsync(file, cancellationToken);
-            var indexed = await _indexCoordinator.IndexAsync(file, request.ExtractContent, allowDeferred: false, cancellationToken)
-                .ConfigureAwait(false);
-            if (indexed)
-            {
-                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
-            }
-            await _repository.UpdateAsync(file, cancellationToken);
+            file.RequestManualReindex();
+            await _repository.UpdateAsync(file, cancellationToken).ConfigureAwait(false);
         }
 
         return AppResult<int>.Success(files.Count);
-    }
-
-    private async Task PublishDomainEventsAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        if (file.DomainEvents.Count == 0)
-        {
-            return;
-        }
-
-        await _eventPublisher.PublishAsync(file.DomainEvents, cancellationToken);
-        file.ClearDomainEvents();
     }
 }

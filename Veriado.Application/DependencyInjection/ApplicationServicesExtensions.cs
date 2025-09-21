@@ -4,6 +4,7 @@ using System.Reflection;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
 using Veriado.Application.UseCases.Queries.FileGrid;
@@ -30,6 +31,8 @@ public static class ApplicationServicesExtensions
         configure?.Invoke(options);
 
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(assembly));
+
+        services.AddScoped<IRequestContext>(_ => AmbientRequestContext.Current);
 
         RegisterValidators(services, assembly);
 

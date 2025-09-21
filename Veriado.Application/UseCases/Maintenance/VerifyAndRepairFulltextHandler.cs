@@ -15,20 +15,13 @@ namespace Veriado.Application.UseCases.Maintenance;
 public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRepairFulltextCommand, AppResult<int>>
 {
     private readonly IFileRepository _repository;
-    private readonly ISearchIndexCoordinator _indexCoordinator;
-    private readonly IClock _clock;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="VerifyAndRepairFulltextHandler"/> class.
     /// </summary>
-    public VerifyAndRepairFulltextHandler(
-        IFileRepository repository,
-        ISearchIndexCoordinator indexCoordinator,
-        IClock clock)
+    public VerifyAndRepairFulltextHandler(IFileRepository repository)
     {
         _repository = repository;
-        _indexCoordinator = indexCoordinator;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -43,13 +36,8 @@ public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRe
                 continue;
             }
 
-            var indexed = await _indexCoordinator.IndexAsync(file, request.ExtractContent, allowDeferred: false, cancellationToken)
-                .ConfigureAwait(false);
-            if (indexed)
-            {
-                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
-            }
-            await _repository.UpdateAsync(file, cancellationToken);
+            file.RequestManualReindex();
+            await _repository.UpdateAsync(file, cancellationToken).ConfigureAwait(false);
             repaired++;
         }
 
