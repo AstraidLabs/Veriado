@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Common;
-using Veriado.Application.Files.Queries;
 
-namespace Veriado.Application.Files.Validation;
+namespace Veriado.Application.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Integrates <see cref="FileGridQueryValidator"/> with the request validation pipeline.

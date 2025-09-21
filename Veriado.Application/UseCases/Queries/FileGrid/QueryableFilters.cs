@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.Files.Services;
+namespace Veriado.Application.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Provides reusable filtering and ordering logic for file grid queries.

@@ -6,8 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
-using Veriado.Application.Files.Configuration;
-using Veriado.Application.Files.Validation;
+using Veriado.Application.UseCases.Queries.FileGrid;
 using Veriado.Application.Pipeline;
 using Veriado.Application.Pipeline.Idempotency;
 

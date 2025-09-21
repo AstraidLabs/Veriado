@@ -2,19 +2,20 @@
 
 ## UseCases jako jediná API vrstva
 
-Aplikační projekt vystavuje veřejné API výhradně prostřednictvím MediatR **UseCases**. Každý zápisový scénář má vlastní `IRequest` command a handler, na které je navázána validační pipeline (`LoggingBehavior`, `IdempotencyBehavior`, `ValidationBehavior`). Staré typy pod `Veriado.Application.Files` jsou pouze pro zpětnou kompatibilitu a jsou označeny jako `Obsolete`.
+Aplikační projekt vystavuje veřejné API výhradně prostřednictvím MediatR **UseCases**. Každý zápisový scénář má vlastní `IRequest` command a handler, na které je navázána validační pipeline (`LoggingBehavior`, `IdempotencyBehavior`, `ValidationBehavior`). Legacy typy pod `Veriado.Application.Files` byly odstraněny – použití `UseCases` je jediná podporovaná cesta.
 
-| Legacy API (`Veriado.Application.Files`)| Náhrada v UseCases |
+| UseCase | Popis |
 | --- | --- |
-| `CreateFileCommand` + `CreateFileHandler` | `UseCases.Files.CreateFile.CreateFileCommand` + `CreateFileHandler` |
-| `ReplaceContentCommand` + `ReplaceContentHandler` | `UseCases.Files.ReplaceFileContent.ReplaceFileContentCommand` + `ReplaceFileContentHandler` |
-| `RenameFileCommand` + `RenameFileHandler` | `UseCases.Files.RenameFile.RenameFileCommand` + `RenameFileHandler` |
-| `UpdateMetadataCommand` | `UseCases.Files.UpdateFileMetadata.UpdateFileMetadataCommand` (+ případně `ApplySystemMetadataCommand`, `SetExtendedMetadataCommand`, `SetFileReadOnlyCommand`) |
-| `SetValidityCommand` + `SetValidityHandler` | `UseCases.Files.SetFileValidity.SetFileValidityCommand` + `SetFileValidityHandler` |
-| `ClearValidityCommand` + `ClearValidityHandler` | `UseCases.Files.ClearFileValidity.ClearFileValidityCommand` + `ClearFileValidityHandler` |
-| `MetadataPatch` | `UseCases.Files.SetExtendedMetadata.SetExtendedMetadataCommand.ExtendedMetadataEntry` |
-| Ruční reindexace (`FileIndexingHelper`, `Reindex` pomocníci) | `UseCases.Maintenance.ReindexFileCommand` / `BulkReindexCommand` / `VerifyAndRepairFulltextCommand` |
+| `UseCases.Files.CreateFile.CreateFileCommand` | Vytvoření nového souboru včetně prvotního indexování. |
+| `UseCases.Files.ReplaceFileContent.ReplaceFileContentCommand` | Náhrada binárního obsahu a přegenerování fulltextu. |
+| `UseCases.Files.RenameFile.RenameFileCommand` | Přejmenování souboru a synchronizace indexu. |
+| `UseCases.Files.UpdateFileMetadata.UpdateFileMetadataCommand` | Aktualizace MIME a autora. |
+| `UseCases.Files.SetExtendedMetadata.SetExtendedMetadataCommand` | Hromadná správa rozšířené metadatové struktury. |
+| `UseCases.Files.ApplySystemMetadata.ApplySystemMetadataCommand` | Import systémových metadat (atributy, časová razítka). |
+| `UseCases.Files.SetFileReadOnly.SetFileReadOnlyCommand` | Přepnutí příznaku pouze pro čtení. |
+| `UseCases.Files.SetFileValidity.SetFileValidityCommand` / `ClearFileValidityCommand` | Správa platnosti dokumentu. |
+| `UseCases.Maintenance.ReindexFileCommand` / `BulkReindexCommand` / `VerifyAndRepairFulltextCommand` | Údržba a manuální reindexace. |
 
-Každý nový command má odpovídající validátor v `UseCases.Files.Validation`, který dědí z `FluentValidation.AbstractValidator` a zároveň implementuje `IRequestValidator<T>`, takže se automaticky zapojuje do pipeline. Spotřebitelé by měli pracovat výhradně s `IMediator.Send` a těmito UseCases.
+Každý command má odpovídající validátor v `UseCases.Files.Validation`, který dědí z `FluentValidation.AbstractValidator` a zároveň implementuje `IRequestValidator<T>`, takže se automaticky zapojuje do pipeline. Spotřebitelé by měli pracovat výhradně s `IMediator.Send` a těmito UseCases.
 
-Dotazovací část (`Files.Queries`, `UseCases.Queries`) zůstává beze změn; `FileGridQueryHandler` dále využívá `QueryableFilters`, `FtsQueryBuilder` a `TrigramQueryBuilder`.
+Dotazovací část je sjednocena v `UseCases.Queries` – například `FileGridQueryHandler` využívá `QueryableFilters`, `FtsQueryBuilder` a `TrigramQueryBuilder` pro pokročilé filtrování, řazení a fulltextové vyhledávání.

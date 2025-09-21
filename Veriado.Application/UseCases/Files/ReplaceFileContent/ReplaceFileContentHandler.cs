@@ -7,6 +7,7 @@ using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
 using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Application.UseCases.Files.Common;
 using Veriado.Domain.Files;
 
 namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
@@ -14,14 +15,9 @@ namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
 /// <summary>
 /// Handles replacing file content while ensuring search index synchronization.
 /// </summary>
-public sealed class ReplaceFileContentHandler : IRequestHandler<ReplaceFileContentCommand, AppResult<FileDto>>
+public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHandler<ReplaceFileContentCommand, AppResult<FileDto>>
 {
-    private readonly IFileRepository _repository;
-    private readonly IEventPublisher _eventPublisher;
-    private readonly ISearchIndexer _searchIndexer;
-    private readonly ITextExtractor _textExtractor;
     private readonly ImportPolicy _importPolicy;
-    private readonly IClock _clock;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReplaceFileContentHandler"/> class.
@@ -33,13 +29,9 @@ public sealed class ReplaceFileContentHandler : IRequestHandler<ReplaceFileConte
         ITextExtractor textExtractor,
         ImportPolicy importPolicy,
         IClock clock)
+        : base(repository, eventPublisher, searchIndexer, textExtractor, clock)
     {
-        _repository = repository;
-        _eventPublisher = eventPublisher;
-        _searchIndexer = searchIndexer;
-        _textExtractor = textExtractor;
         _importPolicy = importPolicy;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -50,7 +42,7 @@ public sealed class ReplaceFileContentHandler : IRequestHandler<ReplaceFileConte
             Guard.AgainstNull(request.Content, nameof(request.Content));
             _importPolicy.EnsureWithinLimit(request.Content.LongLength);
 
-            var file = await _repository.GetAsync(request.FileId, cancellationToken);
+            var file = await Repository.GetAsync(request.FileId, cancellationToken);
             if (file is null)
             {
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
@@ -74,29 +66,4 @@ public sealed class ReplaceFileContentHandler : IRequestHandler<ReplaceFileConte
         }
     }
 
-    private async Task PersistAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-    {
-        await PublishDomainEventsAsync(file, cancellationToken);
-        await IndexAndUpdateAsync(file, extractContent, cancellationToken);
-    }
-
-    private async Task IndexAndUpdateAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-    {
-        var text = extractContent ? await _textExtractor.ExtractTextAsync(file, cancellationToken) : null;
-        var document = file.ToSearchDocument(text);
-        await _searchIndexer.IndexAsync(document, cancellationToken);
-        file.ConfirmIndexed(file.SearchIndex.SchemaVersion, _clock.UtcNow);
-        await _repository.UpdateAsync(file, cancellationToken);
-    }
-
-    private async Task PublishDomainEventsAsync(FileEntity file, CancellationToken cancellationToken)
-    {
-        if (file.DomainEvents.Count == 0)
-        {
-            return;
-        }
-
-        await _eventPublisher.PublishAsync(file.DomainEvents, cancellationToken);
-        file.ClearDomainEvents();
-    }
 }
