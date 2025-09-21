@@ -8,7 +8,7 @@ namespace Veriado.Application.UseCases.Files.Common;
 /// <summary>
 /// Provides reusable persistence helpers for file write handlers.
 /// </summary>
-internal abstract class FileWriteHandlerBase
+public abstract class FileWriteHandlerBase
 {
     private readonly IFileRepository _repository;
     private readonly IEventPublisher _eventPublisher;
