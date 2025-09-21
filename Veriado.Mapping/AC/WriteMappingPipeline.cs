@@ -154,9 +154,9 @@ public sealed class WriteMappingPipeline
             }
         }
 
-        ApplySystemMetadataCommand? systemCommand = systemMetadata is null
-            ? null
-            : CreateSystemMetadataCommand(request.FileId, systemMetadata);
+        ApplySystemMetadataCommand? systemCommand = systemMetadata is { } metadata
+            ? CreateSystemMetadataCommand(request.FileId, metadata)
+            : null;
 
         SetExtendedMetadataCommand? metadataSetCommand = metadataEntries.Count == 0
             ? null
@@ -309,17 +309,17 @@ public sealed record CreateFileMappedRequest(
             yield return new SetExtendedMetadataCommand(fileId, ExtendedMetadata);
         }
 
-        if (SystemMetadata is not null)
+        if (SystemMetadata is { } metadata)
         {
             yield return new ApplySystemMetadataCommand(
                 fileId,
-                SystemMetadata.Attributes,
-                SystemMetadata.CreatedUtc.Value,
-                SystemMetadata.LastWriteUtc.Value,
-                SystemMetadata.LastAccessUtc.Value,
-                SystemMetadata.OwnerSid,
-                SystemMetadata.HardLinkCount,
-                SystemMetadata.AlternateDataStreamCount);
+                metadata.Attributes,
+                metadata.CreatedUtc.Value,
+                metadata.LastWriteUtc.Value,
+                metadata.LastAccessUtc.Value,
+                metadata.OwnerSid,
+                metadata.HardLinkCount,
+                metadata.AlternateDataStreamCount);
         }
 
         if (SetReadOnly)
