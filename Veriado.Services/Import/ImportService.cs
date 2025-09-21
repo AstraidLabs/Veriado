@@ -171,7 +171,7 @@ public sealed class ImportService : IImportService
         if (!extractContent)
         {
             var reindexResult = await _mediator
-                .Send(new ReindexFileCommand(fileId, extractContent: false), cancellationToken)
+                .Send(new ReindexFileCommand(fileId, ExtractContent: false), cancellationToken)
                 .ConfigureAwait(false);
             if (reindexResult.IsFailure)
             {
@@ -211,7 +211,7 @@ public sealed class ImportService : IImportService
                 CoerceToUtc(info.CreationTimeUtc),
                 CoerceToUtc(info.LastWriteTimeUtc),
                 CoerceToUtc(info.LastAccessTimeUtc),
-                ownerSid: null,
+                OwnerSid: null,
                 HardLinkCount: null,
                 AlternateDataStreamCount: null);
             isReadOnly = info.IsReadOnly;
