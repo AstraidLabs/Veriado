@@ -101,24 +101,26 @@ internal sealed class FileRepository : IFileRepository
         return await context.Files.AnyAsync(f => f.Content.Hash == hash, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddAsync(FileEntity entity, CancellationToken cancellationToken = default)
+    public async Task AddAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
+        var tracked = new[] { new QueuedFileWrite(entity, options) };
         await _writeQueue.EnqueueAsync((AppDbContext db, CancellationToken ct) =>
         {
             db.Files.Add(entity);
             return Task.FromResult(true);
-        }, cancellationToken).ConfigureAwait(false);
+        }, tracked, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateAsync(FileEntity entity, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
+        var tracked = new[] { new QueuedFileWrite(entity, options) };
         await _writeQueue.EnqueueAsync((AppDbContext db, CancellationToken ct) =>
         {
             db.Files.Update(entity);
             return Task.FromResult(true);
-        }, cancellationToken).ConfigureAwait(false);
+        }, tracked, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -133,7 +135,7 @@ internal sealed class FileRepository : IFileRepository
 
             db.Files.Remove(entity);
             return true;
-        }, cancellationToken).ConfigureAwait(false);
+        }, null, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task HydrateExtendedMetadataAsync(

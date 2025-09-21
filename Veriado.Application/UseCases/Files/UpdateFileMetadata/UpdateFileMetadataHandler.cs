@@ -20,8 +20,8 @@ public sealed class UpdateFileMetadataHandler : FileWriteHandlerBase, IRequestHa
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdateFileMetadataHandler"/> class.
     /// </summary>
-    public UpdateFileMetadataHandler(IFileRepository repository)
-        : base(repository)
+    public UpdateFileMetadataHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -37,8 +37,9 @@ public sealed class UpdateFileMetadataHandler : FileWriteHandlerBase, IRequestHa
             }
 
             MimeType? mime = request.Mime is null ? null : MimeType.From(request.Mime);
-            file.UpdateMetadata(mime, request.Author);
-            await PersistAsync(file, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.UpdateMetadata(mime, request.Author, timestamp);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

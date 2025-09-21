@@ -14,6 +14,7 @@ using Veriado.Application.Abstractions;
 using Veriado.Domain.Files;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
+using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
@@ -31,7 +32,8 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ILogger<WriteWorker> _logger;
     private readonly InfrastructureOptions _options;
-    private readonly ITextExtractor _textExtractor;
+    private readonly ISearchIndexCoordinator _searchCoordinator;
+    private readonly ISearchIndexer _searchIndexer;
     private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
 
@@ -40,7 +42,8 @@ internal sealed class WriteWorker : BackgroundService
         IDbContextFactory<AppDbContext> dbContextFactory,
         ILogger<WriteWorker> logger,
         InfrastructureOptions options,
-        ITextExtractor textExtractor,
+        ISearchIndexCoordinator searchCoordinator,
+        ISearchIndexer searchIndexer,
         IEventPublisher eventPublisher,
         IClock clock)
     {
@@ -48,7 +51,8 @@ internal sealed class WriteWorker : BackgroundService
         _dbContextFactory = dbContextFactory;
         _logger = logger;
         _options = options;
-        _textExtractor = textExtractor;
+        _searchCoordinator = searchCoordinator;
+        _searchIndexer = searchIndexer;
         _eventPublisher = eventPublisher;
         _clock = clock;
     }
@@ -137,6 +141,17 @@ internal sealed class WriteWorker : BackgroundService
 
         var results = new object?[batch.Count];
         Exception? failure = null;
+        var trackedOptions = new Dictionary<FileEntity, FilePersistenceOptions>();
+        foreach (var request in batch)
+        {
+            if (request.TrackedFiles is { Count: > 0 } trackedFiles)
+            {
+                foreach (var tracked in trackedFiles)
+                {
+                    trackedOptions[tracked.Entity] = tracked.Options;
+                }
+            }
+        }
 
         for (var index = 0; index < batch.Count; index++)
         {
@@ -169,7 +184,7 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         var fileEntries = context.ChangeTracker.Entries<FileEntity>().ToList();
-        var filesToIndex = new List<FileEntity>();
+        var filesToIndex = new List<(FileEntity File, FilePersistenceOptions Options)>();
         var filesToDelete = new List<Guid>();
         foreach (var entry in fileEntries)
         {
@@ -181,7 +196,10 @@ internal sealed class WriteWorker : BackgroundService
             {
                 if (entry.Entity.SearchIndex.IsStale)
                 {
-                    filesToIndex.Add(entry.Entity);
+                    var options = trackedOptions.TryGetValue(entry.Entity, out var value)
+                        ? value
+                        : FilePersistenceOptions.Default;
+                    filesToIndex.Add((entry.Entity, options));
                 }
             }
         }
@@ -195,15 +213,28 @@ internal sealed class WriteWorker : BackgroundService
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
         var reindexEvents = domainEvents.OfType<SearchReindexRequested>().ToList();
 
-        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox)
+        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && filesToIndex.Count > 0)
         {
-            foreach (var reindex in reindexEvents)
+            var reindexByFile = reindexEvents
+                .GroupBy(evt => evt.FileId)
+                .ToDictionary(group => group.Key, group => group.OrderBy(evt => evt.OccurredOnUtc).Last());
+
+            foreach (var (file, options) in filesToIndex)
             {
+                if (!options.AllowDeferredIndexing)
+                {
+                    continue;
+                }
+
+                reindexByFile.TryGetValue(file.Id, out var reindexEvent);
+                var occurredUtc = reindexEvent?.OccurredOnUtc ?? _clock.UtcNow;
+                var reason = reindexEvent?.Reason.ToString() ?? ReindexReason.Manual.ToString();
                 var outbox = OutboxEvent.From(nameof(SearchReindexRequested), new
                 {
-                    reindex.FileId,
-                    Reason = reindex.Reason.ToString(),
-                }, reindex.OccurredOnUtc);
+                    FileId = file.Id,
+                    Reason = reason,
+                    options.ExtractContent,
+                }, occurredUtc);
                 context.OutboxEvents.Add(outbox);
             }
         }
@@ -215,9 +246,12 @@ internal sealed class WriteWorker : BackgroundService
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        if (_options.FtsIndexingMode == FtsIndexingMode.SameTransaction)
+        var indexedNow = await ApplyFulltextUpdatesAsync(context, filesToIndex, filesToDelete, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (indexedNow)
         {
-            await ApplyFulltextUpdatesAsync(context, filesToIndex, filesToDelete, cancellationToken).ConfigureAwait(false);
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -253,50 +287,72 @@ internal sealed class WriteWorker : BackgroundService
             staleCount);
     }
 
-    private async Task ApplyFulltextUpdatesAsync(AppDbContext context, IReadOnlyList<FileEntity> filesToIndex, IReadOnlyList<Guid> filesToDelete, CancellationToken cancellationToken)
+    private async Task<bool> ApplyFulltextUpdatesAsync(
+        AppDbContext context,
+        IReadOnlyList<(FileEntity File, FilePersistenceOptions Options)> filesToIndex,
+        IReadOnlyList<Guid> filesToDelete,
+        CancellationToken cancellationToken)
     {
         if (filesToIndex.Count == 0 && filesToDelete.Count == 0)
         {
-            return;
+            return false;
         }
 
-        if (context.Database.CurrentTransaction?.GetDbTransaction() is not SqliteTransaction sqliteTransaction)
+        var handled = false;
+        var dbTransaction = context.Database.CurrentTransaction?.GetDbTransaction();
+
+        if (_options.FtsIndexingMode == FtsIndexingMode.SameTransaction)
         {
-            throw new InvalidOperationException("SQLite transaction is required for full-text updates.");
-        }
+            if (dbTransaction is not SqliteTransaction sqliteTransaction)
+            {
+                throw new InvalidOperationException("SQLite transaction is required for full-text updates.");
+            }
 
-        var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-        var helper = new SqliteFts5Transactional();
+            var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
+            var helper = new SqliteFts5Transactional();
+
+            foreach (var id in filesToDelete)
+            {
+                await ExecuteWithRetryAsync(
+                    ct => helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, ct),
+                    $"delete index for {id}",
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            foreach (var (file, options) in filesToIndex)
+            {
+                var indexed = await _searchCoordinator
+                    .IndexAsync(file, options, sqliteTransaction, cancellationToken)
+                    .ConfigureAwait(false);
+                if (indexed)
+                {
+                    var timestamp = UtcTimestamp.From(_clock.UtcNow);
+                    file.ConfirmIndexed(file.SearchIndex.SchemaVersion, timestamp);
+                    handled = true;
+                }
+            }
+
+            return handled;
+        }
 
         foreach (var id in filesToDelete)
         {
-            await ExecuteWithRetryAsync(
-                ct => helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, ct),
-                $"delete index for {id}",
-                cancellationToken).ConfigureAwait(false);
+            await _searchIndexer.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
         }
 
-        if (filesToIndex.Count == 0)
+        foreach (var (file, options) in filesToIndex)
         {
-            return;
+            var indexed = await _searchCoordinator.IndexAsync(file, options, dbTransaction, cancellationToken)
+                .ConfigureAwait(false);
+            if (indexed)
+            {
+                var timestamp = UtcTimestamp.From(_clock.UtcNow);
+                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, timestamp);
+                handled = true;
+            }
         }
 
-        var now = _clock.UtcNow;
-        foreach (var file in filesToIndex)
-        {
-            var stopwatch = Stopwatch.StartNew();
-            var text = await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
-            var document = file.ToSearchDocument(text);
-            await ExecuteWithRetryAsync(
-                ct => helper.IndexAsync(document, sqliteConnection, sqliteTransaction, ct),
-                $"index file {file.Id}",
-                cancellationToken).ConfigureAwait(false);
-            stopwatch.Stop();
-            _logger.LogDebug("Indexed file {FileId} in {ElapsedMilliseconds} ms", file.Id, stopwatch.Elapsed.TotalMilliseconds);
-            file.ConfirmIndexed(file.SearchIndex.SchemaVersion, now);
-        }
-
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return handled;
     }
 
     private async Task SynchronizeExtendedMetadataAsync(

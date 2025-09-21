@@ -17,7 +17,14 @@ public sealed class FileValidityChanged : IDomainEvent
     /// <param name="validUntil">The validity expiration timestamp, if any.</param>
     /// <param name="hasPhysicalCopy">Whether a physical copy exists.</param>
     /// <param name="hasElectronicCopy">Whether an electronic copy exists.</param>
-    public FileValidityChanged(Guid fileId, UtcTimestamp? issuedAt, UtcTimestamp? validUntil, bool hasPhysicalCopy, bool hasElectronicCopy)
+    /// <param name="occurredUtc">The timestamp when the validity change was recorded.</param>
+    public FileValidityChanged(
+        Guid fileId,
+        UtcTimestamp? issuedAt,
+        UtcTimestamp? validUntil,
+        bool hasPhysicalCopy,
+        bool hasElectronicCopy,
+        UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         IssuedAt = issuedAt;
@@ -25,7 +32,7 @@ public sealed class FileValidityChanged : IDomainEvent
         HasPhysicalCopy = hasPhysicalCopy;
         HasElectronicCopy = hasElectronicCopy;
         EventId = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>

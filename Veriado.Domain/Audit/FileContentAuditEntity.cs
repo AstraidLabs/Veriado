@@ -35,9 +35,10 @@ public sealed class FileContentAuditEntity
     /// </summary>
     /// <param name="fileId">The file identifier.</param>
     /// <param name="newHash">The new content hash.</param>
+    /// <param name="occurredUtc">The timestamp when the event occurred.</param>
     /// <returns>The created audit entry.</returns>
-    public static FileContentAuditEntity Replaced(Guid fileId, FileHash newHash)
+    public static FileContentAuditEntity Replaced(Guid fileId, FileHash newHash, UtcTimestamp occurredUtc)
     {
-        return new FileContentAuditEntity(fileId, newHash, UtcTimestamp.Now());
+        return new FileContentAuditEntity(fileId, newHash, occurredUtc);
     }
 }

@@ -19,7 +19,16 @@ public sealed class FileCreated : IDomainEvent
     /// <param name="author">The author.</param>
     /// <param name="size">The file size.</param>
     /// <param name="hash">The SHA-256 hash of the file content.</param>
-    public FileCreated(Guid fileId, FileName name, FileExtension extension, MimeType mime, string author, ByteSize size, FileHash hash)
+    /// <param name="occurredUtc">The timestamp when the file was created.</param>
+    public FileCreated(
+        Guid fileId,
+        FileName name,
+        FileExtension extension,
+        MimeType mime,
+        string author,
+        ByteSize size,
+        FileHash hash,
+        UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         Name = name;
@@ -29,7 +38,7 @@ public sealed class FileCreated : IDomainEvent
         Size = size;
         Hash = hash;
         EventId = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Infrastructure.Persistence;
@@ -10,7 +11,10 @@ namespace Veriado.Infrastructure.Concurrency;
 /// </summary>
 internal interface IWriteQueue
 {
-    Task<T> EnqueueAsync<T>(Func<AppDbContext, CancellationToken, Task<T>> work, CancellationToken cancellationToken = default);
+    Task<T> EnqueueAsync<T>(
+        Func<AppDbContext, CancellationToken, Task<T>> work,
+        IReadOnlyList<QueuedFileWrite>? trackedFiles,
+        CancellationToken cancellationToken = default);
 
     ValueTask<WriteRequest?> DequeueAsync(CancellationToken cancellationToken);
 }

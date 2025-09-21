@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Abstractions;
 using Veriado.Domain.Files;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Application.UseCases.Files.Common;
 
@@ -11,34 +12,33 @@ namespace Veriado.Application.UseCases.Files.Common;
 public abstract class FileWriteHandlerBase
 {
     private readonly IFileRepository _repository;
+    private readonly IClock _clock;
 
     protected IFileRepository Repository => _repository;
 
-    protected FileWriteHandlerBase(IFileRepository repository)
+    protected FileWriteHandlerBase(IFileRepository repository, IClock clock)
     {
         _repository = repository;
+        _clock = clock;
     }
 
-    protected Task PersistNewAsync(FileEntity file, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: true, cancellationToken);
+    protected UtcTimestamp CurrentTimestamp() => UtcTimestamp.From(_clock.UtcNow);
 
-    protected Task PersistNewAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: true, cancellationToken);
+    protected Task PersistNewAsync(FileEntity file, FilePersistenceOptions options, CancellationToken cancellationToken)
+        => PersistInternalAsync(file, addFirst: true, options, cancellationToken);
 
-    protected Task PersistAsync(FileEntity file, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: false, cancellationToken);
-
-    protected Task PersistAsync(FileEntity file, bool extractContent, CancellationToken cancellationToken)
-        => PersistInternalAsync(file, addFirst: false, cancellationToken);
+    protected Task PersistAsync(FileEntity file, FilePersistenceOptions options, CancellationToken cancellationToken)
+        => PersistInternalAsync(file, addFirst: false, options, cancellationToken);
 
     private Task PersistInternalAsync(
         FileEntity file,
         bool addFirst,
+        FilePersistenceOptions options,
         CancellationToken cancellationToken)
     {
         if (addFirst)
         {
-            return _repository.AddAsync(file, cancellationToken);
+            return _repository.AddAsync(file, options, cancellationToken);
         }
 
         if (file.DomainEvents.Count == 0 && !file.SearchIndex.IsStale)
@@ -46,6 +46,6 @@ public abstract class FileWriteHandlerBase
             return Task.CompletedTask;
         }
 
-        return _repository.UpdateAsync(file, cancellationToken);
+        return _repository.UpdateAsync(file, options, cancellationToken);
     }
 }

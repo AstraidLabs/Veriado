@@ -20,8 +20,8 @@ public sealed class SetExtendedMetadataHandler : FileWriteHandlerBase, IRequestH
     /// <summary>
     /// Initializes a new instance of the <see cref="SetExtendedMetadataHandler"/> class.
     /// </summary>
-    public SetExtendedMetadataHandler(IFileRepository repository)
-        : base(repository)
+    public SetExtendedMetadataHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -41,23 +41,24 @@ public sealed class SetExtendedMetadataHandler : FileWriteHandlerBase, IRequestH
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
-            file.SetExtendedMetadata(builder =>
+            var timestamp = CurrentTimestamp();
+            file.SetExtendedMetadata(timestamp, builder =>
             {
                 foreach (var entry in request.Entries)
                 {
                     var key = new PropertyKey(entry.FormatId, entry.PropertyId);
-                    if (string.IsNullOrWhiteSpace(entry.Value))
+                    if (entry.Value is null)
                     {
                         builder.Remove(key);
                     }
                     else
                     {
-                        builder.Set(key, MetadataValue.FromString(entry.Value));
+                        builder.Set(key, entry.Value.Value);
                     }
                 }
             });
 
-            await PersistAsync(file, cancellationToken);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

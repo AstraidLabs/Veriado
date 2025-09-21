@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
+using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -90,13 +91,25 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return new IntegrityReport(missing, orphans);
     }
 
-    public async Task RepairAsync(CancellationToken cancellationToken = default)
+    public async Task<int> RepairAsync(bool reindexAll, bool extractContent, CancellationToken cancellationToken = default)
     {
         var report = await VerifyAsync(cancellationToken).ConfigureAwait(false);
-        if (report.MissingCount == 0 && report.OrphanCount == 0)
+        IReadOnlyCollection<Guid> targetFileIds;
+
+        if (reindexAll)
         {
-            _logger.LogInformation("Full-text index already consistent");
-            return;
+            await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            targetFileIds = await readContext.Files.Select(f => f.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            if (report.MissingCount == 0 && report.OrphanCount == 0)
+            {
+                _logger.LogInformation("Full-text index already consistent");
+                return 0;
+            }
+
+            targetFileIds = report.MissingFileIds;
         }
 
         await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
@@ -113,22 +126,31 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             }
         }
 
-        foreach (var missing in report.MissingFileIds)
+        var processed = 0;
+        foreach (var fileId in targetFileIds)
         {
             try
             {
-                await ReindexMissingAsync(writeContext, missing, cancellationToken).ConfigureAwait(false);
+                if (await ReindexFileAsync(writeContext, fileId, extractContent, cancellationToken).ConfigureAwait(false))
+                {
+                    processed++;
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to repair search index for file {FileId}", missing);
+                _logger.LogError(ex, "Failed to repair search index for file {FileId}", fileId);
             }
         }
 
-        await writeContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (processed > 0)
+        {
+            await writeContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return processed;
     }
 
-    private async Task ReindexMissingAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
+    private async Task<bool> ReindexFileAsync(AppDbContext writeContext, Guid fileId, bool extractContent, CancellationToken cancellationToken)
     {
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
@@ -137,18 +159,23 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             .ConfigureAwait(false);
         if (file is null)
         {
-            return;
+            return false;
         }
 
-        var text = await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false);
+        var text = extractContent
+            ? await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false)
+            : null;
         var document = file.ToSearchDocument(text);
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
 
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
         if (tracked is not null)
         {
-            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, _clock.UtcNow);
+            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
+            return true;
         }
+
+        return false;
     }
 
     private SqliteConnection CreateConnection()

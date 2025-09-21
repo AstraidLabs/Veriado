@@ -56,14 +56,21 @@ public sealed class FileDocumentValidityAuditEntity
     /// <param name="validUntil">The new expiration timestamp.</param>
     /// <param name="hasPhysicalCopy">Whether a physical copy exists after the change.</param>
     /// <param name="hasElectronicCopy">Whether an electronic copy exists after the change.</param>
+    /// <param name="occurredUtc">The timestamp when the event occurred.</param>
     /// <returns>The created audit entry.</returns>
-    public static FileDocumentValidityAuditEntity Changed(Guid fileId, UtcTimestamp? issuedAt, UtcTimestamp? validUntil, bool hasPhysicalCopy, bool hasElectronicCopy)
+    public static FileDocumentValidityAuditEntity Changed(
+        Guid fileId,
+        UtcTimestamp? issuedAt,
+        UtcTimestamp? validUntil,
+        bool hasPhysicalCopy,
+        bool hasElectronicCopy,
+        UtcTimestamp occurredUtc)
     {
         if (issuedAt.HasValue && validUntil.HasValue && validUntil.Value.Value < issuedAt.Value.Value)
         {
             throw new ArgumentException("Valid-until must be greater than or equal to issued-at.", nameof(validUntil));
         }
 
-        return new FileDocumentValidityAuditEntity(fileId, issuedAt, validUntil, hasPhysicalCopy, hasElectronicCopy, UtcTimestamp.Now());
+        return new FileDocumentValidityAuditEntity(fileId, issuedAt, validUntil, hasPhysicalCopy, hasElectronicCopy, occurredUtc);
     }
 }

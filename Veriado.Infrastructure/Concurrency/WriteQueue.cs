@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -24,7 +25,10 @@ internal sealed class WriteQueue : IWriteQueue
         _channel = Channel.CreateBounded<WriteRequest>(options);
     }
 
-    public async Task<T> EnqueueAsync<T>(Func<AppDbContext, CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
+    public async Task<T> EnqueueAsync<T>(
+        Func<AppDbContext, CancellationToken, Task<T>> work,
+        IReadOnlyList<QueuedFileWrite>? trackedFiles,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(work);
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -32,7 +36,7 @@ internal sealed class WriteQueue : IWriteQueue
         {
             var value = await work(context, ct).ConfigureAwait(false);
             return (object?)value;
-        }, completion, cancellationToken);
+        }, completion, trackedFiles, cancellationToken);
         await _channel.Writer.WriteAsync(request, cancellationToken).ConfigureAwait(false);
         var result = await completion.Task.ConfigureAwait(false);
         return result is T typed ? typed : default!;

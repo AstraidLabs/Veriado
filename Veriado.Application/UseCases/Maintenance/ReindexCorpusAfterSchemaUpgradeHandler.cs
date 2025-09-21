@@ -5,6 +5,7 @@ using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Domain.Files;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Application.UseCases.Maintenance;
 
@@ -14,10 +15,12 @@ namespace Veriado.Application.UseCases.Maintenance;
 public sealed class ReindexCorpusAfterSchemaUpgradeHandler : IRequestHandler<ReindexCorpusAfterSchemaUpgradeCommand, AppResult<int>>
 {
     private readonly IFileRepository _repository;
+    private readonly IClock _clock;
 
-    public ReindexCorpusAfterSchemaUpgradeHandler(IFileRepository repository)
+    public ReindexCorpusAfterSchemaUpgradeHandler(IFileRepository repository, IClock clock)
     {
         _repository = repository;
+        _clock = clock;
     }
 
     public async Task<AppResult<int>> Handle(ReindexCorpusAfterSchemaUpgradeCommand request, CancellationToken cancellationToken)
@@ -31,10 +34,17 @@ public sealed class ReindexCorpusAfterSchemaUpgradeHandler : IRequestHandler<Rei
 
         try
         {
+            var options = new FilePersistenceOptions
+            {
+                ExtractContent = request.ExtractContent,
+                AllowDeferredIndexing = request.AllowDeferredIndexing,
+            };
+
             await foreach (var file in _repository.StreamAllAsync(cancellationToken))
             {
-                file.BumpSchemaVersion(request.TargetSchemaVersion);
-                await _repository.UpdateAsync(file, cancellationToken).ConfigureAwait(false);
+                var timestamp = UtcTimestamp.From(_clock.UtcNow);
+                file.BumpSchemaVersion(request.TargetSchemaVersion, timestamp);
+                await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
                 reindexed++;
             }
 

@@ -19,8 +19,8 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
     /// <summary>
     /// Initializes a new instance of the <see cref="ClearFileValidityHandler"/> class.
     /// </summary>
-    public ClearFileValidityHandler(IFileRepository repository)
-        : base(repository)
+    public ClearFileValidityHandler(IFileRepository repository, IClock clock)
+        : base(repository, clock)
     {
     }
 
@@ -35,8 +35,9 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
                 return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
-            file.ClearValidity();
-            await PersistAsync(file, cancellationToken);
+            var timestamp = CurrentTimestamp();
+            file.ClearValidity(timestamp);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
         }
         catch (InvalidOperationException ex)

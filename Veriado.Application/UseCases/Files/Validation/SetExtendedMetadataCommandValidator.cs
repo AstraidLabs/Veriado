@@ -52,10 +52,6 @@ public sealed class SetExtendedMetadataCommandValidator : AbstractValidator<SetE
 
             RuleFor(entry => entry.PropertyId)
                 .GreaterThanOrEqualTo(0);
-
-            RuleFor(entry => entry.Value)
-                .Must(value => value is null || value.Trim().Length > 0)
-                .WithMessage("Metadata value must contain text when provided.");
         }
     }
 }
