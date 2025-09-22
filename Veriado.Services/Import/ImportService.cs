@@ -13,7 +13,7 @@ using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Mapping.AC;
 using Veriado.Services.Import.Internal;
-using Veriado.Services.Import.Models;
+using Veriado.Contracts.Import;
 
 namespace Veriado.Services.Import;
 

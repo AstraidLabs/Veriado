@@ -9,14 +9,14 @@ namespace Veriado.Presentation.DependencyInjection;
 /// <summary>
 /// Provides registration helpers for the presentation layer.
 /// </summary>
-public static class PresentationServiceCollectionExtensions
+public static class PresentationViewModelServiceCollectionExtensions
 {
     /// <summary>
     /// Registers presentation services, view models and helpers.
     /// </summary>
     /// <param name="services">The service collection to populate.</param>
     /// <returns>The original service collection for chaining.</returns>
-    public static IServiceCollection AddPresentation(this IServiceCollection services)
+    public static IServiceCollection AddWinUiPresentation(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 

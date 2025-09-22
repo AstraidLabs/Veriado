@@ -6,8 +6,10 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using AutoMapper;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Presentation.Models.Files;
 using Veriado.Services.Files;
 using Veriado.Presentation.Services;
 
@@ -23,6 +25,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     private readonly IFileContentService _fileContentService;
     private readonly IPickerService _pickerService;
     private readonly IDialogService _dialogService;
+    private readonly IMapper _mapper;
 
     public FileDetailViewModel(
         IFileQueryService fileQueryService,
@@ -30,6 +33,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         IFileContentService fileContentService,
         IPickerService pickerService,
         IDialogService dialogService,
+        IMapper mapper,
         IMessenger messenger)
         : base(messenger)
     {
@@ -38,13 +42,14 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         _fileContentService = fileContentService ?? throw new ArgumentNullException(nameof(fileContentService));
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
     }
 
     [ObservableProperty]
     private Guid? currentFileId;
 
     [ObservableProperty]
-    private FileDetailDto? detail;
+    private FileDetailModel? detail;
 
     [ObservableProperty]
     private string editableName = string.Empty;
@@ -274,8 +279,8 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         await SafeExecuteAsync(
             async token =>
             {
-                var detail = await _fileQueryService.GetDetailAsync(fileId, token).ConfigureAwait(true);
-                if (detail is null)
+                var detailDto = await _fileQueryService.GetDetailAsync(fileId, token).ConfigureAwait(true);
+                if (detailDto is null)
                 {
                     StatusMessage = "Soubor nebyl nalezen.";
                     CurrentFileId = null;
@@ -283,7 +288,8 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                     return;
                 }
 
-                PopulateFromDetail(detail);
+                var detailModel = _mapper.Map<FileDetailModel>(detailDto);
+                PopulateFromDetail(detailModel);
                 IsInfoBarOpen = true;
                 StatusMessage = "Detail načten.";
             },
@@ -342,7 +348,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         StatusMessage = "Operace selhala.";
     }
 
-    private void PopulateFromDetail(FileDetailDto detail)
+    private void PopulateFromDetail(FileDetailModel detail)
     {
         Detail = detail;
         EditableName = detail.Name;

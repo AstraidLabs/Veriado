@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
-using Veriado.Services.Import.Models;
+using Veriado.Contracts.Import;
 
 namespace Veriado.Services.Import;
 
