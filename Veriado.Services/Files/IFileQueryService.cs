@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.UseCases.Queries.FileGrid;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
@@ -15,7 +14,7 @@ namespace Veriado.Services.Files;
 /// </summary>
 public interface IFileQueryService
 {
-    Task<PageResult<FileSummaryDto>> GetGridAsync(FileGridQuery query, CancellationToken cancellationToken);
+    Task<PageResult<FileSummaryDto>> GetGridAsync(FileGridQueryDto query, CancellationToken cancellationToken);
 
     Task<FileDetailDto?> GetDetailAsync(Guid fileId, CancellationToken cancellationToken);
 

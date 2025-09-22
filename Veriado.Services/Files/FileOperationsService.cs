@@ -17,8 +17,6 @@ using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Mapping.AC;
 
-using AppFileDto = Veriado.Application.DTO.FileDto;
-
 namespace Veriado.Services.Files;
 
 /// <summary>
@@ -60,7 +58,7 @@ public sealed class FileOperationsService : IFileOperationsService
         }
 
         using var scope = BeginScope();
-        AppResult<AppFileDto>? lastResult = null;
+        AppResult<FileSummaryDto>? lastResult = null;
         foreach (var command in mapping.Data!.Commands())
         {
             var commandResult = await _mediator.Send(command, cancellationToken).ConfigureAwait(false);
@@ -190,7 +188,7 @@ public sealed class FileOperationsService : IFileOperationsService
         return ApiResponse<Guid>.Failure(errors);
     }
 
-    private static ApiResponse<Guid> ToIdResponse(AppResult<AppFileDto> result)
+    private static ApiResponse<Guid> ToIdResponse(AppResult<FileSummaryDto> result)
     {
         if (result.IsSuccess)
         {

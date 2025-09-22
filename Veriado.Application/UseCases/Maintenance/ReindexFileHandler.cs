@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 
@@ -14,7 +14,7 @@ namespace Veriado.Application.UseCases.Maintenance;
 /// <summary>
 /// Handles explicit reindexing requests for a file.
 /// </summary>
-public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, AppResult<FileDto>>
+public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, AppResult<FileSummaryDto>>
 {
     private readonly IFileRepository _repository;
     private readonly IClock _clock;
@@ -29,25 +29,25 @@ public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, App
     }
 
     /// <inheritdoc />
-    public async Task<AppResult<FileDto>> Handle(ReindexFileCommand request, CancellationToken cancellationToken)
+    public async Task<AppResult<FileSummaryDto>> Handle(ReindexFileCommand request, CancellationToken cancellationToken)
     {
         try
         {
             var file = await _repository.GetAsync(request.FileId, cancellationToken);
             if (file is null)
             {
-                return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
+                return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
             var timestamp = UtcTimestamp.From(_clock.UtcNow);
             file.RequestManualReindex(timestamp);
             var options = new FilePersistenceOptions { ExtractContent = request.ExtractContent };
             await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
-            return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
+            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
         }
         catch (Exception ex)
         {
-            return AppResult<FileDto>.FromException(ex, "Failed to reindex the file.");
+            return AppResult<FileSummaryDto>.FromException(ex, "Failed to reindex the file.");
         }
     }
 }

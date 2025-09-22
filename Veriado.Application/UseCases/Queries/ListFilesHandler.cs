@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
 
@@ -29,7 +29,7 @@ public sealed class ListFilesHandler : IRequestHandler<ListFilesQuery, Page<File
     {
         var pageRequest = new PageRequest(request.PageNumber, request.PageSize);
         var result = await _readRepository.ListAsync(pageRequest, cancellationToken);
-        var items = result.Items.Select(DomainToDto.ToListItemDto).ToList();
+        var items = result.Items.Select(DomainToDto.ToFileListItemDto).ToList();
         return new Page<FileListItemDto>(items, result.PageNumber, result.PageSize, result.TotalCount);
     }
 }

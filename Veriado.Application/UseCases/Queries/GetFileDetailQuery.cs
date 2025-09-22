@@ -1,6 +1,6 @@
 using System;
 using MediatR;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
 

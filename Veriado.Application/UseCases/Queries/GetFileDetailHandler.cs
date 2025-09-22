@@ -2,8 +2,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
 

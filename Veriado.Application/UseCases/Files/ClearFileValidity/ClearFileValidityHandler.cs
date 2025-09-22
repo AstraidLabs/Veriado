@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
 using Veriado.Application.UseCases.Files.Common;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
 namespace Veriado.Application.UseCases.Files.ClearFileValidity;
@@ -14,7 +14,7 @@ namespace Veriado.Application.UseCases.Files.ClearFileValidity;
 /// <summary>
 /// Handles clearing document validity from files.
 /// </summary>
-public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHandler<ClearFileValidityCommand, AppResult<FileDto>>
+public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHandler<ClearFileValidityCommand, AppResult<FileSummaryDto>>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ClearFileValidityHandler"/> class.
@@ -25,28 +25,28 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
     }
 
     /// <inheritdoc />
-    public async Task<AppResult<FileDto>> Handle(ClearFileValidityCommand request, CancellationToken cancellationToken)
+    public async Task<AppResult<FileSummaryDto>> Handle(ClearFileValidityCommand request, CancellationToken cancellationToken)
     {
         try
         {
             var file = await Repository.GetAsync(request.FileId, cancellationToken);
             if (file is null)
             {
-                return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
+                return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
             var timestamp = CurrentTimestamp();
             file.ClearValidity(timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
-            return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
+            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
         }
         catch (InvalidOperationException ex)
         {
-            return AppResult<FileDto>.FromException(ex);
+            return AppResult<FileSummaryDto>.FromException(ex);
         }
         catch (Exception ex)
         {
-            return AppResult<FileDto>.FromException(ex, "Failed to clear file validity.");
+            return AppResult<FileSummaryDto>.FromException(ex, "Failed to clear file validity.");
         }
     }
 

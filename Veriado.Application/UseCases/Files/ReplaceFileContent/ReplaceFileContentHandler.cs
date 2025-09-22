@@ -5,9 +5,9 @@ using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
 using Veriado.Application.UseCases.Files.Common;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
 namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
@@ -15,7 +15,7 @@ namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
 /// <summary>
 /// Handles replacing file content while ensuring search index synchronization.
 /// </summary>
-public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHandler<ReplaceFileContentCommand, AppResult<FileDto>>
+public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHandler<ReplaceFileContentCommand, AppResult<FileSummaryDto>>
 {
     private readonly ImportPolicy _importPolicy;
 
@@ -32,7 +32,7 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
     }
 
     /// <inheritdoc />
-    public async Task<AppResult<FileDto>> Handle(ReplaceFileContentCommand request, CancellationToken cancellationToken)
+    public async Task<AppResult<FileSummaryDto>> Handle(ReplaceFileContentCommand request, CancellationToken cancellationToken)
     {
         try
         {
@@ -42,26 +42,26 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
             var file = await Repository.GetAsync(request.FileId, cancellationToken);
             if (file is null)
             {
-                return AppResult<FileDto>.NotFound($"File '{request.FileId}' was not found.");
+                return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
             var timestamp = CurrentTimestamp();
             file.ReplaceContent(request.Content, timestamp, _importPolicy.MaxContentLengthBytes);
             var options = new FilePersistenceOptions { ExtractContent = true };
             await PersistAsync(file, options, cancellationToken);
-            return AppResult<FileDto>.Success(DomainToDto.ToFileDto(file));
+            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
         {
-            return AppResult<FileDto>.FromException(ex);
+            return AppResult<FileSummaryDto>.FromException(ex);
         }
         catch (InvalidOperationException ex)
         {
-            return AppResult<FileDto>.FromException(ex);
+            return AppResult<FileSummaryDto>.FromException(ex);
         }
         catch (Exception ex)
         {
-            return AppResult<FileDto>.FromException(ex, "Failed to replace file content.");
+            return AppResult<FileSummaryDto>.FromException(ex, "Failed to replace file content.");
         }
     }
 

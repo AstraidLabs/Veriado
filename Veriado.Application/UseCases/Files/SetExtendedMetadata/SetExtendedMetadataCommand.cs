@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
 
 namespace Veriado.Application.UseCases.Files.SetExtendedMetadata;
@@ -12,7 +12,7 @@ namespace Veriado.Application.UseCases.Files.SetExtendedMetadata;
 /// </summary>
 /// <param name="FileId">The file identifier.</param>
 /// <param name="Entries">The metadata entries to upsert or remove.</param>
-public sealed record SetExtendedMetadataCommand(Guid FileId, IReadOnlyCollection<ExtendedMetadataEntry> Entries) : IRequest<AppResult<FileDto>>;
+public sealed record SetExtendedMetadataCommand(Guid FileId, IReadOnlyCollection<ExtendedMetadataEntry> Entries) : IRequest<AppResult<FileSummaryDto>>;
 
 /// <summary>
 /// Represents a single extended metadata operation.

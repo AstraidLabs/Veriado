@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using MediatR;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Search;
 
 namespace Veriado.Application.UseCases.Search;
 

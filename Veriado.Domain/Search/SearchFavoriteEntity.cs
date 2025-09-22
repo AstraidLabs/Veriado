@@ -1,7 +1,10 @@
 using System;
 
-namespace Veriado.Infrastructure.Search.Entities;
+namespace Veriado.Domain.Search;
 
+/// <summary>
+/// Represents a persisted search favourite.
+/// </summary>
 public sealed class SearchFavoriteEntity
 {
     public Guid Id { get; set; }

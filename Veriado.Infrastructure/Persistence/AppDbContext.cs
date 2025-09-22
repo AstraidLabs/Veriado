@@ -5,10 +5,10 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Veriado.Domain.Audit;
 using Veriado.Domain.Files;
 using Veriado.Infrastructure.MetadataStore.Kv;
+using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Configurations;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Search.Outbox;
-using Veriado.Infrastructure.Search.Entities;
 
 namespace Veriado.Infrastructure.Persistence;
 

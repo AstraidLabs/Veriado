@@ -1,7 +1,7 @@
 using System;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Files.UpdateFileMetadata;
 
@@ -11,4 +11,4 @@ namespace Veriado.Application.UseCases.Files.UpdateFileMetadata;
 /// <param name="FileId">The identifier of the file.</param>
 /// <param name="Mime">The optional new MIME type.</param>
 /// <param name="Author">The optional new author.</param>
-public sealed record UpdateFileMetadataCommand(Guid FileId, string? Mime, string? Author) : IRequest<AppResult<FileDto>>;
+public sealed record UpdateFileMetadataCommand(Guid FileId, string? Mime, string? Author) : IRequest<AppResult<FileSummaryDto>>;
