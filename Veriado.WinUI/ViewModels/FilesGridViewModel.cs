@@ -194,6 +194,21 @@ public sealed partial class FilesGridViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Applies the supplied suggestion text to the active query.
+    /// </summary>
+    /// <param name="suggestion">The suggestion text to use.</param>
+    [RelayCommand]
+    private void ApplySuggestion(string? suggestion)
+    {
+        if (string.IsNullOrWhiteSpace(suggestion))
+        {
+            return;
+        }
+
+        QueryText = suggestion;
+    }
+
+    /// <summary>
     /// Raises navigation to the detail page for the specified file.
     /// </summary>
     /// <param name="fileId">The identifier of the file to open.</param>
