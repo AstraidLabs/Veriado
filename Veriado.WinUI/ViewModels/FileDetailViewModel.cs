@@ -33,7 +33,13 @@ public sealed partial class FileDetailViewModel : ObservableObject
     private bool isBusy;
 
     [ObservableProperty]
+    private bool isInfoBarOpen = true;
+
+    [ObservableProperty]
     private string? statusMessage;
+
+    [ObservableProperty]
+    private string? errorMessage;
 
     [ObservableProperty]
     private Guid? currentFileId;
@@ -68,10 +74,13 @@ public sealed partial class FileDetailViewModel : ObservableObject
     [ObservableProperty]
     private string? contentPreview;
 
+    [ObservableProperty]
+    private bool extractContent = true;
+
     /// <summary>
     /// Loads the detail information for the specified file.
     /// </summary>
-    public async Task LoadAsync(Guid fileId, CancellationToken cancellationToken = default)
+    public async Task GetDetailAsync(Guid fileId, CancellationToken cancellationToken = default)
     {
         if (IsBusy)
         {
@@ -79,11 +88,13 @@ public sealed partial class FileDetailViewModel : ObservableObject
         }
 
         IsBusy = true;
+        ErrorMessage = null;
         StatusMessage = "Načítám detail souboru...";
+        IsInfoBarOpen = true;
 
         try
         {
-            var detail = await _fileQueryService.GetDetailAsync(fileId, cancellationToken);
+            var detail = await _fileQueryService.GetDetailAsync(fileId, cancellationToken).ConfigureAwait(true);
             if (detail is null)
             {
                 StatusMessage = "Soubor nebyl nalezen.";
@@ -92,17 +103,7 @@ public sealed partial class FileDetailViewModel : ObservableObject
                 return;
             }
 
-            CurrentFileId = detail.Id;
-            Detail = detail;
-            EditableName = detail.Name;
-            EditableAuthor = detail.Author;
-            EditableMime = detail.Mime;
-            EditableIsReadOnly = detail.IsReadOnly;
-            ValidityIssuedAt = detail.Validity?.IssuedAt;
-            ValidityValidUntil = detail.Validity?.ValidUntil;
-            ValidityHasPhysicalCopy = detail.Validity?.HasPhysicalCopy ?? false;
-            ValidityHasElectronicCopy = detail.Validity?.HasElectronicCopy ?? false;
-            ContentPreview = null;
+            PopulateFromDetail(detail);
             StatusMessage = "Detail načten.";
         }
         catch (OperationCanceledException)
@@ -111,7 +112,8 @@ public sealed partial class FileDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Načítání selhalo: {ex.Message}";
+            ErrorMessage = $"Načítání selhalo: {ex.Message}";
+            StatusMessage = "Načítání selhalo.";
         }
         finally
         {
@@ -123,7 +125,7 @@ public sealed partial class FileDetailViewModel : ObservableObject
     /// Persists the edited metadata using the orchestration services.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task SaveMetadataAsync(CancellationToken cancellationToken)
+    private async Task UpdateMetadataAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
@@ -139,10 +141,9 @@ public sealed partial class FileDetailViewModel : ObservableObject
             IsReadOnly = EditableIsReadOnly,
         };
 
-        await ExecuteAsync(() => _fileOperationsService.UpdateMetadataAsync(request, cancellationToken),
+        await ExecuteAsync(
+            () => _fileOperationsService.UpdateMetadataAsync(request, cancellationToken),
             "Metadata byla uložena.");
-
-        await LoadAsync(CurrentFileId.Value, cancellationToken);
     }
 
     /// <summary>
@@ -157,10 +158,25 @@ public sealed partial class FileDetailViewModel : ObservableObject
             return;
         }
 
-        await ExecuteAsync(() => _fileOperationsService.RenameAsync(CurrentFileId.Value, EditableName.Trim(), cancellationToken),
+        await ExecuteAsync(
+            () => _fileOperationsService.RenameAsync(CurrentFileId.Value, EditableName.Trim(), cancellationToken),
             "Soubor byl přejmenován.");
+    }
 
-        await LoadAsync(CurrentFileId.Value, cancellationToken);
+    /// <summary>
+    /// Applies only the read-only toggle using the specialized command.
+    /// </summary>
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task SetReadOnlyAsync(CancellationToken cancellationToken)
+    {
+        if (CurrentFileId is null)
+        {
+            return;
+        }
+
+        await ExecuteAsync(
+            () => _fileOperationsService.SetReadOnlyAsync(CurrentFileId.Value, EditableIsReadOnly, cancellationToken),
+            EditableIsReadOnly ? "Soubor je nyní pouze pro čtení." : "Soubor lze upravovat.");
     }
 
     /// <summary>
@@ -187,10 +203,8 @@ public sealed partial class FileDetailViewModel : ObservableObject
             ValidityHasElectronicCopy);
 
         await ExecuteAsync(
-                () => _fileOperationsService.SetValidityAsync(CurrentFileId.Value, validity, cancellationToken),
-                "Platnost dokumentu byla uložena.");
-
-        await LoadAsync(CurrentFileId.Value, cancellationToken);
+            () => _fileOperationsService.SetValidityAsync(CurrentFileId.Value, validity, cancellationToken),
+            "Platnost byla uložena.");
     }
 
     /// <summary>
@@ -204,10 +218,9 @@ public sealed partial class FileDetailViewModel : ObservableObject
             return;
         }
 
-        await ExecuteAsync(() => _fileOperationsService.ClearValidityAsync(CurrentFileId.Value, cancellationToken),
+        await ExecuteAsync(
+            () => _fileOperationsService.ClearValidityAsync(CurrentFileId.Value, cancellationToken),
             "Platnost byla odstraněna.");
-
-        await LoadAsync(CurrentFileId.Value, cancellationToken);
     }
 
     /// <summary>
@@ -223,19 +236,21 @@ public sealed partial class FileDetailViewModel : ObservableObject
 
         try
         {
-            var content = await _fileContentService.GetContentAsync(CurrentFileId.Value, cancellationToken);
+            StatusMessage = "Načítám obsah...";
+            IsInfoBarOpen = true;
+
+            var content = await _fileContentService.GetContentAsync(CurrentFileId.Value, cancellationToken).ConfigureAwait(true);
             if (content is null)
             {
-                StatusMessage = "Obsah nebyl nalezen.";
                 ContentPreview = null;
+                StatusMessage = "Obsah nebyl nalezen.";
                 return;
             }
 
             var (meta, bytes) = content.Value;
             var previewLength = Math.Min(bytes.Length, 512);
-            var previewText = Encoding.UTF8.GetString(bytes, 0, previewLength);
-            ContentPreview = previewText;
-            StatusMessage = $"Načten obsah (velikost {meta.SizeBytes} B).";
+            ContentPreview = Encoding.UTF8.GetString(bytes, 0, previewLength);
+            StatusMessage = $"Načten obsah (velikost {meta.SizeBytes:N0} B).";
         }
         catch (OperationCanceledException)
         {
@@ -243,8 +258,30 @@ public sealed partial class FileDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Načítání obsahu selhalo: {ex.Message}";
+            ErrorMessage = $"Načítání obsahu selhalo: {ex.Message}";
+            StatusMessage = "Načítání obsahu selhalo.";
         }
+    }
+
+    /// <summary>
+    /// Replaces the file content using the orchestration service.
+    /// </summary>
+    public async Task ReplaceContentAsync(byte[] content, CancellationToken cancellationToken = default)
+    {
+        if (CurrentFileId is null)
+        {
+            return;
+        }
+
+        if (content is null || content.Length == 0)
+        {
+            StatusMessage = "Nebyl vybrán platný soubor.";
+            return;
+        }
+
+        await ExecuteAsync(
+            () => _fileOperationsService.ReplaceContentAsync(CurrentFileId.Value, content, ExtractContent, cancellationToken),
+            "Obsah byl nahrán.");
     }
 
     private async Task ExecuteAsync(Func<Task<AppResult<Guid>>> callback, string successMessage)
@@ -252,8 +289,21 @@ public sealed partial class FileDetailViewModel : ObservableObject
         try
         {
             IsBusy = true;
-            var result = await callback();
-            HandleResult(result, successMessage);
+            ErrorMessage = null;
+            var result = await callback().ConfigureAwait(true);
+            if (result.IsSuccess)
+            {
+                StatusMessage = successMessage;
+                IsInfoBarOpen = true;
+                if (CurrentFileId is { } id)
+                {
+                    await GetDetailAsync(id).ConfigureAwait(true);
+                }
+            }
+            else
+            {
+                HandleFailure(result);
+            }
         }
         finally
         {
@@ -261,17 +311,30 @@ public sealed partial class FileDetailViewModel : ObservableObject
         }
     }
 
-    private void HandleResult(AppResult<Guid> result, string successMessage)
+    private void HandleFailure(AppResult<Guid> result)
     {
-        if (result.IsSuccess)
-        {
-            StatusMessage = successMessage;
-            return;
-        }
+        IsInfoBarOpen = true;
 
         var message = string.IsNullOrWhiteSpace(result.Error.Message)
             ? result.Error.Code.ToString()
             : result.Error.Message;
-        StatusMessage = $"Operace selhala: {message}";
+
+        ErrorMessage = $"Operace selhala: {message}";
+        StatusMessage = "Operace selhala.";
+    }
+
+    private void PopulateFromDetail(FileDetailDto detail)
+    {
+        CurrentFileId = detail.Id;
+        Detail = detail;
+        EditableName = detail.Name;
+        EditableAuthor = detail.Author;
+        EditableMime = detail.Mime;
+        EditableIsReadOnly = detail.IsReadOnly;
+        ValidityIssuedAt = detail.Validity?.IssuedAt;
+        ValidityValidUntil = detail.Validity?.ValidUntil;
+        ValidityHasPhysicalCopy = detail.Validity?.HasPhysicalCopy ?? false;
+        ValidityHasElectronicCopy = detail.Validity?.HasElectronicCopy ?? false;
+        ContentPreview = null;
     }
 }

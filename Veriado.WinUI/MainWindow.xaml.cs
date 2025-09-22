@@ -1,18 +1,24 @@
 using System;
 using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using Veriado.WinUI.ViewModels;
 using Veriado.WinUI.Views;
 
 namespace Veriado;
 
 public sealed partial class MainWindow : Window
 {
+    public ShellViewModel ViewModel { get; }
+
     public MainWindow()
     {
         InitializeComponent();
         Title = "Veriado";
+        ViewModel = AppHost.Services.GetRequiredService<ShellViewModel>();
+        DataContext = ViewModel;
         Loaded += OnLoaded;
     }
 

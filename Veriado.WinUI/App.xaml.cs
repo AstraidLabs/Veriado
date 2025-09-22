@@ -2,7 +2,6 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
-using Veriado.WinUI.ViewModels;
 
 namespace Veriado
 {
@@ -35,8 +34,6 @@ namespace Veriado
             AppHost.StartAsync().GetAwaiter().GetResult();
 
             _window = AppHost.Services.GetRequiredService<MainWindow>();
-            var viewModel = AppHost.Services.GetRequiredService<MainWindowViewModel>();
-            _window.DataContext = viewModel;
             MainWindowInstance = _window;
             _window.Closed += OnWindowClosed;
             _window.Activate();
