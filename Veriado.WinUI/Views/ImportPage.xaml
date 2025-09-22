@@ -46,23 +46,23 @@
                 <TextBox
                     Width="360"
                     PlaceholderText="Cílová složka"
-                    Text="{Binding SelectedFolderPath, Mode=TwoWay}" />
+                    Text="{Binding FolderRequest.FolderPath, Mode=TwoWay}" />
                 <Button Content="Vybrat složku" Command="{Binding BrowseFolderCommand}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <TextBox Width="220" PlaceholderText="Výchozí autor" Text="{Binding DefaultAuthor, Mode=TwoWay}" />
-                <TextBox Width="120" PlaceholderText="Maska" Text="{Binding SearchPattern, Mode=TwoWay}" />
+                <TextBox Width="220" PlaceholderText="Výchozí autor" Text="{Binding FolderRequest.DefaultAuthor, Mode=TwoWay}" />
+                <TextBox Width="120" PlaceholderText="Maska" Text="{Binding FolderRequest.SearchPattern, Mode=TwoWay}" />
                 <winui:NumberBox
                     Width="140"
                     Minimum="1"
                     Maximum="64"
-                    Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}" />
+                    Value="{Binding FolderRequest.MaxDegreeOfParallelism, Mode=TwoWay}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <CheckBox Content="Extrahovat obsah" IsChecked="{Binding ExtractContent, Mode=TwoWay}" />
-                <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+                <CheckBox Content="Extrahovat obsah" IsChecked="{Binding FolderRequest.ExtractContent, Mode=TwoWay}" />
+                <CheckBox Content="Rekurzivně" IsChecked="{Binding FolderRequest.Recursive, Mode=TwoWay}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
@@ -76,10 +76,10 @@
             <TextBlock Text="Souhrn" FontSize="20" FontWeight="SemiBold" />
             <ProgressBar
                 Minimum="0"
-                Maximum="{Binding Total}"
-                Value="{Binding Processed}" />
-            <TextBlock Text="{Binding Processed, StringFormat='Úspěšně: {0}'}" />
-            <TextBlock Text="{Binding Total, StringFormat='Celkem: {0}'}" />
+                Maximum="{Binding Progress.Total}"
+                Value="{Binding Progress.Processed}" />
+            <TextBlock Text="{Binding Progress.Processed, StringFormat='Úspěšně: {0}'}" />
+            <TextBlock Text="{Binding Progress.Total, StringFormat='Celkem: {0}'}" />
         </StackPanel>
     </Grid>
 </Page>

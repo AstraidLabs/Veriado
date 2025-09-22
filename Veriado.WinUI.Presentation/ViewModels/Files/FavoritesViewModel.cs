@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.Contracts.Search;
+using Veriado.Presentation.Models.Search;
 
 namespace Veriado.Presentation.ViewModels.Files;
 
@@ -12,11 +12,11 @@ public sealed partial class FavoritesViewModel : ViewModelBase
     public FavoritesViewModel(IMessenger messenger)
         : base(messenger)
     {
-        Items = new ObservableCollection<SearchFavoriteItem>();
+        Items = new ObservableCollection<SearchFavoriteItemModel>();
     }
 
     /// <summary>
     /// Gets the favourite entries.
     /// </summary>
-    public ObservableCollection<SearchFavoriteItem> Items { get; }
+    public ObservableCollection<SearchFavoriteItemModel> Items { get; }
 }

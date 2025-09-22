@@ -8,14 +8,15 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.WinUI.Collections;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Contracts.Common;
-using Veriado.Contracts.Files;
-using Veriado.Contracts.Search;
-using Veriado.Services.Files;
+using AutoMapper;
 using Veriado.Presentation.Collections;
 using Veriado.Presentation.Helpers;
 using Veriado.Presentation.Messages;
+using Veriado.Presentation.Models.Common;
+using Veriado.Presentation.Models.Files;
+using Veriado.Presentation.Models.Search;
 using Veriado.Presentation.ViewModels.Files;
+using Veriado.Services.Files;
 
 namespace Veriado.Presentation.ViewModels;
 
@@ -36,11 +37,13 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
     IRecipient<ImportCompletedMessage>
 {
     private readonly IFileQueryService _fileQueryService;
+    private readonly IMapper _mapper;
     private readonly AsyncDebouncer _refreshDebouncer = new(TimeSpan.FromMilliseconds(350));
     private bool _isLoadingMore;
 
     public FilesGridViewModel(
         IFileQueryService fileQueryService,
+        IMapper mapper,
         SearchBarViewModel searchBar,
         FileFiltersViewModel filters,
         SortStateViewModel sortState,
@@ -50,6 +53,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
         : base(messenger)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
+        _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
         SearchBar = searchBar ?? throw new ArgumentNullException(nameof(searchBar));
         Filters = filters ?? throw new ArgumentNullException(nameof(filters));
         SortState = sortState ?? throw new ArgumentNullException(nameof(sortState));
@@ -73,7 +77,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
     /// Gets the incremental loading collection bound to the grid.
     /// </summary>
     [ObservableProperty]
-    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto>? items;
+    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryModel>? items;
 
     /// <summary>
     /// Gets or sets the current segmented search mode.
@@ -266,10 +270,10 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
         QueueRefresh();
     }
 
-    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto> CreateCollection()
+    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryModel> CreateCollection()
     {
-        var incrementalSource = new FilesIncrementalSource(_fileQueryService, BuildQuery, OnPageLoaded);
-        return new IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto>(incrementalSource, Math.Max(PagedState.PageSize, 1));
+        var incrementalSource = new FilesIncrementalSource(_fileQueryService, _mapper, BuildQuery, OnPageLoaded);
+        return new IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryModel>(incrementalSource, Math.Max(PagedState.PageSize, 1));
     }
 
     private async Task ReloadAsync(CancellationToken cancellationToken)
@@ -302,20 +306,22 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
             var favorites = await _fileQueryService.GetFavoritesAsync(cancellationToken).ConfigureAwait(false);
             foreach (var favorite in favorites.OrderBy(f => f.Position))
             {
-                Favorites.Items.Add(favorite);
-                if (!string.IsNullOrWhiteSpace(favorite.QueryText) && !SearchBar.Suggestions.Contains(favorite.QueryText))
+                var favoriteModel = _mapper.Map<SearchFavoriteItemModel>(favorite);
+                Favorites.Items.Add(favoriteModel);
+                if (!string.IsNullOrWhiteSpace(favoriteModel.QueryText) && !SearchBar.Suggestions.Contains(favoriteModel.QueryText))
                 {
-                    SearchBar.Suggestions.Add(favorite.QueryText);
+                    SearchBar.Suggestions.Add(favoriteModel.QueryText);
                 }
             }
 
             var historyEntries = await _fileQueryService.GetSearchHistoryAsync(15, cancellationToken).ConfigureAwait(false);
             foreach (var entry in historyEntries.OrderByDescending(h => h.LastQueriedUtc))
             {
-                History.Items.Add(entry);
-                if (!string.IsNullOrWhiteSpace(entry.QueryText) && !SearchBar.Suggestions.Contains(entry.QueryText))
+                var historyModel = _mapper.Map<SearchHistoryEntryModel>(entry);
+                History.Items.Add(historyModel);
+                if (!string.IsNullOrWhiteSpace(historyModel.QueryText) && !SearchBar.Suggestions.Contains(historyModel.QueryText))
                 {
-                    SearchBar.Suggestions.Add(entry.QueryText);
+                    SearchBar.Suggestions.Add(historyModel.QueryText);
                 }
             }
         }
@@ -325,52 +331,50 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
         }
     }
 
-    private FileGridQueryDto BuildQuery()
+    private FileGridQueryModel BuildQuery()
     {
-        var dto = new FileGridQueryDto
+        var model = new FileGridQueryModel
         {
             Text = string.IsNullOrWhiteSpace(SearchBar.Query) ? null : SearchBar.Query.Trim(),
             Fuzzy = SearchMode == FileSearchMode.Fuzzy,
             TextPrefix = SearchMode != FileSearchMode.Fuzzy,
             TextAllTerms = true,
-            Page = new PageRequest
-            {
-                Page = 1,
-                PageSize = Math.Max(PagedState.PageSize, 1),
-            },
         };
 
-        dto.Sort.Clear();
-        dto.Sort.Add(new FileSortSpecDto
+        model.Page.Page = 1;
+        model.Page.PageSize = Math.Max(PagedState.PageSize, 1);
+
+        model.Sort.Clear();
+        model.Sort.Add(new FileSortSpecModel
         {
             Field = SortState.SelectedOption.Field switch
             {
-                FileSortField.Created => nameof(FileSummaryDto.CreatedUtc),
-                FileSortField.Name => nameof(FileSummaryDto.Name),
-                FileSortField.Size => nameof(FileSummaryDto.Size),
-                _ => nameof(FileSummaryDto.LastModifiedUtc),
+                FileSortField.Created => nameof(FileSummaryModel.CreatedUtc),
+                FileSortField.Name => nameof(FileSummaryModel.Name),
+                FileSortField.Size => nameof(FileSummaryModel.Size),
+                _ => nameof(FileSummaryModel.LastModifiedUtc),
             },
             Descending = SortState.IsDescending,
         });
 
         if (Filters.SizeFrom > 0)
         {
-            dto = dto with { SizeMin = (long)Math.Round(Filters.SizeFrom) };
+            model.SizeMin = (long)Math.Round(Filters.SizeFrom);
         }
 
         if (Filters.SizeTo > 0)
         {
-            dto = dto with { SizeMax = (long)Math.Round(Filters.SizeTo) };
+            model.SizeMax = (long)Math.Round(Filters.SizeTo);
         }
 
         if (Filters.CreatedFrom is not null)
         {
-            dto = dto with { CreatedFromUtc = Filters.CreatedFrom };
+            model.CreatedFromUtc = Filters.CreatedFrom;
         }
 
         if (Filters.CreatedTo is not null)
         {
-            dto = dto with { CreatedToUtc = Filters.CreatedTo };
+            model.CreatedToUtc = Filters.CreatedTo;
         }
 
         foreach (var token in SearchBar.Tokens)
@@ -385,7 +389,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
                 var mime = token["mime:".Length..].Trim();
                 if (!string.IsNullOrWhiteSpace(mime))
                 {
-                    dto = dto with { Mime = mime };
+                    model.Mime = mime;
                 }
             }
             else if (token.StartsWith("author:", StringComparison.OrdinalIgnoreCase))
@@ -393,7 +397,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
                 var author = token["author:".Length..].Trim();
                 if (!string.IsNullOrWhiteSpace(author))
                 {
-                    dto = dto with { Author = author };
+                    model.Author = author;
                 }
             }
             else if (token.StartsWith("validity:", StringComparison.OrdinalIgnoreCase))
@@ -401,19 +405,19 @@ public sealed partial class FilesGridViewModel : ViewModelBase,
                 var validity = token["validity:".Length..].Trim();
                 if (string.Equals(validity, "active", StringComparison.OrdinalIgnoreCase))
                 {
-                    dto = dto with { IsCurrentlyValid = true };
+                    model.IsCurrentlyValid = true;
                 }
                 else if (string.Equals(validity, "expired", StringComparison.OrdinalIgnoreCase))
                 {
-                    dto = dto with { IsCurrentlyValid = false };
+                    model.IsCurrentlyValid = false;
                 }
             }
         }
 
-        return dto;
+        return model;
     }
 
-    private void OnPageLoaded(PageResult<FileSummaryDto> page)
+    private void OnPageLoaded(PageResultModel<FileSummaryModel> page)
     {
         PagedState.TotalCount = page.TotalCount;
         LastError = null;
