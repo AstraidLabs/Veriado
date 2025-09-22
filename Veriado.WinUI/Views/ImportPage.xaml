@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Veriado.WinUI.Views.ImportPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls">
+
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <InfoBar
+            IsOpen="True"
+            Severity="Informational"
+            Title="Stav"
+            Message="{Binding StatusMessage}" />
+
+        <StackPanel Grid.Row="1" Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBox
+                    Width="360"
+                    PlaceholderText="Cílová složka"
+                    Text="{Binding SelectedFolderPath, Mode=TwoWay}" />
+                <Button Content="Vybrat složku" Command="{Binding BrowseFolderCommand}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBox Width="220" PlaceholderText="Výchozí autor" Text="{Binding DefaultAuthor, Mode=TwoWay}" />
+                <TextBox Width="120" PlaceholderText="Maska" Text="{Binding SearchPattern, Mode=TwoWay}" />
+                <controls:NumberBox
+                    Width="140"
+                    Minimum="1"
+                    Maximum="64"
+                    Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <CheckBox Content="Extrahovat obsah" IsChecked="{Binding ExtractContent, Mode=TwoWay}" />
+                <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <Button Content="Importovat" Command="{Binding ImportCommand}" />
+                <Button Content="Zrušit" Command="{Binding CancelImportCommand}" />
+                <ProgressRing Width="32" Height="32" IsActive="{Binding IsBusy}" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Spacing="8">
+            <TextBlock Text="Souhrn" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock
+                Text="{Binding LastResult.Succeeded, StringFormat='Úspěšně: {0}'}"
+                TargetNullValue="Úspěšně: 0" />
+            <TextBlock
+                Text="{Binding LastResult.Failed, StringFormat='Selhalo: {0}'}"
+                TargetNullValue="Selhalo: 0" />
+            <TextBlock
+                Text="{Binding LastResult.Total, StringFormat='Celkem: {0}'}"
+                TargetNullValue="Celkem: 0" />
+        </StackPanel>
+    </Grid>
+</Page>

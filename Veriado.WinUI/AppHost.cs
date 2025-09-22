@@ -9,8 +9,8 @@ using Veriado.Application.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services.DependencyInjection;
+using Veriado.WinUI.DependencyInjection;
 using Veriado.WinUI.Services;
-using Veriado.WinUI.ViewModels;
 
 namespace Veriado;
 
@@ -76,10 +76,7 @@ internal static class AppHost
 
                 services.AddSingleton<IPickerService, WinUIFolderPickerService>();
 
-                services.AddSingleton<ImportViewModel>();
-                services.AddSingleton<GridViewModel>();
-                services.AddSingleton<DetailViewModel>();
-                services.AddSingleton<MainViewModel>();
+                services.AddViewModels();
 
                 services.AddSingleton<MainWindow>();
             })
