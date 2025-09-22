@@ -220,10 +220,10 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                     return;
                 }
 
-                var (meta, bytes) = content.Value;
+                var bytes = content.Content;
                 var previewLength = Math.Min(bytes.Length, 512);
                 ContentPreview = Encoding.UTF8.GetString(bytes, 0, previewLength);
-                StatusMessage = $"Načten obsah (velikost {meta.SizeBytes:N0} B).";
+                StatusMessage = $"Načten obsah (velikost {content.SizeBytes:N0} B).";
             },
             cancellationToken: cancellationToken);
     }

@@ -4,9 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
 using Veriado.Application.Search.Abstractions;
+using Veriado.Contracts.Search;
 
 namespace Veriado.Application.UseCases.Search;
 

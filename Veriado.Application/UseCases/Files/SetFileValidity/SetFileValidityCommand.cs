@@ -1,7 +1,7 @@
 using System;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Files.SetFileValidity;
 
@@ -18,4 +18,4 @@ public sealed record SetFileValidityCommand(
     DateTimeOffset IssuedAtUtc,
     DateTimeOffset ValidUntilUtc,
     bool HasPhysicalCopy,
-    bool HasElectronicCopy) : IRequest<AppResult<FileDto>>;
+    bool HasElectronicCopy) : IRequest<AppResult<FileSummaryDto>>;

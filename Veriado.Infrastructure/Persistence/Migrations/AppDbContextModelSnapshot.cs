@@ -256,7 +256,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("idempotency_keys", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Infrastructure.Search.Entities.SearchFavoriteEntity", b =>
+            modelBuilder.Entity("Veriado.Domain.Search.SearchFavoriteEntity", b =>
                 {
                     b.Property<byte[]>("Id")
                         .HasColumnType("BLOB")
@@ -303,7 +303,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("search_favorites", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Infrastructure.Search.Entities.SearchHistoryEntryEntity", b =>
+            modelBuilder.Entity("Veriado.Domain.Search.SearchHistoryEntryEntity", b =>
                 {
                     b.Property<byte[]>("Id")
                         .HasColumnType("BLOB")

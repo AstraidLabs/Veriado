@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Services.Files;
 
@@ -11,7 +11,7 @@ namespace Veriado.Services.Files;
 /// </summary>
 public interface IFileContentService
 {
-    Task<(FileDto Meta, byte[] Content)?> GetContentAsync(Guid fileId, CancellationToken cancellationToken);
+    Task<FileContentResponseDto?> GetContentAsync(Guid fileId, CancellationToken cancellationToken);
 
     Task<AppResult<Guid>> SaveContentToDiskAsync(Guid fileId, string targetPath, CancellationToken cancellationToken);
 }

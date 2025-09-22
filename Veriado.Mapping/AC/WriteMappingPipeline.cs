@@ -6,7 +6,6 @@ using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.UseCases.Files.ApplySystemMetadata;
 using Veriado.Application.UseCases.Files.ClearFileValidity;
 using Veriado.Application.UseCases.Files.CreateFile;
@@ -302,7 +301,7 @@ public sealed record CreateFileMappedRequest(
     FileSystemMetadata? SystemMetadata,
     bool SetReadOnly)
 {
-    public IEnumerable<IRequest<AppResult<FileDto>>> BuildFollowUpCommands(Guid fileId)
+    public IEnumerable<IRequest<AppResult<FileSummaryDto>>> BuildFollowUpCommands(Guid fileId)
     {
         if (ExtendedMetadata.Count > 0)
         {
@@ -338,7 +337,7 @@ public sealed record UpdateFileMetadataMappedRequest(
     SetExtendedMetadataCommand? ExtendedMetadataCommand,
     SetFileReadOnlyCommand? ReadOnlyCommand)
 {
-    public IEnumerable<IRequest<AppResult<FileDto>>> Commands()
+    public IEnumerable<IRequest<AppResult<FileSummaryDto>>> Commands()
     {
         if (MetadataCommand is not null)
         {

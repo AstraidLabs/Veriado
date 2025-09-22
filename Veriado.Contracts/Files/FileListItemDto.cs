@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.DTO;
+namespace Veriado.Contracts.Files;
 
 /// <summary>
 /// Represents a file projection optimized for list screens.

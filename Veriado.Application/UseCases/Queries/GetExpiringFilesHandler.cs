@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common.Policies;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
 
@@ -35,6 +35,6 @@ public sealed class GetExpiringFilesHandler : IRequestHandler<GetExpiringFilesQu
         var leadTime = request.LeadTime ?? _policy.ReminderLeadTime;
         var threshold = _clock.UtcNow + leadTime;
         var items = await _readRepository.ListExpiringAsync(threshold, cancellationToken);
-        return items.Select(DomainToDto.ToListItemDto).ToArray();
+        return items.Select(DomainToDto.ToFileListItemDto).ToArray();
     }
 }

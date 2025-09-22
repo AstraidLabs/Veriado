@@ -1,7 +1,10 @@
 using System;
 
-namespace Veriado.Infrastructure.Search.Entities;
+namespace Veriado.Domain.Search;
 
+/// <summary>
+/// Represents a stored search history entry.
+/// </summary>
 public sealed class SearchHistoryEntryEntity
 {
     public Guid Id { get; set; }

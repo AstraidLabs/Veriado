@@ -1,7 +1,7 @@
 using System;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
 
 namespace Veriado.Application.UseCases.Files.ApplySystemMetadata;
@@ -25,4 +25,4 @@ public sealed record ApplySystemMetadataCommand(
     DateTimeOffset LastAccessUtc,
     string? OwnerSid,
     uint? HardLinkCount,
-    uint? AlternateDataStreamCount) : IRequest<AppResult<FileDto>>;
+    uint? AlternateDataStreamCount) : IRequest<AppResult<FileSummaryDto>>;

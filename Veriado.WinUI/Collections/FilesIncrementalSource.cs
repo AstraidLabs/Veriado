@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.WinUI.Collections;
-using Veriado.Application.UseCases.Queries.FileGrid;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
@@ -43,7 +42,7 @@ public sealed class FilesIncrementalSource : IIncrementalSource<FileSummaryDto>
         };
 
         var result = await _fileQueryService
-            .GetGridAsync(new FileGridQuery(request), cancellationToken)
+            .GetGridAsync(request, cancellationToken)
             .ConfigureAwait(false);
 
         _pageCallback(result);

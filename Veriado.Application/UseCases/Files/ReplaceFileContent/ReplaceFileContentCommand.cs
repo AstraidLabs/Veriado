@@ -1,7 +1,7 @@
 using System;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
 
@@ -10,4 +10,4 @@ namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
 /// </summary>
 /// <param name="FileId">The identifier of the file to update.</param>
 /// <param name="Content">The new binary content.</param>
-public sealed record ReplaceFileContentCommand(Guid FileId, byte[] Content) : IRequest<AppResult<FileDto>>;
+public sealed record ReplaceFileContentCommand(Guid FileId, byte[] Content) : IRequest<AppResult<FileSummaryDto>>;

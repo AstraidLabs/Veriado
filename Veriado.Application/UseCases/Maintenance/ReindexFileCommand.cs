@@ -1,7 +1,7 @@
 using System;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Maintenance;
 
@@ -10,4 +10,4 @@ namespace Veriado.Application.UseCases.Maintenance;
 /// </summary>
 /// <param name="FileId">The file identifier.</param>
 /// <param name="ExtractContent">Indicates whether the text extractor should be invoked.</param>
-public sealed record ReindexFileCommand(Guid FileId, bool ExtractContent = false) : IRequest<AppResult<FileDto>>;
+public sealed record ReindexFileCommand(Guid FileId, bool ExtractContent = false) : IRequest<AppResult<FileSummaryDto>>;

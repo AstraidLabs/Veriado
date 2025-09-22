@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.DTO;
+namespace Veriado.Contracts.Search;
 
 /// <summary>
 /// Represents a single hit returned by the search subsystem.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MediatR;
-using Veriado.Application.DTO;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
 

@@ -4,8 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.DTO;
 using Veriado.Application.Mapping;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Services.Files;
 
@@ -21,7 +21,7 @@ public sealed class FileContentService : IFileContentService
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     }
 
-    public async Task<(FileDto Meta, byte[] Content)?> GetContentAsync(Guid fileId, CancellationToken cancellationToken)
+    public async Task<FileContentResponseDto?> GetContentAsync(Guid fileId, CancellationToken cancellationToken)
     {
         var file = await _repository.GetAsync(fileId, cancellationToken).ConfigureAwait(false);
         if (file is null)
@@ -29,10 +29,22 @@ public sealed class FileContentService : IFileContentService
             return null;
         }
 
-        var dto = DomainToDto.ToFileDto(file);
+        var summary = DomainToDto.ToFileSummaryDto(file);
         var content = new byte[file.Content.Bytes.Length];
         Array.Copy(file.Content.Bytes, content, file.Content.Bytes.Length);
-        return (dto, content);
+        return new FileContentResponseDto(
+            summary.Id,
+            summary.Name,
+            summary.Extension,
+            summary.Mime,
+            summary.Author,
+            summary.Size,
+            summary.Version,
+            summary.IsReadOnly,
+            summary.CreatedUtc,
+            summary.LastModifiedUtc,
+            summary.Validity,
+            content);
     }
 
     public async Task<AppResult<Guid>> SaveContentToDiskAsync(Guid fileId, string targetPath, CancellationToken cancellationToken)
