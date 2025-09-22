@@ -38,6 +38,7 @@ public static class MappingServiceCollectionExtensions
                 cfg.AddProfile<FileReadProfiles>();
                 cfg.AddProfile<MetadataProfiles>();
                 cfg.AddProfile<FileWriteProfiles>();
+                cfg.AddProfile<SearchProfiles>();
             });
 #if DEBUG
             configuration.AssertConfigurationIsValid();

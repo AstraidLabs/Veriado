@@ -9,6 +9,7 @@ using Veriado.Application.Search;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Contracts.Search;
 using Veriado.Domain.Files;
 
 namespace Veriado.Application.UseCases.Queries.FileGrid;

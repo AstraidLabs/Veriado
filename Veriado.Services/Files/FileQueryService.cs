@@ -5,13 +5,10 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.UseCases.Queries;
 using Veriado.Application.UseCases.Queries.FileGrid;
+using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
-using Veriado.Application.Search.Abstractions;
-using Veriado.Services.Files.Models;
-using AppSearchHistoryEntry = Veriado.Application.Search.Abstractions.SearchHistoryEntry;
-using AppSearchFavoriteItem = Veriado.Application.Search.Abstractions.SearchFavoriteItem;
 
 namespace Veriado.Services.Files;
 
@@ -51,13 +48,7 @@ public sealed class FileQueryService : IFileQueryService
             return Array.Empty<SearchHistoryEntry>();
         }
 
-        var result = new List<SearchHistoryEntry>(entries.Count);
-        foreach (var entry in entries)
-        {
-            result.Add(MapHistory(entry));
-        }
-
-        return result;
+        return entries;
     }
 
     public async Task<IReadOnlyList<SearchFavoriteItem>> GetFavoritesAsync(CancellationToken cancellationToken)
@@ -68,13 +59,7 @@ public sealed class FileQueryService : IFileQueryService
             return Array.Empty<SearchFavoriteItem>();
         }
 
-        var result = new List<SearchFavoriteItem>(favorites.Count);
-        foreach (var favorite in favorites)
-        {
-            result.Add(MapFavorite(favorite));
-        }
-
-        return result;
+        return favorites;
     }
 
     public Task AddFavoriteAsync(SearchFavoriteDefinition favorite, CancellationToken cancellationToken)
@@ -88,9 +73,4 @@ public sealed class FileQueryService : IFileQueryService
         return _favoritesService.RemoveAsync(favoriteId, cancellationToken);
     }
 
-    private static SearchHistoryEntry MapHistory(AppSearchHistoryEntry entry)
-        => new(entry.Id, entry.QueryText, entry.MatchQuery, entry.LastQueriedUtc, entry.Executions, entry.LastTotalHits, entry.IsFuzzy);
-
-    private static SearchFavoriteItem MapFavorite(AppSearchFavoriteItem favorite)
-        => new(favorite.Id, favorite.Name, favorite.QueryText, favorite.MatchQuery, favorite.Position, favorite.CreatedUtc, favorite.IsFuzzy);
 }

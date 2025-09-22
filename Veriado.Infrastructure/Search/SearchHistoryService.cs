@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Search.Abstractions;
+using Veriado.Contracts.Search;
 using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Search;

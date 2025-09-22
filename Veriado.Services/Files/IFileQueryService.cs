@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
-using Veriado.Services.Files.Models;
 
 namespace Veriado.Services.Files;
 

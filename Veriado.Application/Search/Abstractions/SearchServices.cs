@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Veriado.Contracts.Search;
 using Veriado.Domain.Search;
 
 namespace Veriado.Application.Search.Abstractions;
@@ -139,41 +140,3 @@ public interface ISearchFavoritesService
     /// <returns>The favourite when found, otherwise <see langword="null"/>.</returns>
     Task<SearchFavoriteItem?> TryGetByKeyAsync(string key, CancellationToken cancellationToken);
 }
-
-/// <summary>
-/// Represents a persisted search history entry.
-/// </summary>
-/// <param name="Id">The entry identifier.</param>
-/// <param name="QueryText">The user-supplied query text.</param>
-/// <param name="MatchQuery">The generated FTS match clause.</param>
-/// <param name="LastQueriedUtc">The timestamp of the most recent execution.</param>
-/// <param name="Executions">The number of times the query was executed.</param>
-/// <param name="LastTotalHits">The last recorded hit count.</param>
-/// <param name="IsFuzzy">Indicates whether the entry was produced by fuzzy search.</param>
-public sealed record SearchHistoryEntry(
-    Guid Id,
-    string? QueryText,
-    string MatchQuery,
-    DateTimeOffset LastQueriedUtc,
-    int Executions,
-    int? LastTotalHits,
-    bool IsFuzzy);
-
-/// <summary>
-/// Represents a saved search favourite definition.
-/// </summary>
-/// <param name="Id">The favourite identifier.</param>
-/// <param name="Name">The unique favourite name.</param>
-/// <param name="QueryText">The original query text.</param>
-/// <param name="MatchQuery">The FTS match query.</param>
-/// <param name="Position">The ordering position.</param>
-/// <param name="CreatedUtc">The creation timestamp.</param>
-/// <param name="IsFuzzy">Indicates whether the favourite uses trigram fuzzy search.</param>
-public sealed record SearchFavoriteItem(
-    Guid Id,
-    string Name,
-    string? QueryText,
-    string MatchQuery,
-    int Position,
-    DateTimeOffset CreatedUtc,
-    bool IsFuzzy);
