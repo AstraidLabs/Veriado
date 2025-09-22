@@ -2,7 +2,8 @@ using System;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
-using Veriado.WinUI.Messages;
+using Veriado.Presentation.Messages;
+using Veriado.Presentation.Services;
 using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.Services;

@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.WinUI.Messages;
+namespace Veriado.Presentation.Messages;
 
 /// <summary>
 /// Message instructing the navigation layer to open the file detail page.

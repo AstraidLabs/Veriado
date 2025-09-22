@@ -2,10 +2,10 @@ using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.WinUI.Messages;
-using Veriado.WinUI.Services;
+using Veriado.Presentation.Messages;
+using Veriado.Presentation.Services;
 
-namespace Veriado.WinUI.ViewModels;
+namespace Veriado.Presentation.ViewModels;
 
 /// <summary>
 /// Aggregates the primary feature view models exposed by the shell.

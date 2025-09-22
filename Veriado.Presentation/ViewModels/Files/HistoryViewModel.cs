@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Search;
 
-namespace Veriado.WinUI.ViewModels.Files;
+namespace Veriado.Presentation.ViewModels.Files;
 
 /// <summary>
 /// Maintains the recent search history entries displayed by the UI.

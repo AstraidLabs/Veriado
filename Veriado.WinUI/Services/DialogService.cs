@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Veriado.Presentation.Services;
 
 namespace Veriado.WinUI.Services;
 

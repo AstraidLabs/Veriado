@@ -1,4 +1,4 @@
-namespace Veriado.WinUI.Messages;
+namespace Veriado.Presentation.Messages;
 
 /// <summary>
 /// Message requesting execution of a search with the supplied query text.

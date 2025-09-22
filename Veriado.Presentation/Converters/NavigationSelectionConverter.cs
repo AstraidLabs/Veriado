@@ -2,7 +2,7 @@ using System;
 using CommunityToolkit.WinUI.UI;
 using Microsoft.UI.Xaml.Controls;
 
-namespace Veriado.WinUI.Converters;
+namespace Veriado.Presentation.Converters;
 
 /// <summary>
 /// Converts <see cref="NavigationViewSelectionChangedEventArgs"/> to the associated navigation tag.

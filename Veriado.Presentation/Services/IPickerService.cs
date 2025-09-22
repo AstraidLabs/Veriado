@@ -1,8 +1,8 @@
-// BEGIN CHANGE Veriado.WinUI/Services/IPickerService.cs
+// BEGIN CHANGE Veriado.Presentation/Services/IPickerService.cs
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Presentation.Services;
 
 /// <summary>
 /// Abstraction over platform pickers used to select folders or files.
@@ -31,4 +31,4 @@ public interface IPickerService
 /// <param name="Content">The file content.</param>
 /// <param name="ContentType">The MIME content type when known.</param>
 public sealed record PickedFile(string Name, byte[] Content, string? ContentType);
-// END CHANGE Veriado.WinUI/Services/IPickerService.cs
+// END CHANGE Veriado.Presentation/Services/IPickerService.cs
