@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Search;
@@ -27,6 +29,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
     private readonly ISearchFavoritesService _favoritesService;
     private readonly IClock _clock;
     private readonly FileGridQueryOptions _options;
+    private readonly IMapper _mapper;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileGridQueryHandler"/> class.
@@ -37,7 +40,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         ISearchHistoryService historyService,
         ISearchFavoritesService favoritesService,
         IClock clock,
-        FileGridQueryOptions options)
+        FileGridQueryOptions options,
+        IMapper mapper)
     {
         _contextFactory = contextFactory;
         _searchQueryService = searchQueryService;
@@ -45,6 +49,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         _favoritesService = favoritesService;
         _clock = clock;
         _options = options;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -319,7 +324,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         var pageQueryProjection = orderedQuery
             .Skip(offset)
             .Take(pageSize)
-            .ProjectToFileSummary();
+            .ProjectTo<FileSummaryDto>(_mapper.ConfigurationProvider);
 
         var projectedItems = await context.ToListAsync(pageQueryProjection, cancellationToken).ConfigureAwait(false);
         return new PageResult<FileSummaryDto>(projectedItems, pageNumber, pageSize, total);
@@ -351,7 +356,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         return matched;
     }
 
-    private static async Task<Dictionary<Guid, FileSummaryDto>> FetchSummariesAsync(
+    private async Task<Dictionary<Guid, FileSummaryDto>> FetchSummariesAsync(
         IReadOnlyFileContext context,
         IQueryable<FileEntity> query,
         IEnumerable<Guid> ids,
@@ -366,8 +371,10 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
             }
 
             var chunkQuery = query.Where(file => chunk.Contains(file.Id));
-            var chunkSummaries = await context.ToListAsync(chunkQuery.ProjectToFileSummary(), cancellationToken)
-                .ConfigureAwait(false);
+                var chunkSummaries = await context.ToListAsync(
+                    chunkQuery.ProjectTo<FileSummaryDto>(_mapper.ConfigurationProvider),
+                    cancellationToken)
+                    .ConfigureAwait(false);
             foreach (var summary in chunkSummaries)
             {
                 summaries[summary.Id] = summary;

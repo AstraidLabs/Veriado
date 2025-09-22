@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -21,9 +20,6 @@ namespace Veriado.Infrastructure.Repositories;
 /// </summary>
 internal sealed class FileReadRepository : IFileReadRepository
 {
-    private static readonly FieldInfo MetadataValueField = typeof(MetadataValue)
-        .GetField("_value", BindingFlags.Instance | BindingFlags.NonPublic)
-        ?? throw new InvalidOperationException("MetadataValue internal layout has changed.");
 
     private readonly IDbContextFactory<ReadOnlyDbContext> _contextFactory;
     private readonly InfrastructureOptions _options;
@@ -228,7 +224,7 @@ internal sealed class FileReadRepository : IFileReadRepository
             return single;
         }
 
-        if (value.TryGetStringArray(out var array) && array is not null)
+        if (value.TryGetStringArray(out var array) && array is { Length: > 0 })
         {
             return string.Join(", ", array);
         }
@@ -243,20 +239,31 @@ internal sealed class FileReadRepository : IFileReadRepository
             return fileTime.ToString("O", CultureInfo.InvariantCulture);
         }
 
-        if (value.TryGetBinary(out var binary) && binary is not null)
+        if (value.TryGetBinary(out var binary) && binary is { Length: > 0 })
         {
             return Convert.ToBase64String(binary);
         }
 
-        var raw = MetadataValueField.GetValue(value);
-        return raw switch
+        if (value.TryGetBoolean(out var boolean))
         {
-            null => null,
-            bool boolean => boolean.ToString(CultureInfo.InvariantCulture),
-            int number => number.ToString(CultureInfo.InvariantCulture),
-            uint unsigned => unsigned.ToString(CultureInfo.InvariantCulture),
-            double dbl => dbl.ToString(CultureInfo.InvariantCulture),
-            _ => raw.ToString(),
-        };
+            return boolean.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetInt32(out var intValue))
+        {
+            return intValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetUInt32(out var uintValue))
+        {
+            return uintValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetDouble(out var doubleValue))
+        {
+            return doubleValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return null;
     }
 }

@@ -1,11 +1,11 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
-using Veriado.Application.Mapping;
 using Veriado.Application.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
@@ -25,8 +25,9 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
     public ReplaceFileContentHandler(
         IFileRepository repository,
         IClock clock,
-        ImportPolicy importPolicy)
-        : base(repository, clock)
+        ImportPolicy importPolicy,
+        IMapper mapper)
+        : base(repository, clock, mapper)
     {
         _importPolicy = importPolicy;
     }
@@ -49,7 +50,7 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
             file.ReplaceContent(request.Content, timestamp, _importPolicy.MaxContentLengthBytes);
             var options = new FilePersistenceOptions { ExtractContent = true };
             await PersistAsync(file, options, cancellationToken);
-            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
+            return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
         {

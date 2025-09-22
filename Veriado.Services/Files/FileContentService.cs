@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Contracts.Files;
 
 namespace Veriado.Services.Files;
@@ -15,10 +15,12 @@ namespace Veriado.Services.Files;
 public sealed class FileContentService : IFileContentService
 {
     private readonly IFileRepository _repository;
+    private readonly IMapper _mapper;
 
-    public FileContentService(IFileRepository repository)
+    public FileContentService(IFileRepository repository, IMapper mapper)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
     }
 
     public async Task<FileContentResponseDto?> GetContentAsync(Guid fileId, CancellationToken cancellationToken)
@@ -29,7 +31,7 @@ public sealed class FileContentService : IFileContentService
             return null;
         }
 
-        var summary = DomainToDto.ToFileSummaryDto(file);
+        var summary = _mapper.Map<FileSummaryDto>(file);
         var content = new byte[file.Content.Bytes.Length];
         Array.Copy(file.Content.Bytes, content, file.Content.Bytes.Length);
         return new FileContentResponseDto(

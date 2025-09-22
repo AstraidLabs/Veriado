@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using Veriado.Application.Abstractions;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
@@ -14,12 +15,15 @@ public abstract class FileWriteHandlerBase
     private readonly IFileRepository _repository;
     private readonly IClock _clock;
 
+    protected IMapper Mapper { get; }
+
     protected IFileRepository Repository => _repository;
 
-    protected FileWriteHandlerBase(IFileRepository repository, IClock clock)
+    protected FileWriteHandlerBase(IFileRepository repository, IClock clock, IMapper mapper)
     {
         _repository = repository;
         _clock = clock;
+        Mapper = mapper;
     }
 
     protected UtcTimestamp CurrentTimestamp() => UtcTimestamp.From(_clock.UtcNow);

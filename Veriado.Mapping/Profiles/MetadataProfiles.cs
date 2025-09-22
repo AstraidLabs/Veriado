@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using AutoMapper;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
@@ -13,7 +14,6 @@ namespace Veriado.Mapping.Profiles;
 /// </summary>
 public sealed class MetadataProfiles : Profile
 {
-    private static readonly FieldInfo ValueField = typeof(MetadataValue).GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MetadataProfiles"/> class.
@@ -28,12 +28,14 @@ public sealed class MetadataProfiles : Profile
             .ForMember(dest => dest.PropertyId, opt => opt.MapFrom(src => src.Key.PropertyId))
             .ForMember(dest => dest.Remove, opt => opt.MapFrom(_ => false))
             .ForMember(dest => dest.Value, opt => opt.MapFrom(src => src.Value));
+
+        CreateMap<ExtendedMetadata, IReadOnlyDictionary<string, string?>>()
+            .ConvertUsing(ConvertExtendedMetadataToDictionary);
     }
 
     private static MetadataValueDto ConvertMetadataValueToDto(MetadataValue source, MetadataValueDto destination, ResolutionContext context)
     {
         var kind = ConvertKind(source.Kind);
-        var raw = ValueField.GetValue(source);
 
         return kind switch
         {
@@ -44,47 +46,51 @@ public sealed class MetadataProfiles : Profile
             MetadataValueDtoKind.String => new MetadataValueDto
             {
                 Kind = kind,
-                StringValue = raw as string,
+                StringValue = source.TryGetString(out var value) ? value : null,
             },
             MetadataValueDtoKind.StringArray => new MetadataValueDto
             {
                 Kind = kind,
-                StringArrayValue = raw is string[] array ? array.ToArray() : Array.Empty<string>(),
+                StringArrayValue = source.TryGetStringArray(out var values) && values is not null
+                    ? values.ToArray()
+                    : Array.Empty<string>(),
             },
             MetadataValueDtoKind.UInt32 => new MetadataValueDto
             {
                 Kind = kind,
-                UInt32Value = raw is uint u ? u : null,
+                UInt32Value = source.TryGetUInt32(out var number) ? number : null,
             },
             MetadataValueDtoKind.Int32 => new MetadataValueDto
             {
                 Kind = kind,
-                Int32Value = raw is int i ? i : null,
+                Int32Value = source.TryGetInt32(out var number) ? number : null,
             },
             MetadataValueDtoKind.Double => new MetadataValueDto
             {
                 Kind = kind,
-                DoubleValue = raw is double d ? d : null,
+                DoubleValue = source.TryGetDouble(out var number) ? number : null,
             },
             MetadataValueDtoKind.Boolean => new MetadataValueDto
             {
                 Kind = kind,
-                BooleanValue = raw is bool b ? b : null,
+                BooleanValue = source.TryGetBoolean(out var boolean) ? boolean : null,
             },
             MetadataValueDtoKind.Guid => new MetadataValueDto
             {
                 Kind = kind,
-                GuidValue = raw is Guid g ? g : null,
+                GuidValue = source.TryGetGuid(out var guid) ? guid : null,
             },
             MetadataValueDtoKind.FileTime => new MetadataValueDto
             {
                 Kind = kind,
-                FileTimeValue = raw is DateTimeOffset time ? time : null,
+                FileTimeValue = source.TryGetFileTime(out var timestamp) ? timestamp : null,
             },
             MetadataValueDtoKind.Binary => new MetadataValueDto
             {
                 Kind = kind,
-                BinaryValue = raw is byte[] bytes ? bytes.ToArray() : null,
+                BinaryValue = source.TryGetBinary(out var payload) && payload is not null
+                    ? payload.ToArray()
+                    : null,
             },
             _ => throw new NotSupportedException($"Unsupported metadata value kind '{source.Kind}'."),
         };
@@ -124,5 +130,74 @@ public sealed class MetadataProfiles : Profile
             MetadataValueDtoKind.Binary => MetadataValue.FromBinary(source.BinaryValue ?? Array.Empty<byte>()),
             _ => throw new NotSupportedException($"Unsupported metadata value kind '{source.Kind}'."),
         };
+    }
+
+    private static IReadOnlyDictionary<string, string?> ConvertExtendedMetadataToDictionary(
+        ExtendedMetadata source,
+        IReadOnlyDictionary<string, string?> destination,
+        ResolutionContext context)
+    {
+        if (source is null)
+        {
+            return new ReadOnlyDictionary<string, string?>(new Dictionary<string, string?>(StringComparer.Ordinal));
+        }
+
+        var materialized = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var pair in source.AsEnumerable())
+        {
+            materialized[pair.Key.ToString()] = FormatMetadataValue(pair.Value);
+        }
+
+        return new ReadOnlyDictionary<string, string?>(materialized);
+    }
+
+    private static string? FormatMetadataValue(MetadataValue value)
+    {
+        if (value.TryGetString(out var single))
+        {
+            return single;
+        }
+
+        if (value.TryGetStringArray(out var array) && array is { Length: > 0 })
+        {
+            return string.Join(", ", array);
+        }
+
+        if (value.TryGetGuid(out var guid))
+        {
+            return guid.ToString("D", CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetFileTime(out var fileTime))
+        {
+            return fileTime.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetBinary(out var binary) && binary is { Length: > 0 })
+        {
+            return Convert.ToBase64String(binary);
+        }
+
+        if (value.TryGetBoolean(out var boolean))
+        {
+            return boolean.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetInt32(out var intValue))
+        {
+            return intValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetUInt32(out var uintValue))
+        {
+            return uintValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetDouble(out var doubleValue))
+        {
+            return doubleValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return null;
     }
 }

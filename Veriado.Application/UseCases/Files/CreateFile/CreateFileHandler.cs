@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
@@ -24,8 +25,9 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
     public CreateFileHandler(
         IFileRepository repository,
         IClock clock,
-        ImportPolicy importPolicy)
-        : base(repository, clock)
+        ImportPolicy importPolicy,
+        IMapper mapper)
+        : base(repository, clock, mapper)
     {
         _importPolicy = importPolicy;
     }

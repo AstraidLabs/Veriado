@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Application.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
@@ -20,8 +20,8 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
     /// <summary>
     /// Initializes a new instance of the <see cref="SetFileValidityHandler"/> class.
     /// </summary>
-    public SetFileValidityHandler(IFileRepository repository, IClock clock)
-        : base(repository, clock)
+    public SetFileValidityHandler(IFileRepository repository, IClock clock, IMapper mapper)
+        : base(repository, clock, mapper)
     {
     }
 
@@ -41,7 +41,7 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
             var timestamp = CurrentTimestamp();
             file.SetValidity(issued, validUntil, request.HasPhysicalCopy, request.HasElectronicCopy, timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
-            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
+            return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
         {
