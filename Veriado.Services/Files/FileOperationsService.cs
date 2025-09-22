@@ -37,7 +37,7 @@ public sealed class FileOperationsService : IFileOperationsService
         _requestContext = requestContext ?? throw new ArgumentNullException(nameof(requestContext));
     }
 
-    public async Task<AppResult<Guid>> RenameAsync(Guid fileId, string newName, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> RenameAsync(Guid fileId, string newName, CancellationToken cancellationToken)
     {
         var mapping = await _mappingPipeline.MapRenameAsync(fileId, newName, cancellationToken).ConfigureAwait(false);
         if (!mapping.IsSuccess)
@@ -47,10 +47,10 @@ public sealed class FileOperationsService : IFileOperationsService
 
         using var scope = BeginScope();
         var result = await _mediator.Send(mapping.Data!, cancellationToken).ConfigureAwait(false);
-        return ToIdResult(result);
+        return ToIdResponse(result);
     }
 
-    public async Task<AppResult<Guid>> UpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> UpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         var mapping = await _mappingPipeline.MapUpdateMetadataAsync(request, cancellationToken).ConfigureAwait(false);
@@ -66,7 +66,7 @@ public sealed class FileOperationsService : IFileOperationsService
             var commandResult = await _mediator.Send(command, cancellationToken).ConfigureAwait(false);
             if (commandResult.IsFailure)
             {
-                return ToIdResult(commandResult);
+                return ToIdResponse(commandResult);
             }
 
             lastResult = commandResult;
@@ -74,22 +74,22 @@ public sealed class FileOperationsService : IFileOperationsService
 
         if (lastResult is { } finalResult)
         {
-            return ToIdResult(finalResult);
+            return ToIdResponse(finalResult);
         }
 
-        return AppResult<Guid>.Success(request.FileId);
+        return ApiResponse<Guid>.Success(request.FileId);
     }
 
-    public async Task<AppResult<Guid>> SetReadOnlyAsync(Guid fileId, bool isReadOnly, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> SetReadOnlyAsync(Guid fileId, bool isReadOnly, CancellationToken cancellationToken)
     {
         using var scope = BeginScope();
         var result = await _mediator
             .Send(new SetFileReadOnlyCommand(fileId, isReadOnly), cancellationToken)
             .ConfigureAwait(false);
-        return ToIdResult(result);
+        return ToIdResponse(result);
     }
 
-    public async Task<AppResult<Guid>> SetValidityAsync(Guid fileId, FileValidityDto validity, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> SetValidityAsync(Guid fileId, FileValidityDto validity, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(validity);
         var request = new SetValidityRequest
@@ -109,10 +109,10 @@ public sealed class FileOperationsService : IFileOperationsService
 
         using var scope = BeginScope();
         var result = await _mediator.Send(mapping.Data!, cancellationToken).ConfigureAwait(false);
-        return ToIdResult(result);
+        return ToIdResponse(result);
     }
 
-    public async Task<AppResult<Guid>> ClearValidityAsync(Guid fileId, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> ClearValidityAsync(Guid fileId, CancellationToken cancellationToken)
     {
         var mapping = await _mappingPipeline
             .MapClearValidityAsync(new ClearValidityRequest { FileId = fileId }, cancellationToken)
@@ -124,10 +124,10 @@ public sealed class FileOperationsService : IFileOperationsService
 
         using var scope = BeginScope();
         var result = await _mediator.Send(mapping.Data!, cancellationToken).ConfigureAwait(false);
-        return ToIdResult(result);
+        return ToIdResponse(result);
     }
 
-    public async Task<AppResult<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, bool extractContent, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, bool extractContent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
         var request = new ReplaceContentRequest
@@ -146,7 +146,7 @@ public sealed class FileOperationsService : IFileOperationsService
         var result = await _mediator.Send(mapping.Data!, cancellationToken).ConfigureAwait(false);
         if (result.IsFailure)
         {
-            return ToIdResult(result);
+            return ToIdResponse(result);
         }
 
         if (!extractContent)
@@ -156,14 +156,14 @@ public sealed class FileOperationsService : IFileOperationsService
                 .ConfigureAwait(false);
             if (reindexResult.IsFailure)
             {
-                return ToIdResult(reindexResult);
+                return ToIdResponse(reindexResult);
             }
         }
 
-        return ToIdResult(result);
+        return ToIdResponse(result);
     }
 
-    public async Task<AppResult<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         using var scope = BeginScope();
@@ -178,27 +178,51 @@ public sealed class FileOperationsService : IFileOperationsService
             metadata.AlternateDataStreamCount);
 
         var result = await _mediator.Send(command, cancellationToken).ConfigureAwait(false);
-        return ToIdResult(result);
+        return ToIdResponse(result);
     }
-    private AppResult<Guid> ValidationFailure(IReadOnlyList<ApiError> errors)
+    private ApiResponse<Guid> ValidationFailure(IReadOnlyList<ApiError> errors)
     {
         if (errors.Count == 0)
         {
-            return AppResult<Guid>.Validation(Array.Empty<string>());
+            return ApiResponse<Guid>.Failure(new ApiError("validation_error", "Validation failed."));
         }
 
-        var messages = errors.Select(error =>
-            string.IsNullOrWhiteSpace(error.Target)
-                ? error.Message
-                : $"{error.Target}: {error.Message}").ToArray();
-        return AppResult<Guid>.Validation(messages);
+        return ApiResponse<Guid>.Failure(errors);
     }
 
-    private static AppResult<Guid> ToIdResult(AppResult<AppFileDto> result)
+    private static ApiResponse<Guid> ToIdResponse(AppResult<AppFileDto> result)
     {
-        return result.IsSuccess
-            ? AppResult<Guid>.Success(result.Value.Id)
-            : AppResult<Guid>.Failure(result.Error);
+        if (result.IsSuccess)
+        {
+            return ApiResponse<Guid>.Success(result.Value.Id);
+        }
+
+        var error = ConvertAppError(result.Error);
+        return ApiResponse<Guid>.Failure(error);
+    }
+
+    private static ApiError ConvertAppError(AppError error)
+    {
+        var code = error.Code switch
+        {
+            ErrorCode.NotFound => "not_found",
+            ErrorCode.Conflict => "conflict",
+            ErrorCode.Validation => "validation_error",
+            ErrorCode.Forbidden => "forbidden",
+            ErrorCode.TooLarge => "payload_too_large",
+            _ => "unexpected_error",
+        };
+
+        IReadOnlyDictionary<string, string[]>? details = null;
+        if (error.Details is { Count: > 0 })
+        {
+            details = new Dictionary<string, string[]>
+            {
+                ["messages"] = error.Details.ToArray(),
+            };
+        }
+
+        return new ApiError(code, error.Message, null, details);
     }
 
     private IDisposable BeginScope()

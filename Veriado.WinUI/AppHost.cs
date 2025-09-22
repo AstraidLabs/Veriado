@@ -1,5 +1,6 @@
 // BEGIN CHANGE Veriado.WinUI/AppHost.cs
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
@@ -71,16 +72,26 @@ internal static class AppHost
 
                 services.AddApplication();
                 services.AddVeriadoMapping();
-                services.AddInfrastructure();
+                services.AddInfrastructure(options => options.DbPath = ResolveDatabasePath());
                 services.AddVeriadoServices();
 
-                services.AddSingleton<IPickerService, WinUIFolderPickerService>();
+                services.AddSingleton<INavigationService, NavigationService>();
+                services.AddSingleton<IDialogService, DialogService>();
+                services.AddSingleton<IPickerService, WinUIPickerService>();
 
                 services.AddViewModels();
 
                 services.AddSingleton<MainWindow>();
             })
             .Build();
+    }
+
+    private static string ResolveDatabasePath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var directory = Path.Combine(appData, "Veriado");
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, "veriado.db");
     }
 }
 // END CHANGE Veriado.WinUI/AppHost.cs

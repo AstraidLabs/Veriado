@@ -1,45 +1,44 @@
 using System;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Veriado.Application.Common;
+using CommunityToolkit.Mvvm.Messaging;
+using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
+using Veriado.WinUI.Services;
 
 namespace Veriado.WinUI.ViewModels;
 
 /// <summary>
 /// Provides the presentation logic for the file detail page.
 /// </summary>
-public sealed partial class FileDetailViewModel : ObservableObject
+public sealed partial class FileDetailViewModel : ViewModelBase
 {
     private readonly IFileQueryService _fileQueryService;
     private readonly IFileOperationsService _fileOperationsService;
     private readonly IFileContentService _fileContentService;
+    private readonly IPickerService _pickerService;
+    private readonly IDialogService _dialogService;
 
     public FileDetailViewModel(
         IFileQueryService fileQueryService,
         IFileOperationsService fileOperationsService,
-        IFileContentService fileContentService)
+        IFileContentService fileContentService,
+        IPickerService pickerService,
+        IDialogService dialogService,
+        IMessenger messenger)
+        : base(messenger)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
         _fileContentService = fileContentService ?? throw new ArgumentNullException(nameof(fileContentService));
+        _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
     }
-
-    [ObservableProperty]
-    private bool isBusy;
-
-    [ObservableProperty]
-    private bool isInfoBarOpen = true;
-
-    [ObservableProperty]
-    private string? statusMessage;
-
-    [ObservableProperty]
-    private string? errorMessage;
 
     [ObservableProperty]
     private Guid? currentFileId;
@@ -80,120 +79,89 @@ public sealed partial class FileDetailViewModel : ObservableObject
     /// <summary>
     /// Loads the detail information for the specified file.
     /// </summary>
-    public async Task GetDetailAsync(Guid fileId, CancellationToken cancellationToken = default)
-    {
-        if (IsBusy)
-        {
-            return;
-        }
-
-        IsBusy = true;
-        ErrorMessage = null;
-        StatusMessage = "Načítám detail souboru...";
-        IsInfoBarOpen = true;
-
-        try
-        {
-            var detail = await _fileQueryService.GetDetailAsync(fileId, cancellationToken).ConfigureAwait(true);
-            if (detail is null)
-            {
-                StatusMessage = "Soubor nebyl nalezen.";
-                CurrentFileId = null;
-                Detail = null;
-                return;
-            }
-
-            PopulateFromDetail(detail);
-            StatusMessage = "Detail načten.";
-        }
-        catch (OperationCanceledException)
-        {
-            StatusMessage = "Načítání bylo zrušeno.";
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Načítání selhalo: {ex.Message}";
-            StatusMessage = "Načítání selhalo.";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    [RelayCommand(IncludeCancelCommand = true)]
+    private Task LoadAsync(Guid fileId, CancellationToken cancellationToken)
+        => LoadDetailAsync(fileId, cancellationToken);
 
     /// <summary>
     /// Persists the edited metadata using the orchestration services.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task UpdateMetadataAsync(CancellationToken cancellationToken)
+    private Task UpdateMetadataAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
             StatusMessage = "Vyberte soubor.";
-            return;
+            return Task.CompletedTask;
         }
 
         var request = new UpdateMetadataRequest
         {
             FileId = CurrentFileId.Value,
-            Author = EditableAuthor,
+            Author = string.IsNullOrWhiteSpace(EditableAuthor) ? null : EditableAuthor.Trim(),
             Mime = string.IsNullOrWhiteSpace(EditableMime) ? null : EditableMime.Trim(),
             IsReadOnly = EditableIsReadOnly,
         };
 
-        await ExecuteAsync(
-            () => _fileOperationsService.UpdateMetadataAsync(request, cancellationToken),
-            "Metadata byla uložena.");
+        return ExecuteOperationAsync(
+            token => _fileOperationsService.UpdateMetadataAsync(request, token),
+            "Ukládám metadata...",
+            "Metadata byla uložena.",
+            cancellationToken);
     }
 
     /// <summary>
     /// Renames the file aggregate.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task RenameAsync(CancellationToken cancellationToken)
+    private Task RenameAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null || string.IsNullOrWhiteSpace(EditableName))
         {
             StatusMessage = "Zadejte nový název.";
-            return;
+            return Task.CompletedTask;
         }
 
-        await ExecuteAsync(
-            () => _fileOperationsService.RenameAsync(CurrentFileId.Value, EditableName.Trim(), cancellationToken),
-            "Soubor byl přejmenován.");
+        return ExecuteOperationAsync(
+            token => _fileOperationsService.RenameAsync(CurrentFileId.Value, EditableName.Trim(), token),
+            "Přejmenovávám soubor...",
+            "Soubor byl přejmenován.",
+            cancellationToken);
     }
 
     /// <summary>
     /// Applies only the read-only toggle using the specialized command.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task SetReadOnlyAsync(CancellationToken cancellationToken)
+    private Task SetReadOnlyAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await ExecuteAsync(
-            () => _fileOperationsService.SetReadOnlyAsync(CurrentFileId.Value, EditableIsReadOnly, cancellationToken),
-            EditableIsReadOnly ? "Soubor je nyní pouze pro čtení." : "Soubor lze upravovat.");
+        return ExecuteOperationAsync(
+            token => _fileOperationsService.SetReadOnlyAsync(CurrentFileId.Value, EditableIsReadOnly, token),
+            EditableIsReadOnly ? "Nastavuji pouze pro čtení..." : "Povoluji úpravy...",
+            EditableIsReadOnly ? "Soubor je nyní pouze pro čtení." : "Soubor lze upravovat.",
+            cancellationToken);
     }
 
     /// <summary>
     /// Applies the validity parameters captured by the view.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task ApplyValidityAsync(CancellationToken cancellationToken)
+    private Task ApplyValidityAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (ValidityIssuedAt is null || ValidityValidUntil is null)
         {
             StatusMessage = "Zadejte platná data platnosti.";
-            return;
+            return Task.CompletedTask;
         }
 
         var validity = new FileValidityDto(
@@ -202,134 +170,184 @@ public sealed partial class FileDetailViewModel : ObservableObject
             ValidityHasPhysicalCopy,
             ValidityHasElectronicCopy);
 
-        await ExecuteAsync(
-            () => _fileOperationsService.SetValidityAsync(CurrentFileId.Value, validity, cancellationToken),
-            "Platnost byla uložena.");
+        return ExecuteOperationAsync(
+            token => _fileOperationsService.SetValidityAsync(CurrentFileId.Value, validity, token),
+            "Ukládám platnost...",
+            "Platnost byla uložena.",
+            cancellationToken);
     }
 
     /// <summary>
     /// Clears the validity metadata on the file.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task ClearValidityAsync(CancellationToken cancellationToken)
+    private Task ClearValidityAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await ExecuteAsync(
-            () => _fileOperationsService.ClearValidityAsync(CurrentFileId.Value, cancellationToken),
-            "Platnost byla odstraněna.");
+        return ExecuteOperationAsync(
+            token => _fileOperationsService.ClearValidityAsync(CurrentFileId.Value, token),
+            "Odebírám platnost...",
+            "Platnost byla odstraněna.",
+            cancellationToken);
     }
 
     /// <summary>
     /// Retrieves file content from storage and populates the preview.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
-    private async Task LoadContentPreviewAsync(CancellationToken cancellationToken)
+    private Task LoadContentPreviewAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        try
-        {
-            StatusMessage = "Načítám obsah...";
-            IsInfoBarOpen = true;
-
-            var content = await _fileContentService.GetContentAsync(CurrentFileId.Value, cancellationToken).ConfigureAwait(true);
-            if (content is null)
+        return SafeExecuteAsync(
+            async token =>
             {
-                ContentPreview = null;
-                StatusMessage = "Obsah nebyl nalezen.";
-                return;
-            }
+                StatusMessage = "Načítám obsah...";
+                IsInfoBarOpen = true;
 
-            var (meta, bytes) = content.Value;
-            var previewLength = Math.Min(bytes.Length, 512);
-            ContentPreview = Encoding.UTF8.GetString(bytes, 0, previewLength);
-            StatusMessage = $"Načten obsah (velikost {meta.SizeBytes:N0} B).";
-        }
-        catch (OperationCanceledException)
-        {
-            StatusMessage = "Načítání obsahu bylo zrušeno.";
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Načítání obsahu selhalo: {ex.Message}";
-            StatusMessage = "Načítání obsahu selhalo.";
-        }
+                var content = await _fileContentService.GetContentAsync(CurrentFileId.Value, token).ConfigureAwait(true);
+                if (content is null)
+                {
+                    ContentPreview = null;
+                    StatusMessage = "Obsah nebyl nalezen.";
+                    return;
+                }
+
+                var (meta, bytes) = content.Value;
+                var previewLength = Math.Min(bytes.Length, 512);
+                ContentPreview = Encoding.UTF8.GetString(bytes, 0, previewLength);
+                StatusMessage = $"Načten obsah (velikost {meta.SizeBytes:N0} B).";
+            },
+            cancellationToken: cancellationToken);
     }
 
     /// <summary>
     /// Replaces the file content using the orchestration service.
     /// </summary>
-    public async Task ReplaceContentAsync(byte[] content, CancellationToken cancellationToken = default)
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task ReplaceContentAsync(CancellationToken cancellationToken)
     {
         if (CurrentFileId is null)
         {
             return;
         }
 
-        if (content is null || content.Length == 0)
+        var picked = await _pickerService.PickFileAsync(cancellationToken).ConfigureAwait(true);
+        if (picked is null || picked.Content.Length == 0)
         {
             StatusMessage = "Nebyl vybrán platný soubor.";
             return;
         }
 
-        await ExecuteAsync(
-            () => _fileOperationsService.ReplaceContentAsync(CurrentFileId.Value, content, ExtractContent, cancellationToken),
-            "Obsah byl nahrán.");
+        var confirm = await _dialogService
+            .ShowConfirmationAsync("Nahradit obsah", "Opravdu chcete nahradit obsah souboru?", cancellationToken)
+            .ConfigureAwait(true);
+        if (!confirm)
+        {
+            StatusMessage = "Nahrávání bylo zrušeno.";
+            return;
+        }
+
+        await ExecuteOperationAsync(
+            token => _fileOperationsService.ReplaceContentAsync(CurrentFileId.Value, picked.Content, ExtractContent, token),
+            "Nahrávám obsah...",
+            "Obsah byl nahrán.",
+            cancellationToken).ConfigureAwait(true);
     }
 
-    private async Task ExecuteAsync(Func<Task<AppResult<Guid>>> callback, string successMessage)
+    private async Task LoadDetailAsync(Guid fileId, CancellationToken cancellationToken)
     {
-        try
+        if (fileId == Guid.Empty)
         {
-            IsBusy = true;
-            ErrorMessage = null;
-            var result = await callback().ConfigureAwait(true);
-            if (result.IsSuccess)
+            return;
+        }
+
+        CurrentFileId = fileId;
+
+        await SafeExecuteAsync(
+            async token =>
             {
-                StatusMessage = successMessage;
-                IsInfoBarOpen = true;
-                if (CurrentFileId is { } id)
+                var detail = await _fileQueryService.GetDetailAsync(fileId, token).ConfigureAwait(true);
+                if (detail is null)
                 {
-                    await GetDetailAsync(id).ConfigureAwait(true);
+                    StatusMessage = "Soubor nebyl nalezen.";
+                    CurrentFileId = null;
+                    Detail = null;
+                    return;
                 }
-            }
-            else
-            {
-                HandleFailure(result);
-            }
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+
+                PopulateFromDetail(detail);
+                IsInfoBarOpen = true;
+                StatusMessage = "Detail načten.";
+            },
+            "Načítám detail souboru...",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private void HandleFailure(AppResult<Guid> result)
+    private async Task ExecuteOperationAsync(
+        Func<CancellationToken, Task<ApiResponse<Guid>>> operation,
+        string pendingMessage,
+        string successMessage,
+        CancellationToken cancellationToken)
+    {
+        await SafeExecuteAsync(
+            async token =>
+            {
+                var response = await operation(token).ConfigureAwait(true);
+                if (response.IsSuccess)
+                {
+                    StatusMessage = successMessage;
+                    IsInfoBarOpen = true;
+                    if (CurrentFileId is { } id)
+                    {
+                        await LoadDetailAsync(id, token).ConfigureAwait(true);
+                    }
+                }
+                else
+                {
+                    HandleFailure(response);
+                }
+            },
+            pendingMessage,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private void HandleFailure(ApiResponse<Guid> response)
     {
         IsInfoBarOpen = true;
 
-        var message = string.IsNullOrWhiteSpace(result.Error.Message)
-            ? result.Error.Code.ToString()
-            : result.Error.Message;
+        if (response.Errors.Count > 0)
+        {
+            var messages = response.Errors
+                .Select(error => string.IsNullOrWhiteSpace(error.Message) ? error.Code : error.Message)
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .ToArray();
 
-        ErrorMessage = $"Operace selhala: {message}";
+            LastError = messages.Length > 0
+                ? string.Join(Environment.NewLine, messages)
+                : "Operace selhala.";
+        }
+        else
+        {
+            LastError = "Operace selhala.";
+        }
+
         StatusMessage = "Operace selhala.";
     }
 
     private void PopulateFromDetail(FileDetailDto detail)
     {
-        CurrentFileId = detail.Id;
         Detail = detail;
         EditableName = detail.Name;
-        EditableAuthor = detail.Author;
-        EditableMime = detail.Mime;
+        EditableAuthor = detail.Author ?? string.Empty;
+        EditableMime = detail.Mime ?? string.Empty;
         EditableIsReadOnly = detail.IsReadOnly;
         ValidityIssuedAt = detail.Validity?.IssuedAt;
         ValidityValidUntil = detail.Validity?.ValidUntil;

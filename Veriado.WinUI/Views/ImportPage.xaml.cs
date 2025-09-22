@@ -10,10 +10,7 @@ public sealed partial class ImportPage : Page
     {
         InitializeComponent();
         ViewModel = AppHost.Services.GetRequiredService<ImportViewModel>();
-        DataContext = ViewModel;
     }
 
     public ImportViewModel ViewModel { get; }
-
-    public ImportViewModel VM => ViewModel;
 }

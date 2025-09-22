@@ -1,53 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="Veriado.WinUI.Views.FilesPage"
-    x:Name="PageRoot"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:animations="using:CommunityToolkit.WinUI.Animations"
     xmlns:contracts="using:Veriado.Contracts.Files"
     xmlns:converters="using:CommunityToolkit.WinUI.Converters"
+    xmlns:core="using:Microsoft.Xaml.Interactions.Core"
     xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
+    xmlns:toolkitControls="using:CommunityToolkit.WinUI.Controls"
     xmlns:i="using:Microsoft.Xaml.Interactivity"
     xmlns:trig="using:CommunityToolkit.WinUI.Triggers"
-    xmlns:toolkitControls="using:CommunityToolkit.WinUI.Controls"
     xmlns:viewModels="using:Veriado.WinUI.ViewModels"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
-    x:DataType="viewModels:FilesGridViewModel"
-    Loaded="OnPageLoaded"
-    Unloaded="OnPageUnloaded">
+    x:DataType="viewModels:FilesGridViewModel">
+
+    <Page.DataContext>
+        <x:Bind Path="ViewModel" />
+    </Page.DataContext>
 
     <Page.Resources>
-        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:ObjectToVisibilityConverter x:Key="ObjectToVisibilityConverter" />
     </Page.Resources>
 
+    <i:Interaction.Behaviors>
+        <ctb:EventToCommandBehavior EventName="Loaded" Command="{Binding LoadCommand}" />
+    </i:Interaction.Behaviors>
+
     <Grid Padding="24" RowSpacing="16">
-        <VisualStateManager.VisualStateGroups>
-            <VisualStateGroup x:Name="LayoutStates">
-                <VisualState x:Name="SingleColumnState">
-                    <VisualState.Setters>
-                        <Setter Target="FilesLayout.MaximumRowsOrColumns" Value="1" />
-                    </VisualState.Setters>
-                </VisualState>
-                <VisualState x:Name="TwoColumnState">
-                    <VisualState.Setters>
-                        <Setter Target="FilesLayout.MaximumRowsOrColumns" Value="2" />
-                    </VisualState.Setters>
-                </VisualState>
-                <VisualState x:Name="FourColumnState">
-                    <VisualState.Setters>
-                        <Setter Target="FilesLayout.MaximumRowsOrColumns" Value="4" />
-                    </VisualState.Setters>
-                </VisualState>
-            </VisualStateGroup>
-        </VisualStateManager.VisualStateGroups>
-
-        <i:Interaction.Behaviors>
-            <trig:AdaptiveTriggerBehavior MinWindowWidth="0" StateName="SingleColumnState" />
-            <trig:AdaptiveTriggerBehavior MinWindowWidth="720" StateName="TwoColumnState" />
-            <trig:AdaptiveTriggerBehavior MinWindowWidth="1024" StateName="FourColumnState" />
-        </i:Interaction.Behaviors>
-
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -55,112 +34,124 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="12">
-            <toolkitControls:RichSuggestBox
-                x:Name="SearchBox"
-                Width="560"
-                ItemsSource="{x:Bind SearchSuggestions}"
-                PlaceholderText="Vyhledat dokumenty"
-                QueryIcon="Find"
-                Text="{x:Bind QueryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                <i:Interaction.Behaviors>
-                    <ctb:EventToCommandBehavior
-                        EventName="SuggestionChosen"
-                        Command="{x:Bind ElementName=PageRoot, Path=VM.ApplySuggestionCommand}"
-                        CommandParameter="{Binding Text, ElementName=SearchBox}" />
-                    <ctb:EventToCommandBehavior
-                        EventName="QuerySubmitted"
-                        Command="{x:Bind ElementName=PageRoot, Path=VM.ApplySuggestionCommand}"
-                        CommandParameter="{Binding Text, ElementName=SearchBox}" />
-                </i:Interaction.Behaviors>
-            </toolkitControls:RichSuggestBox>
-
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <toolkitControls:Segmented SelectedIndex="{x:Bind SearchModeIndex, Mode=TwoWay}">
+                <AutoSuggestBox
+                    x:Name="SearchBox"
+                    Width="560"
+                    PlaceholderText="Vyhledat dokumenty"
+                    Text="{Binding SearchBar.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    ItemsSource="{Binding SearchBar.Suggestions}">
+                    <i:Interaction.Behaviors>
+                        <ctb:EventToCommandBehavior
+                            EventName="QuerySubmitted"
+                            Command="{Binding SearchBar.SubmitCommand}"
+                            CommandParameter="{Binding Text, ElementName=SearchBox}" />
+                        <ctb:EventToCommandBehavior
+                            EventName="SuggestionChosen"
+                            Command="{Binding SearchBar.ApplySuggestionCommand}"
+                            CommandParameter="{Binding Text, ElementName=SearchBox}" />
+                    </i:Interaction.Behaviors>
+                </AutoSuggestBox>
+
+                <toolkitControls:Segmented
+                    SelectedIndex="{Binding SearchModeIndex, Mode=TwoWay}">
                     <toolkitControls:SegmentedItem Content="Fulltext" />
                     <toolkitControls:SegmentedItem Content="Fuzzy" />
                 </toolkitControls:Segmented>
 
                 <toolkitControls:TokenizingTextBox
-                    x:Name="TokenBox"
-                    Width="420"
+                    Width="320"
                     PlaceholderText="Filtry: mime:pdf author:smith validity:active"
-                    ItemsSource="{x:Bind QueryTokens}" />
+                    ItemsSource="{Binding SearchBar.Tokens}" />
+            </StackPanel>
 
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <toolkitControls:RangeSelector
                     Width="280"
                     Header="Velikost (B)"
                     Minimum="0"
                     Maximum="104857600"
-                    LowerValue="{x:Bind SizeLowerBound, Mode=TwoWay}"
-                    UpperValue="{x:Bind SizeUpperBound, Mode=TwoWay}" />
+                    RangeStart="{Binding Filters.SizeFrom, Mode=TwoWay}"
+                    RangeEnd="{Binding Filters.SizeTo, Mode=TwoWay}" />
 
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <DatePicker Width="160" Date="{x:Bind CreatedFrom, Mode=TwoWay}" />
-                    <DatePicker Width="160" Date="{x:Bind CreatedTo, Mode=TwoWay}" />
+                    <DatePicker Width="160" Date="{Binding Filters.CreatedFrom, Mode=TwoWay}" />
+                    <DatePicker Width="160" Date="{Binding Filters.CreatedTo, Mode=TwoWay}" />
                 </StackPanel>
+
+                <ComboBox
+                    Width="160"
+                    ItemsSource="{Binding SortState.Options}"
+                    DisplayMemberPath="DisplayName"
+                    SelectedItem="{Binding SortState.SelectedOption, Mode=TwoWay}">
+                    <i:Interaction.Behaviors>
+                        <ctb:EventToCommandBehavior
+                            EventName="SelectionChanged"
+                            Command="{Binding SetSortCommand}"
+                            CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource Mode=Self}}" />
+                    </i:Interaction.Behaviors>
+                </ComboBox>
+
+                <Button Content="Směr" Command="{Binding ToggleSortDirectionCommand}" />
+                <Button Content="Hledat" Command="{Binding SearchCommand}" />
             </StackPanel>
         </StackPanel>
 
-        <ScrollViewer
-            x:Name="RepeaterScrollViewer"
-            Grid.Row="1"
-            ViewChanged="OnScrollViewerViewChanged">
-            <winui:ItemsRepeaterScrollHost>
-                <ItemsRepeater
-                    x:Name="FilesRepeater"
-                    ItemsSource="{x:Bind Items, Mode=OneWay}">
-                    <ItemsRepeater.Layout>
-                        <winui:UniformGridLayout
-                            x:Name="FilesLayout"
-                            Orientation="Vertical"
-                            ItemsStretch="Fill"
-                            MinColumnSpacing="8"
-                            MinRowSpacing="8"
-                            MaximumRowsOrColumns="4" />
-                    </ItemsRepeater.Layout>
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="contracts:FileSummaryDto">
-                            <Border
-                                Padding="12"
-                                Margin="0,0,0,8"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                CornerRadius="8">
-                                <StackPanel>
-                                    <TextBlock Text="{x:Bind Name}" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                                    <TextBlock Text="{x:Bind Author}" Opacity="0.8" />
-                                    <TextBlock Text="{x:Bind Mime}" Opacity="0.7" />
-                                    <TextBlock Text="{x:Bind Size, StringFormat='{}Velikost: {0:N0} B'}" />
-                                </StackPanel>
-                                <i:Interaction.Behaviors>
-                                    <i:EventTriggerBehavior EventName="Tapped">
-                                        <i:InvokeCommandAction
-                                            Command="{x:Bind ElementName=PageRoot, Path=VM.OpenDetailCommand}"
-                                            CommandParameter="{x:Bind Id}" />
-                                    </i:EventTriggerBehavior>
-                                </i:Interaction.Behaviors>
-                                <animations:Implicit.ShowAnimations>
-                                    <animations:FadeInThemeAnimation />
-                                </animations:Implicit.ShowAnimations>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
-            </winui:ItemsRepeaterScrollHost>
+        <ScrollViewer x:Name="RepeaterScrollViewer" Grid.Row="1">
+            <i:Interaction.Behaviors>
+                <ctb:EventToCommandBehavior
+                    EventName="ViewChanged"
+                    Command="{Binding LoadMoreCommand}"
+                    CommandParameter="{Binding ElementName=RepeaterScrollViewer}" />
+            </i:Interaction.Behaviors>
+            <winui:ItemsRepeater ItemsSource="{Binding Items}">
+                <winui:ItemsRepeater.Layout>
+                    <winui:UniformGridLayout
+                        x:Name="FilesLayout"
+                        Orientation="Vertical"
+                        ItemsStretch="Fill"
+                        MinColumnSpacing="8"
+                        MinRowSpacing="8"
+                        MaximumRowsOrColumns="4" />
+                </winui:ItemsRepeater.Layout>
+                <winui:ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="contracts:FileSummaryDto">
+                        <Border
+                            Padding="12"
+                            Margin="0,0,0,8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="8">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="{Binding Author}" Opacity="0.8" />
+                                <TextBlock Text="{Binding Mime}" Opacity="0.7" />
+                                <TextBlock Text="{Binding Size, StringFormat='{}Velikost: {0:N0} B'}" />
+                            </StackPanel>
+                            <i:Interaction.Behaviors>
+                                <ctb:EventToCommandBehavior
+                                    EventName="Tapped"
+                                    Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
+                                    CommandParameter="{Binding Id}" />
+                            </i:Interaction.Behaviors>
+                        </Border>
+                    </DataTemplate>
+                </winui:ItemsRepeater.ItemTemplate>
+            </winui:ItemsRepeater>
         </ScrollViewer>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-            <ProgressRing Width="28" Height="28" IsActive="{x:Bind IsBusy, Mode=OneWay}" />
-            <Button Content="Obnovit" Command="{x:Bind RefreshCommand}" />
+            <ProgressRing Width="28" Height="28" IsActive="{Binding IsBusy}" />
+            <Button Content="Obnovit" Command="{Binding RefreshCommand}" />
             <InfoBar
-                IsOpen="{x:Bind IsInfoBarOpen, Mode=TwoWay}"
-                Severity="{x:Bind HasError ? winui:InfoBarSeverity.Error : winui:InfoBarSeverity.Informational}"
+                IsOpen="{Binding IsInfoBarOpen, Mode=TwoWay}"
+                Severity="{Binding HasError, Converter={StaticResource BoolToSeverity}}"
                 Title="Stav">
                 <StackPanel>
-                    <TextBlock Text="{x:Bind StatusMessage}" />
+                    <TextBlock Text="{Binding StatusMessage}" />
                     <TextBlock
-                        Text="{x:Bind ErrorMessage}"
+                        Text="{Binding LastError}"
                         Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                        Visibility="{x:Bind !string.IsNullOrEmpty(ErrorMessage), Converter={StaticResource BoolToVisibilityConverter}}" />
+                        Visibility="{Binding LastError, Converter={StaticResource ObjectToVisibilityConverter}}" />
                 </StackPanel>
             </InfoBar>
         </StackPanel>

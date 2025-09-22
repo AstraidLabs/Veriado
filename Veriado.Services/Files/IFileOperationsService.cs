@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Common;
+using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 
 namespace Veriado.Services.Files;
@@ -11,17 +11,17 @@ namespace Veriado.Services.Files;
 /// </summary>
 public interface IFileOperationsService
 {
-    Task<AppResult<Guid>> RenameAsync(Guid fileId, string newName, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> RenameAsync(Guid fileId, string newName, CancellationToken cancellationToken);
 
-    Task<AppResult<Guid>> UpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> UpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken);
 
-    Task<AppResult<Guid>> SetReadOnlyAsync(Guid fileId, bool isReadOnly, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> SetReadOnlyAsync(Guid fileId, bool isReadOnly, CancellationToken cancellationToken);
 
-    Task<AppResult<Guid>> SetValidityAsync(Guid fileId, FileValidityDto validity, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> SetValidityAsync(Guid fileId, FileValidityDto validity, CancellationToken cancellationToken);
 
-    Task<AppResult<Guid>> ClearValidityAsync(Guid fileId, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> ClearValidityAsync(Guid fileId, CancellationToken cancellationToken);
 
-    Task<AppResult<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, bool extractContent, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, bool extractContent, CancellationToken cancellationToken);
 
-    Task<AppResult<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken);
+    Task<ApiResponse<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken);
 }
