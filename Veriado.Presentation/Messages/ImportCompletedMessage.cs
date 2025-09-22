@@ -1,4 +1,4 @@
-namespace Veriado.WinUI.Messages;
+namespace Veriado.Presentation.Messages;
 
 /// <summary>
 /// Message signalling that an import operation has completed.

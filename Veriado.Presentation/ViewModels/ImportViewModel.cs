@@ -9,10 +9,10 @@ using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Import;
 using Veriado.Services.Import.Models;
-using Veriado.WinUI.Messages;
-using Veriado.WinUI.Services;
+using Veriado.Presentation.Messages;
+using Veriado.Presentation.Services;
 
-namespace Veriado.WinUI.ViewModels;
+namespace Veriado.Presentation.ViewModels;
 
 /// <summary>
 /// Coordinates the WinUI import workflow.

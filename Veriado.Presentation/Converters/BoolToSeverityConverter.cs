@@ -2,7 +2,7 @@ using System;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 
-namespace Veriado.WinUI.Converters;
+namespace Veriado.Presentation.Converters;
 
 /// <summary>
 /// Converts a boolean flag indicating an error state into an <see cref="InfoBarSeverity"/> value.

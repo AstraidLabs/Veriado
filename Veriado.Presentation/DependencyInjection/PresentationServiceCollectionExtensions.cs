@@ -1,21 +1,22 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
-using Veriado.WinUI.ViewModels;
-using Veriado.WinUI.ViewModels.Files;
+using Veriado.Presentation.Converters;
+using Veriado.Presentation.ViewModels;
+using Veriado.Presentation.ViewModels.Files;
 
-namespace Veriado.WinUI.DependencyInjection;
+namespace Veriado.Presentation.DependencyInjection;
 
 /// <summary>
-/// Registers WinUI view models with the dependency injection container.
+/// Provides registration helpers for the presentation layer.
 /// </summary>
-public static class ViewModelServiceCollectionExtensions
+public static class PresentationServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the WinUI view models to the provided service collection.
+    /// Registers presentation services, view models and helpers.
     /// </summary>
     /// <param name="services">The service collection to populate.</param>
     /// <returns>The original service collection for chaining.</returns>
-    public static IServiceCollection AddViewModels(this IServiceCollection services)
+    public static IServiceCollection AddPresentation(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -28,6 +29,9 @@ public static class ViewModelServiceCollectionExtensions
         services.AddTransient<FilesGridViewModel>();
         services.AddTransient<FileDetailViewModel>();
         services.AddTransient<ImportViewModel>();
+
+        services.AddSingleton<BoolToSeverityConverter>();
+        services.AddSingleton<NavigationSelectionConverter>();
 
         return services;
     }

@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 
-namespace Veriado.WinUI.ViewModels;
+namespace Veriado.Presentation.ViewModels;
 
 /// <summary>
 /// Provides a shared base implementation for view models with busy/error state handling.

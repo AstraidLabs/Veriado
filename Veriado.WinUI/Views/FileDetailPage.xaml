@@ -8,7 +8,7 @@
     xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
     xmlns:i="using:Microsoft.Xaml.Interactivity"
     xmlns:trig="using:CommunityToolkit.WinUI.Triggers"
-    xmlns:viewModels="using:Veriado.WinUI.ViewModels"
+    xmlns:viewModels="using:Veriado.Presentation.ViewModels"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
     x:DataType="viewModels:FileDetailViewModel">
 

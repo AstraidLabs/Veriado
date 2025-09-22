@@ -12,12 +12,12 @@ using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
 using Veriado.Services.Files;
-using Veriado.WinUI.Collections;
-using Veriado.WinUI.Helpers;
-using Veriado.WinUI.Messages;
-using Veriado.WinUI.ViewModels.Files;
+using Veriado.Presentation.Collections;
+using Veriado.Presentation.Helpers;
+using Veriado.Presentation.Messages;
+using Veriado.Presentation.ViewModels.Files;
 
-namespace Veriado.WinUI.ViewModels;
+namespace Veriado.Presentation.ViewModels;
 
 /// <summary>
 /// Defines the available search modes exposed through the segmented control.

@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Presentation.Services;
 
 /// <summary>
 /// Provides dialog presentation capabilities to view models.

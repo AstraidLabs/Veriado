@@ -3,7 +3,7 @@
     x:Class="Veriado.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:converters="using:Veriado.WinUI.Converters"
+    xmlns:converters="using:Veriado.Presentation.Converters"
     xmlns:local="using:Veriado">
     <Application.Resources>
         <ResourceDictionary>

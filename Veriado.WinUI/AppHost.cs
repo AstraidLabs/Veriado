@@ -9,8 +9,9 @@ using Microsoft.Extensions.Hosting;
 using Veriado.Application.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Mapping.DependencyInjection;
+using Veriado.Presentation.DependencyInjection;
+using Veriado.Presentation.Services;
 using Veriado.Services.DependencyInjection;
-using Veriado.WinUI.DependencyInjection;
 using Veriado.WinUI.Services;
 
 namespace Veriado;
@@ -79,7 +80,7 @@ internal static class AppHost
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<IPickerService, WinUIPickerService>();
 
-                services.AddViewModels();
+                services.AddPresentation();
 
                 services.AddSingleton<MainWindow>();
             })

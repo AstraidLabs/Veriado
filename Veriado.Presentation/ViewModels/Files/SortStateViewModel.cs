@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 
-namespace Veriado.WinUI.ViewModels.Files;
+namespace Veriado.Presentation.ViewModels.Files;
 
 /// <summary>
 /// Represents the sort configuration applied to the files grid.

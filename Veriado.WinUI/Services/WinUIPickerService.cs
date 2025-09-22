@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
+using Veriado.Presentation.Services;
 
 namespace Veriado.WinUI.Services;
 

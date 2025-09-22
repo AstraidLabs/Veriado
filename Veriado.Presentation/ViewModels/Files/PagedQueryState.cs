@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Veriado.WinUI.ViewModels.Files;
+namespace Veriado.Presentation.ViewModels.Files;
 
 /// <summary>
 /// Captures paging information for the incremental loading collection.
