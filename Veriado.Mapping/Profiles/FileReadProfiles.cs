@@ -95,7 +95,7 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.LastModifiedUtc, opt => opt.MapFrom(src => src.LastModifiedUtc))
             .ForMember(dest => dest.IsReadOnly, opt => opt.MapFrom(src => src.IsReadOnly))
             .ForMember(dest => dest.Version, opt => opt.MapFrom(src => src.Version))
-            .ForMember(dest => dest.Content, opt => opt.MapFrom(src => new FileContentDto(string.Empty, src.SizeBytes)))
+            .ForMember(dest => dest.Content, opt => opt.MapFrom(src => new FileContentDto(string.Empty, src.SizeBytes, null)))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
             .ForMember(dest => dest.ExtendedMetadata, opt =>
             {
