@@ -4,7 +4,9 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:converters="using:CommunityToolkit.WinUI.Converters"
-    xmlns:viewModels="using:Veriado.WinUI.ViewModels">
+    xmlns:viewModels="using:Veriado.WinUI.ViewModels"
+    xmlns:winui="using:Microsoft.UI.Xaml.Controls"
+    x:DataType="viewModels:FileDetailViewModel">
 
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -14,67 +16,77 @@
         <StackPanel Spacing="16">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <TextBlock x:Name="DetailHeader" Text="Detail dokumentu" FontSize="24" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Detail.Id}" Opacity="0.6" />
+                <TextBlock Text="{x:Bind Detail.Id}" Opacity="0.6" />
             </StackPanel>
 
             <InfoBar
-                IsOpen="True"
-                Visibility="Visible"
-                Severity="Informational"
-                Title="Stav"
-                Message="{Binding StatusMessage}" />
+                IsOpen="{x:Bind IsInfoBarOpen, Mode=TwoWay}"
+                Severity="{x:Bind !string.IsNullOrEmpty(ErrorMessage) ? winui:InfoBarSeverity.Error : winui:InfoBarSeverity.Informational}"
+                Title="Stav">
+                <StackPanel>
+                    <TextBlock Text="{x:Bind StatusMessage}" />
+                    <TextBlock
+                        Text="{x:Bind ErrorMessage}"
+                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                        Visibility="{x:Bind !string.IsNullOrEmpty(ErrorMessage), Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+            </InfoBar>
 
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <TextBlock Width="140" Text="Název" />
-                <TextBox Width="320" Text="{Binding EditableName, Mode=TwoWay}" />
-                <Button Content="Přejmenovat" Command="{Binding RenameCommand}" />
+                <TextBox Width="320" Text="{x:Bind EditableName, Mode=TwoWay}" />
+                <Button Content="Přejmenovat" Command="{x:Bind RenameCommand}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <TextBlock Width="140" Text="Autor" />
-                <TextBox Width="320" Text="{Binding EditableAuthor, Mode=TwoWay}" />
+                <TextBox Width="320" Text="{x:Bind EditableAuthor, Mode=TwoWay}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <TextBlock Width="140" Text="MIME" />
-                <TextBox Width="320" Text="{Binding EditableMime, Mode=TwoWay}" />
+                <TextBox Width="320" Text="{x:Bind EditableMime, Mode=TwoWay}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <TextBlock Width="140" Text="Jen pro čtení" />
-                <ToggleSwitch IsOn="{Binding EditableIsReadOnly, Mode=TwoWay}" />
-                <Button Content="Uložit metadata" Command="{Binding SaveMetadataCommand}" />
+                <ToggleSwitch IsOn="{x:Bind EditableIsReadOnly, Mode=TwoWay}" />
+                <Button Content="Uložit metadata" Command="{x:Bind UpdateMetadataCommand}" />
+                <Button Content="Aktualizovat stav" Command="{x:Bind SetReadOnlyCommand}" />
             </StackPanel>
 
             <StackPanel Spacing="8">
                 <TextBlock Text="Platnost" FontSize="20" FontWeight="SemiBold" />
                 <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                     <TextBlock Width="140" Text="Platí od" />
-                    <DatePicker Date="{Binding ValidityIssuedAt, Mode=TwoWay}" />
+                    <DatePicker Date="{x:Bind ValidityIssuedAt, Mode=TwoWay}" />
                     <TextBlock Width="140" Text="Platí do" />
-                    <DatePicker Date="{Binding ValidityValidUntil, Mode=TwoWay}" />
+                    <DatePicker Date="{x:Bind ValidityValidUntil, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <CheckBox Content="Fyzická kopie" IsChecked="{Binding ValidityHasPhysicalCopy, Mode=TwoWay}" />
-                    <CheckBox Content="Elektronická kopie" IsChecked="{Binding ValidityHasElectronicCopy, Mode=TwoWay}" />
-                    <Button Content="Uložit platnost" Command="{Binding ApplyValidityCommand}" />
-                    <Button Content="Zrušit platnost" Command="{Binding ClearValidityCommand}" />
+                    <CheckBox Content="Fyzická kopie" IsChecked="{x:Bind ValidityHasPhysicalCopy, Mode=TwoWay}" />
+                    <CheckBox Content="Elektronická kopie" IsChecked="{x:Bind ValidityHasElectronicCopy, Mode=TwoWay}" />
+                    <Button Content="Uložit platnost" Command="{x:Bind ApplyValidityCommand}" />
+                    <Button Content="Zrušit platnost" Command="{x:Bind ClearValidityCommand}" />
                 </StackPanel>
             </StackPanel>
 
             <StackPanel Spacing="8">
                 <TextBlock Text="Obsah" FontSize="20" FontWeight="SemiBold" />
-                <Button Content="Načíst náhled" Command="{Binding LoadContentPreviewCommand}" Width="160" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Načíst náhled" Command="{x:Bind LoadContentPreviewCommand}" Width="160" />
+                    <Button Content="Nahradit obsah" Click="OnReplaceContentClicked" Width="160" />
+                </StackPanel>
                 <Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
-                    <TextBlock Text="{Binding ContentPreview}" TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Bind ContentPreview}" TextWrapping="Wrap" />
                 </Border>
             </StackPanel>
 
             <StackPanel Spacing="8">
                 <TextBlock Text="Systémová metadata" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Detail.CreatedUtc, StringFormat='Vytvořeno: {0:G}'}" />
-                <TextBlock Text="{Binding Detail.LastModifiedUtc, StringFormat='Upraveno: {0:G}'}" />
-                <TextBlock Text="{Binding Detail.Size, StringFormat='Velikost: {0:N0} B'}" />
+                <TextBlock Text="{x:Bind Detail.CreatedUtc, StringFormat='Vytvořeno: {0:G}'}" />
+                <TextBlock Text="{x:Bind Detail.LastModifiedUtc, StringFormat='Upraveno: {0:G}'}" />
+                <TextBlock Text="{x:Bind Detail.Size, StringFormat='Velikost: {0:N0} B'}" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

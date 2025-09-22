@@ -18,10 +18,10 @@ public static class ViewModelServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<FilesGridViewModel>();
-        services.AddSingleton<FileDetailViewModel>();
-        services.AddSingleton<ImportViewModel>();
-        services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<ShellViewModel>();
+        services.AddTransient<FilesGridViewModel>();
+        services.AddTransient<FileDetailViewModel>();
+        services.AddTransient<ImportViewModel>();
 
         return services;
     }
