@@ -22,7 +22,7 @@ public sealed class WinUIFolderPickerService : IPickerService
         picker.FileTypeFilter.Add("*");
         InitializeWithWindow.Initialize(picker, hwnd);
 
-        var folder = await picker.PickSingleFolderAsync().AsTask(cancellationToken).ConfigureAwait(false);
+        var folder = await picker.PickSingleFolderAsync().AsTask(cancellationToken);
         return folder?.Path;
     }
 }

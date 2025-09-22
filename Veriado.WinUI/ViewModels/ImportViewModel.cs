@@ -1,31 +1,41 @@
-// BEGIN CHANGE Veriado.WinUI/ViewModels/ImportViewModel.cs
 using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Services.Import;
 using Veriado.Services.Import.Models;
-using Veriado.WinUI.Messages;
 using Veriado.WinUI.Services;
 
 namespace Veriado.WinUI.ViewModels;
 
 /// <summary>
-/// Coordinates folder and single file imports.
+/// Coordinates the WinUI import workflow.
 /// </summary>
-public sealed partial class ImportViewModel : BaseViewModel
+public sealed partial class ImportViewModel : ObservableObject
 {
     private readonly IImportService _importService;
     private readonly IPickerService _pickerService;
+    private CancellationTokenSource? _importCancellationSource;
+
+    public ImportViewModel(IImportService importService, IPickerService pickerService)
+    {
+        _importService = importService ?? throw new ArgumentNullException(nameof(importService));
+        _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
+    }
+
+    [ObservableProperty]
+    private bool isBusy;
+
+    [ObservableProperty]
+    private string? statusMessage;
 
     [ObservableProperty]
     private string? selectedFolderPath;
 
     [ObservableProperty]
-    private string defaultAuthor = string.Empty;
+    private string? defaultAuthor;
 
     [ObservableProperty]
     private bool extractContent = true;
@@ -34,36 +44,34 @@ public sealed partial class ImportViewModel : BaseViewModel
     private bool recursive = true;
 
     [ObservableProperty]
-    private int maxDegreeOfParallelism = Environment.ProcessorCount;
+    private int maxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
 
     [ObservableProperty]
-    private string? searchPattern = "*";
+    private string searchPattern = "*";
 
     [ObservableProperty]
     private ImportBatchResult? lastResult;
 
-    public ImportViewModel(IImportService importService, IPickerService pickerService, IMessenger messenger)
-        : base(messenger)
-    {
-        _importService = importService ?? throw new ArgumentNullException(nameof(importService));
-        _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
-    }
+    [ObservableProperty]
+    private bool showInfoBar;
 
-    public string? LastResultSummary => LastResult is { } result
-        ? $"Imported {result.Succeeded}/{result.Total} (failed: {result.Failed})"
-        : null;
-
-    [RelayCommand(IncludeCancelCommand = true, AllowConcurrentExecutions = false)]
-    private async Task BrowseAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Prompts the user to pick a folder for import.
+    /// </summary>
+    [RelayCommand]
+    private async Task BrowseFolderAsync()
     {
-        var folder = await _pickerService.PickFolderAsync(cancellationToken).ConfigureAwait(false);
+        var folder = await _pickerService.PickFolderAsync(CancellationToken.None);
         if (!string.IsNullOrWhiteSpace(folder))
         {
             SelectedFolderPath = folder;
         }
     }
 
-    [RelayCommand(IncludeCancelCommand = true, AllowConcurrentExecutions = false)]
+    /// <summary>
+    /// Invokes the folder import workflow through the orchestration service.
+    /// </summary>
+    [RelayCommand(IncludeCancelCommand = true)]
     private async Task ImportAsync(CancellationToken cancellationToken)
     {
         if (IsBusy)
@@ -71,28 +79,32 @@ public sealed partial class ImportViewModel : BaseViewModel
             return;
         }
 
-        var folder = SelectedFolderPath;
-        if (string.IsNullOrWhiteSpace(folder))
+        if (string.IsNullOrWhiteSpace(SelectedFolderPath))
         {
-            StatusMessage = "Nejprve vyberte složku k importu.";
+            StatusMessage = "Vyberte složku k importu.";
+            ShowInfoBar = true;
             return;
         }
 
-        if (!Directory.Exists(folder))
+        if (!Directory.Exists(SelectedFolderPath))
         {
-            StatusMessage = $"Složka '{folder}' neexistuje.";
+            StatusMessage = $"Složka '{SelectedFolderPath}' neexistuje.";
+            ShowInfoBar = true;
             return;
         }
 
-        IsBusy = true;
-        StatusMessage = "Import souborů byl spuštěn.";
-        Messenger.Send(new ImportProgressMessage(ImportProgress.Started(StatusMessage)));
+        _importCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var linkedToken = _importCancellationSource.Token;
 
         try
         {
+            IsBusy = true;
+            ShowInfoBar = true;
+            StatusMessage = "Import byl spuštěn...";
+
             var request = new ImportFolderRequest
             {
-                FolderPath = folder,
+                FolderPath = SelectedFolderPath!,
                 DefaultAuthor = DefaultAuthor,
                 ExtractContent = ExtractContent,
                 Recursive = Recursive,
@@ -100,52 +112,48 @@ public sealed partial class ImportViewModel : BaseViewModel
                 MaxDegreeOfParallelism = Math.Max(1, MaxDegreeOfParallelism),
             };
 
-            var response = await _importService.ImportFolderAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await _importService.ImportFolderAsync(request, linkedToken);
             if (!response.IsSuccess)
             {
-                StatusMessage = response.Errors.Count > 0
-                    ? response.Errors[0].Message
-                    : "Import selhal.";
-                Messenger.Send(new ImportProgressMessage(ImportProgress.Failed(StatusMessage)));
+                StatusMessage = response.Errors.Count > 0 ? response.Errors[0].Message : "Import selhal.";
                 return;
             }
 
             LastResult = response.Data;
             StatusMessage = LastResult is { } result
-                ? $"Import dokončen ({result.Succeeded}/{result.Total})"
+                ? $"Import dokončen: {result.Succeeded}/{result.Total}"
                 : "Import dokončen.";
-
-            Messenger.Send(new ImportProgressMessage(ImportProgress.Completed(StatusMessage)));
-            Messenger.Send(new GridRefreshMessage(new GridRefreshRequest(true)));
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "Import byl zrušen.";
-            Messenger.Send(new ImportProgressMessage(ImportProgress.Failed(StatusMessage)));
         }
         catch (Exception ex)
         {
             StatusMessage = $"Import selhal: {ex.Message}";
-            Messenger.Send(new ImportProgressMessage(ImportProgress.Failed(StatusMessage)));
         }
         finally
         {
             IsBusy = false;
-            OnPropertyChanged(nameof(LastResultSummary));
+            _importCancellationSource?.Dispose();
+            _importCancellationSource = null;
         }
     }
 
-    partial void OnLastResultChanged(ImportBatchResult? value)
+    /// <summary>
+    /// Cancels the running import operation, if any.
+    /// </summary>
+    [RelayCommand]
+    private void CancelImport()
     {
-        OnPropertyChanged(nameof(LastResultSummary));
-    }
-
-    partial void OnMaxDegreeOfParallelismChanged(int value)
-    {
-        if (value <= 0)
+        if (_importCancellationSource is null)
         {
-            MaxDegreeOfParallelism = 1;
+            return;
+        }
+
+        if (!_importCancellationSource.IsCancellationRequested)
+        {
+            _importCancellationSource.Cancel();
         }
     }
 }
-// END CHANGE Veriado.WinUI/ViewModels/ImportViewModel.cs

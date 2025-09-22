@@ -1,31 +1,55 @@
-// BEGIN CHANGE Veriado.WinUI/MainWindow.xaml.cs
 using System;
+using System.Linq;
 using Microsoft.UI.Xaml;
-using Veriado.WinUI.ViewModels;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
+using Veriado.WinUI.Views;
 
-namespace Veriado
+namespace Veriado;
+
+public sealed partial class MainWindow : Window
 {
-    /// <summary>
-    /// Main application window providing the composite shell.
-    /// </summary>
-    public sealed partial class MainWindow : Window
+    public MainWindow()
     {
-        public MainWindow(MainViewModel viewModel)
+        InitializeComponent();
+        Title = "Veriado";
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        var firstItem = ShellNavigationView.MenuItems.OfType<NavigationViewItem>().FirstOrDefault();
+        ShellNavigationView.SelectedItem = firstItem;
+        RootFrame.Navigate(typeof(FilesPage));
+    }
+
+    private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.IsSettingsSelected)
         {
-            ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-            InitializeComponent();
-            DataContext = ViewModel;
-            Title = "Veriado";
-            Loaded += OnLoaded;
+            return;
         }
 
-        public MainViewModel ViewModel { get; }
+        var tag = args.SelectedItemContainer?.Tag?.ToString();
+        Navigate(tag);
+    }
 
-        private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void Navigate(string? tag)
+    {
+        switch (tag)
         {
-            Loaded -= OnLoaded;
-            await ViewModel.InitializeAsync().ConfigureAwait(false);
+            case "Files":
+                RootFrame.Navigate(typeof(FilesPage));
+                break;
+            case "Import":
+                RootFrame.Navigate(typeof(ImportPage));
+                break;
         }
     }
+
+    private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
+    {
+        throw new InvalidOperationException($"Navigace selhala: {e.SourcePageType}");
+    }
 }
-// END CHANGE Veriado.WinUI/MainWindow.xaml.cs
