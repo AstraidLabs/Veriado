@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.Contracts.Search;
+using Veriado.Presentation.Models.Search;
 
 namespace Veriado.Presentation.ViewModels.Files;
 
@@ -12,11 +12,11 @@ public sealed partial class HistoryViewModel : ViewModelBase
     public HistoryViewModel(IMessenger messenger)
         : base(messenger)
     {
-        Items = new ObservableCollection<SearchHistoryEntry>();
+        Items = new ObservableCollection<SearchHistoryEntryModel>();
     }
 
     /// <summary>
     /// Gets the history entries.
     /// </summary>
-    public ObservableCollection<SearchHistoryEntry> Items { get; }
+    public ObservableCollection<SearchHistoryEntryModel> Items { get; }
 }

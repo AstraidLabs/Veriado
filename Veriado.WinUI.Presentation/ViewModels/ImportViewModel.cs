@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using AutoMapper;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
-using Veriado.Services.Import;
-using Veriado.Services.Import.Models;
+using Veriado.Contracts.Import;
 using Veriado.Presentation.Messages;
+using Veriado.Presentation.Models.Import;
 using Veriado.Presentation.Services;
+using Veriado.Services.Import;
 
 namespace Veriado.Presentation.ViewModels;
 
@@ -21,41 +23,26 @@ public sealed partial class ImportViewModel : ViewModelBase
 {
     private readonly IImportService _importService;
     private readonly IPickerService _pickerService;
+    private readonly IMapper _mapper;
     private CancellationTokenSource? _importCancellationSource;
 
-    public ImportViewModel(IImportService importService, IPickerService pickerService, IMessenger messenger)
+    public ImportViewModel(IImportService importService, IPickerService pickerService, IMapper mapper, IMessenger messenger)
         : base(messenger)
     {
         _importService = importService ?? throw new ArgumentNullException(nameof(importService));
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
+        _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+        FolderRequest.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
     }
 
     [ObservableProperty]
     private bool isImporting;
 
     [ObservableProperty]
-    private int processed;
+    private ImportFolderRequestModel folderRequest = new();
 
     [ObservableProperty]
-    private int total;
-
-    [ObservableProperty]
-    private string? selectedFolderPath;
-
-    [ObservableProperty]
-    private string? defaultAuthor;
-
-    [ObservableProperty]
-    private bool extractContent = true;
-
-    [ObservableProperty]
-    private bool recursive = true;
-
-    [ObservableProperty]
-    private int maxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
-
-    [ObservableProperty]
-    private string searchPattern = "*";
+    private ImportProgressModel progress = new();
 
     /// <summary>
     /// Prompts the user to pick a folder for import.
@@ -66,7 +53,7 @@ public sealed partial class ImportViewModel : ViewModelBase
         var folder = await _pickerService.PickFolderAsync(cancellationToken).ConfigureAwait(true);
         if (!string.IsNullOrWhiteSpace(folder))
         {
-            SelectedFolderPath = folder;
+            FolderRequest.FolderPath = folder;
             LastError = null;
             StatusMessage = $"Vybrána složka {folder}.";
             IsInfoBarOpen = true;
@@ -84,16 +71,16 @@ public sealed partial class ImportViewModel : ViewModelBase
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(SelectedFolderPath))
+        if (string.IsNullOrWhiteSpace(FolderRequest.FolderPath))
         {
             LastError = "Vyberte složku k importu.";
             IsInfoBarOpen = true;
             return;
         }
 
-        if (!Directory.Exists(SelectedFolderPath))
+        if (!Directory.Exists(FolderRequest.FolderPath))
         {
-            LastError = $"Složka '{SelectedFolderPath}' neexistuje.";
+            LastError = $"Složka '{FolderRequest.FolderPath}' neexistuje.";
             IsInfoBarOpen = true;
             return;
         }
@@ -110,18 +97,13 @@ public sealed partial class ImportViewModel : ViewModelBase
                     IsInfoBarOpen = true;
                     LastError = null;
                     StatusMessage = "Import byl spuštěn...";
-                    Processed = 0;
-                    Total = 0;
+                    Progress.Processed = 0;
+                    Progress.Total = 0;
 
-                    var request = new ImportFolderRequest
-                    {
-                        FolderPath = SelectedFolderPath!,
-                        DefaultAuthor = DefaultAuthor,
-                        ExtractContent = ExtractContent,
-                        Recursive = Recursive,
-                        SearchPattern = string.IsNullOrWhiteSpace(SearchPattern) ? "*" : SearchPattern,
-                        MaxDegreeOfParallelism = Math.Max(1, MaxDegreeOfParallelism),
-                    };
+                    FolderRequest.SearchPattern = string.IsNullOrWhiteSpace(FolderRequest.SearchPattern) ? "*" : FolderRequest.SearchPattern;
+                    FolderRequest.MaxDegreeOfParallelism = Math.Max(1, FolderRequest.MaxDegreeOfParallelism);
+
+                    var request = _mapper.Map<ImportFolderRequest>(FolderRequest);
 
                     var response = await _importService.ImportFolderAsync(request, token).ConfigureAwait(true);
                     if (!response.IsSuccess)
@@ -132,13 +114,13 @@ public sealed partial class ImportViewModel : ViewModelBase
                     }
 
                     var result = response.Data;
-                    Processed = result?.Succeeded ?? 0;
-                    Total = result?.Total ?? Processed;
+                    Progress.Processed = result?.Succeeded ?? 0;
+                    Progress.Total = result?.Total ?? Progress.Processed;
                     StatusMessage = result is null
                         ? "Import dokončen."
-                        : $"Import dokončen: {Processed}/{Total}.";
+                        : $"Import dokončen: {Progress.Processed}/{Progress.Total}.";
 
-                    Messenger.Send(new ImportCompletedMessage(Total, Processed));
+                    Messenger.Send(new ImportCompletedMessage(Progress.Total, Progress.Processed));
                 },
                 "Import byl spuštěn...",
                 cancellationToken: linkedToken).ConfigureAwait(false);

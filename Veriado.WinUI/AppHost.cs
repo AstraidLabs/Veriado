@@ -80,7 +80,8 @@ internal static class AppHost
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<IPickerService, WinUIPickerService>();
 
-                services.AddPresentation();
+                services.AddWinUiPresentation();
+                services.AddPresentationModels();
 
                 services.AddSingleton<MainWindow>();
             })
