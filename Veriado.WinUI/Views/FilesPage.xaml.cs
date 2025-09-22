@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using CommunityToolkit.WinUI.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -21,6 +20,8 @@ public sealed partial class FilesPage : Page
 
     public FilesGridViewModel ViewModel { get; }
 
+    public FilesGridViewModel VM => ViewModel;
+
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnPageLoaded;
@@ -30,22 +31,6 @@ public sealed partial class FilesPage : Page
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         ViewModel.DetailRequested -= OnDetailRequested;
-    }
-
-    private void OnSuggestionChosen(RichSuggestBox sender, RichSuggestBoxSuggestionChosenEventArgs args)
-    {
-        if (args.SelectedItem is string suggestion)
-        {
-            ViewModel.QueryText = suggestion;
-        }
-    }
-
-    private void OnQuerySubmitted(RichSuggestBox sender, RichSuggestBoxQuerySubmittedEventArgs args)
-    {
-        if (!string.IsNullOrWhiteSpace(args.QueryText))
-        {
-            ViewModel.QueryText = args.QueryText;
-        }
     }
 
     private async void OnScrollViewerViewChanged(object sender, ScrollViewerViewChangedEventArgs e)

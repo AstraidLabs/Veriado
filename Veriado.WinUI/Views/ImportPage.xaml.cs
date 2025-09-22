@@ -14,4 +14,6 @@ public sealed partial class ImportPage : Page
     }
 
     public ImportViewModel ViewModel { get; }
+
+    public ImportViewModel VM => ViewModel;
 }
