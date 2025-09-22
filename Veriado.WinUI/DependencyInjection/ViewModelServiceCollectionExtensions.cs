@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Veriado.WinUI.ViewModels;
+using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.DependencyInjection;
 
@@ -19,6 +20,11 @@ public static class ViewModelServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<ShellViewModel>();
+        services.AddTransient<SearchBarViewModel>();
+        services.AddTransient<FileFiltersViewModel>();
+        services.AddTransient<SortStateViewModel>();
+        services.AddTransient<FavoritesViewModel>();
+        services.AddTransient<HistoryViewModel>();
         services.AddTransient<FilesGridViewModel>();
         services.AddTransient<FileDetailViewModel>();
         services.AddTransient<ImportViewModel>();

@@ -4,16 +4,19 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
-using Veriado.Application.Search.Abstractions;
 using Veriado.Application.UseCases.Queries;
 using Veriado.Application.UseCases.Queries.FileGrid;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Contracts.Search;
+using Veriado.Application.Search.Abstractions;
 using Veriado.Services.Files.Models;
 
 using AppFileDetailDto = Veriado.Application.DTO.FileDetailDto;
 using AppFileSystemMetadataDto = Veriado.Application.DTO.FileSystemMetadataDto;
 using AppFileValidityDto = Veriado.Application.DTO.FileValidityDto;
+using AppSearchHistoryEntry = Veriado.Application.Search.Abstractions.SearchHistoryEntry;
+using AppSearchFavoriteItem = Veriado.Application.Search.Abstractions.SearchFavoriteItem;
 
 namespace Veriado.Services.Files;
 
@@ -48,14 +51,38 @@ public sealed class FileQueryService : IFileQueryService
         return detail is null ? null : MapToContract(detail);
     }
 
-    public Task<IReadOnlyList<SearchHistoryEntry>> GetSearchHistoryAsync(int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SearchHistoryEntry>> GetSearchHistoryAsync(int take, CancellationToken cancellationToken)
     {
-        return _historyService.GetRecentAsync(take, cancellationToken);
+        var entries = await _historyService.GetRecentAsync(take, cancellationToken).ConfigureAwait(false);
+        if (entries.Count == 0)
+        {
+            return Array.Empty<SearchHistoryEntry>();
+        }
+
+        var result = new List<SearchHistoryEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            result.Add(MapHistory(entry));
+        }
+
+        return result;
     }
 
-    public Task<IReadOnlyList<SearchFavoriteItem>> GetFavoritesAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SearchFavoriteItem>> GetFavoritesAsync(CancellationToken cancellationToken)
     {
-        return _favoritesService.GetAllAsync(cancellationToken);
+        var favorites = await _favoritesService.GetAllAsync(cancellationToken).ConfigureAwait(false);
+        if (favorites.Count == 0)
+        {
+            return Array.Empty<SearchFavoriteItem>();
+        }
+
+        var result = new List<SearchFavoriteItem>(favorites.Count);
+        foreach (var favorite in favorites)
+        {
+            result.Add(MapFavorite(favorite));
+        }
+
+        return result;
     }
 
     public Task AddFavoriteAsync(SearchFavoriteDefinition favorite, CancellationToken cancellationToken)
@@ -187,4 +214,10 @@ public sealed class FileQueryService : IFileQueryService
 
         return true;
     }
+
+    private static SearchHistoryEntry MapHistory(AppSearchHistoryEntry entry)
+        => new(entry.Id, entry.QueryText, entry.MatchQuery, entry.LastQueriedUtc, entry.Executions, entry.LastTotalHits, entry.IsFuzzy);
+
+    private static SearchFavoriteItem MapFavorite(AppSearchFavoriteItem favorite)
+        => new(favorite.Id, favorite.Name, favorite.QueryText, favorite.MatchQuery, favorite.Position, favorite.CreatedUtc, favorite.IsFuzzy);
 }

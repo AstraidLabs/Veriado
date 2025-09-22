@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Search.Abstractions;
 using Veriado.Application.UseCases.Queries.FileGrid;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Contracts.Search;
 using Veriado.Services.Files.Models;
 
 namespace Veriado.Services.Files;

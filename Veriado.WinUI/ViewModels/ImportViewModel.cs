@@ -4,10 +4,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Import;
 using Veriado.Services.Import.Models;
+using Veriado.WinUI.Messages;
 using Veriado.WinUI.Services;
 
 namespace Veriado.WinUI.ViewModels;
@@ -15,13 +17,14 @@ namespace Veriado.WinUI.ViewModels;
 /// <summary>
 /// Coordinates the WinUI import workflow.
 /// </summary>
-public sealed partial class ImportViewModel : ObservableObject
+public sealed partial class ImportViewModel : ViewModelBase
 {
     private readonly IImportService _importService;
     private readonly IPickerService _pickerService;
     private CancellationTokenSource? _importCancellationSource;
 
-    public ImportViewModel(IImportService importService, IPickerService pickerService)
+    public ImportViewModel(IImportService importService, IPickerService pickerService, IMessenger messenger)
+        : base(messenger)
     {
         _importService = importService ?? throw new ArgumentNullException(nameof(importService));
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
@@ -29,15 +32,6 @@ public sealed partial class ImportViewModel : ObservableObject
 
     [ObservableProperty]
     private bool isImporting;
-
-    [ObservableProperty]
-    private bool isInfoBarOpen = true;
-
-    [ObservableProperty]
-    private string? statusMessage;
-
-    [ObservableProperty]
-    private string? lastError;
 
     [ObservableProperty]
     private int processed;
@@ -66,10 +60,10 @@ public sealed partial class ImportViewModel : ObservableObject
     /// <summary>
     /// Prompts the user to pick a folder for import.
     /// </summary>
-    [RelayCommand]
-    private async Task BrowseFolderAsync()
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task BrowseFolderAsync(CancellationToken cancellationToken)
     {
-        var folder = await _pickerService.PickFolderAsync(CancellationToken.None).ConfigureAwait(true);
+        var folder = await _pickerService.PickFolderAsync(cancellationToken).ConfigureAwait(true);
         if (!string.IsNullOrWhiteSpace(folder))
         {
             SelectedFolderPath = folder;
@@ -110,45 +104,48 @@ public sealed partial class ImportViewModel : ObservableObject
         try
         {
             IsImporting = true;
-            IsInfoBarOpen = true;
-            LastError = null;
-            StatusMessage = "Import byl spuštěn...";
-            Processed = 0;
-            Total = 0;
+            await SafeExecuteAsync(
+                async token =>
+                {
+                    IsInfoBarOpen = true;
+                    LastError = null;
+                    StatusMessage = "Import byl spuštěn...";
+                    Processed = 0;
+                    Total = 0;
 
-            var request = new ImportFolderRequest
-            {
-                FolderPath = SelectedFolderPath!,
-                DefaultAuthor = DefaultAuthor,
-                ExtractContent = ExtractContent,
-                Recursive = Recursive,
-                SearchPattern = string.IsNullOrWhiteSpace(SearchPattern) ? "*" : SearchPattern,
-                MaxDegreeOfParallelism = Math.Max(1, MaxDegreeOfParallelism),
-            };
+                    var request = new ImportFolderRequest
+                    {
+                        FolderPath = SelectedFolderPath!,
+                        DefaultAuthor = DefaultAuthor,
+                        ExtractContent = ExtractContent,
+                        Recursive = Recursive,
+                        SearchPattern = string.IsNullOrWhiteSpace(SearchPattern) ? "*" : SearchPattern,
+                        MaxDegreeOfParallelism = Math.Max(1, MaxDegreeOfParallelism),
+                    };
 
-            var response = await _importService.ImportFolderAsync(request, linkedToken).ConfigureAwait(true);
-            if (!response.IsSuccess)
-            {
-                LastError = response.Errors.Count > 0 ? response.Errors[0].Message : "Import selhal.";
-                StatusMessage = "Import selhal.";
-                return;
-            }
+                    var response = await _importService.ImportFolderAsync(request, token).ConfigureAwait(true);
+                    if (!response.IsSuccess)
+                    {
+                        LastError = response.Errors.Count > 0 ? response.Errors[0].Message : "Import selhal.";
+                        StatusMessage = "Import selhal.";
+                        return;
+                    }
 
-            var result = response.Data;
-            Processed = result?.Succeeded ?? 0;
-            Total = result?.Total ?? Processed;
-            StatusMessage = result is null
-                ? "Import dokončen."
-                : $"Import dokončen: {result.Succeeded}/{result.Total}.";
+                    var result = response.Data;
+                    Processed = result?.Succeeded ?? 0;
+                    Total = result?.Total ?? Processed;
+                    StatusMessage = result is null
+                        ? "Import dokončen."
+                        : $"Import dokončen: {Processed}/{Total}.";
+
+                    Messenger.Send(new ImportCompletedMessage(Total, Processed));
+                },
+                "Import byl spuštěn...",
+                cancellationToken: linkedToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "Import byl zrušen.";
-        }
-        catch (Exception ex)
-        {
-            LastError = $"Import selhal: {ex.Message}";
-            StatusMessage = "Import selhal.";
         }
         finally
         {
@@ -173,6 +170,8 @@ public sealed partial class ImportViewModel : ObservableObject
         {
             _importCancellationSource.Cancel();
         }
+
+        TryCancelRunning();
     }
 
     /// <summary>

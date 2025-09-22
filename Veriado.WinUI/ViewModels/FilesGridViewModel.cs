@@ -1,18 +1,21 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.WinUI.Collections;
+using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Contracts.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.Collections;
 using Veriado.WinUI.Helpers;
+using Veriado.WinUI.Messages;
+using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.ViewModels;
 
@@ -28,75 +31,49 @@ public enum FileSearchMode
 /// <summary>
 /// View model powering the file grid with incremental loading, paging and advanced filtering.
 /// </summary>
-public sealed partial class FilesGridViewModel : ObservableObject
+public sealed partial class FilesGridViewModel : ViewModelBase,
+    IRecipient<SearchRequestedMessage>,
+    IRecipient<ImportCompletedMessage>
 {
     private readonly IFileQueryService _fileQueryService;
     private readonly AsyncDebouncer _refreshDebouncer = new(TimeSpan.FromMilliseconds(350));
     private bool _isLoadingMore;
 
-    public FilesGridViewModel(IFileQueryService fileQueryService)
+    public FilesGridViewModel(
+        IFileQueryService fileQueryService,
+        SearchBarViewModel searchBar,
+        FileFiltersViewModel filters,
+        SortStateViewModel sortState,
+        FavoritesViewModel favorites,
+        HistoryViewModel history,
+        IMessenger messenger)
+        : base(messenger)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
+        SearchBar = searchBar ?? throw new ArgumentNullException(nameof(searchBar));
+        Filters = filters ?? throw new ArgumentNullException(nameof(filters));
+        SortState = sortState ?? throw new ArgumentNullException(nameof(sortState));
+        Favorites = favorites ?? throw new ArgumentNullException(nameof(favorites));
+        History = history ?? throw new ArgumentNullException(nameof(history));
 
-        QueryTokens = new ObservableCollection<string>();
-        QueryTokens.CollectionChanged += OnQueryTokensChanged;
-
-        SearchSuggestions = new ObservableCollection<string>();
-        Favorites = new ObservableCollection<SearchFavoriteItem>();
-        History = new ObservableCollection<SearchHistoryEntry>();
-
-        PageSize = 50;
-        SizeUpperBound = 1024 * 1024 * 100;
+        PagedState = new PagedQueryState();
         Items = CreateCollection();
+
+        SearchBar.PropertyChanged += OnSearchBarPropertyChanged;
+        SearchBar.Tokens.CollectionChanged += (_, _) => QueueRefresh();
+        Filters.PropertyChanged += OnFiltersChanged;
+        SortState.PropertyChanged += OnSortChanged;
+        PagedState.PropertyChanged += OnPagedStateChanged;
+
+        Messenger.Register<FilesGridViewModel, SearchRequestedMessage>(this, static (recipient, message) => recipient.Receive(message));
+        Messenger.Register<FilesGridViewModel, ImportCompletedMessage>(this, static (recipient, message) => recipient.Receive(message));
     }
 
     /// <summary>
-    /// Gets the items displayed by the grid.
+    /// Gets the incremental loading collection bound to the grid.
     /// </summary>
     [ObservableProperty]
-    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto> items;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the view model is loading data.
-    /// </summary>
-    [ObservableProperty]
-    private bool isBusy;
-
-    /// <summary>
-    /// Gets or sets the search query text.
-    /// </summary>
-    [ObservableProperty]
-    private string? queryText;
-
-    /// <summary>
-    /// Gets or sets the number of records requested per page.
-    /// </summary>
-    [ObservableProperty]
-    private int pageSize;
-
-    /// <summary>
-    /// Gets or sets the informational status message displayed in the info bar.
-    /// </summary>
-    [ObservableProperty]
-    private string? statusMessage;
-
-    /// <summary>
-    /// Gets or sets the error message displayed in the info bar.
-    /// </summary>
-    [ObservableProperty]
-    private string? errorMessage;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the info bar should display an error state.
-    /// </summary>
-    [ObservableProperty]
-    private bool hasError;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the status info bar is visible.
-    /// </summary>
-    [ObservableProperty]
-    private bool isInfoBarOpen = true;
+    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto>? items;
 
     /// <summary>
     /// Gets or sets the current segmented search mode.
@@ -105,152 +82,7 @@ public sealed partial class FilesGridViewModel : ObservableObject
     private FileSearchMode searchMode = FileSearchMode.FullText;
 
     /// <summary>
-    /// Gets or sets the minimum file size filter.
-    /// </summary>
-    [ObservableProperty]
-    private double sizeLowerBound;
-
-    /// <summary>
-    /// Gets or sets the maximum file size filter.
-    /// </summary>
-    [ObservableProperty]
-    private double sizeUpperBound;
-
-    /// <summary>
-    /// Gets or sets the minimum creation date filter.
-    /// </summary>
-    [ObservableProperty]
-    private DateTimeOffset? createdFrom;
-
-    /// <summary>
-    /// Gets or sets the maximum creation date filter.
-    /// </summary>
-    [ObservableProperty]
-    private DateTimeOffset? createdTo;
-
-    /// <summary>
-    /// Gets or sets the total count reported by the server.
-    /// </summary>
-    [ObservableProperty]
-    private int totalCount;
-
-    /// <summary>
-    /// Gets or sets the currently selected file identifier.
-    /// </summary>
-    [ObservableProperty]
-    private Guid? selectedFileId;
-
-    /// <summary>
-    /// Gets the advanced filter tokens bound to the tokenizing text box.
-    /// </summary>
-    public ObservableCollection<string> QueryTokens { get; }
-
-    /// <summary>
-    /// Gets the suggestions exposed by the rich suggest box.
-    /// </summary>
-    public ObservableCollection<string> SearchSuggestions { get; }
-
-    /// <summary>
-    /// Gets the favourite entries retrieved from the services layer.
-    /// </summary>
-    public ObservableCollection<SearchFavoriteItem> Favorites { get; }
-
-    /// <summary>
-    /// Gets the recent search history entries.
-    /// </summary>
-    public ObservableCollection<SearchHistoryEntry> History { get; }
-
-    /// <summary>
-    /// Occurs when the detail page should be opened.
-    /// </summary>
-    public event EventHandler<Guid>? DetailRequested;
-
-    /// <summary>
-    /// Initializes the grid by loading persisted search metadata and the first page of results.
-    /// </summary>
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
-    {
-        await LoadSuggestionsAsync(cancellationToken).ConfigureAwait(true);
-        await ReloadAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Refreshes the grid by reloading the incremental source.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    [RelayCommand(IncludeCancelCommand = true)]
-    private async Task RefreshAsync(CancellationToken cancellationToken)
-    {
-        await ReloadAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Triggers a new search with the current parameters.
-    /// </summary>
-    [RelayCommand]
-    private void Search()
-    {
-        QueueRefresh();
-    }
-
-    /// <summary>
-    /// Applies the supplied suggestion text to the active query.
-    /// </summary>
-    /// <param name="suggestion">The suggestion text to use.</param>
-    [RelayCommand]
-    private void ApplySuggestion(string? suggestion)
-    {
-        if (string.IsNullOrWhiteSpace(suggestion))
-        {
-            return;
-        }
-
-        QueryText = suggestion;
-    }
-
-    /// <summary>
-    /// Raises navigation to the detail page for the specified file.
-    /// </summary>
-    /// <param name="fileId">The identifier of the file to open.</param>
-    [RelayCommand]
-    private void OpenDetail(Guid fileId)
-    {
-        if (fileId == Guid.Empty)
-        {
-            return;
-        }
-
-        SelectedFileId = fileId;
-        DetailRequested?.Invoke(this, fileId);
-    }
-
-    /// <summary>
-    /// Attempts to load additional items when the repeater approaches the end of the list.
-    /// </summary>
-    public async Task EnsureMoreItemsAsync(CancellationToken cancellationToken)
-    {
-        if (Items is null || _isLoadingMore || !Items.HasMoreItems)
-        {
-            return;
-        }
-
-        try
-        {
-            _isLoadingMore = true;
-            await Items.LoadMoreItemsAsync((uint)Math.Max(PageSize, 1)).AsTask(cancellationToken).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException)
-        {
-            // Ignore cancellation triggered by rapid scrolling.
-        }
-        finally
-        {
-            _isLoadingMore = false;
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets the search mode as an index for segmented control bindings.
+    /// Gets or sets the search mode index used by the segmented control.
     /// </summary>
     public int SearchModeIndex
     {
@@ -268,78 +100,222 @@ public sealed partial class FilesGridViewModel : ObservableObject
         }
     }
 
-    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto> CreateCollection()
+    /// <summary>
+    /// Gets or sets the currently selected file identifier.
+    /// </summary>
+    [ObservableProperty]
+    private Guid? selectedFileId;
+
+    /// <summary>
+    /// Gets the search bar view model.
+    /// </summary>
+    public SearchBarViewModel SearchBar { get; }
+
+    /// <summary>
+    /// Gets the filters view model.
+    /// </summary>
+    public FileFiltersViewModel Filters { get; }
+
+    /// <summary>
+    /// Gets the sort state view model.
+    /// </summary>
+    public SortStateViewModel SortState { get; }
+
+    /// <summary>
+    /// Gets the favourites view model.
+    /// </summary>
+    public FavoritesViewModel Favorites { get; }
+
+    /// <summary>
+    /// Gets the history view model.
+    /// </summary>
+    public HistoryViewModel History { get; }
+
+    /// <summary>
+    /// Gets the paging state.
+    /// </summary>
+    public PagedQueryState PagedState { get; }
+
+    /// <summary>
+    /// Initializes the grid by loading persisted search metadata and the first page of results.
+    /// </summary>
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        var incrementalSource = new FilesIncrementalSource(_fileQueryService, BuildQuery, OnPageLoaded);
-        return new IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto>(incrementalSource, PageSize);
+        await LoadSuggestionsAsync(cancellationToken).ConfigureAwait(true);
+        await ReloadAsync(cancellationToken).ConfigureAwait(true);
     }
 
-    private async Task ReloadAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Initializes the grid when the page is loaded.
+    /// </summary>
+    [RelayCommand(IncludeCancelCommand = true)]
+    private Task LoadAsync(CancellationToken cancellationToken)
+        => InitializeAsync(cancellationToken);
+
+    /// <summary>
+    /// Refreshes the grid by reloading the incremental source.
+    /// </summary>
+    [RelayCommand(IncludeCancelCommand = true)]
+    private Task RefreshAsync(CancellationToken cancellationToken)
+        => ReloadAsync(cancellationToken);
+
+    /// <summary>
+    /// Executes the search using the current parameters.
+    /// </summary>
+    [RelayCommand]
+    private void Search()
+        => QueueRefresh();
+
+    /// <summary>
+    /// Sets the selected sort option.
+    /// </summary>
+    [RelayCommand]
+    private void SetSort(FileSortOption? option)
     {
-        if (IsBusy)
+        if (option is not null && !ReferenceEquals(SortState.SelectedOption, option))
+        {
+            SortState.SelectedOption = option;
+        }
+    }
+
+    /// <summary>
+    /// Toggles the sort direction.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleSortDirection()
+    {
+        SortState.IsDescending = !SortState.IsDescending;
+    }
+
+    /// <summary>
+    /// Navigates to the detail of the specified file.
+    /// </summary>
+    [RelayCommand]
+    private void OpenDetail(Guid fileId)
+    {
+        if (fileId == Guid.Empty)
         {
             return;
         }
 
-        IsBusy = true;
-        ErrorMessage = null;
-        StatusMessage = "Načítám soubory...";
-        IsInfoBarOpen = true;
+        SelectedFileId = fileId;
+        Messenger.Send(new OpenFileDetailMessage(fileId));
+    }
+
+    /// <summary>
+    /// Attempts to load additional items when the repeater approaches the end of the list.
+    /// </summary>
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task LoadMoreAsync(ScrollViewer? scrollViewer, CancellationToken cancellationToken)
+    {
+        if (scrollViewer is null || Items is null)
+        {
+            return;
+        }
+
+        var threshold = scrollViewer.ExtentHeight - scrollViewer.ViewportHeight - 200;
+        if (scrollViewer.VerticalOffset < threshold)
+        {
+            return;
+        }
+
+        await EnsureMoreItemsAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Ensures additional items are loaded from the incremental source when available.
+    /// </summary>
+    public async Task EnsureMoreItemsAsync(CancellationToken cancellationToken)
+    {
+        if (Items is null || _isLoadingMore || !Items.HasMoreItems)
+        {
+            return;
+        }
 
         try
         {
-            _isLoadingMore = false;
-            Items = CreateCollection();
-
-            await Items.LoadMoreItemsAsync((uint)Math.Max(PageSize, 1)).AsTask(cancellationToken).ConfigureAwait(true);
-
-            StatusMessage = Items.Count > 0
-                ? $"Načteno {Items.Count} z {TotalCount} položek."
-                : "Žádné soubory nebyly nalezeny.";
+            _isLoadingMore = true;
+            await Items.LoadMoreItemsAsync((uint)Math.Max(PagedState.PageSize, 1)).AsTask(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "Načítání bylo zrušeno.";
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Načítání selhalo: {ex.Message}";
-            StatusMessage = "Načítání selhalo.";
+            // Ignore cancellation triggered by rapid scrolling.
         }
         finally
         {
-            IsBusy = false;
+            _isLoadingMore = false;
         }
     }
 
-    private void QueueRefresh()
-        => _refreshDebouncer.Enqueue(() => ReloadAsync(CancellationToken.None));
+    /// <inheritdoc />
+    public void Receive(SearchRequestedMessage message)
+    {
+        if (!string.Equals(SearchBar.Query, message.Query, StringComparison.Ordinal))
+        {
+            SearchBar.Query = message.Query;
+        }
+
+        QueueRefresh();
+    }
+
+    /// <inheritdoc />
+    public void Receive(ImportCompletedMessage message)
+    {
+        StatusMessage = $"Import dokončen: {message.Succeeded}/{message.Total}.";
+        IsInfoBarOpen = true;
+        QueueRefresh();
+    }
+
+    private IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto> CreateCollection()
+    {
+        var incrementalSource = new FilesIncrementalSource(_fileQueryService, BuildQuery, OnPageLoaded);
+        return new IncrementalLoadingCollection<FilesIncrementalSource, FileSummaryDto>(incrementalSource, Math.Max(PagedState.PageSize, 1));
+    }
+
+    private async Task ReloadAsync(CancellationToken cancellationToken)
+    {
+        await SafeExecuteAsync(
+            async token =>
+            {
+                _isLoadingMore = false;
+                Items = CreateCollection();
+                await Items!.LoadMoreItemsAsync((uint)Math.Max(PagedState.PageSize, 1)).AsTask(token).ConfigureAwait(false);
+
+                StatusMessage = Items.Count > 0
+                    ? $"Načteno {Items.Count} z {PagedState.TotalCount} položek."
+                    : "Žádné soubory nebyly nalezeny.";
+                IsInfoBarOpen = true;
+            },
+            "Načítám soubory...",
+            successMessage: null,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
 
     private async Task LoadSuggestionsAsync(CancellationToken cancellationToken)
     {
         try
         {
-            SearchSuggestions.Clear();
-            Favorites.Clear();
-            History.Clear();
+            SearchBar.Suggestions.Clear();
+            Favorites.Items.Clear();
+            History.Items.Clear();
 
-            var favorites = await _fileQueryService.GetFavoritesAsync(cancellationToken).ConfigureAwait(true);
+            var favorites = await _fileQueryService.GetFavoritesAsync(cancellationToken).ConfigureAwait(false);
             foreach (var favorite in favorites.OrderBy(f => f.Position))
             {
-                Favorites.Add(favorite);
-                if (!string.IsNullOrWhiteSpace(favorite.QueryText) && !SearchSuggestions.Contains(favorite.QueryText))
+                Favorites.Items.Add(favorite);
+                if (!string.IsNullOrWhiteSpace(favorite.QueryText) && !SearchBar.Suggestions.Contains(favorite.QueryText))
                 {
-                    SearchSuggestions.Add(favorite.QueryText);
+                    SearchBar.Suggestions.Add(favorite.QueryText);
                 }
             }
 
-            var historyEntries = await _fileQueryService.GetSearchHistoryAsync(15, cancellationToken).ConfigureAwait(true);
+            var historyEntries = await _fileQueryService.GetSearchHistoryAsync(15, cancellationToken).ConfigureAwait(false);
             foreach (var entry in historyEntries.OrderByDescending(h => h.LastQueriedUtc))
             {
-                History.Add(entry);
-                if (!string.IsNullOrWhiteSpace(entry.QueryText) && !SearchSuggestions.Contains(entry.QueryText))
+                History.Items.Add(entry);
+                if (!string.IsNullOrWhiteSpace(entry.QueryText) && !SearchBar.Suggestions.Contains(entry.QueryText))
                 {
-                    SearchSuggestions.Add(entry.QueryText);
+                    SearchBar.Suggestions.Add(entry.QueryText);
                 }
             }
         }
@@ -353,45 +329,51 @@ public sealed partial class FilesGridViewModel : ObservableObject
     {
         var dto = new FileGridQueryDto
         {
-            Text = string.IsNullOrWhiteSpace(QueryText) ? null : QueryText.Trim(),
+            Text = string.IsNullOrWhiteSpace(SearchBar.Query) ? null : SearchBar.Query.Trim(),
             Fuzzy = SearchMode == FileSearchMode.Fuzzy,
             TextPrefix = SearchMode != FileSearchMode.Fuzzy,
             TextAllTerms = true,
             Page = new PageRequest
             {
                 Page = 1,
-                PageSize = Math.Max(PageSize, 1),
+                PageSize = Math.Max(PagedState.PageSize, 1),
             },
         };
 
         dto.Sort.Clear();
         dto.Sort.Add(new FileSortSpecDto
         {
-            Field = nameof(FileSummaryDto.LastModifiedUtc),
-            Descending = true,
+            Field = SortState.SelectedOption.Field switch
+            {
+                FileSortField.Created => nameof(FileSummaryDto.CreatedUtc),
+                FileSortField.Name => nameof(FileSummaryDto.Name),
+                FileSortField.Size => nameof(FileSummaryDto.Size),
+                _ => nameof(FileSummaryDto.LastModifiedUtc),
+            },
+            Descending = SortState.IsDescending,
         });
 
-        if (SizeLowerBound > 0)
+        if (Filters.SizeFrom > 0)
         {
-            dto = dto with { SizeMin = (long)Math.Round(SizeLowerBound) };
+            dto = dto with { SizeMin = (long)Math.Round(Filters.SizeFrom) };
         }
 
-        if (SizeUpperBound > 0)
+        if (Filters.SizeTo > 0)
         {
-            dto = dto with { SizeMax = (long)Math.Round(SizeUpperBound) };
+            dto = dto with { SizeMax = (long)Math.Round(Filters.SizeTo) };
         }
 
-        if (CreatedFrom is not null)
+        if (Filters.CreatedFrom is not null)
         {
-            dto = dto with { CreatedFromUtc = CreatedFrom };
+            dto = dto with { CreatedFromUtc = Filters.CreatedFrom };
         }
 
-        if (CreatedTo is not null)
+        if (Filters.CreatedTo is not null)
         {
-            dto = dto with { CreatedToUtc = CreatedTo };
+            dto = dto with { CreatedToUtc = Filters.CreatedTo };
         }
 
-        foreach (var token in QueryTokens)
+        foreach (var token in SearchBar.Tokens)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -433,26 +415,25 @@ public sealed partial class FilesGridViewModel : ObservableObject
 
     private void OnPageLoaded(PageResult<FileSummaryDto> page)
     {
-        TotalCount = page.TotalCount;
-        ErrorMessage = null;
+        PagedState.TotalCount = page.TotalCount;
+        LastError = null;
         IsInfoBarOpen = true;
     }
 
-    partial void OnErrorMessageChanged(string? value)
+    private void OnSearchBarPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        HasError = !string.IsNullOrWhiteSpace(value);
-        if (HasError)
+        if (string.Equals(e.PropertyName, nameof(SearchBarViewModel.Query), StringComparison.Ordinal))
         {
-            IsInfoBarOpen = true;
+            QueueRefresh();
         }
     }
 
-    private void OnQueryTokensChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnFiltersChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         QueueRefresh();
     }
 
-    partial void OnQueryTextChanged(string? value)
+    private void OnSortChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         QueueRefresh();
     }
@@ -463,34 +444,20 @@ public sealed partial class FilesGridViewModel : ObservableObject
         QueueRefresh();
     }
 
-    partial void OnPageSizeChanged(int value)
+    private void OnPagedStateChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (value <= 0)
+        if (string.Equals(e.PropertyName, nameof(PagedQueryState.PageSize), StringComparison.Ordinal))
         {
-            PageSize = 25;
-            return;
+            if (PagedState.PageSize <= 0)
+            {
+                PagedState.PageSize = 25;
+                return;
+            }
+
+            QueueRefresh();
         }
-
-        QueueRefresh();
     }
 
-    partial void OnSizeLowerBoundChanged(double value)
-    {
-        QueueRefresh();
-    }
-
-    partial void OnSizeUpperBoundChanged(double value)
-    {
-        QueueRefresh();
-    }
-
-    partial void OnCreatedFromChanged(DateTimeOffset? value)
-    {
-        QueueRefresh();
-    }
-
-    partial void OnCreatedToChanged(DateTimeOffset? value)
-    {
-        QueueRefresh();
-    }
+    private void QueueRefresh()
+        => _refreshDebouncer.Enqueue(() => ReloadAsync(CancellationToken.None));
 }
