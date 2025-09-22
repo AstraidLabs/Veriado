@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
@@ -18,14 +18,16 @@ public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, App
 {
     private readonly IFileRepository _repository;
     private readonly IClock _clock;
+    private readonly IMapper _mapper;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReindexFileHandler"/> class.
     /// </summary>
-    public ReindexFileHandler(IFileRepository repository, IClock clock)
+    public ReindexFileHandler(IFileRepository repository, IClock clock, IMapper mapper)
     {
         _repository = repository;
         _clock = clock;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -43,7 +45,7 @@ public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, App
             file.RequestManualReindex(timestamp);
             var options = new FilePersistenceOptions { ExtractContent = request.ExtractContent };
             await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
-            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
+            return AppResult<FileSummaryDto>.Success(_mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex)
         {

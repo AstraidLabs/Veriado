@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Application.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
@@ -21,8 +21,8 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
     /// <summary>
     /// Initializes a new instance of the <see cref="ApplySystemMetadataHandler"/> class.
     /// </summary>
-    public ApplySystemMetadataHandler(IFileRepository repository, IClock clock)
-        : base(repository, clock)
+    public ApplySystemMetadataHandler(IFileRepository repository, IClock clock, IMapper mapper)
+        : base(repository, clock, mapper)
     {
     }
 
@@ -49,7 +49,7 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
             var timestamp = CurrentTimestamp();
             file.ApplySystemMetadata(metadata, timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
-            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
+            return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
         {

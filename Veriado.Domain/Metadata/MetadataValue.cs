@@ -199,6 +199,74 @@ public readonly struct MetadataValue : IEquatable<MetadataValue>
     }
 
     /// <summary>
+    /// Attempts to retrieve the stored unsigned 32-bit integer value.
+    /// </summary>
+    /// <param name="value">The extracted unsigned integer.</param>
+    /// <returns><see langword="true"/> if the value was retrieved; otherwise <see langword="false"/>.</returns>
+    public bool TryGetUInt32(out uint value)
+    {
+        if (Kind == MetadataValueKind.UInt32)
+        {
+            value = (uint)_value!;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the stored signed 32-bit integer value.
+    /// </summary>
+    /// <param name="value">The extracted integer.</param>
+    /// <returns><see langword="true"/> if the value was retrieved; otherwise <see langword="false"/>.</returns>
+    public bool TryGetInt32(out int value)
+    {
+        if (Kind == MetadataValueKind.Int32)
+        {
+            value = (int)_value!;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the stored double precision floating point value.
+    /// </summary>
+    /// <param name="value">The extracted floating point value.</param>
+    /// <returns><see langword="true"/> if the value was retrieved; otherwise <see langword="false"/>.</returns>
+    public bool TryGetDouble(out double value)
+    {
+        if (Kind == MetadataValueKind.Double)
+        {
+            value = (double)_value!;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the stored Boolean value.
+    /// </summary>
+    /// <param name="value">The extracted Boolean value.</param>
+    /// <returns><see langword="true"/> if the value was retrieved; otherwise <see langword="false"/>.</returns>
+    public bool TryGetBoolean(out bool value)
+    {
+        if (Kind == MetadataValueKind.Boolean)
+        {
+            value = (bool)_value!;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
     /// Attempts to retrieve the stored binary payload.
     /// </summary>
     /// <param name="value">The extracted binary payload.</param>

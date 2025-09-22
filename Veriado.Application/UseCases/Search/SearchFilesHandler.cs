@@ -1,10 +1,9 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Search;
 
@@ -16,13 +15,15 @@ namespace Veriado.Application.UseCases.Search;
 public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IReadOnlyList<SearchHitDto>>
 {
     private readonly ISearchQueryService _searchQueryService;
+    private readonly IMapper _mapper;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SearchFilesHandler"/> class.
     /// </summary>
-    public SearchFilesHandler(ISearchQueryService searchQueryService)
+    public SearchFilesHandler(ISearchQueryService searchQueryService, IMapper mapper)
     {
         _searchQueryService = searchQueryService;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -30,6 +31,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     {
         Guard.AgainstNullOrWhiteSpace(request.Text, nameof(request.Text));
         var hits = await _searchQueryService.SearchAsync(request.Text, request.Limit, cancellationToken);
-        return hits.Select(DomainToDto.ToSearchHitDto).ToArray();
+        return _mapper.Map<IReadOnlyList<SearchHitDto>>(hits);
     }
 }

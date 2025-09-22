@@ -1,11 +1,10 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common.Policies;
-using Veriado.Application.Mapping;
 using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
@@ -18,15 +17,17 @@ public sealed class GetExpiringFilesHandler : IRequestHandler<GetExpiringFilesQu
     private readonly IFileReadRepository _readRepository;
     private readonly ValidityReminderPolicy _policy;
     private readonly IClock _clock;
+    private readonly IMapper _mapper;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GetExpiringFilesHandler"/> class.
     /// </summary>
-    public GetExpiringFilesHandler(IFileReadRepository readRepository, ValidityReminderPolicy policy, IClock clock)
+    public GetExpiringFilesHandler(IFileReadRepository readRepository, ValidityReminderPolicy policy, IClock clock, IMapper mapper)
     {
         _readRepository = readRepository;
         _policy = policy;
         _clock = clock;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -35,6 +36,6 @@ public sealed class GetExpiringFilesHandler : IRequestHandler<GetExpiringFilesQu
         var leadTime = request.LeadTime ?? _policy.ReminderLeadTime;
         var threshold = _clock.UtcNow + leadTime;
         var items = await _readRepository.ListExpiringAsync(threshold, cancellationToken);
-        return items.Select(DomainToDto.ToFileListItemDto).ToArray();
+        return _mapper.Map<IReadOnlyList<FileListItemDto>>(items);
     }
 }

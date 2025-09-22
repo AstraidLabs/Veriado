@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Application.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
@@ -19,8 +19,8 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
     /// <summary>
     /// Initializes a new instance of the <see cref="ClearFileValidityHandler"/> class.
     /// </summary>
-    public ClearFileValidityHandler(IFileRepository repository, IClock clock)
-        : base(repository, clock)
+    public ClearFileValidityHandler(IFileRepository repository, IClock clock, IMapper mapper)
+        : base(repository, clock, mapper)
     {
     }
 
@@ -38,7 +38,7 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
             var timestamp = CurrentTimestamp();
             file.ClearValidity(timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
-            return AppResult<FileSummaryDto>.Success(DomainToDto.ToFileSummaryDto(file));
+            return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }
         catch (InvalidOperationException ex)
         {

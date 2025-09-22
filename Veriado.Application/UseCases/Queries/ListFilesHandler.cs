@@ -1,10 +1,9 @@
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
 using MediatR;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Common;
-using Veriado.Application.Mapping;
 using Veriado.Contracts.Files;
 
 namespace Veriado.Application.UseCases.Queries;
@@ -15,13 +14,15 @@ namespace Veriado.Application.UseCases.Queries;
 public sealed class ListFilesHandler : IRequestHandler<ListFilesQuery, Page<FileListItemDto>>
 {
     private readonly IFileReadRepository _readRepository;
+    private readonly IMapper _mapper;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ListFilesHandler"/> class.
     /// </summary>
-    public ListFilesHandler(IFileReadRepository readRepository)
+    public ListFilesHandler(IFileReadRepository readRepository, IMapper mapper)
     {
         _readRepository = readRepository;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -29,7 +30,7 @@ public sealed class ListFilesHandler : IRequestHandler<ListFilesQuery, Page<File
     {
         var pageRequest = new PageRequest(request.PageNumber, request.PageSize);
         var result = await _readRepository.ListAsync(pageRequest, cancellationToken);
-        var items = result.Items.Select(DomainToDto.ToFileListItemDto).ToList();
+        var items = _mapper.Map<IReadOnlyList<FileListItemDto>>(result.Items);
         return new Page<FileListItemDto>(items, result.PageNumber, result.PageSize, result.TotalCount);
     }
 }
