@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.WinUI.Helpers;
+namespace Veriado.Presentation.Helpers;
 
 /// <summary>
 /// Provides a lightweight helper for debouncing asynchronous operations.

@@ -1,7 +1,7 @@
 using System;
 using Microsoft.UI.Xaml.Controls;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Presentation.Services;
 
 /// <summary>
 /// Provides navigation capabilities for the WinUI shell.

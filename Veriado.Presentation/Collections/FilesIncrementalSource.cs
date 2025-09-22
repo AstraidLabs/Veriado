@@ -7,7 +7,7 @@ using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
 
-namespace Veriado.WinUI.Collections;
+namespace Veriado.Presentation.Collections;
 
 /// <summary>
 /// Incremental source that delegates server-side paging to <see cref="IFileQueryService"/>.

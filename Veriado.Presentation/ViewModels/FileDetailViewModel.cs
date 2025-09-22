@@ -9,9 +9,9 @@ using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
-using Veriado.WinUI.Services;
+using Veriado.Presentation.Services;
 
-namespace Veriado.WinUI.ViewModels;
+namespace Veriado.Presentation.ViewModels;
 
 /// <summary>
 /// Provides the presentation logic for the file detail page.

@@ -2,9 +2,9 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.WinUI.Messages;
+using Veriado.Presentation.Messages;
 
-namespace Veriado.WinUI.ViewModels.Files;
+namespace Veriado.Presentation.ViewModels.Files;
 
 /// <summary>
 /// Represents the search bar state and commands used on the files page.
