@@ -11,12 +11,11 @@
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
     Title="Veriado">
 
-    <Window.Resources>
-        <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        <converters:KeyRoutedEventArgsConverter x:Key="KeyEventConverter" />
-    </Window.Resources>
-
     <Grid x:Name="LayoutRoot">
+        <Grid.Resources>
+            <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+            <converters:KeyRoutedEventArgsConverter x:Key="KeyEventConverter" />
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
