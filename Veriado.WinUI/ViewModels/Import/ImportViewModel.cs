@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -33,6 +34,24 @@ public sealed partial class ImportViewModel : ViewModelBase
     [ObservableProperty]
     private int maxDegreeOfParallelism = 4;
 
+    [ObservableProperty]
+    private bool isInfoBarOpen;
+
+    [ObservableProperty]
+    private string? lastError;
+
+    [ObservableProperty]
+    private bool isImporting;
+
+    [ObservableProperty]
+    private string? searchPattern;
+
+    [ObservableProperty]
+    private int processed;
+
+    [ObservableProperty]
+    private int total;
+
     public ImportViewModel(
         IMessenger messenger,
         IImportService import,
@@ -56,6 +75,7 @@ public sealed partial class ImportViewModel : ViewModelBase
             {
                 SelectedFolderPath = folder;
                 StatusMessage = null;
+                LastError = null;
             }
         });
     }
@@ -67,31 +87,61 @@ public sealed partial class ImportViewModel : ViewModelBase
         {
             HasError = true;
             StatusMessage = "Vyberte složku pro import.";
+            LastError = StatusMessage;
             return;
         }
 
-        await SafeExecuteAsync(async ct =>
+        IsImporting = true;
+        Processed = 0;
+        Total = 0;
+        LastError = null;
+
+        try
         {
-            var request = new ImportFolderRequest
+            await SafeExecuteAsync(async ct =>
             {
-                FolderPath = SelectedFolderPath!,
-                DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
-                Recursive = Recursive,
-                ExtractContent = ExtractContent,
-                MaxDegreeOfParallelism = Math.Clamp(MaxDegreeOfParallelism, 1, 16),
-            };
+                var request = new ImportFolderRequest
+                {
+                    FolderPath = SelectedFolderPath!,
+                    DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
+                    Recursive = Recursive,
+                    ExtractContent = ExtractContent,
+                    MaxDegreeOfParallelism = Math.Clamp(MaxDegreeOfParallelism, 1, 16),
+                    SearchPattern = string.IsNullOrWhiteSpace(SearchPattern) ? null : SearchPattern,
+                };
 
-            var response = await _import.ImportFolderAsync(request, ct).ConfigureAwait(false);
-            if (!response.IsSuccess || response.Data is null)
-            {
-                HasError = true;
-                StatusMessage = "Import se nezdařil.";
-                return;
-            }
+                var response = await _import.ImportFolderAsync(request, ct).ConfigureAwait(false);
+                if (!response.IsSuccess || response.Data is null)
+                {
+                    HasError = true;
+                    StatusMessage = "Import se nezdařil.";
+                    LastError = response.Errors.Count > 0
+                        ? string.Join(Environment.NewLine, response.Errors.Select(error => error.Message))
+                        : StatusMessage;
+                    return;
+                }
 
-            var result = response.Data;
-            StatusMessage = $"Načteno: {result.Succeeded}/{result.Total}.";
-        }, "Importuji dokumenty…");
+                var result = response.Data;
+                Processed = result.Succeeded;
+                Total = result.Total;
+
+                if (result.Errors.Count > 0)
+                {
+                    HasError = true;
+                    LastError = string.Join(Environment.NewLine, result.Errors.Select(error => error.Message));
+                    StatusMessage = $"Import dokončen s chybami ({result.Succeeded}/{result.Total}).";
+                }
+                else
+                {
+                    HasError = false;
+                    StatusMessage = $"Import dokončen ({result.Succeeded}/{result.Total}).";
+                }
+            }, "Importuji dokumenty…");
+        }
+        finally
+        {
+            IsImporting = false;
+        }
     }
 
     [RelayCommand]
@@ -99,5 +149,12 @@ public sealed partial class ImportViewModel : ViewModelBase
     {
         TryCancelRunning();
         StatusMessage = "Import byl zrušen.";
+        LastError = null;
+        IsImporting = false;
+    }
+
+    partial void OnStatusMessageChanged(string? value)
+    {
+        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
     }
 }

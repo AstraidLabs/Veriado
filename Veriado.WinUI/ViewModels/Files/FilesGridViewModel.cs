@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Contracts.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.ViewModels.Messages;
@@ -20,7 +21,33 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     [ObservableProperty]
     private string? searchText;
 
+    [ObservableProperty]
+    private bool isInfoBarOpen;
+
+    [ObservableProperty]
+    private int searchModeIndex;
+
+    [ObservableProperty]
+    private DateTimeOffset? createdFrom;
+
+    [ObservableProperty]
+    private DateTimeOffset? createdTo;
+
+    [ObservableProperty]
+    private double? lowerValue;
+
+    [ObservableProperty]
+    private double? upperValue;
+
     public ObservableCollection<FileSummaryDto> Items { get; } = new();
+
+    public ObservableCollection<string> SearchSuggestions { get; } = new();
+
+    public ObservableCollection<string> QueryTokens { get; } = new();
+
+    public ObservableCollection<SearchFavoriteItem> Favorites { get; } = new();
+
+    public ObservableCollection<SearchHistoryEntry> History { get; } = new();
 
     public FilesGridViewModel(IMessenger messenger, IFileQueryService queryService)
         : base(messenger)
@@ -64,5 +91,10 @@ public sealed partial class FilesGridViewModel : ViewModelBase
         }
 
         Messenger.Send(new OpenFileDetailMessage(id));
+    }
+
+    partial void OnStatusMessageChanged(string? value)
+    {
+        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
     }
 }

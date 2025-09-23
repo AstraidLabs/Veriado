@@ -16,6 +16,9 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     private readonly IFileOperationsService _operations;
 
     [ObservableProperty]
+    private bool isInfoBarOpen;
+
+    [ObservableProperty]
     private FileDetailDto? detail;
 
     [ObservableProperty]
@@ -44,6 +47,9 @@ public sealed partial class FileDetailViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? editableMime;
+
+    [ObservableProperty]
+    private string? contentPreview;
 
     public FileDetailViewModel(IMessenger messenger, IFileQueryService queryService, IFileOperationsService operations)
         : base(messenger)
@@ -243,5 +249,10 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         }
 
         StatusMessage = null;
+    }
+
+    partial void OnStatusMessageChanged(string? value)
+    {
+        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
     }
 }
