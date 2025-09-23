@@ -32,11 +32,11 @@
         <winui:CommandBar Grid.Row="0" Grid.ColumnSpan="3">
             <winui:AppBarButton Icon="Refresh"
                                 Label="Obnovit"
-                                Command="{x:Bind ViewModel.Files.RefreshCommand}" />
+                                Command="{x:Bind ViewModel.Files.RefreshCommand, Mode=OneWay}" />
             <winui:AppBarSeparator />
             <winui:AppBarButton Icon="Find"
                                 Label="Spotlight"
-                                Command="{x:Bind ViewModel.Search.OpenCommand}" />
+                                Command="{x:Bind ViewModel.Search.OpenCommand, Mode=OneWay}" />
         </winui:CommandBar>
 
         <winui:NavigationView x:Name="ShellNavigationView"
@@ -46,8 +46,8 @@
                               SelectedItem="{x:Bind ViewModel.SelectedNavItem, Mode=TwoWay}">
             <i:Interaction.Behaviors>
                 <ctb:EventToCommandBehavior EventName="SelectionChanged"
-                                            Command="{x:Bind ViewModel.NavigateCommand}"
-                                            CommandParameter="{x:Bind ShellNavigationView.SelectedItem.Tag}" />
+                                            Command="{x:Bind ViewModel.NavigateCommand, Mode=OneWay}"
+                                            CommandParameter="{x:Bind ShellNavigationView.SelectedItem?.Tag, Mode=OneWay}" />
             </i:Interaction.Behaviors>
             <winui:NavigationView.MenuItems>
                 <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" IsSelected="True" />
@@ -58,7 +58,7 @@
 
         <ContentPresenter Grid.Row="1"
                           Grid.Column="1"
-                          Content="{x:Bind ViewModel.CurrentContent}" />
+                          Content="{x:Bind ViewModel.CurrentContent, Mode=OneWay}" />
 
         <Grid Grid.Row="1" Grid.Column="2" MinWidth="360">
             <VisualStateManager.VisualStateGroups>
@@ -83,22 +83,22 @@
             </VisualStateManager.VisualStateGroups>
 
             <Border x:Name="RightPane" Padding="12">
-                <ContentPresenter Content="{x:Bind ViewModel.CurrentDetail}" />
+                <ContentPresenter Content="{x:Bind ViewModel.CurrentDetail, Mode=OneWay}" />
             </Border>
         </Grid>
 
         <winui:InfoBar Grid.Row="2"
                        Grid.ColumnSpan="3"
-                       IsOpen="{x:Bind ViewModel.IsInfoBarOpen}"
-                       Severity="{x:Bind ViewModel.HasError, Converter={StaticResource BoolToSeverityConverter}}"
-                       Message="{x:Bind ViewModel.StatusMessage}" />
+                       IsOpen="{x:Bind ViewModel.IsInfoBarOpen, Mode=OneWay}"
+                       Severity="{x:Bind ViewModel.HasError, Mode=OneWay, Converter={StaticResource BoolToSeverityConverter}}"
+                       Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" />
 
         <Grid x:Name="SearchOverlayRoot"
               Grid.RowSpan="3"
               Grid.ColumnSpan="3"
               Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-              Visibility="{x:Bind ViewModel.Search.IsOpen, Converter={StaticResource BoolToVisibility}}"
-              IsHitTestVisible="{x:Bind ViewModel.Search.IsOpen}">
+              Visibility="{x:Bind ViewModel.Search.IsOpen, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+              IsHitTestVisible="{x:Bind ViewModel.Search.IsOpen, Mode=OneWay}">
             <Border MaxWidth="900"
                     Margin="100"
                     HorizontalAlignment="Center"
@@ -122,20 +122,20 @@
                                         PlaceholderText="Hledat..."
                                         QueryIcon="Find"
                                         Text="{x:Bind ViewModel.Search.QueryText, Mode=TwoWay}"
-                                        ItemsSource="{x:Bind ViewModel.Search.Suggestions}">
+                                        ItemsSource="{x:Bind ViewModel.Search.Suggestions, Mode=OneWay}">
                             <i:Interaction.Behaviors>
                                 <ctb:EventToCommandBehavior EventName="TextChanged"
-                                                            Command="{x:Bind ViewModel.Search.TextChangedCommand}" />
+                                                            Command="{x:Bind ViewModel.Search.TextChangedCommand, Mode=OneWay}" />
                                 <ctb:EventToCommandBehavior EventName="QuerySubmitted"
-                                                            Command="{x:Bind ViewModel.Search.QuerySubmittedCommand}" />
+                                                            Command="{x:Bind ViewModel.Search.QuerySubmittedCommand, Mode=OneWay}" />
                                 <ctb:EventToCommandBehavior EventName="SuggestionChosen"
-                                                            Command="{x:Bind ViewModel.Search.SuggestionChosenCommand}" />
+                                                            Command="{x:Bind ViewModel.Search.SuggestionChosenCommand, Mode=OneWay}" />
                             </i:Interaction.Behaviors>
                         </AutoSuggestBox>
 
                         <Button Grid.Column="1"
                                 Content="Zavřít"
-                                Command="{x:Bind ViewModel.Search.CloseCommand}" />
+                                Command="{x:Bind ViewModel.Search.CloseCommand, Mode=OneWay}" />
                     </Grid>
 
                     <Grid Grid.Row="1" ColumnSpacing="16">
@@ -144,7 +144,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Results}"
+                        <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Results, Mode=OneWay}"
                                         SelectionMode="None">
                             <winui:ListView.ItemTemplate>
                                 <DataTemplate x:DataType="contracts:SearchHitDto">
@@ -159,12 +159,12 @@
                         <StackPanel Grid.Column="1" Spacing="16">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Oblíbené" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Favorites.Items}"
+                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Favorites.Items, Mode=OneWay}"
                                                 SelectionMode="None"
                                                 IsItemClickEnabled="True">
                                     <i:Interaction.Behaviors>
                                         <ctb:EventToCommandBehavior EventName="ItemClick"
-                                                                    Command="{x:Bind ViewModel.Search.UseFavoriteCommand}"
+                                                                    Command="{x:Bind ViewModel.Search.UseFavoriteCommand, Mode=OneWay}"
                                                                     CommandParameterPath="ClickedItem" />
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
@@ -180,12 +180,12 @@
 
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Historie" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.History.Items}"
+                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.History.Items, Mode=OneWay}"
                                                 SelectionMode="None"
                                                 IsItemClickEnabled="True">
                                     <i:Interaction.Behaviors>
                                         <ctb:EventToCommandBehavior EventName="ItemClick"
-                                                                    Command="{x:Bind ViewModel.Search.UseHistoryCommand}"
+                                                                    Command="{x:Bind ViewModel.Search.UseHistoryCommand, Mode=OneWay}"
                                                                     CommandParameterPath="ClickedItem" />
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
@@ -206,7 +206,7 @@
 
             <i:Interaction.Behaviors>
                 <ctb:EventToCommandBehavior EventName="KeyDown"
-                                            Command="{x:Bind ViewModel.Search.CloseOnEscCommand}" />
+                                            Command="{x:Bind ViewModel.Search.CloseOnEscCommand, Mode=OneWay}" />
             </i:Interaction.Behaviors>
         </Grid>
     </Grid>

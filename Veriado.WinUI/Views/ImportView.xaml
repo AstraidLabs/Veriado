@@ -25,7 +25,7 @@
         </StackPanel>
 
         <winui:InfoBar IsOpen="True"
-                       Visibility="{x:Bind !string.IsNullOrEmpty(ViewModel.StatusMessage), Converter={StaticResource BoolToVisibility}}"
+                       Visibility="{x:Bind !string.IsNullOrEmpty(ViewModel.StatusMessage), Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
                        Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
                        Message="{Binding StatusMessage}" />
         <ProgressBar IsIndeterminate="{Binding IsBusy}"
