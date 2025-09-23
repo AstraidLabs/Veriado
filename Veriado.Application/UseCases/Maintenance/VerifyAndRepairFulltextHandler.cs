@@ -2,10 +2,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Ensures that the search index accurately reflects the file corpus.

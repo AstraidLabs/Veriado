@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Domain.Metadata;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides read-optimized access to file projections for query scenarios.

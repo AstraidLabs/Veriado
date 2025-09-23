@@ -3,13 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Handles explicit reindexing requests for a file.

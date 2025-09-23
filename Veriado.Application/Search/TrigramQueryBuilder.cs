@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 
-namespace Veriado.Application.Search;
+namespace Veriado.Appl.Search;
 
 /// <summary>
 /// Provides helpers for constructing trigram match expressions compatible with SQLite FTS5.

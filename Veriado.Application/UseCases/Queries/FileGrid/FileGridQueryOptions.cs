@@ -1,4 +1,4 @@
-namespace Veriado.Application.UseCases.Queries.FileGrid;
+namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Provides configuration for the advanced file grid query handler.

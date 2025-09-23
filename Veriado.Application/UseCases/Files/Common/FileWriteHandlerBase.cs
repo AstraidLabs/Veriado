@@ -1,11 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Application.UseCases.Files.Common;
+namespace Veriado.Appl.UseCases.Files.Common;
 
 /// <summary>
 /// Provides reusable persistence helpers for file write handlers.

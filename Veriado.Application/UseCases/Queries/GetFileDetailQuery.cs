@@ -2,7 +2,7 @@ using System;
 using MediatR;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Queries;
+namespace Veriado.Appl.UseCases.Queries;
 
 /// <summary>
 /// Query to retrieve a detailed representation of a file.

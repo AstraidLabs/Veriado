@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Files.SetFileReadOnly;
+namespace Veriado.Appl.UseCases.Files.SetFileReadOnly;
 
 /// <summary>
 /// Command for toggling the read-only status of a file.

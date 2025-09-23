@@ -3,13 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.UseCases.Files.SetFileReadOnly;
+namespace Veriado.Appl.UseCases.Files.SetFileReadOnly;
 
 /// <summary>
 /// Handles toggling the read-only status of a file aggregate.

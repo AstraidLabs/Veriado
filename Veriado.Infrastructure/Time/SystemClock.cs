@@ -1,5 +1,5 @@
 using System;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 
 namespace Veriado.Infrastructure.Time;
 

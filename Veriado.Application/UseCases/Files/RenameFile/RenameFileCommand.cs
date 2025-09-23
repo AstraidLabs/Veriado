@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Files.RenameFile;
+namespace Veriado.Appl.UseCases.Files.RenameFile;
 
 /// <summary>
 /// Command for renaming a file aggregate.

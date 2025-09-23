@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Represents a read-only persistence context exposing queryable file aggregates.

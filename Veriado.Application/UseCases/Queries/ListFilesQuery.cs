@@ -1,8 +1,8 @@
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Queries;
+namespace Veriado.Appl.UseCases.Queries;
 
 /// <summary>
 /// Query to obtain a paginated list of files.

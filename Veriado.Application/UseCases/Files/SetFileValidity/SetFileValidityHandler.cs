@@ -3,14 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Application.UseCases.Files.SetFileValidity;
+namespace Veriado.Appl.UseCases.Files.SetFileValidity;
 
 /// <summary>
 /// Handles updates to document validity metadata for files.

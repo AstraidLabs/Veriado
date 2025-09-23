@@ -3,8 +3,8 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Pipeline.Idempotency;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Pipeline.Idempotency;
 using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Idempotency;

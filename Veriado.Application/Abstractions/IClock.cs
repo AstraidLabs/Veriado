@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides access to wall-clock time in UTC.

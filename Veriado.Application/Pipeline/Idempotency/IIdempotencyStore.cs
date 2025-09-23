@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.Application.Pipeline.Idempotency;
+namespace Veriado.Appl.Pipeline.Idempotency;
 
 /// <summary>
 /// Provides persistence for idempotency request processing.

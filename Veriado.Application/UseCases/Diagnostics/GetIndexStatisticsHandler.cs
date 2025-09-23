@@ -2,11 +2,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Diagnostics;
 
-namespace Veriado.Application.UseCases.Diagnostics;
+namespace Veriado.Appl.UseCases.Diagnostics;
 
 /// <summary>
 /// Handles retrieval of search index diagnostics.

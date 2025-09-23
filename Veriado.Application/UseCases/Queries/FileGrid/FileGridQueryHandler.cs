@@ -6,15 +6,15 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Search;
-using Veriado.Application.Search.Abstractions;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Search;
+using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.UseCases.Queries.FileGrid;
+namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Handles the advanced file grid query.

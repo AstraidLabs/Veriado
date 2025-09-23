@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using FluentValidation;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Queries.FileGrid;
+namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Validates <see cref="FileGridQueryDto"/> instances.

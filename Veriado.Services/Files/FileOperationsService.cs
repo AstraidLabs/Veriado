@@ -4,8 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
 using Veriado.Application.UseCases.Files.ApplySystemMetadata;
 using Veriado.Application.UseCases.Files.ClearFileValidity;
 using Veriado.Application.UseCases.Files.ReplaceFileContent;
@@ -16,6 +14,8 @@ using Veriado.Application.UseCases.Maintenance;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Mapping.AC;
+using Veriado.Appl.Common;
+using Veriado.Appl.Abstractions;
 
 namespace Veriado.Services.Files;
 

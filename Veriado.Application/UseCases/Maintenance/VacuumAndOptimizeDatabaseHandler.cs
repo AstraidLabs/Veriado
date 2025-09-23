@@ -3,10 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Executes SQLite VACUUM and PRAGMA optimize commands to keep the database lean.

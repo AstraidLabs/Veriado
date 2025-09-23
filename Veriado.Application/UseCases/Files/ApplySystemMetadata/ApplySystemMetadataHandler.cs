@@ -3,15 +3,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Application.UseCases.Files.ApplySystemMetadata;
+namespace Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 
 /// <summary>
 /// Handles applying system metadata snapshots to files.

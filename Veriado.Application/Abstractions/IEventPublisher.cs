@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Primitives;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides an abstraction for publishing domain events raised by aggregates.

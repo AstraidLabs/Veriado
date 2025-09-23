@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.ReplaceFileContent;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.ReplaceFileContent;
 
-namespace Veriado.Application.UseCases.Files.Validation;
+namespace Veriado.Appl.UseCases.Files.Validation;
 
 /// <summary>
 /// Validates <see cref="ReplaceFileContentCommand"/> instances and bridges to the request pipeline.
@@ -34,7 +34,7 @@ public sealed class ReplaceFileContentCommandValidator : AbstractValidator<Repla
         ReplaceFileContentCommand request,
         CancellationToken cancellationToken)
     {
-        var result = await base.ValidateAsync(request, cancellationToken).ConfigureAwait(false);
+        var result = await ValidateAsync(request, cancellationToken).ConfigureAwait(false);
         return result.IsValid
             ? NoErrors
             : result.Errors.Select(static failure => failure.ErrorMessage).ToArray();

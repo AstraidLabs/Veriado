@@ -2,7 +2,7 @@ using MediatR;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Queries.FileGrid;
+namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Represents the advanced grid query over files.

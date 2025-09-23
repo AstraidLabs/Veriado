@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.SetFileReadOnly;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.SetFileReadOnly;
 
-namespace Veriado.Application.UseCases.Files.Validation;
+namespace Veriado.Appl.UseCases.Files.Validation;
 
 /// <summary>
 /// Validates read-only status updates.
@@ -29,7 +29,7 @@ public sealed class SetFileReadOnlyCommandValidator : AbstractValidator<SetFileR
         SetFileReadOnlyCommand request,
         CancellationToken cancellationToken)
     {
-        var result = await base.ValidateAsync(request, cancellationToken).ConfigureAwait(false);
+        var result = await ValidateAsync(request, cancellationToken).ConfigureAwait(false);
         return result.IsValid
             ? NoErrors
             : result.Errors.Select(static failure => failure.ErrorMessage).ToArray();

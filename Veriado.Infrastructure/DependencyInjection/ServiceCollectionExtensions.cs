@@ -8,9 +8,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Search.Abstractions;
-using Veriado.Application.Pipeline.Idempotency;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
@@ -24,6 +21,9 @@ using Veriado.Infrastructure.Search;
 using Veriado.Infrastructure.Search.Outbox;
 using Veriado.Infrastructure.Time;
 using Veriado.Domain.Primitives;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Search.Abstractions;
+using Veriado.Appl.Pipeline.Idempotency;
 
 namespace Veriado.Infrastructure.DependencyInjection;
 

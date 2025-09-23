@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Search.Abstractions;
+using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Search;
 
 namespace Veriado.Services.Search;

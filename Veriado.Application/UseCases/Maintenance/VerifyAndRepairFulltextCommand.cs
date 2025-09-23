@@ -1,7 +1,7 @@
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Command that verifies the search index and repairs entries when necessary.

@@ -1,8 +1,8 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Files.CreateFile;
+namespace Veriado.Appl.UseCases.Files.CreateFile;
 
 /// <summary>
 /// Command used to create a new file aggregate with content.

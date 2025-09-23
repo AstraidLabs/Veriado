@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Command that forces reindexing of a single file.

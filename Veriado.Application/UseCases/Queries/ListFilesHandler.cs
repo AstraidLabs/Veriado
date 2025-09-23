@@ -3,11 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Queries;
+namespace Veriado.Appl.UseCases.Queries;
 
 /// <summary>
 /// Handles listing files with paging support.

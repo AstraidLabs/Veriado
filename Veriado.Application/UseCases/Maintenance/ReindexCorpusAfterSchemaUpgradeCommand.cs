@@ -1,7 +1,7 @@
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Requests a complete reindex of the corpus after a search schema upgrade.

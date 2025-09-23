@@ -4,14 +4,15 @@ using System.Reflection;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
 using Veriado.Application.Common.Policies;
 using Veriado.Application.UseCases.Queries.FileGrid;
-using Veriado.Application.Pipeline;
-using Veriado.Application.Pipeline.Idempotency;
+using Veriado.Appl.Pipeline;
+using Veriado.Appl.UseCases.Queries.FileGrid;
+using Veriado.Appl.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Pipeline.Idempotency;
 
-namespace Veriado.Application.DependencyInjection;
+namespace Veriado.Appl.DependencyInjection;
 
 /// <summary>
 /// Provides extension methods to register the application layer services.

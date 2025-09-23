@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Coordinates search indexing operations taking the configured infrastructure mode into account.

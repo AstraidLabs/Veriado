@@ -3,11 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Common;
-using Veriado.Application.Search.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Search;
 
-namespace Veriado.Application.UseCases.Search;
+namespace Veriado.Appl.UseCases.Search;
 
 /// <summary>
 /// Handles full-text search queries for files.

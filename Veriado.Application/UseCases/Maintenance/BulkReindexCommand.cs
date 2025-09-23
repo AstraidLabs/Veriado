@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Command to reindex multiple files in bulk.

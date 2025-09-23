@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.Files;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;

@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.UpdateFileMetadata;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.UpdateFileMetadata;
 
-namespace Veriado.Application.UseCases.Files.Validation;
+namespace Veriado.Appl.UseCases.Files.Validation;
 
 /// <summary>
 /// Validates <see cref="UpdateFileMetadataCommand"/> instances.
@@ -39,7 +39,7 @@ public sealed class UpdateFileMetadataCommandValidator : AbstractValidator<Updat
         UpdateFileMetadataCommand request,
         CancellationToken cancellationToken)
     {
-        var result = await base.ValidateAsync(request, cancellationToken).ConfigureAwait(false);
+        var result = await ValidateAsync(request, cancellationToken).ConfigureAwait(false);
         return result.IsValid
             ? NoErrors
             : result.Errors.Select(static failure => failure.ErrorMessage).ToArray();

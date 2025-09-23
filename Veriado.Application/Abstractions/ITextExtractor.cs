@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides facilities to extract searchable text from file content.

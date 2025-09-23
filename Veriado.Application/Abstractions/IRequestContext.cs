@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides contextual information about the current request being processed by the application layer.

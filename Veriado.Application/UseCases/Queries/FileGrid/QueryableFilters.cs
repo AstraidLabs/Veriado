@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.UseCases.Queries.FileGrid;
+namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>
 /// Provides reusable filtering and ordering logic for file grid queries.
@@ -147,7 +147,7 @@ internal static class QueryableFilters
 
         if (sort is null || sort.Count == 0)
         {
-            return ((IOrderedQueryable<FileEntity>)query.OrderBy(file => file.Name.Value))
+            return query.OrderBy(file => file.Name.Value)
                 .ThenBy(file => file.Id);
         }
 

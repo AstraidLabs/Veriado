@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides an ambient <see cref="IRequestContext"/> using <see cref="AsyncLocal{T}"/> storage.

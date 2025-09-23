@@ -2,18 +2,18 @@ using System;
 using AutoMapper;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
-using Veriado.Application.UseCases.Files.ApplySystemMetadata;
-using Veriado.Application.UseCases.Files.ClearFileValidity;
-using Veriado.Application.UseCases.Files.CreateFile;
-using Veriado.Application.UseCases.Files.ReplaceFileContent;
-using Veriado.Application.UseCases.Files.RenameFile;
-using Veriado.Application.UseCases.Files.SetExtendedMetadata;
-using Veriado.Application.UseCases.Files.SetFileReadOnly;
-using Veriado.Application.UseCases.Files.SetFileValidity;
-using Veriado.Application.UseCases.Files.UpdateFileMetadata;
-using Veriado.Application.UseCases.Files.Validation;
 using Veriado.Mapping.AC;
 using Veriado.Mapping.Profiles;
+using Veriado.Appl.UseCases.Files.Validation;
+using Veriado.Appl.UseCases.Files.RenameFile;
+using Veriado.Appl.UseCases.Files.ApplySystemMetadata;
+using Veriado.Appl.UseCases.Files.SetFileValidity;
+using Veriado.Appl.UseCases.Files.UpdateFileMetadata;
+using Veriado.Appl.UseCases.Files.CreateFile;
+using Veriado.Appl.UseCases.Files.ReplaceFileContent;
+using Veriado.Appl.UseCases.Files.SetFileReadOnly;
+using Veriado.Appl.UseCases.Files.ClearFileValidity;
+using Veriado.Appl.UseCases.Files.SetExtendedMetadata;
 
 namespace Veriado.Mapping.DependencyInjection;
 

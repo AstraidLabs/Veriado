@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Files.SetFileValidity;
+namespace Veriado.Appl.UseCases.Files.SetFileValidity;
 
 /// <summary>
 /// Command to set or update document validity information for a file.

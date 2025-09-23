@@ -1,4 +1,4 @@
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.Files;
 
 namespace Veriado.Infrastructure.Concurrency;

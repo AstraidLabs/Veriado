@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Veriado.Application.UseCases.Files.SetExtendedMetadata;
+using Veriado.Appl.UseCases.Files.SetExtendedMetadata;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;

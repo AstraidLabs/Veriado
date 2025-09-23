@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
 
-namespace Veriado.Application.UseCases.Files.SetExtendedMetadata;
+namespace Veriado.Appl.UseCases.Files.SetExtendedMetadata;
 
 /// <summary>
 /// Command to set extended metadata values on a file.

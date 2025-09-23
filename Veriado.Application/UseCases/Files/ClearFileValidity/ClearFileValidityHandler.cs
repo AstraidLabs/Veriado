@@ -3,13 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
-using Veriado.Application.UseCases.Files.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.UseCases.Files.ClearFileValidity;
+namespace Veriado.Appl.UseCases.Files.ClearFileValidity;
 
 /// <summary>
 /// Handles clearing document validity from files.

@@ -1,8 +1,8 @@
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Diagnostics;
 
-namespace Veriado.Application.UseCases.Diagnostics;
+namespace Veriado.Appl.UseCases.Diagnostics;
 
 /// <summary>
 /// Query to retrieve high-level search index metrics.

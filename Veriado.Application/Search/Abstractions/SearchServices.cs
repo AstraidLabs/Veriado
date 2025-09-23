@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Veriado.Contracts.Search;
 using Veriado.Domain.Search;
 
-namespace Veriado.Application.Search.Abstractions;
+namespace Veriado.Appl.Search.Abstractions;
 
 /// <summary>
 /// Provides search capabilities over indexed file documents.

@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Represents configuration flags that influence how file aggregates are persisted.

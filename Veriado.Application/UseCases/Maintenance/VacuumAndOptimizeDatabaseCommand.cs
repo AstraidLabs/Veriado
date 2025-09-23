@@ -1,7 +1,7 @@
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.UseCases.Maintenance;
+namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
 /// Triggers maintenance commands that reclaim unused space and optimise the SQLite database.

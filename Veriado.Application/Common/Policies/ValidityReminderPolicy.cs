@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.Common.Policies;
+namespace Veriado.Appl.Common.Policies;
 
 /// <summary>
 /// Describes how far in advance validity reminders should be issued for expiring documents.

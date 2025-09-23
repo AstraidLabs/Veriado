@@ -5,10 +5,10 @@ using System.Threading.Tasks;
 using MediatR;
 using Veriado.Application.UseCases.Queries;
 using Veriado.Application.UseCases.Queries.FileGrid;
-using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
+using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.Services.Files;
 

@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Search;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Provides an abstraction for interacting with the full-text search indexing infrastructure.

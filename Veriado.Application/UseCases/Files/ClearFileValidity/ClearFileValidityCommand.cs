@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Files.ClearFileValidity;
+namespace Veriado.Appl.UseCases.Files.ClearFileValidity;
 
 /// <summary>
 /// Command to clear validity information from a file.

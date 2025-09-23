@@ -4,9 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 
-namespace Veriado.Application.Pipeline;
+namespace Veriado.Appl.Pipeline;
 
 /// <summary>
 /// Logs request handling lifecycle events.

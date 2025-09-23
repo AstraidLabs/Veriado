@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.Application.Common;
+namespace Veriado.Appl.Common;
 
 /// <summary>
 /// Provides guard helper methods for validating arguments.

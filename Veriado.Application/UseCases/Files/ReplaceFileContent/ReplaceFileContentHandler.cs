@@ -3,14 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
-using Veriado.Application.Common.Policies;
-using Veriado.Application.UseCases.Files.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.Common.Policies;
+using Veriado.Appl.UseCases.Files.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
 
-namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
+namespace Veriado.Appl.UseCases.Files.ReplaceFileContent;
 
 /// <summary>
 /// Handles replacing file content while ensuring search index synchronization.

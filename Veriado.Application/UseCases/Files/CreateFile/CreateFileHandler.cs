@@ -3,14 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
-using Veriado.Application.Common.Policies;
-using Veriado.Application.UseCases.Files.Common;
+using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common;
+using Veriado.Appl.Common.Policies;
+using Veriado.Appl.UseCases.Files.Common;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Application.UseCases.Files.CreateFile;
+namespace Veriado.Appl.UseCases.Files.CreateFile;
 
 /// <summary>
 /// Handles creation of new file aggregates.

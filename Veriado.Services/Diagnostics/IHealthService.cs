@@ -1,6 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Diagnostics;
 
 namespace Veriado.Services.Diagnostics;

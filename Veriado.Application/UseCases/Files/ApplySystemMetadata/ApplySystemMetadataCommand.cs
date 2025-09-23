@@ -1,10 +1,10 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
 
-namespace Veriado.Application.UseCases.Files.ApplySystemMetadata;
+namespace Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 
 /// <summary>
 /// Command to apply a system metadata snapshot to a file.

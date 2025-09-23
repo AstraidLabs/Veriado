@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Application.Common.Policies;
+namespace Veriado.Appl.Common.Policies;
 
 /// <summary>
 /// Defines the configuration used when importing new file content into the system.

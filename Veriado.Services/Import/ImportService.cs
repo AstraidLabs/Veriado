@@ -6,14 +6,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Veriado.Application.Abstractions;
-using Veriado.Application.Common;
 using Veriado.Application.UseCases.Maintenance;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Mapping.AC;
 using Veriado.Services.Import.Internal;
 using Veriado.Contracts.Import;
+using Veriado.Appl.Common;
+using Veriado.Appl.Abstractions;
 
 namespace Veriado.Services.Import;
 

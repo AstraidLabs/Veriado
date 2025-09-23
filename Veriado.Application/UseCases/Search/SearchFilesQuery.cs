@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using MediatR;
 using Veriado.Contracts.Search;
 
-namespace Veriado.Application.UseCases.Search;
+namespace Veriado.Appl.UseCases.Search;
 
 /// <summary>
 /// Query to search for files in the indexed corpus.

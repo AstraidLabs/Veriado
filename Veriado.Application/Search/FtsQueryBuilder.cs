@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Veriado.Application.Search;
+namespace Veriado.Appl.Search;
 
 /// <summary>
 /// Provides helpers to construct safe FTS5 match expressions from raw user input.

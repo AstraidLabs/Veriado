@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
-using Veriado.Application.Search.Abstractions;
+using Veriado.Appl.Search.Abstractions;
 using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Options;
 

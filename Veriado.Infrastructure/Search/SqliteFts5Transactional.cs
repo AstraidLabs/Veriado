@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
-using Veriado.Application.Search;
+using Veriado.Appl.Search;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;

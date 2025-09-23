@@ -4,9 +4,9 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 
-namespace Veriado.Application.Pipeline;
+namespace Veriado.Appl.Pipeline;
 
 /// <summary>
 /// Executes registered validators prior to invoking the request handler.

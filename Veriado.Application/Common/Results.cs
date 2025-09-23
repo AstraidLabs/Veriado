@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Veriado.Application.Common;
+namespace Veriado.Appl.Common;
 
 /// <summary>
 /// Represents the result of an application-layer operation.

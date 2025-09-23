@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Files.UpdateFileMetadata;
+namespace Veriado.Appl.UseCases.Files.UpdateFileMetadata;
 
 /// <summary>
 /// Command to update the core metadata of a file such as MIME type and author.

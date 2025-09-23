@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Veriado.Application.Common;
+namespace Veriado.Appl.Common;
 
 /// <summary>
 /// Represents a request for a page of results.

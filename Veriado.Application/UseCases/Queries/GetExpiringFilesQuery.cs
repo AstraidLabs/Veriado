@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using MediatR;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Queries;
+namespace Veriado.Appl.UseCases.Queries;
 
 /// <summary>
 /// Query to retrieve files that are expiring within a configured lead time.

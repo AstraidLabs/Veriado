@@ -12,7 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Veriado.Contracts\Veriado.Contracts.csproj" />
-    <ProjectReference Include="..\Veriado.Application\Veriado.Application.csproj" />
+    <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
   </ItemGroup>
 </Project>

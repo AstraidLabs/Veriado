@@ -1,9 +1,9 @@
 using System;
 using MediatR;
-using Veriado.Application.Common;
+using Veriado.Appl.Common;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Application.UseCases.Files.ReplaceFileContent;
+namespace Veriado.Appl.UseCases.Files.ReplaceFileContent;
 
 /// <summary>
 /// Command that replaces the binary content of an existing file.
