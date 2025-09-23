@@ -7,11 +7,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Search;
 using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Models.Search;
+using Windows.System;
 
 namespace Veriado.WinUI.ViewModels.Search;
 
@@ -61,12 +61,11 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     private void Close() => IsOpen = false;
 
     [RelayCommand]
-    private void CloseOnEsc(KeyRoutedEventArgs args)
+    private void CloseOnEsc(VirtualKey key)
     {
-        if (args is not null && args.Key == Windows.System.VirtualKey.Escape)
+        if (key == VirtualKey.Escape && string.IsNullOrWhiteSpace(QueryText))
         {
             IsOpen = false;
-            args.Handled = true;
         }
     }
 

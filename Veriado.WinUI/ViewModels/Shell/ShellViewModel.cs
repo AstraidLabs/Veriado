@@ -1,6 +1,5 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
@@ -75,12 +74,11 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         if (value is NavigationViewItem item)
         {
-            Navigate(item.Tag ?? item.Content);
+            NavigateTo(item.Tag ?? item.Content);
         }
     }
 
-    [RelayCommand]
-    private void Navigate(object? tag)
+    private void NavigateTo(object? tag)
     {
         switch (tag?.ToString())
         {
