@@ -1,7 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Services.Abstractions;
-using Veriado.WinUI.Services.Messages;
+using Veriado.Services.Messages;
 
 namespace Veriado.Services;
 
