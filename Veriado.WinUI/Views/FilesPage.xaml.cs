@@ -1,16 +1,17 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Presentation.ViewModels;
+using Veriado.ViewModels.Files;
 
-namespace Veriado.WinUI.Views;
+namespace Veriado.Views;
 
 public sealed partial class FilesPage : Page
 {
+    public FilesGridViewModel ViewModel { get; }
+
     public FilesPage()
     {
         InitializeComponent();
-        ViewModel = AppHost.Services.GetRequiredService<FilesGridViewModel>();
+        ViewModel = App.Current.Services.GetRequiredService<FilesGridViewModel>();
+        DataContext = ViewModel;
     }
-
-    public FilesGridViewModel ViewModel { get; }
 }

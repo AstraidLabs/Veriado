@@ -1,49 +1,40 @@
-// BEGIN CHANGE Veriado.WinUI/App.xaml.cs
 using System;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 
-namespace Veriado
+namespace Veriado;
+
+public partial class App : Application
 {
-    /// <summary>
-    /// Provides application-specific behavior to supplement the default Application class.
-    /// </summary>
-    public partial class App : Application
+    private AppHost? _appHost;
+    private Window? _window;
+
+    public App()
     {
-        private Window? _window;
+        InitializeComponent();
+    }
 
-        /// <summary>
-        /// Initializes the singleton application object.  This is the first line of authored code
-        /// executed, and as such is the logical equivalent of main() or WinMain().
-        /// </summary>
-        public App()
+    public static new App Current => (App)Application.Current;
+
+    public IServiceProvider Services => _appHost?.Services
+        ?? throw new InvalidOperationException("Application host has not been started.");
+
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        base.OnLaunched(args);
+
+        _appHost = AppHost.StartAsync().GetAwaiter().GetResult();
+
+        _window = new Views.MainWindow();
+        _window.Closed += OnWindowClosed;
+        _window.Activate();
+    }
+
+    private async void OnWindowClosed(object sender, WindowEventArgs e)
+    {
+        if (_appHost is not null)
         {
-            InitializeComponent();
-        }
-
-        /// <summary>
-        /// Gets the active WinUI window.
-        /// </summary>
-        public static Window? MainWindowInstance { get; private set; }
-
-        /// <inheritdoc />
-        protected override void OnLaunched(LaunchActivatedEventArgs args)
-        {
-            base.OnLaunched(args);
-
-            AppHost.StartAsync().GetAwaiter().GetResult();
-
-            _window = AppHost.Services.GetRequiredService<MainWindow>();
-            MainWindowInstance = _window;
-            _window.Closed += OnWindowClosed;
-            _window.Activate();
-        }
-
-        private async void OnWindowClosed(object sender, WindowEventArgs e)
-        {
-            MainWindowInstance = null;
-            await AppHost.StopAsync().ConfigureAwait(false);
+            await _appHost.DisposeAsync().ConfigureAwait(false);
+            _appHost = null;
         }
     }
 }
-// END CHANGE Veriado.WinUI/App.xaml.cs

@@ -1,16 +1,17 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Presentation.ViewModels;
+using Veriado.ViewModels.Import;
 
-namespace Veriado.WinUI.Views;
+namespace Veriado.Views;
 
 public sealed partial class ImportPage : Page
 {
+    public ImportViewModel ViewModel { get; }
+
     public ImportPage()
     {
         InitializeComponent();
-        ViewModel = AppHost.Services.GetRequiredService<ImportViewModel>();
+        ViewModel = App.Current.Services.GetRequiredService<ImportViewModel>();
+        DataContext = ViewModel;
     }
-
-    public ImportViewModel ViewModel { get; }
 }
