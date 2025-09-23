@@ -33,7 +33,7 @@
                             <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
                             <TextBlock Text="{x:Bind Mime}" />
                             <Button Content="Otevřít detail"
-                                    Command="{x:Bind ElementName=Root, Path=DataContext.OpenDetailCommand, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.OpenDetailCommand, Mode=OneWay}"
                                     CommandParameter="{x:Bind Id, Mode=OneWay}" />
                         </StackPanel>
                     </Border>

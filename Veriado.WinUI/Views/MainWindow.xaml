@@ -7,6 +7,7 @@
     xmlns:i="using:Microsoft.Xaml.Interactivity"
     xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
     xmlns:conv="using:CommunityToolkit.WinUI.Converters"
+    xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:models="using:Veriado.WinUI.Models.Search"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
     Title="Veriado"
@@ -15,6 +16,7 @@
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <converters:KeyRoutedEventArgsConverter x:Key="KeyEventConverter" />
     </Window.Resources>
 
     <Grid x:Name="LayoutRoot">
@@ -44,11 +46,6 @@
                               Grid.Column="0"
                               IsSettingsVisible="True"
                               SelectedItem="{x:Bind ViewModel.SelectedNavItem, Mode=TwoWay}">
-            <i:Interaction.Behaviors>
-                <ctb:EventToCommandBehavior EventName="SelectionChanged"
-                                            Command="{x:Bind ViewModel.NavigateCommand, Mode=OneWay}"
-                                            CommandParameter="{x:Bind ShellNavigationView.SelectedItem?.Tag, Mode=OneWay}" />
-            </i:Interaction.Behaviors>
             <winui:NavigationView.MenuItems>
                 <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" IsSelected="True" />
                 <winui:NavigationViewItem Content="Import" Icon="Upload" Tag="Import" />
@@ -206,7 +203,8 @@
 
             <i:Interaction.Behaviors>
                 <ctb:EventToCommandBehavior EventName="KeyDown"
-                                            Command="{x:Bind ViewModel.Search.CloseOnEscCommand, Mode=OneWay}" />
+                                            Command="{x:Bind ViewModel.Search.CloseOnEscCommand, Mode=OneWay}"
+                                            EventArgsConverter="{StaticResource KeyEventConverter}" />
             </i:Interaction.Behaviors>
         </Grid>
     </Grid>
