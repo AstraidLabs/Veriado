@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Veriado.Appl.Common;
-using Veriado.Application.UseCases.Diagnostics;
+using Veriado.Appl.UseCases.Diagnostics;
 using Veriado.Contracts.Diagnostics;
 
 namespace Veriado.Services.Diagnostics;
