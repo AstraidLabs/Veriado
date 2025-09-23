@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Views;
 
 namespace Veriado;
@@ -30,6 +31,8 @@ public partial class App : Application
         _appHost = AppHost.StartAsync().GetAwaiter().GetResult();
 
         MainWindow = Services.GetRequiredService<MainWindow>();
+        var windowProvider = Services.GetRequiredService<IWindowProvider>();
+        windowProvider.SetWindow(MainWindow);
         MainWindow.Closed += OnWindowClosed;
         MainWindow.Activate();
     }

@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Search;
 using Veriado.WinUI.ViewModels.Base;
 using Windows.System;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Search;
 
@@ -20,8 +21,8 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     private const int HistoryTake = 50;
     private readonly ISearchFacade _searchFacade;
 
-    public SearchOverlayViewModel(IMessenger messenger, ISearchFacade searchFacade)
-        : base(messenger)
+    public SearchOverlayViewModel(IMessenger messenger, IStatusService statusService, ISearchFacade searchFacade)
+        : base(messenger, statusService)
     {
         _searchFacade = searchFacade ?? throw new ArgumentNullException(nameof(searchFacade));
     }

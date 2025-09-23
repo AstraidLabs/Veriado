@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.WinUI.ViewModels.Messages;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Base;
 
@@ -13,17 +13,24 @@ namespace Veriado.WinUI.ViewModels.Base;
 public abstract partial class ViewModelBase : ObservableObject
 {
     private readonly IMessenger _messenger;
+    private readonly IStatusService _statusService;
     private CancellationTokenSource? _cancellationSource;
 
-    protected ViewModelBase(IMessenger messenger)
+    protected ViewModelBase(IMessenger messenger, IStatusService statusService)
     {
         _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+        _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
     }
 
     /// <summary>
     /// Gets the messenger instance used to communicate between view models.
     /// </summary>
     protected IMessenger Messenger => _messenger;
+
+    /// <summary>
+    /// Gets the status service used to broadcast status updates.
+    /// </summary>
+    protected IStatusService StatusService => _statusService;
 
     /// <summary>
     /// Gets a value indicating whether status changes should be broadcast through the messenger.
@@ -112,7 +119,7 @@ public abstract partial class ViewModelBase : ObservableObject
 
         if (BroadcastStatusChanges)
         {
-            _messenger.Send(new StatusChangedMessage(value, HasError));
+            PublishStatus();
         }
     }
 
@@ -120,7 +127,25 @@ public abstract partial class ViewModelBase : ObservableObject
     {
         if (BroadcastStatusChanges)
         {
-            _messenger.Send(new StatusChangedMessage(StatusMessage, value));
+            PublishStatus();
+        }
+    }
+
+    private void PublishStatus()
+    {
+        if (string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            _statusService.Clear();
+            return;
+        }
+
+        if (HasError)
+        {
+            _statusService.ShowError(StatusMessage);
+        }
+        else
+        {
+            _statusService.ShowInfo(StatusMessage);
         }
     }
 }

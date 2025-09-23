@@ -7,8 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Import;
 using Veriado.Services.Import;
-using Veriado.WinUI.Services.Pickers;
-using Veriado.WinUI.Services.Windowing;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 
 namespace Veriado.WinUI.ViewModels.Import;
@@ -17,7 +16,6 @@ public sealed partial class ImportViewModel : ViewModelBase
 {
     private readonly IImportService _import;
     private readonly IPickerService _picker;
-    private readonly IWindowProvider _windowProvider;
 
     [ObservableProperty]
     private string? selectedFolderPath;
@@ -51,23 +49,21 @@ public sealed partial class ImportViewModel : ViewModelBase
 
     public ImportViewModel(
         IMessenger messenger,
+        IStatusService statusService,
         IImportService import,
-        IPickerService picker,
-        IWindowProvider windowProvider)
-        : base(messenger)
+        IPickerService picker)
+        : base(messenger, statusService)
     {
         _import = import ?? throw new ArgumentNullException(nameof(import));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
-        _windowProvider = windowProvider ?? throw new ArgumentNullException(nameof(windowProvider));
     }
 
     [RelayCommand]
     private async Task BrowseFolderAsync()
     {
-        var window = _windowProvider.GetMainWindow();
-        await SafeExecuteAsync(async _ =>
+        await SafeExecuteAsync(async ct =>
         {
-            var folder = await _picker.PickFolderAsync(window).ConfigureAwait(false);
+            var folder = await _picker.PickFolderAsync(ct).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(folder))
             {
                 SelectedFolderPath = folder;
