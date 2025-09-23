@@ -1,10 +1,19 @@
+using System;
+using Microsoft.UI.Xaml;
+
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IWindowProvider
 {
-    void SetWindow(Microsoft.UI.Xaml.Window window);
+    void SetWindow(Window window);
 
-    Microsoft.UI.Xaml.Window? TryGetWindow();
+    bool TryGetWindow(out Window? window);
 
-    nint GetHwnd();
+    Window GetMainWindow();
+
+    IntPtr GetHwnd(Window? window = null);
+
+    XamlRoot GetXamlRoot(Window? window = null);
+
+    Window GetActiveWindow();
 }

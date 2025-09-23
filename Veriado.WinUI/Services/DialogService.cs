@@ -16,14 +16,15 @@ public sealed class DialogService : IDialogService
 
     public async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel")
     {
-        var hwnd = _window.GetHwnd();
+        var window = _window.GetActiveWindow();
+        var hwnd = _window.GetHwnd(window);
         var dialog = new ContentDialog
         {
             Title = title,
             Content = message,
             PrimaryButtonText = confirmText,
-            CloseButtonText = cancelText,
-            XamlRoot = Microsoft.UI.Xaml.Window.Current.Content.XamlRoot,
+            CloseButtonText = string.IsNullOrWhiteSpace(cancelText) ? null : cancelText,
+            XamlRoot = _window.GetXamlRoot(window),
         };
 
         WinRT.Interop.InitializeWithWindow.Initialize(dialog, hwnd);

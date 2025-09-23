@@ -36,8 +36,7 @@ public sealed class ThemeService : IThemeService
 
     private void ApplyTheme(AppTheme theme)
     {
-        var window = _windowProvider.TryGetWindow();
-        if (window?.Content is not FrameworkElement root)
+        if (!_windowProvider.TryGetWindow(out var window) || window?.Content is not FrameworkElement root)
         {
             return;
         }

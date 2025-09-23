@@ -65,29 +65,31 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             return;
         }
 
-        _ = Task.Run(async () =>
+        _ = PersistStateAsync();
+    }
+
+    private async Task PersistStateAsync()
+    {
+        try
         {
+            await _gate.WaitAsync().ConfigureAwait(false);
             try
             {
-                await _gate.WaitAsync().ConfigureAwait(false);
-                try
+                await _settingsService.UpdateAsync(settings =>
                 {
-                    await _settingsService.UpdateAsync(settings =>
-                    {
-                        settings.LastQuery = LastQuery;
-                        settings.LastFolder = LastFolder;
-                        settings.PageSize = PageSize > 0 ? PageSize : AppSettings.DefaultPageSize;
-                    }).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _gate.Release();
-                }
+                    settings.LastQuery = LastQuery;
+                    settings.LastFolder = LastFolder;
+                    settings.PageSize = PageSize > 0 ? PageSize : AppSettings.DefaultPageSize;
+                }).ConfigureAwait(false);
             }
-            catch
+            finally
             {
-                // Persistence of hot state should not crash the UI layer.
+                _gate.Release();
             }
-        });
+        }
+        catch
+        {
+            // Persistence of hot state should not crash the UI layer.
+        }
     }
 }

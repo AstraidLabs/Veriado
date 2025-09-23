@@ -25,8 +25,7 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
             return;
         }
 
-        var window = _windowProvider.TryGetWindow();
-        if (window is null)
+        if (!_windowProvider.TryGetWindow(out var window) || window is null)
         {
             return;
         }
