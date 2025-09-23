@@ -68,8 +68,6 @@
     <ProjectReference Include="..\Veriado.Infrastructure\Veriado.Infrastructure.csproj" />
     <ProjectReference Include="..\Veriado.Services\Veriado.Services.csproj" />
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
-    <ProjectReference Include="..\Veriado.WinUI.Presentation\Veriado.WinUI.Presentation.csproj" />
-    <ProjectReference Include="..\Veriado.Presentation\Veriado.Presentation.csproj" />
   </ItemGroup>
 
   <!--

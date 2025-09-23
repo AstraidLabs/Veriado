@@ -3,8 +3,9 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Veriado.Mappers;
-using Veriado.Models.Search;
+using CommunityToolkit.Mvvm.Messaging;
+using Veriado.WinUI.Mappers;
+using Veriado.WinUI.Models.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
 
@@ -14,7 +15,8 @@ public sealed partial class HistoryViewModel : ViewModelBase
 {
     private readonly IFileQueryService _fileQueryService;
 
-    public HistoryViewModel(IFileQueryService fileQueryService)
+    public HistoryViewModel(IMessenger messenger, IFileQueryService fileQueryService)
+        : base(messenger)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
     }

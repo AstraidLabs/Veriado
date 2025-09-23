@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Models.Files;
+namespace Veriado.WinUI.Models.Files;
 
 /// <summary>
 /// Represents a lightweight projection of <see cref="Contracts.Files.FileSummaryDto"/> tailored for list views.

@@ -1,11 +1,13 @@
 <Window
     x:Class="Veriado.WinUI.Views.MainWindow"
+    x:Name="WindowRoot"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:contracts="using:Veriado.Contracts.Search"
-    xmlns:conv="using:CommunityToolkit.WinUI.Converters"
     xmlns:i="using:Microsoft.Xaml.Interactivity"
     xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
+    xmlns:conv="using:CommunityToolkit.WinUI.Converters"
+    xmlns:models="using:Veriado.WinUI.Models.Search"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
     Title="Veriado"
     Width="1280"
@@ -15,7 +17,7 @@
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="LayoutRoot">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -28,22 +30,24 @@
         </Grid.ColumnDefinitions>
 
         <winui:CommandBar Grid.Row="0" Grid.ColumnSpan="3">
-            <winui:AppBarButton Icon="Refresh" Label="Obnovit"
-                                Command="{Binding Files.RefreshCommand}" />
+            <winui:AppBarButton Icon="Refresh"
+                                Label="Obnovit"
+                                Command="{x:Bind ViewModel.Files.RefreshCommand}" />
             <winui:AppBarSeparator />
-            <winui:AppBarButton Icon="Find" Label="Spotlight"
-                                Command="{Binding Search.OpenCommand}" />
+            <winui:AppBarButton Icon="Find"
+                                Label="Spotlight"
+                                Command="{x:Bind ViewModel.Search.OpenCommand}" />
         </winui:CommandBar>
 
         <winui:NavigationView x:Name="ShellNavigationView"
                               Grid.Row="1"
                               Grid.Column="0"
                               IsSettingsVisible="True"
-                              SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}">
+                              SelectedItem="{x:Bind ViewModel.SelectedNavItem, Mode=TwoWay}">
             <i:Interaction.Behaviors>
                 <ctb:EventToCommandBehavior EventName="SelectionChanged"
-                                            Command="{Binding NavigateCommand}"
-                                            CommandParameter="{Binding SelectedItem.Tag, ElementName=ShellNavigationView}" />
+                                            Command="{x:Bind ViewModel.NavigateCommand}"
+                                            CommandParameter="{x:Bind ShellNavigationView.SelectedItem.Tag}" />
             </i:Interaction.Behaviors>
             <winui:NavigationView.MenuItems>
                 <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" IsSelected="True" />
@@ -52,8 +56,9 @@
             </winui:NavigationView.MenuItems>
         </winui:NavigationView>
 
-        <ContentPresenter Grid.Row="1" Grid.Column="1"
-                          Content="{Binding CurrentContent}" />
+        <ContentPresenter Grid.Row="1"
+                          Grid.Column="1"
+                          Content="{x:Bind ViewModel.CurrentContent}" />
 
         <Grid Grid.Row="1" Grid.Column="2" MinWidth="360">
             <VisualStateManager.VisualStateGroups>
@@ -78,43 +83,130 @@
             </VisualStateManager.VisualStateGroups>
 
             <Border x:Name="RightPane" Padding="12">
-                <ContentPresenter Content="{Binding CurrentDetail}" />
+                <ContentPresenter Content="{x:Bind ViewModel.CurrentDetail}" />
             </Border>
         </Grid>
 
-        <winui:InfoBar Grid.Row="2" Grid.ColumnSpan="3"
-                       IsOpen="{Binding IsInfoBarOpen, Mode=TwoWay}"
-                       Message="{Binding StatusMessage}" />
+        <winui:InfoBar Grid.Row="2"
+                       Grid.ColumnSpan="3"
+                       IsOpen="{x:Bind ViewModel.IsInfoBarOpen}"
+                       Severity="{x:Bind ViewModel.HasError, Converter={StaticResource BoolToSeverityConverter}}"
+                       Message="{x:Bind ViewModel.StatusMessage}" />
 
-        <Grid Grid.RowSpan="3" Grid.ColumnSpan="3"
+        <Grid x:Name="SearchOverlayRoot"
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
               Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-              Visibility="{Binding Search.IsOpen, Converter={StaticResource BoolToVisibility}}">
-            <Border MaxWidth="900" Margin="100"
-                    HorizontalAlignment="Center" VerticalAlignment="Top"
+              Visibility="{x:Bind ViewModel.Search.IsOpen, Converter={StaticResource BoolToVisibility}}"
+              IsHitTestVisible="{x:Bind ViewModel.Search.IsOpen}">
+            <Border MaxWidth="900"
+                    Margin="100"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="12" Padding="16">
-                <StackPanel Spacing="8">
-                    <AutoSuggestBox PlaceholderText="Hledat..."
-                                    QueryIcon="Find"
-                                    Text="{Binding Search.QueryText, Mode=TwoWay}"
-                                    ItemsSource="{Binding Search.Suggestions}"
-                                    QuerySubmitted="{x:Bind ViewModel.Search.OnQuerySubmitted}"
-                                    SuggestionChosen="{x:Bind ViewModel.Search.OnSuggestionChosen}" />
-                    <winui:ListView ItemsSource="{Binding Search.Results}">
-                        <winui:ListView.ItemTemplate>
-                            <DataTemplate x:DataType="contracts:SearchHitDto">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{x:Bind Snippet}" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </winui:ListView.ItemTemplate>
-                    </winui:ListView>
-                </StackPanel>
+                    CornerRadius="12"
+                    Padding="16">
+                <Grid RowSpacing="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <AutoSuggestBox Grid.Column="0"
+                                        PlaceholderText="Hledat..."
+                                        QueryIcon="Find"
+                                        Text="{x:Bind ViewModel.Search.QueryText, Mode=TwoWay}"
+                                        ItemsSource="{x:Bind ViewModel.Search.Suggestions}">
+                            <i:Interaction.Behaviors>
+                                <ctb:EventToCommandBehavior EventName="TextChanged"
+                                                            Command="{x:Bind ViewModel.Search.TextChangedCommand}" />
+                                <ctb:EventToCommandBehavior EventName="QuerySubmitted"
+                                                            Command="{x:Bind ViewModel.Search.QuerySubmittedCommand}" />
+                                <ctb:EventToCommandBehavior EventName="SuggestionChosen"
+                                                            Command="{x:Bind ViewModel.Search.SuggestionChosenCommand}" />
+                            </i:Interaction.Behaviors>
+                        </AutoSuggestBox>
+
+                        <Button Grid.Column="1"
+                                Content="Zavřít"
+                                Command="{x:Bind ViewModel.Search.CloseCommand}" />
+                    </Grid>
+
+                    <Grid Grid.Row="1" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Results}"
+                                        SelectionMode="None">
+                            <winui:ListView.ItemTemplate>
+                                <DataTemplate x:DataType="contracts:SearchHitDto">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind Snippet}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </winui:ListView.ItemTemplate>
+                        </winui:ListView>
+
+                        <StackPanel Grid.Column="1" Spacing="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Oblíbené" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Favorites.Items}"
+                                                SelectionMode="None"
+                                                IsItemClickEnabled="True">
+                                    <i:Interaction.Behaviors>
+                                        <ctb:EventToCommandBehavior EventName="ItemClick"
+                                                                    Command="{x:Bind ViewModel.Search.UseFavoriteCommand}"
+                                                                    CommandParameterPath="ClickedItem" />
+                                    </i:Interaction.Behaviors>
+                                    <winui:ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="models:SearchFavoriteItemModel">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{x:Bind QueryText}" Style="{ThemeResource CaptionTextBlockStyle}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </winui:ListView.ItemTemplate>
+                                </winui:ListView>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Historie" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.History.Items}"
+                                                SelectionMode="None"
+                                                IsItemClickEnabled="True">
+                                    <i:Interaction.Behaviors>
+                                        <ctb:EventToCommandBehavior EventName="ItemClick"
+                                                                    Command="{x:Bind ViewModel.Search.UseHistoryCommand}"
+                                                                    CommandParameterPath="ClickedItem" />
+                                    </i:Interaction.Behaviors>
+                                    <winui:ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="models:SearchHistoryItemModel">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{x:Bind QueryText}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{x:Bind LastQueriedUtc}"
+                                                           Style="{ThemeResource CaptionTextBlockStyle}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </winui:ListView.ItemTemplate>
+                                </winui:ListView>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
             </Border>
+
             <i:Interaction.Behaviors>
                 <ctb:EventToCommandBehavior EventName="KeyDown"
-                                            Command="{Binding Search.CloseOnEscCommand}" />
+                                            Command="{x:Bind ViewModel.Search.CloseOnEscCommand}" />
             </i:Interaction.Behaviors>
         </Grid>
     </Grid>

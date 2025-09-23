@@ -1,5 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Xaml;
+using System;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.ViewModels.Files;
 
@@ -7,18 +6,12 @@ namespace Veriado.WinUI.Views;
 
 public sealed partial class FileDetailView : UserControl
 {
-    public FileDetailView()
+    public FileDetailView(FileDetailViewModel viewModel)
     {
         InitializeComponent();
 
-        var viewModel = App.Services.GetRequiredService<FileDetailViewModel>();
-        DataContext = viewModel;
+        DataContext = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
     }
 
     public FileDetailViewModel ViewModel => (FileDetailViewModel)DataContext!;
-
-    private void SetReadOnlyFromToggle(object sender, RoutedEventArgs e)
-    {
-        ViewModel.SetReadOnlyCommand.Execute(null);
-    }
 }

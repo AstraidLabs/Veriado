@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
-using Veriado.Models.Files;
-using Veriado.Models.Search;
+using Veriado.WinUI.Models.Files;
+using Veriado.WinUI.Models.Search;
 
-namespace Veriado.Mappers;
+namespace Veriado.WinUI.Mappers;
 
 /// <summary>
 /// Provides helper extensions to convert contracts DTOs into UI-facing models.

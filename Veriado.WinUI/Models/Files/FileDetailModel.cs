@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Veriado.Contracts.Files;
 
-namespace Veriado.Models.Files;
+namespace Veriado.WinUI.Models.Files;
 
 /// <summary>
 /// Represents a presentation-friendly projection of <see cref="FileDetailDto"/>.

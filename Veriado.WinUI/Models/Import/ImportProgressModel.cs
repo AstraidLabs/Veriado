@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Veriado.Models.Import;
+namespace Veriado.WinUI.Models.Import;
 
 /// <summary>
 /// Represents the UI-facing progress of a long-running import operation.

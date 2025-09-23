@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Models.Search;
+namespace Veriado.WinUI.Models.Search;
 
 /// <summary>
 /// Represents a single entry in the user search history.

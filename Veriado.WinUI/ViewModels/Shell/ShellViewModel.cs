@@ -4,16 +4,18 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
+using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
+using Veriado.WinUI.ViewModels.Messages;
+using Veriado.WinUI.ViewModels.Search;
 using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.ViewModels;
 
-public partial class ShellViewModel : ObservableObject
+public sealed partial class ShellViewModel : ViewModelBase
 {
     private readonly IServiceProvider _services;
-    private readonly IMessenger _messenger;
 
     [ObservableProperty]
     private object? currentContent;
@@ -27,9 +29,6 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool isInfoBarOpen;
 
-    [ObservableProperty]
-    private string? statusMessage;
-
     public FilesGridViewModel Files { get; }
 
     public ImportViewModel Import { get; }
@@ -42,20 +41,34 @@ public partial class ShellViewModel : ObservableObject
         ImportViewModel import,
         SearchOverlayViewModel search,
         IMessenger messenger)
+        : base(messenger)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         Files = files ?? throw new ArgumentNullException(nameof(files));
         Import = import ?? throw new ArgumentNullException(nameof(import));
         Search = search ?? throw new ArgumentNullException(nameof(search));
-        _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
 
         CurrentContent = _services.GetRequiredService<FilesView>();
         CurrentDetail = null;
 
-        _messenger.Register<ShellViewModel, FileSelectedMessage>(this, static (recipient, message) =>
+        Messenger.Register<StatusChangedMessage>(this, (_, message) =>
         {
-            recipient.ShowFileDetail(message.FileId);
+            HasError = message.IsError;
+            StatusMessage = message.Text;
+            IsInfoBarOpen = !string.IsNullOrWhiteSpace(message.Text);
         });
+
+        Messenger.Register<OpenFileDetailMessage>(this, (_, message) =>
+        {
+            ShowFileDetail(message.FileId);
+        });
+    }
+
+    protected override bool BroadcastStatusChanges => false;
+
+    partial void OnStatusMessageChanged(string? value)
+    {
+        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
     }
 
     partial void OnSelectedNavItemChanged(object? value)
@@ -73,12 +86,15 @@ public partial class ShellViewModel : ObservableObject
         {
             case "Files":
                 CurrentContent = _services.GetRequiredService<FilesView>();
+                CurrentDetail = null;
                 break;
             case "Import":
                 CurrentContent = _services.GetRequiredService<ImportView>();
+                CurrentDetail = null;
                 break;
             case "Settings":
                 CurrentContent = _services.GetRequiredService<SettingsView>();
+                CurrentDetail = null;
                 break;
         }
     }
@@ -91,9 +107,11 @@ public partial class ShellViewModel : ObservableObject
         }
 
         var view = _services.GetRequiredService<FileDetailView>();
-        view.ViewModel.LoadCommand.Execute(fileId);
         CurrentDetail = view;
+
+        if (view.DataContext is FileDetailViewModel detailViewModel)
+        {
+            _ = detailViewModel.LoadCommand.ExecuteAsync(fileId);
+        }
     }
 }
-
-public sealed record FileSelectedMessage(Guid FileId);
