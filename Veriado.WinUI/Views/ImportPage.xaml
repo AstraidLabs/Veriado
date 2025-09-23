@@ -17,19 +17,51 @@
   </i:Interaction.Behaviors>
 
   <Grid Padding="24" RowSpacing="16">
-    <StackPanel Spacing="12">
+    <StackPanel Spacing="16">
       <TextBlock Text="Import souborů" Style="{StaticResource SectionTitleTextBlockStyle}" />
-      <ProgressBar Value="{Binding Progress}" Maximum="100" />
-      <StackPanel Orientation="Horizontal" Spacing="12">
-        <Button x:Name="StartButton" Content="Spustit import" Command="{Binding StartImportCommand}" />
-        <Button Content="Reset" Command="{Binding ResetCommand}" />
+
+      <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <TextBox Width="320" Text="{Binding SelectedFolderPath, Mode=TwoWay}" PlaceholderText="Vyberte složku" IsReadOnly="True" />
+        <Button Content="Vybrat složku" Command="{Binding BrowseFolderCommand}" />
       </StackPanel>
+
+      <Grid ColumnSpacing="12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="0" Spacing="8">
+          <TextBlock Text="Výchozí autor" />
+          <TextBox Text="{Binding DefaultAuthor, Mode=TwoWay}" />
+          <TextBlock Text="Maska souborů" Margin="0,12,0,0" />
+          <TextBox Text="{Binding SearchPattern, Mode=TwoWay}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="8">
+          <CheckBox Content="Včetně podadresářů" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+          <CheckBox Content="Extrahovat obsah" IsChecked="{Binding ExtractContent, Mode=TwoWay}" />
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="Paralelní úlohy" VerticalAlignment="Center" />
+            <muxc:NumberBox Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}" Minimum="1" Maximum="8" Width="96" />
+          </StackPanel>
+        </StackPanel>
+      </Grid>
+
+      <ProgressBar Value="{Binding Progress.Percent}" Maximum="100" />
+      <TextBlock Text="{Binding Progress.Processed, StringFormat='Zpracováno: {0}'}" />
+
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <Button x:Name="StartButton" Content="Spustit import" Command="{Binding ImportCommand}" />
+        <Button Content="Reset" Command="{Binding ResetCommand}" />
+        <ProgressRing Width="24" Height="24" IsActive="{Binding Progress.IsRunning}" />
+      </StackPanel>
+
       <InfoBar
           IsOpen="True"
           Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
           Title="Stav">
         <StackPanel>
           <TextBlock x:Name="StatusMessageText" Text="{Binding StatusMessage}" />
+          <TextBlock Text="{Binding Progress.ErrorsCount, StringFormat='Chyb: {0}'}" />
         </StackPanel>
       </InfoBar>
     </StackPanel>
@@ -38,7 +70,7 @@
       <VisualStateGroup>
         <VisualState x:Name="Completed">
           <VisualState.StateTriggers>
-            <trig:ComparisonStateTrigger Comparison="GreaterThanOrEqual" Value="100" Source="{Binding Progress}" />
+            <trig:ComparisonStateTrigger Comparison="GreaterThanOrEqual" Value="100" Source="{Binding Progress.Percent}" />
           </VisualState.StateTriggers>
           <VisualState.Setters>
             <Setter Target="StatusMessageText.Text" Value="Import dokončen." />

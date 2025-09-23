@@ -16,23 +16,49 @@
 
     <StackPanel Orientation="Horizontal" Spacing="12">
       <Button Content="Zpět" Command="{Binding CloseCommand}" />
-      <TextBlock Text="{Binding FileName}" Style="{StaticResource SectionTitleTextBlockStyle}" />
+      <TextBlock Text="{Binding Detail.Name}" Style="{StaticResource SectionTitleTextBlockStyle}" />
+      <ProgressRing Width="24" Height="24" IsActive="{Binding IsBusy}" />
     </StackPanel>
 
-    <InfoBar
-        Grid.Row="1"
-        x:Name="DetailStatusInfoBar"
-        IsOpen="True"
-        Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
-        Title="Stav detailu">
-      <i:Interaction.Behaviors>
-        <core:EventTriggerBehavior EventName="Loaded">
-          <core:CallMethodAction TargetObject="{Binding ElementName=DetailStatusInfoBar}" MethodName="BringIntoView" />
-        </core:EventTriggerBehavior>
-      </i:Interaction.Behaviors>
-      <StackPanel>
-        <TextBlock Text="{Binding StatusMessage}" />
+    <Grid Grid.Row="1" ColumnSpacing="24">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="200" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <StackPanel Grid.Column="0" Spacing="8">
+        <TextBlock Text="Autor" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+        <TextBlock Text="{Binding Detail.Author}" />
+        <TextBlock Text="Typ" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,12,0,0" />
+        <TextBlock Text="{Binding Detail.Mime}" />
+        <TextBlock Text="Velikost" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,12,0,0" />
+        <TextBlock Text="{Binding Detail.SizeBytes}" />
+        <TextBlock Text="Platí do" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,12,0,0" />
+        <TextBlock Text="{Binding Detail.ValidUntilUtc, StringFormat='{}{0:G}'}" />
       </StackPanel>
-    </InfoBar>
+
+      <StackPanel Grid.Column="1" Spacing="12">
+        <InfoBar
+            x:Name="DetailStatusInfoBar"
+            IsOpen="True"
+            Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
+            Title="Stav detailu">
+          <i:Interaction.Behaviors>
+            <core:EventTriggerBehavior EventName="Loaded">
+              <core:CallMethodAction TargetObject="{Binding ElementName=DetailStatusInfoBar}" MethodName="BringIntoView" />
+            </core:EventTriggerBehavior>
+          </i:Interaction.Behaviors>
+          <StackPanel>
+            <TextBlock Text="{Binding StatusMessage}" />
+          </StackPanel>
+        </InfoBar>
+
+        <StackPanel>
+          <TextBlock Text="Systémová metadata" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+          <TextBlock Text="Vytvořeno: {Binding Detail.SystemMetadata.CreatedUtc, StringFormat='{}{0:G}'}" />
+          <TextBlock Text="Změněno: {Binding Detail.LastModifiedUtc, StringFormat='{}{0:G}'}" />
+          <TextBlock Text="Verze: {Binding Detail.Version}" />
+        </StackPanel>
+      </StackPanel>
+    </Grid>
   </Grid>
 </Page>
