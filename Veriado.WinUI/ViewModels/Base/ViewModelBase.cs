@@ -14,40 +14,33 @@ public abstract partial class ViewModelBase : ObservableObject
 {
     private readonly IMessenger _messenger;
     private readonly IStatusService _statusService;
+    private readonly IDispatcherService _dispatcher;
+    private readonly IExceptionHandler _exceptionHandler;
     private CancellationTokenSource? _cancellationSource;
 
-    protected ViewModelBase(IMessenger messenger, IStatusService statusService)
+    protected ViewModelBase(
+        IMessenger messenger,
+        IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler)
     {
         _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
         _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
     }
 
-    /// <summary>
-    /// Gets the messenger instance used to communicate between view models.
-    /// </summary>
     protected IMessenger Messenger => _messenger;
 
-    /// <summary>
-    /// Gets the status service used to broadcast status updates.
-    /// </summary>
     protected IStatusService StatusService => _statusService;
 
-    /// <summary>
-    /// Gets a value indicating whether status changes should be broadcast through the messenger.
-    /// </summary>
-    protected virtual bool BroadcastStatusChanges => true;
+    protected IDispatcherService Dispatcher => _dispatcher;
 
     [ObservableProperty]
     private bool isBusy;
 
     [ObservableProperty]
     private bool hasError;
-
-    [ObservableProperty]
-    private string? statusMessage;
-
-    [ObservableProperty]
-    private bool isInfoBarOpen;
 
     /// <summary>
     /// Attempts to cancel the currently running operation, if any.
@@ -77,75 +70,48 @@ public abstract partial class ViewModelBase : ObservableObject
             return;
         }
 
-        HasError = false;
-        if (!string.IsNullOrWhiteSpace(busyMessage))
-        {
-            StatusMessage = busyMessage;
-        }
-
         using var cts = new CancellationTokenSource();
         _cancellationSource = cts;
-        IsBusy = true;
+
+        await _dispatcher.RunAsync(() =>
+        {
+            HasError = false;
+            IsBusy = true;
+        }).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(busyMessage))
+        {
+            _statusService.Info(busyMessage);
+        }
 
         try
         {
             await action(cts.Token).ConfigureAwait(false);
+            await _dispatcher.RunAsync(() => HasError = false).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            HasError = false;
-            StatusMessage = "Operace byla zrušena.";
+            await _dispatcher.RunAsync(() => HasError = false).ConfigureAwait(false);
+            _statusService.Info("Operace byla zrušena.");
         }
         catch (Exception ex)
         {
-            HasError = true;
-            StatusMessage = ex.Message;
+            var message = _exceptionHandler.Handle(ex);
+            await _dispatcher.RunAsync(() => HasError = true).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                _statusService.Error(message);
+            }
         }
         finally
         {
-            IsBusy = false;
             _cancellationSource = null;
+            await _dispatcher.RunAsync(() => IsBusy = false).ConfigureAwait(false);
 
-            if (!HasError && !string.IsNullOrWhiteSpace(busyMessage) && StatusMessage == busyMessage)
+            if (!HasError && !string.IsNullOrWhiteSpace(busyMessage))
             {
-                StatusMessage = null;
+                _statusService.Clear();
             }
-        }
-    }
-
-    partial void OnStatusMessageChanged(string? value)
-    {
-        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
-
-        if (BroadcastStatusChanges)
-        {
-            PublishStatus();
-        }
-    }
-
-    partial void OnHasErrorChanged(bool value)
-    {
-        if (BroadcastStatusChanges)
-        {
-            PublishStatus();
-        }
-    }
-
-    private void PublishStatus()
-    {
-        if (string.IsNullOrWhiteSpace(StatusMessage))
-        {
-            _statusService.Clear();
-            return;
-        }
-
-        if (HasError)
-        {
-            _statusService.ShowError(StatusMessage);
-        }
-        else
-        {
-            _statusService.ShowInfo(StatusMessage);
         }
     }
 }

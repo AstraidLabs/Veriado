@@ -15,8 +15,13 @@ public sealed partial class HistoryViewModel : ViewModelBase
 {
     private readonly IFileQueryService _fileQueryService;
 
-    public HistoryViewModel(IMessenger messenger, IStatusService statusService, IFileQueryService fileQueryService)
-        : base(messenger, statusService)
+    public HistoryViewModel(
+        IMessenger messenger,
+        IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
+        IFileQueryService fileQueryService)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
     }
@@ -39,9 +44,14 @@ public sealed partial class HistoryViewModel : ViewModelBase
                 Items.Add(entry);
             }
 
-            StatusMessage = Items.Count == 0
-                ? "Historie je prázdná."
-                : $"Načteno {Items.Count} položek historie.";
+            if (Items.Count == 0)
+            {
+                StatusService.Info("Historie je prázdná.");
+            }
+            else
+            {
+                StatusService.Info($"Načteno {Items.Count} položek historie.");
+            }
         }, "Načítám historii hledání…");
     }
 }

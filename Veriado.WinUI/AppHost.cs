@@ -13,6 +13,7 @@ using Veriado.WinUI.ViewModels;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
 using Veriado.WinUI.ViewModels.Search;
+using Veriado.WinUI.ViewModels.Settings;
 
 namespace Veriado;
 
@@ -38,6 +39,16 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IMessenger>(messenger);
 
                 services.AddSingleton<IWindowProvider, WindowProvider>();
+                services.AddSingleton<ISettingsService, JsonSettingsService>();
+                services.AddSingleton<IThemeService, ThemeService>();
+                services.AddSingleton<IDispatcherService, DispatcherService>();
+                services.AddSingleton<IExceptionHandler, ExceptionHandler>();
+                services.AddSingleton<IKeyboardShortcutsService, KeyboardShortcutsService>();
+                services.AddSingleton<IClipboardService, ClipboardService>();
+                services.AddSingleton<IShareService, ShareService>();
+                services.AddSingleton<IPreviewService, PreviewService>();
+                services.AddSingleton<ICacheService, MemoryCacheService>();
+                services.AddSingleton<IHotStateService, HotStateService>();
                 services.AddSingleton<INavigationService, NavigationService>();
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<IPickerService, PickerService>();
@@ -50,6 +61,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<ImportViewModel>();
                 services.AddSingleton<FavoritesViewModel>();
                 services.AddSingleton<HistoryViewModel>();
+                services.AddSingleton<SettingsViewModel>();
 
                 services.AddWinUiShell();
 
@@ -63,6 +75,7 @@ internal sealed class AppHost : IAsyncDisposable
 
         await host.StartAsync().ConfigureAwait(false);
         await host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
+        await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
         return new AppHost(host);
     }
 

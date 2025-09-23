@@ -1,10 +1,8 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IPickerService
 {
-    Task<string?> PickFolderAsync(CancellationToken ct);
-    Task<string[]?> PickFilesAsync(string[]? extensions, CancellationToken ct);
+    System.Threading.Tasks.Task<string?> PickFolderAsync();
+
+    System.Threading.Tasks.Task<string[]?> PickFilesAsync(string[]? extensions = null, bool multiple = true);
 }

@@ -13,7 +13,12 @@ public sealed class WindowProvider : IWindowProvider
         _window = window ?? throw new ArgumentNullException(nameof(window));
     }
 
-    public nint GetWindowHandle()
+    public Window? TryGetWindow()
+    {
+        return _window;
+    }
+
+    public nint GetHwnd()
     {
         if (_window is null)
         {
