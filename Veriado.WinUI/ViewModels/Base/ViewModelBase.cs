@@ -26,7 +26,10 @@ public abstract partial class ViewModelBase : ObservableObject
         }
 
         HasError = false;
-        StatusMessage = busyMessage;
+        if (!string.IsNullOrWhiteSpace(busyMessage))
+        {
+            StatusMessage = busyMessage;
+        }
 
         using var cts = new CancellationTokenSource();
         Cts = cts;
@@ -35,7 +38,10 @@ public abstract partial class ViewModelBase : ObservableObject
         try
         {
             await action(cts.Token).ConfigureAwait(false);
-            StatusMessage = null;
+            if (!string.IsNullOrWhiteSpace(busyMessage) && StatusMessage == busyMessage)
+            {
+                StatusMessage = null;
+            }
         }
         catch (OperationCanceledException)
         {

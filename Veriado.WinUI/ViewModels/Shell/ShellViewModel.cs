@@ -1,10 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Veriado.Services;
+using Veriado.ViewModels.Base;
 
 namespace Veriado.ViewModels.Shell;
 
-public sealed partial class ShellViewModel : ObservableObject
+public sealed partial class ShellViewModel : ViewModelBase
 {
     private readonly INavigationService _navigationService;
 

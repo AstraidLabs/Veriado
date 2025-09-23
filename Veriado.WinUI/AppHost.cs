@@ -2,10 +2,16 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Veriado.Application.DependencyInjection;
 using Veriado.Converters;
+using Veriado.Infrastructure.DependencyInjection;
+using Veriado.Mapping.DependencyInjection;
+using Veriado.Presentation.Services;
 using Veriado.Services;
+using Veriado.Services.DependencyInjection;
 using Veriado.ViewModels.Files;
 using Veriado.ViewModels.Import;
+using Veriado.ViewModels.Search;
 using Veriado.ViewModels.Shell;
 
 namespace Veriado;
@@ -31,12 +37,20 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddTransient<FilesGridViewModel>();
                 services.AddTransient<FileDetailViewModel>();
                 services.AddTransient<ImportViewModel>();
+                services.AddTransient<HistoryViewModel>();
+                services.AddTransient<FavoritesViewModel>();
 
                 services.AddSingleton<BoolToSeverityConverter>();
 
                 services.AddSingleton<INavigationService, NavigationService>();
+                services.AddSingleton<IPickerService, PickerService>();
 
-                // TODO: Register application, infrastructure, mapping, and services layers when wiring the full stack.
+                services.AddApplication();
+                services.AddVeriadoMapping();
+                services.AddInfrastructure();
+                services.AddVeriadoServices();
+
+                // TODO: Configure infrastructure options (database path, etc.) when wiring the full stack.
             })
             .Build();
 

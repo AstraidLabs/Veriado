@@ -1,23 +1,51 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Veriado.Contracts.Common;
+using Veriado.Contracts.Files;
+using Veriado.Mappers;
+using Veriado.Models.Files;
 using Veriado.Services;
+using Veriado.Services.Files;
 using Veriado.ViewModels.Base;
 
 namespace Veriado.ViewModels.Files;
 
 public sealed partial class FilesGridViewModel : ViewModelBase
 {
+    private readonly IFileQueryService _fileQueryService;
     private readonly INavigationService _navigationService;
 
-    public FilesGridViewModel(INavigationService navigationService)
+    public FilesGridViewModel(IFileQueryService fileQueryService, INavigationService navigationService)
     {
-        _navigationService = navigationService;
+        _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
+        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+
+        UpdateCreatedRange();
     }
 
     public ObservableCollection<FileListItemModel> Items { get; } = new();
+
+    [ObservableProperty]
+    private string? queryText;
+
+    [ObservableProperty]
+    private int pageIndex;
+
+    [ObservableProperty]
+    private int pageSize = 50;
+
+    [ObservableProperty]
+    private FileSortSpecDto? sort;
+
+    [ObservableProperty]
+    private DateTimeOffset? createdFrom;
+
+    [ObservableProperty]
+    private DateTimeOffset? createdTo;
 
     [ObservableProperty]
     private int createdDaysFrom;
@@ -30,32 +58,83 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     {
         await SafeExecuteAsync(async ct =>
         {
-            await Task.Delay(150, ct).ConfigureAwait(false);
+            var result = await _fileQueryService.GetGridAsync(BuildQuery(), ct).ConfigureAwait(false);
 
             Items.Clear();
-            for (var i = 0; i < 9; i++)
+            foreach (var dto in result.Items)
             {
-                Items.Add(new FileListItemModel
-                {
-                    Id = Guid.NewGuid(),
-                    Name = $"Dokument {i + 1:00}"
-                });
+                Items.Add(dto.ToFileListItemModel());
             }
-        }, "Načítám položky…");
 
-        StatusMessage = $"Načteno {Items.Count} položek.";
+            StatusMessage = result.TotalCount == 0
+                ? "Nebyla nalezena žádná data."
+                : $"Načteno {Items.Count} z {result.TotalCount} položek.";
+        }, "Načítám položky…");
     }
 
     [RelayCommand]
     private void OpenDetail(Guid id)
     {
+        if (id == Guid.Empty)
+        {
+            return;
+        }
+
         _navigationService.NavigateToFileDetail(id);
     }
-}
 
-public sealed class FileListItemModel : ObservableObject
-{
-    public Guid Id { get; init; }
+    private FileGridQueryDto BuildQuery()
+    {
+        var effectivePage = PageIndex < 0 ? 0 : PageIndex;
+        var effectiveSize = PageSize <= 0 ? 50 : PageSize;
 
-    public string Name { get; init; } = string.Empty;
+        return new FileGridQueryDto
+        {
+            Text = string.IsNullOrWhiteSpace(QueryText) ? null : QueryText,
+            CreatedFromUtc = CreatedFrom,
+            CreatedToUtc = CreatedTo,
+            Sort = Sort is not null ? new List<FileSortSpecDto> { Sort } : new List<FileSortSpecDto>(),
+            Page = new PageRequest
+            {
+                Page = effectivePage + 1,
+                PageSize = effectiveSize,
+            },
+        };
+    }
+
+    partial void OnCreatedDaysFromChanged(int value) => UpdateCreatedRange();
+
+    partial void OnCreatedDaysToChanged(int value) => UpdateCreatedRange();
+
+    private void UpdateCreatedRange()
+    {
+        var lower = CreatedDaysFrom < 0 ? 0 : CreatedDaysFrom;
+        var upper = CreatedDaysTo < 0 ? 0 : CreatedDaysTo;
+
+        if (upper < lower)
+        {
+            upper = lower;
+            if (CreatedDaysTo != upper)
+            {
+                CreatedDaysTo = upper;
+                return;
+            }
+        }
+
+        if (lower != CreatedDaysFrom)
+        {
+            CreatedDaysFrom = lower;
+            return;
+        }
+
+        if (upper != CreatedDaysTo)
+        {
+            CreatedDaysTo = upper;
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        CreatedFrom = now.AddDays(-upper);
+        CreatedTo = now.AddDays(-lower);
+    }
 }

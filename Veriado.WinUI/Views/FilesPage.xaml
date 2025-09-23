@@ -10,6 +10,7 @@
     xmlns:trig="using:CommunityToolkit.WinUI.Triggers"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:models="using:Veriado.Models.Files"
     xmlns:vm="using:Veriado.ViewModels.Files"
     NavigationCacheMode="Enabled"
     x:DataType="vm:FilesGridViewModel">
@@ -44,7 +45,7 @@
               MinRowSpacing="12" />
         </muxc:ItemsRepeater.Layout>
         <muxc:ItemsRepeater.ItemTemplate>
-          <DataTemplate x:DataType="vm:FileListItemModel">
+          <DataTemplate x:DataType="models:FileListItemModel">
             <Border
                 Padding="16"
                 Margin="8"
@@ -58,7 +59,8 @@
               </i:Interaction.Behaviors>
               <StackPanel Spacing="8">
                 <TextBlock Text="{Binding Name}" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                <TextBlock Text="{Binding Id}" Opacity="0.6" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Author}" Opacity="0.8" />
+                <TextBlock Text="{Binding LastModifiedUtc, StringFormat='{}{0:G}'}" Opacity="0.6" />
               </StackPanel>
             </Border>
           </DataTemplate>
