@@ -22,9 +22,6 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     private string? searchText;
 
     [ObservableProperty]
-    private bool isInfoBarOpen;
-
-    [ObservableProperty]
     private int searchModeIndex;
 
     [ObservableProperty]
@@ -93,8 +90,4 @@ public sealed partial class FilesGridViewModel : ViewModelBase
         Messenger.Send(new OpenFileDetailMessage(id));
     }
 
-    partial void OnStatusMessageChanged(string? value)
-    {
-        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
-    }
 }

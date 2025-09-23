@@ -25,9 +25,6 @@ public sealed partial class ShellViewModel : ViewModelBase
     [ObservableProperty]
     private object? selectedNavItem;
 
-    [ObservableProperty]
-    private bool isInfoBarOpen;
-
     public FilesGridViewModel Files { get; }
 
     public ImportViewModel Import { get; }
@@ -54,7 +51,6 @@ public sealed partial class ShellViewModel : ViewModelBase
         {
             HasError = message.IsError;
             StatusMessage = message.Text;
-            IsInfoBarOpen = !string.IsNullOrWhiteSpace(message.Text);
         });
 
         Messenger.Register<OpenFileDetailMessage>(this, (_, message) =>
@@ -64,11 +60,6 @@ public sealed partial class ShellViewModel : ViewModelBase
     }
 
     protected override bool BroadcastStatusChanges => false;
-
-    partial void OnStatusMessageChanged(string? value)
-    {
-        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
-    }
 
     partial void OnSelectedNavItemChanged(object? value)
     {

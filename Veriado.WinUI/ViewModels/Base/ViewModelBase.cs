@@ -39,6 +39,9 @@ public abstract partial class ViewModelBase : ObservableObject
     [ObservableProperty]
     private string? statusMessage;
 
+    [ObservableProperty]
+    private bool isInfoBarOpen;
+
     /// <summary>
     /// Attempts to cancel the currently running operation, if any.
     /// </summary>
@@ -105,6 +108,8 @@ public abstract partial class ViewModelBase : ObservableObject
 
     partial void OnStatusMessageChanged(string? value)
     {
+        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
+
         if (BroadcastStatusChanges)
         {
             _messenger.Send(new StatusChangedMessage(value, HasError));

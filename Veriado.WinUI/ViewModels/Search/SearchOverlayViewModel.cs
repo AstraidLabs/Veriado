@@ -10,7 +10,6 @@ using Microsoft.UI.Xaml.Controls;
 using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Search;
 using Veriado.WinUI.ViewModels.Base;
-using Veriado.WinUI.Models.Search;
 using Windows.System;
 
 namespace Veriado.WinUI.ViewModels.Search;
@@ -130,7 +129,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task UseFavoriteAsync(SearchFavoriteItemModel? favorite)
+    private async Task UseFavoriteAsync(SearchFavoriteItem? favorite)
     {
         if (favorite is null)
         {
@@ -148,7 +147,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task UseHistoryAsync(SearchHistoryItemModel? historyItem)
+    private async Task UseHistoryAsync(SearchHistoryEntry? historyItem)
     {
         if (historyItem is null)
         {

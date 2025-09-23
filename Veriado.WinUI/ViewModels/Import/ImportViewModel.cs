@@ -35,9 +35,6 @@ public sealed partial class ImportViewModel : ViewModelBase
     private int maxDegreeOfParallelism = 4;
 
     [ObservableProperty]
-    private bool isInfoBarOpen;
-
-    [ObservableProperty]
     private string? lastError;
 
     [ObservableProperty]
@@ -153,8 +150,4 @@ public sealed partial class ImportViewModel : ViewModelBase
         IsImporting = false;
     }
 
-    partial void OnStatusMessageChanged(string? value)
-    {
-        IsInfoBarOpen = !string.IsNullOrWhiteSpace(value);
-    }
 }

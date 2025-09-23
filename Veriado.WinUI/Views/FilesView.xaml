@@ -30,10 +30,10 @@
                 <DataTemplate x:DataType="contracts:FileSummaryDto">
                     <Border Padding="12">
                         <StackPanel>
-                            <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
-                            <TextBlock Text="{x:Bind Mime}" />
+                            <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Bind Mime, Mode=OneWay}" />
                             <Button Content="Otevřít detail"
-                                    Command="{x:Bind ViewModel.OpenDetailCommand, Mode=OneWay}"
+                                    Command="{x:Bind Root.ViewModel.OpenDetailCommand, Mode=OneWay}"
                                     CommandParameter="{x:Bind Id, Mode=OneWay}" />
                         </StackPanel>
                     </Border>
