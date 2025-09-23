@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -7,7 +8,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Application.Search.Abstractions;
 using Veriado.Contracts.Search;
 using Veriado.WinUI.ViewModels.Base;
 using Windows.System;
@@ -16,20 +16,14 @@ namespace Veriado.WinUI.ViewModels.Search;
 
 public sealed partial class SearchOverlayViewModel : ViewModelBase
 {
-    private readonly ISearchQueryService _search;
-    private readonly FavoritesViewModel _favorites;
-    private readonly HistoryViewModel _history;
+    private const int SearchResultLimit = 50;
+    private const int HistoryTake = 50;
+    private readonly ISearchFacade _searchFacade;
 
-    public SearchOverlayViewModel(
-        IMessenger messenger,
-        ISearchQueryService search,
-        FavoritesViewModel favorites,
-        HistoryViewModel history)
+    public SearchOverlayViewModel(IMessenger messenger, ISearchFacade searchFacade)
         : base(messenger)
     {
-        _search = search ?? throw new ArgumentNullException(nameof(search));
-        _favorites = favorites ?? throw new ArgumentNullException(nameof(favorites));
-        _history = history ?? throw new ArgumentNullException(nameof(history));
+        _searchFacade = searchFacade ?? throw new ArgumentNullException(nameof(searchFacade));
     }
 
     [ObservableProperty]
@@ -42,18 +36,21 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
 
     public ObservableCollection<SearchHitDto> Results { get; } = new();
 
-    public FavoritesViewModel Favorites => _favorites;
+    public SearchSection<SearchFavoriteItem> Favorites { get; } = new();
 
-    public HistoryViewModel History => _history;
+    public SearchSection<SearchHistoryEntry> History { get; } = new();
 
     [RelayCommand]
     private async Task OpenAsync()
     {
         IsOpen = true;
         StatusMessage = null;
-        await Task.WhenAll(
-            _favorites.LoadCommand.ExecuteAsync(null),
-            _history.LoadCommand.ExecuteAsync(null));
+        await SafeExecuteAsync(async ct =>
+        {
+            await Task.WhenAll(
+                LoadFavoritesAsync(ct),
+                LoadHistoryAsync(ct)).ConfigureAwait(false);
+        }).ConfigureAwait(false);
     }
 
     [RelayCommand]
@@ -85,7 +82,14 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
             return;
         }
 
-        await ExecuteSearchAsync(QueryText!).ConfigureAwait(false);
+        var query = QueryText!;
+        await ExecuteSearchAsync(
+            query,
+            afterSearch: async ct =>
+            {
+                await _searchFacade.AddToHistoryAsync(query, ct).ConfigureAwait(false);
+                await LoadHistoryAsync(ct).ConfigureAwait(false);
+            }).ConfigureAwait(false);
     }
 
     [RelayCommand]
@@ -105,12 +109,12 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
         var current = QueryText!;
         var lower = current.ToLowerInvariant();
 
-        var favoriteMatches = _favorites.Items
+        var favoriteMatches = Favorites.Items
             .Select(item => item.Name)
             .Where(name => !string.IsNullOrWhiteSpace(name) && name.Contains(lower, StringComparison.OrdinalIgnoreCase))
             .Select(name => name);
 
-        var historyMatches = _history.Items
+        var historyMatches = History.Items
             .Select(item => item.QueryText)
             .Where(text => !string.IsNullOrWhiteSpace(text) && text.Contains(lower, StringComparison.OrdinalIgnoreCase))
             .Select(text => text!);
@@ -140,10 +144,22 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
             ? favorite.MatchQuery
             : favorite.QueryText;
 
-        if (!string.IsNullOrWhiteSpace(QueryText))
+        if (string.IsNullOrWhiteSpace(QueryText))
         {
-            await ExecuteSearchAsync(QueryText!).ConfigureAwait(false);
+            return;
         }
+
+        var query = QueryText!;
+        var definition = new SearchFavoriteDefinition(
+            favorite.Name,
+            favorite.MatchQuery,
+            favorite.QueryText,
+            favorite.IsFuzzy);
+
+        await ExecuteSearchAsync(
+            query,
+            beforeSearch: ct => _searchFacade.UseFavoriteAsync(definition, ct),
+            afterSearch: LoadHistoryAsync).ConfigureAwait(false);
     }
 
     [RelayCommand]
@@ -156,29 +172,83 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
 
         QueryText = historyItem.QueryText ?? historyItem.MatchQuery;
 
-        if (!string.IsNullOrWhiteSpace(QueryText))
+        if (string.IsNullOrWhiteSpace(QueryText))
         {
-            await ExecuteSearchAsync(QueryText!).ConfigureAwait(false);
+            return;
         }
+
+        var query = QueryText!;
+        await ExecuteSearchAsync(query, afterSearch: LoadHistoryAsync).ConfigureAwait(false);
     }
 
-    private async Task ExecuteSearchAsync(string query)
+    private Task ExecuteSearchAsync(
+        string query,
+        Func<CancellationToken, Task>? beforeSearch = null,
+        Func<CancellationToken, Task>? afterSearch = null)
     {
-        await SafeExecuteAsync(ct => SearchAsync(query, ct), "Vyhledávám…").ConfigureAwait(false);
+        return SafeExecuteAsync(async ct =>
+        {
+            if (beforeSearch is not null)
+            {
+                await beforeSearch(ct).ConfigureAwait(false);
+            }
+
+            await SearchAsync(query, ct).ConfigureAwait(false);
+
+            if (afterSearch is not null)
+            {
+                await afterSearch(ct).ConfigureAwait(false);
+            }
+        }, "Vyhledávám…");
+    }
+
+    private async Task LoadFavoritesAsync(CancellationToken ct)
+    {
+        var favorites = await _searchFacade.GetFavoritesAsync(ct).ConfigureAwait(false);
+        ReplaceItems(Favorites.Items, favorites);
+    }
+
+    private async Task LoadHistoryAsync(CancellationToken ct)
+    {
+        var history = await _searchFacade.GetHistoryAsync(HistoryTake, ct).ConfigureAwait(false);
+        ReplaceItems(History.Items, history);
     }
 
     private async Task SearchAsync(string query, CancellationToken ct)
     {
         Results.Clear();
 
-        var hits = await _search.SearchAsync(query, 50, ct).ConfigureAwait(false);
-        foreach (var hit in hits)
+        var hits = await _searchFacade.SearchAsync(query, SearchResultLimit, ct).ConfigureAwait(false);
+        if (hits.Count > 0)
         {
-            Results.Add(new SearchHitDto(hit.FileId, hit.Title, hit.Mime, hit.Snippet, hit.Score, hit.LastModifiedUtc));
+            foreach (var hit in hits)
+            {
+                Results.Add(hit);
+            }
         }
 
         StatusMessage = Results.Count == 0
             ? "Nebyl nalezen žádný výsledek."
             : $"Nalezeno {Results.Count} výsledků.";
+    }
+
+    private static void ReplaceItems<T>(ObservableCollection<T> target, IReadOnlyList<T> source)
+    {
+        target.Clear();
+
+        if (source.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < source.Count; i++)
+        {
+            target.Add(source[i]);
+        }
+    }
+
+    public sealed class SearchSection<T>
+    {
+        public ObservableCollection<T> Items { get; } = new();
     }
 }
