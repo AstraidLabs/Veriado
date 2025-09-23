@@ -2,6 +2,7 @@ using System;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Input;
 using Veriado.Services.Abstractions;
+using Veriado.Services.Messages;
 using Veriado.WinUI.Services.Messages;
 
 namespace Veriado.Services;
