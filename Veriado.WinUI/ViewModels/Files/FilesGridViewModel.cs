@@ -8,12 +8,13 @@ using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
+using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.ViewModels.Messages;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
-public partial class FilesGridViewModel : ObservableObject
+public sealed partial class FilesGridViewModel : ViewModelBase
 {
-    private readonly IMessenger _messenger;
     private readonly IFileQueryService _queryService;
 
     [ObservableProperty]
@@ -22,29 +23,36 @@ public partial class FilesGridViewModel : ObservableObject
     public ObservableCollection<FileSummaryDto> Items { get; } = new();
 
     public FilesGridViewModel(IMessenger messenger, IFileQueryService queryService)
+        : base(messenger)
     {
-        _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
     }
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        var page = await _queryService.GetGridAsync(new FileGridQueryDto
+        await SafeExecuteAsync(async ct =>
         {
-            Text = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText,
-            Page = new PageRequest
+            var page = await _queryService.GetGridAsync(new FileGridQueryDto
             {
-                Page = 1,
-                PageSize = 50,
-            },
-        }, CancellationToken.None).ConfigureAwait(false);
+                Text = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText,
+                Page = new PageRequest
+                {
+                    Page = 1,
+                    PageSize = 50,
+                },
+            }, ct).ConfigureAwait(false);
 
-        Items.Clear();
-        foreach (var item in page.Items)
-        {
-            Items.Add(item);
-        }
+            Items.Clear();
+            foreach (var item in page.Items)
+            {
+                Items.Add(item);
+            }
+
+            StatusMessage = Items.Count == 0
+                ? "Žádné dokumenty neodpovídají aktuálnímu filtru."
+                : $"Načteno {Items.Count} dokumentů.";
+        }, "Načítám dokumenty…");
     }
 
     [RelayCommand]
@@ -55,6 +63,6 @@ public partial class FilesGridViewModel : ObservableObject
             return;
         }
 
-        _messenger.Send(new FileSelectedMessage(id));
+        Messenger.Send(new OpenFileDetailMessage(id));
     }
 }

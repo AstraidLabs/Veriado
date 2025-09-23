@@ -1,4 +1,4 @@
-namespace Veriado.Models.Search;
+namespace Veriado.WinUI.Models.Search;
 
 /// <summary>
 /// Represents the data required to create a new search favourite from the UI.

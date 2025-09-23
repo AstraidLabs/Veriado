@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.Models.Search;
+namespace Veriado.WinUI.Models.Search;
 
 /// <summary>
 /// Represents a saved favourite search entry exposed in the UI.

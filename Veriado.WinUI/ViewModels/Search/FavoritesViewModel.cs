@@ -4,8 +4,9 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Veriado.Contracts.Search;
-using Veriado.Mappers;
-using Veriado.Models.Search;
+using CommunityToolkit.Mvvm.Messaging;
+using Veriado.WinUI.Mappers;
+using Veriado.WinUI.Models.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
 
@@ -15,7 +16,8 @@ public sealed partial class FavoritesViewModel : ViewModelBase
 {
     private readonly IFileQueryService _fileQueryService;
 
-    public FavoritesViewModel(IFileQueryService fileQueryService)
+    public FavoritesViewModel(IMessenger messenger, IFileQueryService fileQueryService)
+        : base(messenger)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
     }
@@ -52,6 +54,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
         await SafeExecuteAsync(async ct =>
         {
             await _fileQueryService.RemoveFavoriteAsync(id, ct).ConfigureAwait(false);
+            StatusMessage = "Oblíbené vyhledávání bylo odstraněno.";
         }, "Odstraňuji oblíbené vyhledávání…");
 
         await LoadAsync();
@@ -76,6 +79,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
                 favorite.IsFuzzy);
 
             await _fileQueryService.AddFavoriteAsync(definition, ct).ConfigureAwait(false);
+            StatusMessage = "Oblíbené vyhledávání bylo uloženo.";
         }, "Ukládám oblíbené vyhledávání…");
 
         await LoadAsync();

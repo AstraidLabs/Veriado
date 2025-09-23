@@ -19,11 +19,16 @@
                          Minimum="1"
                          Maximum="16"
                          Width="200" />
-        <Button Content="Importovat" Command="{Binding ImportCommand}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Importovat" Command="{Binding ImportCommand}" />
+            <Button Content="Zrušit" Command="{Binding CancelImportCommand}" />
+        </StackPanel>
 
-        <winui:InfoBar IsOpen="{Binding IsInfoBarOpen}"
+        <winui:InfoBar IsOpen="True"
+                       Visibility="{x:Bind !string.IsNullOrEmpty(ViewModel.StatusMessage), Converter={StaticResource BoolToVisibility}}"
+                       Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
                        Message="{Binding StatusMessage}" />
-        <ProgressBar IsIndeterminate="{Binding IsImporting}"
-                     Visibility="{Binding IsImporting, Converter={StaticResource BoolToVisibility}}" />
+        <ProgressBar IsIndeterminate="{Binding IsBusy}"
+                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
     </StackPanel>
 </UserControl>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
@@ -9,37 +10,30 @@ namespace Veriado.WinUI.Services.Pickers;
 
 public sealed class WinUIPickerService : IPickerService
 {
-    private static IntPtr GetWindowHandle()
-    {
-        if (Application.Current is not App app || app.MainWindow is null)
-        {
-            throw new InvalidOperationException("Main window is not available.");
-        }
+    private static IntPtr GetWindowHandle(Window window)
+        => WindowNative.GetWindowHandle(window ?? throw new ArgumentNullException(nameof(window)));
 
-        return WindowNative.GetWindowHandle(app.MainWindow);
-    }
-
-    public async Task<string?> PickFolderAsync()
+    public async Task<string?> PickFolderAsync(Window window)
     {
         var picker = new FolderPicker();
-        InitializeWithWindow.Initialize(picker, GetWindowHandle());
+        InitializeWithWindow.Initialize(picker, GetWindowHandle(window));
         picker.FileTypeFilter.Add("*");
         var folder = await picker.PickSingleFolderAsync();
         return folder?.Path;
     }
 
-    public async Task<string[]?> PickFilesAsync(string[]? extensions = null)
+    public async Task<IReadOnlyList<string>> PickFilesAsync(Window window, string[]? filters = null)
     {
         var picker = new FileOpenPicker();
-        InitializeWithWindow.Initialize(picker, GetWindowHandle());
+        InitializeWithWindow.Initialize(picker, GetWindowHandle(window));
 
-        if (extensions is { Length: > 0 })
+        if (filters is { Length: > 0 })
         {
-            foreach (var extension in extensions)
+            foreach (var filter in filters)
             {
-                if (!string.IsNullOrWhiteSpace(extension))
+                if (!string.IsNullOrWhiteSpace(filter))
                 {
-                    picker.FileTypeFilter.Add(extension);
+                    picker.FileTypeFilter.Add(filter);
                 }
             }
         }
@@ -49,6 +43,6 @@ public sealed class WinUIPickerService : IPickerService
         }
 
         var files = await picker.PickMultipleFilesAsync();
-        return files?.Select(file => file.Path).ToArray();
+        return files?.Select(file => file.Path).ToArray() ?? Array.Empty<string>();
     }
 }
