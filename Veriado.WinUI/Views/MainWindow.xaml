@@ -115,12 +115,17 @@
                                         Text="{x:Bind ViewModel.Search.QueryText, Mode=TwoWay}"
                                         ItemsSource="{x:Bind ViewModel.Search.Suggestions, Mode=OneWay}">
                             <i:Interaction.Behaviors>
-                                <ctb:EventToCommandBehavior EventName="TextChanged"
-                                                            Command="{x:Bind ViewModel.Search.TextChangedCommand, Mode=OneWay}" />
-                                <ctb:EventToCommandBehavior EventName="QuerySubmitted"
-                                                            Command="{x:Bind ViewModel.Search.QuerySubmittedCommand, Mode=OneWay}" />
-                                <ctb:EventToCommandBehavior EventName="SuggestionChosen"
-                                                            Command="{x:Bind ViewModel.Search.SuggestionChosenCommand, Mode=OneWay}" />
+                                <i:EventTriggerBehavior EventName="TextChanged">
+                                    <i:InvokeCommandAction Command="{x:Bind ViewModel.Search.TextChangedCommand, Mode=OneWay}" />
+                                </i:EventTriggerBehavior>
+
+                                <i:EventTriggerBehavior EventName="QuerySubmitted">
+                                    <i:InvokeCommandAction Command="{x:Bind ViewModel.Search.QuerySubmittedCommand, Mode=OneWay}" />
+                                </i:EventTriggerBehavior>
+
+                                <i:EventTriggerBehavior EventName="SuggestionChosen">
+                                    <i:InvokeCommandAction Command="{x:Bind ViewModel.Search.SuggestionChosenCommand, Mode=OneWay}" />
+                                </i:EventTriggerBehavior>
                             </i:Interaction.Behaviors>
                         </AutoSuggestBox>
 
@@ -154,9 +159,11 @@
                                                 SelectionMode="None"
                                                 IsItemClickEnabled="True">
                                     <i:Interaction.Behaviors>
-                                        <ctb:EventToCommandBehavior EventName="ItemClick"
-                                                                    Command="{x:Bind ViewModel.Search.UseFavoriteCommand, Mode=OneWay}"
-                                                                    CommandParameterPath="ClickedItem" />
+                                        <i:EventTriggerBehavior EventName="ItemClick">
+                                            <i:InvokeCommandAction
+                                                Command="{x:Bind ViewModel.Search.UseFavoriteCommand, Mode=OneWay}"
+                                                CommandParameter="{Binding ClickedItem, RelativeSource={RelativeSource Mode=Self}}" />
+                                        </i:EventTriggerBehavior>
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
                                         <DataTemplate x:DataType="contracts:SearchFavoriteItem">
@@ -175,9 +182,11 @@
                                                 SelectionMode="None"
                                                 IsItemClickEnabled="True">
                                     <i:Interaction.Behaviors>
-                                        <ctb:EventToCommandBehavior EventName="ItemClick"
-                                                                    Command="{x:Bind ViewModel.Search.UseHistoryCommand, Mode=OneWay}"
-                                                                    CommandParameterPath="ClickedItem" />
+                                        <i:EventTriggerBehavior EventName="ItemClick">
+                                            <i:InvokeCommandAction
+                                                Command="{x:Bind ViewModel.Search.UseHistoryCommand, Mode=OneWay}"
+                                                CommandParameter="{Binding ClickedItem, RelativeSource={RelativeSource Mode=Self}}" />
+                                        </i:EventTriggerBehavior>
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
                                         <DataTemplate x:DataType="contracts:SearchHistoryEntry">
@@ -196,9 +205,11 @@
             </Border>
 
             <i:Interaction.Behaviors>
-                <ctb:EventToCommandBehavior EventName="KeyDown"
-                                            Command="{x:Bind ViewModel.Search.CloseOnEscCommand, Mode=OneWay}"
-                                            CommandParameterPath="Key" />
+                <i:EventTriggerBehavior EventName="KeyDown">
+                    <i:InvokeCommandAction
+                         Command="{x:Bind ViewModel.Search.CloseOnEscCommand, Mode=OneWay}"
+                         CommandParameter="{Binding}" />
+                </i:EventTriggerBehavior>
             </i:Interaction.Behaviors>
         </Grid>
     </Grid>
