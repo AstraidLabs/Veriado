@@ -7,6 +7,7 @@ namespace Veriado.WinUI.Services;
 public sealed class MemoryCacheService : ICacheService
 {
     private readonly ConcurrentDictionary<string, CacheEntry> _entries = new();
+    private static readonly TimeSpan DefaultTimeToLive = TimeSpan.FromMinutes(5);
 
     public bool TryGetValue<T>(string key, out T? value)
     {
@@ -37,6 +38,11 @@ public sealed class MemoryCacheService : ICacheService
         if (string.IsNullOrWhiteSpace(key))
         {
             throw new ArgumentNullException(nameof(key));
+        }
+
+        if (timeToLive <= TimeSpan.Zero)
+        {
+            timeToLive = DefaultTimeToLive;
         }
 
         var entry = new CacheEntry(value, DateTimeOffset.UtcNow.Add(timeToLive));

@@ -7,5 +7,9 @@ public interface IDispatcherService
 {
     bool HasThreadAccess { get; }
 
-    Task RunAsync(Action action);
+    Task Enqueue(Action action);
+
+    Task EnqueueAsync(Func<Task> action);
+
+    Task<T> EnqueueAsync<T>(Func<Task<T>> action);
 }

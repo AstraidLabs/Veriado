@@ -17,30 +17,88 @@ public sealed class DispatcherService : IDispatcherService
 
     public bool HasThreadAccess => GetDispatcher().HasThreadAccess;
 
-    public Task RunAsync(Action action)
+    public Task Enqueue(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
 
         var dispatcher = GetDispatcher();
         if (dispatcher.HasThreadAccess)
         {
-            action();
-            return Task.CompletedTask;
+            try
+            {
+                action();
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
         }
 
-        var completion = new TaskCompletionSource<object?>();
-        if (!dispatcher.TryEnqueue(() =>
+        var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() => Execute(action, completion)))
+        {
+            completion.SetException(new InvalidOperationException("Unable to enqueue action on the UI dispatcher."));
+        }
+
+        return completion.Task;
+    }
+
+    public Task EnqueueAsync(Func<Task> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return EnqueueAsyncInternal(action);
+    }
+
+    public Task<T> EnqueueAsync<T>(Func<Task<T>> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return EnqueueAsyncInternal(action);
+    }
+
+    private Task EnqueueAsyncInternal(Func<Task> action)
+    {
+        var dispatcher = GetDispatcher();
+        if (dispatcher.HasThreadAccess)
+        {
+            try
             {
-                try
-                {
-                    action();
-                    completion.SetResult(null);
-                }
-                catch (Exception ex)
-                {
-                    completion.SetException(ex);
-                }
-            }))
+                var task = action();
+                return task ?? Task.FromException(new InvalidOperationException("The dispatcher action returned a null task."));
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
+        }
+
+        var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() => ExecuteAsync(action, completion)))
+        {
+            completion.SetException(new InvalidOperationException("Unable to enqueue action on the UI dispatcher."));
+        }
+
+        return completion.Task;
+    }
+
+    private Task<T> EnqueueAsyncInternal<T>(Func<Task<T>> action)
+    {
+        var dispatcher = GetDispatcher();
+        if (dispatcher.HasThreadAccess)
+        {
+            try
+            {
+                var task = action();
+                return task ?? Task.FromException<T>(new InvalidOperationException("The dispatcher action returned a null task."));
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<T>(ex);
+            }
+        }
+
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() => ExecuteAsync(action, completion)))
         {
             completion.SetException(new InvalidOperationException("Unable to enqueue action on the UI dispatcher."));
         }
@@ -55,7 +113,7 @@ public sealed class DispatcherService : IDispatcherService
             return _dispatcher;
         }
 
-        if (_windowProvider.TryGetWindow() is { } window)
+        if (_windowProvider.TryGetWindow(out var window) && window is not null)
         {
             _dispatcher = window.DispatcherQueue;
         }
@@ -66,5 +124,58 @@ public sealed class DispatcherService : IDispatcherService
         }
 
         return _dispatcher;
+    }
+
+    private static void Execute(Action action, TaskCompletionSource<object?> completion)
+    {
+        try
+        {
+            action();
+            completion.SetResult(null);
+        }
+        catch (Exception ex)
+        {
+            completion.SetException(ex);
+        }
+    }
+
+    private static async void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
+    {
+        try
+        {
+            var task = action();
+            if (task is null)
+            {
+                completion.SetException(new InvalidOperationException("The dispatcher action returned a null task."));
+                return;
+            }
+
+            await task.ConfigureAwait(true);
+            completion.SetResult(null);
+        }
+        catch (Exception ex)
+        {
+            completion.SetException(ex);
+        }
+    }
+
+    private static async void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
+    {
+        try
+        {
+            var task = action();
+            if (task is null)
+            {
+                completion.SetException(new InvalidOperationException("The dispatcher action returned a null task."));
+                return;
+            }
+
+            var result = await task.ConfigureAwait(true);
+            completion.SetResult(result);
+        }
+        catch (Exception ex)
+        {
+            completion.SetException(ex);
+        }
     }
 }

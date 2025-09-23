@@ -47,12 +47,12 @@ public sealed class ShareService : IShareService
     {
         ArgumentNullException.ThrowIfNull(populateRequest);
 
-        if (_windowProvider.TryGetWindow() is null)
+        if (!_windowProvider.TryGetWindow(out var window) || window is null)
         {
             throw new InvalidOperationException("Window has not been initialized.");
         }
 
-        var hwnd = _windowProvider.GetHwnd();
+        var hwnd = _windowProvider.GetHwnd(window);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try

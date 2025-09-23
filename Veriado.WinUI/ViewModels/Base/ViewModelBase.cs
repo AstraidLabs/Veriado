@@ -73,7 +73,7 @@ public abstract partial class ViewModelBase : ObservableObject
         using var cts = new CancellationTokenSource();
         _cancellationSource = cts;
 
-        await _dispatcher.RunAsync(() =>
+        await _dispatcher.Enqueue(() =>
         {
             HasError = false;
             IsBusy = true;
@@ -87,17 +87,17 @@ public abstract partial class ViewModelBase : ObservableObject
         try
         {
             await action(cts.Token).ConfigureAwait(false);
-            await _dispatcher.RunAsync(() => HasError = false).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => HasError = false).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            await _dispatcher.RunAsync(() => HasError = false).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => HasError = false).ConfigureAwait(false);
             _statusService.Info("Operace byla zrušena.");
         }
         catch (Exception ex)
         {
             var message = _exceptionHandler.Handle(ex);
-            await _dispatcher.RunAsync(() => HasError = true).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => HasError = true).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(message))
             {
                 _statusService.Error(message);
@@ -106,7 +106,7 @@ public abstract partial class ViewModelBase : ObservableObject
         finally
         {
             _cancellationSource = null;
-            await _dispatcher.RunAsync(() => IsBusy = false).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => IsBusy = false).ConfigureAwait(false);
 
             if (!HasError && !string.IsNullOrWhiteSpace(busyMessage))
             {

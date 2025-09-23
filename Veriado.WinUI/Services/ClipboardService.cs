@@ -16,7 +16,7 @@ public sealed class ClipboardService : IClipboardService
 
     public async Task CopyTextAsync(string text)
     {
-        await _dispatcher.RunAsync(() =>
+        await _dispatcher.Enqueue(() =>
         {
             if (string.IsNullOrEmpty(text))
             {

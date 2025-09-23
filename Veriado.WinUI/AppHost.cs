@@ -38,6 +38,10 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton(messenger);
                 services.AddSingleton<IMessenger>(messenger);
 
+                var infrastructureConfig = new InfrastructureConfigProvider();
+                services.AddSingleton<IInfrastructureConfigProvider>(infrastructureConfig);
+                services.AddSingleton<InfrastructureConfigProvider>(infrastructureConfig);
+
                 services.AddSingleton<IWindowProvider, WindowProvider>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
                 services.AddSingleton<IThemeService, ThemeService>();
@@ -56,9 +60,9 @@ internal sealed class AppHost : IAsyncDisposable
 
                 services.AddSingleton<ShellViewModel>();
                 services.AddSingleton<SearchOverlayViewModel>();
-                services.AddSingleton<FilesGridViewModel>();
-                services.AddSingleton<FileDetailViewModel>();
-                services.AddSingleton<ImportViewModel>();
+                services.AddTransient<FilesGridViewModel>();
+                services.AddTransient<FileDetailViewModel>();
+                services.AddTransient<ImportViewModel>();
                 services.AddSingleton<FavoritesViewModel>();
                 services.AddSingleton<HistoryViewModel>();
                 services.AddSingleton<SettingsViewModel>();
@@ -66,10 +70,13 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddWinUiShell();
 
                 services.AddVeriadoMapping();
-                services.AddInfrastructure();
+                services.AddInfrastructure(options =>
+                {
+                    var databasePath = infrastructureConfig.GetDatabasePath();
+                    infrastructureConfig.EnsureStorageExists(databasePath);
+                    options.DbPath = databasePath;
+                });
                 services.AddVeriadoServices();
-
-                // TODO: Configure infrastructure options (database path, etc.) when wiring the full stack.
             })
             .Build();
 
