@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Veriado.Appl.Common;
-using Veriado.Application.UseCases.Maintenance;
+using Veriado.Appl.UseCases.Maintenance;
 using Veriado.Infrastructure.DependencyInjection;
 
 namespace Veriado.Services.Maintenance;

@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Veriado.Application.UseCases.Maintenance;
+using Veriado.Appl.UseCases.Maintenance;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Mapping.AC;
