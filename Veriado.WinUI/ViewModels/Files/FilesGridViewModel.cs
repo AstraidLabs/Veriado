@@ -1,75 +1,50 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
-using Veriado.Mappers;
-using Veriado.Models.Files;
-using Veriado.Services;
 using Veriado.Services.Files;
-using Veriado.ViewModels.Base;
 
-namespace Veriado.ViewModels.Files;
+namespace Veriado.WinUI.ViewModels.Files;
 
-public sealed partial class FilesGridViewModel : ViewModelBase
+public partial class FilesGridViewModel : ObservableObject
 {
-    private readonly IFileQueryService _fileQueryService;
-    private readonly INavigationService _navigationService;
+    private readonly IMessenger _messenger;
+    private readonly IFileQueryService _queryService;
 
-    public FilesGridViewModel(IFileQueryService fileQueryService, INavigationService navigationService)
+    [ObservableProperty]
+    private string? searchText;
+
+    public ObservableCollection<FileSummaryDto> Items { get; } = new();
+
+    public FilesGridViewModel(IMessenger messenger, IFileQueryService queryService)
     {
-        _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
-        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
-
-        UpdateCreatedRange();
+        _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+        _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
     }
-
-    public ObservableCollection<FileListItemModel> Items { get; } = new();
-
-    [ObservableProperty]
-    private string? queryText;
-
-    [ObservableProperty]
-    private int pageIndex;
-
-    [ObservableProperty]
-    private int pageSize = 50;
-
-    [ObservableProperty]
-    private FileSortSpecDto? sort;
-
-    [ObservableProperty]
-    private DateTimeOffset? createdFrom;
-
-    [ObservableProperty]
-    private DateTimeOffset? createdTo;
-
-    [ObservableProperty]
-    private int createdDaysFrom;
-
-    [ObservableProperty]
-    private int createdDaysTo = 365;
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        await SafeExecuteAsync(async ct =>
+        var page = await _queryService.GetGridAsync(new FileGridQueryDto
         {
-            var result = await _fileQueryService.GetGridAsync(BuildQuery(), ct).ConfigureAwait(false);
-
-            Items.Clear();
-            foreach (var dto in result.Items)
+            Text = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText,
+            Page = new PageRequest
             {
-                Items.Add(dto.ToFileListItemModel());
-            }
+                Page = 1,
+                PageSize = 50,
+            },
+        }, CancellationToken.None).ConfigureAwait(false);
 
-            StatusMessage = result.TotalCount == 0
-                ? "Nebyla nalezena žádná data."
-                : $"Načteno {Items.Count} z {result.TotalCount} položek.";
-        }, "Načítám položky…");
+        Items.Clear();
+        foreach (var item in page.Items)
+        {
+            Items.Add(item);
+        }
     }
 
     [RelayCommand]
@@ -80,61 +55,6 @@ public sealed partial class FilesGridViewModel : ViewModelBase
             return;
         }
 
-        _navigationService.NavigateToFileDetail(id);
-    }
-
-    private FileGridQueryDto BuildQuery()
-    {
-        var effectivePage = PageIndex < 0 ? 0 : PageIndex;
-        var effectiveSize = PageSize <= 0 ? 50 : PageSize;
-
-        return new FileGridQueryDto
-        {
-            Text = string.IsNullOrWhiteSpace(QueryText) ? null : QueryText,
-            CreatedFromUtc = CreatedFrom,
-            CreatedToUtc = CreatedTo,
-            Sort = Sort is not null ? new List<FileSortSpecDto> { Sort } : new List<FileSortSpecDto>(),
-            Page = new PageRequest
-            {
-                Page = effectivePage + 1,
-                PageSize = effectiveSize,
-            },
-        };
-    }
-
-    partial void OnCreatedDaysFromChanged(int value) => UpdateCreatedRange();
-
-    partial void OnCreatedDaysToChanged(int value) => UpdateCreatedRange();
-
-    private void UpdateCreatedRange()
-    {
-        var lower = CreatedDaysFrom < 0 ? 0 : CreatedDaysFrom;
-        var upper = CreatedDaysTo < 0 ? 0 : CreatedDaysTo;
-
-        if (upper < lower)
-        {
-            upper = lower;
-            if (CreatedDaysTo != upper)
-            {
-                CreatedDaysTo = upper;
-                return;
-            }
-        }
-
-        if (lower != CreatedDaysFrom)
-        {
-            CreatedDaysFrom = lower;
-            return;
-        }
-
-        if (upper != CreatedDaysTo)
-        {
-            CreatedDaysTo = upper;
-            return;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        CreatedFrom = now.AddDays(-upper);
-        CreatedTo = now.AddDays(-lower);
+        _messenger.Send(new FileSelectedMessage(id));
     }
 }

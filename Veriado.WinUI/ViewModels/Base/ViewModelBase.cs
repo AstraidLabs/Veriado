@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Veriado.ViewModels.Base;
+namespace Veriado.WinUI.ViewModels.Base;
 
 public abstract partial class ViewModelBase : ObservableObject
 {

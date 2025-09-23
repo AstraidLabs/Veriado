@@ -1,0 +1,43 @@
+<UserControl
+    x:Class="Veriado.WinUI.Views.FileDetailView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:winui="using:Microsoft.UI.Xaml.Controls">
+
+    <Grid x:Name="Root" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Spacing="8">
+            <TextBlock Text="{Binding Detail.Name}" FontSize="18" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBox Width="220"
+                         PlaceholderText="Nový název"
+                         Text="{Binding NewName, Mode=TwoWay}" />
+                <Button Content="Přejmenovat" Command="{Binding RenameCommand}" />
+                <ToggleSwitch Header="Jen pro čtení"
+                              IsOn="{Binding IsReadOnly, Mode=TwoWay}"
+                              IsEnabled="{Binding CanEdit}"
+                              Toggled="{x:Bind SetReadOnlyFromToggle}" />
+            </StackPanel>
+        </StackPanel>
+
+        <winui:Expander Header="Platnost" Grid.Row="1">
+            <StackPanel Spacing="8">
+                <DatePicker Date="{Binding ValidityIssuedAt, Mode=TwoWay}" />
+                <DatePicker Date="{Binding ValidityValidUntil, Mode=TwoWay}" />
+                <CheckBox Content="Fyzická kopie" IsChecked="{Binding ValidityHasPhysicalCopy, Mode=TwoWay}" />
+                <CheckBox Content="Elektronická kopie" IsChecked="{Binding ValidityHasElectronicCopy, Mode=TwoWay}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Uložit" Command="{Binding ApplyValidityCommand}" />
+                    <Button Content="Zrušit" Command="{Binding ClearValidityCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </winui:Expander>
+
+        <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" />
+    </Grid>
+</UserControl>

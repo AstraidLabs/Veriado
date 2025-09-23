@@ -1,57 +1,205 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Veriado.Mappers;
-using Veriado.Models.Files;
-using Veriado.Services;
+using Veriado.Contracts.Files;
 using Veriado.Services.Files;
-using Veriado.ViewModels.Base;
 
-namespace Veriado.ViewModels.Files;
+namespace Veriado.WinUI.ViewModels.Files;
 
-public sealed partial class FileDetailViewModel : ViewModelBase
+public partial class FileDetailViewModel : ObservableObject
 {
-    private readonly IFileQueryService _fileQueryService;
-    private readonly INavigationService _navigationService;
+    private readonly IFileQueryService _queryService;
+    private readonly IFileOperationsService _operations;
 
-    public FileDetailViewModel(IFileQueryService fileQueryService, INavigationService navigationService)
+    [ObservableProperty]
+    private FileDetailDto? detail;
+
+    [ObservableProperty]
+    private DateTimeOffset? validityIssuedAt;
+
+    [ObservableProperty]
+    private DateTimeOffset? validityValidUntil;
+
+    [ObservableProperty]
+    private bool validityHasPhysicalCopy;
+
+    [ObservableProperty]
+    private bool validityHasElectronicCopy;
+
+    [ObservableProperty]
+    private bool isReadOnly;
+
+    [ObservableProperty]
+    private bool canEdit = true;
+
+    [ObservableProperty]
+    private string? newName;
+
+    [ObservableProperty]
+    private string? author;
+
+    [ObservableProperty]
+    private string? mime;
+
+    [ObservableProperty]
+    private string? statusMessage;
+
+    public FileDetailViewModel(IFileQueryService queryService, IFileOperationsService operations)
     {
-        _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
-        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+        _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
+        _operations = operations ?? throw new ArgumentNullException(nameof(operations));
     }
 
-    [ObservableProperty]
-    private Guid? id;
-
-    [ObservableProperty]
-    private FileDetailModel? detail;
-
     [RelayCommand]
-    private async Task LoadAsync(Guid fileId)
+    public async Task Load(Guid id)
     {
-        Id = fileId;
+        var detail = await _queryService.GetDetailAsync(id, CancellationToken.None).ConfigureAwait(false);
+        Detail = detail;
 
-        await SafeExecuteAsync(async ct =>
+        if (detail is null)
         {
-            var dto = await _fileQueryService.GetDetailAsync(fileId, ct).ConfigureAwait(false);
-            if (dto is null)
-            {
-                Detail = null;
-                HasError = true;
-                StatusMessage = "Dokument nebyl nalezen.";
-                return;
-            }
+            StatusMessage = "Dokument nebyl nalezen.";
+            return;
+        }
 
-            Detail = dto.ToFileDetailModel();
-            StatusMessage = "Detail načten.";
-        }, "Načítám detail…");
+        NewName = detail.Name;
+        Author = detail.Author;
+        Mime = detail.Mime;
+        IsReadOnly = detail.IsReadOnly;
+        CanEdit = true;
+        StatusMessage = null;
+
+        if (detail.Validity is { } validity)
+        {
+            ValidityIssuedAt = validity.IssuedAt;
+            ValidityValidUntil = validity.ValidUntil;
+            ValidityHasPhysicalCopy = validity.HasPhysicalCopy;
+            ValidityHasElectronicCopy = validity.HasElectronicCopy;
+        }
+        else
+        {
+            ValidityIssuedAt = null;
+            ValidityValidUntil = null;
+            ValidityHasPhysicalCopy = false;
+            ValidityHasElectronicCopy = false;
+        }
     }
 
     [RelayCommand]
-    private void Close()
+    private async Task RenameAsync()
     {
-        Cancel();
-        _navigationService.GoBack();
+        if (Detail is null || string.IsNullOrWhiteSpace(NewName))
+        {
+            return;
+        }
+
+        var response = await _operations
+            .RenameAsync(Detail.Id, NewName.Trim(), CancellationToken.None)
+            .ConfigureAwait(false);
+        if (!response.IsSuccess)
+        {
+            StatusMessage = "Přejmenování se nezdařilo.";
+            return;
+        }
+
+        var fileId = response.Data ?? Detail.Id;
+        await Load(fileId).ConfigureAwait(false);
+        StatusMessage = "Název byl aktualizován.";
+    }
+
+    [RelayCommand]
+    private async Task UpdateMetadataAsync()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        var request = new UpdateMetadataRequest
+        {
+            FileId = Detail.Id,
+            Author = string.IsNullOrWhiteSpace(Author) ? null : Author,
+            Mime = string.IsNullOrWhiteSpace(Mime) ? null : Mime,
+        };
+
+        var response = await _operations.UpdateMetadataAsync(request, CancellationToken.None).ConfigureAwait(false);
+        if (!response.IsSuccess)
+        {
+            StatusMessage = "Aktualizace metadat se nezdařila.";
+            return;
+        }
+
+        var fileId = response.Data ?? Detail.Id;
+        await Load(fileId).ConfigureAwait(false);
+        StatusMessage = "Metadata byla aktualizována.";
+    }
+
+    [RelayCommand]
+    private async Task SetReadOnlyAsync()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        var response = await _operations
+            .SetReadOnlyAsync(Detail.Id, IsReadOnly, CancellationToken.None)
+            .ConfigureAwait(false);
+        if (!response.IsSuccess)
+        {
+            StatusMessage = "Změna režimu jen pro čtení se nezdařila.";
+            return;
+        }
+
+        var fileId = response.Data ?? Detail.Id;
+        await Load(fileId).ConfigureAwait(false);
+    }
+
+    [RelayCommand]
+    private async Task ApplyValidityAsync()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        var issuedAt = ValidityIssuedAt ?? DateTimeOffset.UtcNow;
+        var validUntil = ValidityValidUntil ?? issuedAt;
+        var validity = new FileValidityDto(issuedAt, validUntil, ValidityHasPhysicalCopy, ValidityHasElectronicCopy);
+
+        var response = await _operations
+            .SetValidityAsync(Detail.Id, validity, CancellationToken.None)
+            .ConfigureAwait(false);
+        if (!response.IsSuccess)
+        {
+            StatusMessage = "Uložení platnosti se nezdařilo.";
+            return;
+        }
+
+        var fileId = response.Data ?? Detail.Id;
+        await Load(fileId).ConfigureAwait(false);
+    }
+
+    [RelayCommand]
+    private async Task ClearValidityAsync()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        var response = await _operations
+            .ClearValidityAsync(Detail.Id, CancellationToken.None)
+            .ConfigureAwait(false);
+        if (!response.IsSuccess)
+        {
+            StatusMessage = "Odstranění platnosti se nezdařilo.";
+            return;
+        }
+
+        var fileId = response.Data ?? Detail.Id;
+        await Load(fileId).ConfigureAwait(false);
     }
 }

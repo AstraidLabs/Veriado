@@ -1,57 +1,99 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Veriado.Services;
-using Veriado.ViewModels.Base;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml.Controls;
+using Veriado.WinUI.ViewModels.Files;
+using Veriado.WinUI.ViewModels.Import;
+using Veriado.WinUI.Views;
 
-namespace Veriado.ViewModels.Shell;
+namespace Veriado.WinUI.ViewModels;
 
-public sealed partial class ShellViewModel : ViewModelBase
+public partial class ShellViewModel : ObservableObject
 {
-    private readonly INavigationService _navigationService;
-
-    public ShellViewModel(INavigationService navigationService)
-    {
-        _navigationService = navigationService;
-    }
+    private readonly IServiceProvider _services;
+    private readonly IMessenger _messenger;
 
     [ObservableProperty]
-    private string title = "Veriado";
+    private object? currentContent;
 
     [ObservableProperty]
-    private bool isBackEnabled;
+    private object? currentDetail;
 
-    [RelayCommand]
-    private void Initialize()
+    [ObservableProperty]
+    private object? selectedNavItem;
+
+    [ObservableProperty]
+    private bool isInfoBarOpen;
+
+    [ObservableProperty]
+    private string? statusMessage;
+
+    public FilesGridViewModel Files { get; }
+
+    public ImportViewModel Import { get; }
+
+    public SearchOverlayViewModel Search { get; }
+
+    public ShellViewModel(
+        IServiceProvider services,
+        FilesGridViewModel files,
+        ImportViewModel import,
+        SearchOverlayViewModel search,
+        IMessenger messenger)
     {
-        _navigationService.NavigateToFiles();
-        UpdateBackButton();
+        _services = services ?? throw new ArgumentNullException(nameof(services));
+        Files = files ?? throw new ArgumentNullException(nameof(files));
+        Import = import ?? throw new ArgumentNullException(nameof(import));
+        Search = search ?? throw new ArgumentNullException(nameof(search));
+        _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+
+        CurrentContent = _services.GetRequiredService<FilesView>();
+        CurrentDetail = null;
+
+        _messenger.Register<ShellViewModel, FileSelectedMessage>(this, static (recipient, message) =>
+        {
+            recipient.ShowFileDetail(message.FileId);
+        });
+    }
+
+    partial void OnSelectedNavItemChanged(object? value)
+    {
+        if (value is NavigationViewItem item)
+        {
+            Navigate(item.Tag ?? item.Content);
+        }
     }
 
     [RelayCommand]
-    private void Navigate(string? destination)
+    private void Navigate(object? tag)
     {
-        switch (destination)
+        switch (tag?.ToString())
         {
             case "Files":
-                _navigationService.NavigateToFiles();
-                Title = "Veriado – Soubory";
+                CurrentContent = _services.GetRequiredService<FilesView>();
                 break;
             case "Import":
-                _navigationService.NavigateToImport();
-                Title = "Veriado – Import";
+                CurrentContent = _services.GetRequiredService<ImportView>();
+                break;
+            case "Settings":
+                CurrentContent = _services.GetRequiredService<SettingsView>();
                 break;
         }
-
-        UpdateBackButton();
     }
 
-    [RelayCommand]
-    private void GoBack()
+    private void ShowFileDetail(Guid fileId)
     {
-        _navigationService.GoBack();
-        UpdateBackButton();
-    }
+        if (fileId == Guid.Empty)
+        {
+            return;
+        }
 
-    private void UpdateBackButton()
-        => IsBackEnabled = _navigationService.CanGoBack;
+        var view = _services.GetRequiredService<FileDetailView>();
+        view.ViewModel.LoadCommand.Execute(fileId);
+        CurrentDetail = view;
+    }
 }
+
+public sealed record FileSelectedMessage(Guid FileId);

@@ -1,18 +1,17 @@
 using System;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Veriado.Application.DependencyInjection;
-using Veriado.Converters;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Mapping.DependencyInjection;
-using Veriado.Presentation.Services;
-using Veriado.Services;
 using Veriado.Services.DependencyInjection;
-using Veriado.ViewModels.Files;
-using Veriado.ViewModels.Import;
-using Veriado.ViewModels.Search;
-using Veriado.ViewModels.Shell;
+using Veriado.WinUI.DependencyInjection;
+using Veriado.WinUI.Services.Pickers;
+using Veriado.WinUI.ViewModels;
+using Veriado.WinUI.ViewModels.Files;
+using Veriado.WinUI.ViewModels.Import;
 
 namespace Veriado;
 
@@ -33,17 +32,19 @@ internal sealed class AppHost : IAsyncDisposable
             .CreateDefaultBuilder()
             .ConfigureServices((_, services) =>
             {
+                var messenger = WeakReferenceMessenger.Default;
+                services.AddSingleton(messenger);
+                services.AddSingleton<IMessenger>(messenger);
+
                 services.AddSingleton<ShellViewModel>();
-                services.AddTransient<FilesGridViewModel>();
+                services.AddSingleton<SearchOverlayViewModel>();
+                services.AddSingleton<FilesGridViewModel>();
                 services.AddTransient<FileDetailViewModel>();
-                services.AddTransient<ImportViewModel>();
-                services.AddTransient<HistoryViewModel>();
-                services.AddTransient<FavoritesViewModel>();
+                services.AddSingleton<ImportViewModel>();
 
-                services.AddSingleton<BoolToSeverityConverter>();
+                services.AddSingleton<IPickerService, WinUIPickerService>();
 
-                services.AddSingleton<INavigationService, NavigationService>();
-                services.AddSingleton<IPickerService, PickerService>();
+                services.AddWinUiShell();
 
                 services.AddApplication();
                 services.AddVeriadoMapping();
@@ -55,6 +56,7 @@ internal sealed class AppHost : IAsyncDisposable
             .Build();
 
         await host.StartAsync().ConfigureAwait(false);
+        await host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
         return new AppHost(host);
     }
 

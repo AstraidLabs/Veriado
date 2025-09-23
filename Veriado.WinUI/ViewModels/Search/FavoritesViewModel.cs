@@ -7,9 +7,9 @@ using Veriado.Contracts.Search;
 using Veriado.Mappers;
 using Veriado.Models.Search;
 using Veriado.Services.Files;
-using Veriado.ViewModels.Base;
+using Veriado.WinUI.ViewModels.Base;
 
-namespace Veriado.ViewModels.Search;
+namespace Veriado.WinUI.ViewModels.Search;
 
 public sealed partial class FavoritesViewModel : ViewModelBase
 {
