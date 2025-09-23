@@ -7,7 +7,7 @@ using Veriado.WinUI.ViewModels.Settings;
 
 namespace Veriado;
 
-public partial class App : Microsoft.UI.Xaml.Application
+public partial class App : Application
 {
     private AppHost? _appHost;
 
@@ -16,7 +16,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         InitializeComponent();
     }
 
-    public static new App Current => (App)Microsoft.UI.Xaml.Application.Current;
+    public static new App Current => (App)Application.Current;
 
     public static IServiceProvider Services => Current.Services;
 
