@@ -1,51 +1,44 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Presentation.Services;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 
-/// <summary>
-/// WinUI implementation of <see cref="IDialogService"/> using <see cref="ContentDialog"/>.
-/// </summary>
 public sealed class DialogService : IDialogService
 {
-    /// <inheritdoc />
-    public async Task ShowMessageAsync(string title, string message, CancellationToken cancellationToken)
-    {
-        var dialog = CreateDialog(title, message);
-        dialog.PrimaryButtonText = "OK";
+    private readonly IWindowProvider _window;
 
-        await dialog.ShowAsync(ContentDialogPlacement.Popup);
-        cancellationToken.ThrowIfCancellationRequested();
+    public DialogService(IWindowProvider window)
+    {
+        _window = window ?? throw new ArgumentNullException(nameof(window));
     }
 
-    /// <inheritdoc />
-    public async Task<bool> ShowConfirmationAsync(string title, string message, CancellationToken cancellationToken)
+    public async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel")
     {
-        var dialog = CreateDialog(title, message);
-        dialog.PrimaryButtonText = "Ano";
-        dialog.SecondaryButtonText = "Ne";
-
-        var result = await dialog.ShowAsync(ContentDialogPlacement.Popup);
-        cancellationToken.ThrowIfCancellationRequested();
-        return result == ContentDialogResult.Primary;
-    }
-
-    private static ContentDialog CreateDialog(string title, string message)
-    {
-        if (App.MainWindowInstance?.Content is not FrameworkElement root)
-        {
-            throw new InvalidOperationException("Main window content is not available for dialog hosting.");
-        }
-
-        return new ContentDialog
+        var window = _window.GetActiveWindow();
+        var hwnd = _window.GetHwnd(window);
+        var dialog = new ContentDialog
         {
             Title = title,
             Content = message,
-            XamlRoot = root.XamlRoot,
+            PrimaryButtonText = confirmText,
+            CloseButtonText = string.IsNullOrWhiteSpace(cancelText) ? null : cancelText,
+            XamlRoot = _window.GetXamlRoot(window),
         };
+
+        WinRT.Interop.InitializeWithWindow.Initialize(dialog, hwnd);
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary;
+    }
+
+    public Task ShowInfoAsync(string title, string message)
+    {
+        return ConfirmAsync(title, message, "OK", string.Empty);
+    }
+
+    public Task ShowErrorAsync(string title, string message)
+    {
+        return ConfirmAsync(title, message, "OK", string.Empty);
     }
 }

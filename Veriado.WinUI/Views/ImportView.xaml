@@ -1,0 +1,33 @@
+<UserControl
+    x:Class="Veriado.WinUI.Views.ImportView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:winui="using:Microsoft.UI.Xaml.Controls">
+
+    <StackPanel Spacing="8">
+        <TextBox Header="Autor"
+                 Text="{Binding DefaultAuthor, Mode=TwoWay}"
+                 Width="300" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Vybrat složku" Command="{Binding BrowseFolderCommand}" />
+            <TextBlock Text="{Binding SelectedFolderPath}" />
+        </StackPanel>
+        <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+        <CheckBox Content="Extrakce obsahu" IsChecked="{Binding ExtractContent, Mode=TwoWay}" />
+        <winui:NumberBox Header="Paralelismus"
+                         Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}"
+                         Minimum="1"
+                         Maximum="16"
+                         Width="200" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Importovat" Command="{Binding ImportCommand}" />
+            <Button Content="Zrušit" Command="{Binding CancelImportCommand}" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding LastError}"
+                   TextWrapping="Wrap"
+                   Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+        <ProgressBar IsIndeterminate="{Binding IsBusy}"
+                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+    </StackPanel>
+</UserControl>

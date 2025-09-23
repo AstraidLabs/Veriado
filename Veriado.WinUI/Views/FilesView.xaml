@@ -1,0 +1,52 @@
+<UserControl
+    x:Class="Veriado.WinUI.Views.FilesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:contracts="using:Veriado.Contracts.Files"
+    xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
+    xmlns:i="using:Microsoft.Xaml.Interactivity"
+    xmlns:winui="using:Microsoft.UI.Xaml.Controls">
+
+    <Grid x:Name="Root">
+        <i:Interaction.Behaviors>
+            <ctb:EventToCommandBehavior EventName="Loaded"
+                                        Command="{Binding RefreshCommand}" />
+        </i:Interaction.Behaviors>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox Width="320"
+                     PlaceholderText="Hledat"
+                     Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Hledat"
+                    Command="{Binding RefreshCommand}" />
+            <winui:NumberBox Width="140"
+                             Header="Položek na stránku"
+                             Value="{Binding PageSize, Mode=TwoWay}"
+                             Minimum="1"
+                             Maximum="500" />
+        </StackPanel>
+
+        <winui:ItemsRepeater Grid.Row="1" ItemsSource="{Binding Items}">
+            <winui:ItemsRepeater.ItemTemplate>
+                <DataTemplate x:DataType="contracts:FileSummaryDto">
+                    <Border Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Bind Mime, Mode=OneWay}" />
+                            <Button Content="Otevřít detail"
+                                    Command="{x:Bind Root.ViewModel.OpenDetailCommand, Mode=OneWay}"
+                                    CommandParameter="{x:Bind Id, Mode=OneWay}" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </winui:ItemsRepeater.ItemTemplate>
+            <winui:ItemsRepeater.Layout>
+                <winui:UniformGridLayout MaximumRowsOrColumns="3" />
+            </winui:ItemsRepeater.Layout>
+        </winui:ItemsRepeater>
+    </Grid>
+</UserControl>

@@ -1,49 +1,57 @@
-// BEGIN CHANGE Veriado.WinUI/App.xaml.cs
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Views;
+using Veriado.WinUI.ViewModels.Settings;
 
-namespace Veriado
+namespace Veriado;
+
+public partial class App : Application
 {
-    /// <summary>
-    /// Provides application-specific behavior to supplement the default Application class.
-    /// </summary>
-    public partial class App : Application
+    private AppHost? _appHost;
+
+    public App()
     {
-        private Window? _window;
+        InitializeComponent();
+    }
 
-        /// <summary>
-        /// Initializes the singleton application object.  This is the first line of authored code
-        /// executed, and as such is the logical equivalent of main() or WinMain().
-        /// </summary>
-        public App()
+    public static new App Current => (App)Application.Current;
+
+    public static IServiceProvider Services => Current.Services;
+
+    public IServiceProvider Services => _appHost?.Services
+        ?? throw new InvalidOperationException("Application host has not been started.");
+
+    public Window MainWindow { get; private set; } = default!;
+
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        base.OnLaunched(args);
+
+        _appHost = AppHost.StartAsync().GetAwaiter().GetResult();
+
+        MainWindow = Services.GetRequiredService<MainWindow>();
+        var windowProvider = Services.GetRequiredService<IWindowProvider>();
+        windowProvider.SetWindow(MainWindow);
+        var keyboardShortcuts = Services.GetRequiredService<IKeyboardShortcutsService>();
+        keyboardShortcuts.RegisterDefaultShortcuts();
+        var themeService = Services.GetRequiredService<IThemeService>();
+        themeService.InitializeAsync().GetAwaiter().GetResult();
+        var settingsViewModel = Services.GetRequiredService<SettingsViewModel>();
+        settingsViewModel.SelectedTheme = themeService.CurrentTheme;
+        MainWindow.Closed += OnWindowClosed;
+        MainWindow.Activate();
+    }
+
+    private async void OnWindowClosed(object sender, WindowEventArgs e)
+    {
+        if (_appHost is not null)
         {
-            InitializeComponent();
+            await _appHost.DisposeAsync().ConfigureAwait(false);
+            _appHost = null;
         }
 
-        /// <summary>
-        /// Gets the active WinUI window.
-        /// </summary>
-        public static Window? MainWindowInstance { get; private set; }
-
-        /// <inheritdoc />
-        protected override void OnLaunched(LaunchActivatedEventArgs args)
-        {
-            base.OnLaunched(args);
-
-            AppHost.StartAsync().GetAwaiter().GetResult();
-
-            _window = AppHost.Services.GetRequiredService<MainWindow>();
-            MainWindowInstance = _window;
-            _window.Closed += OnWindowClosed;
-            _window.Activate();
-        }
-
-        private async void OnWindowClosed(object sender, WindowEventArgs e)
-        {
-            MainWindowInstance = null;
-            await AppHost.StopAsync().ConfigureAwait(false);
-        }
+        MainWindow = null!;
     }
 }
-// END CHANGE Veriado.WinUI/App.xaml.cs
