@@ -1,22 +1,21 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
-using Veriado.Presentation.ViewModels;
+using Veriado.ViewModels.Files;
 
-namespace Veriado.WinUI.Views;
+namespace Veriado.Views;
 
 public sealed partial class FileDetailPage : Page
 {
+    public FileDetailViewModel ViewModel { get; }
+
     public FileDetailPage()
     {
         InitializeComponent();
-        ViewModel = AppHost.Services.GetRequiredService<FileDetailViewModel>();
+        ViewModel = App.Current.Services.GetRequiredService<FileDetailViewModel>();
+        DataContext = ViewModel;
     }
-
-    public FileDetailViewModel ViewModel { get; }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
@@ -24,9 +23,7 @@ public sealed partial class FileDetailPage : Page
 
         if (e.Parameter is Guid fileId)
         {
-            await ViewModel.LoadCommand.ExecuteAsync(fileId).ConfigureAwait(true);
-            var animation = ConnectedAnimationService.GetForCurrentView().GetAnimation("FileCardAnimation");
-            animation?.TryStart(DetailHeader);
+            await ViewModel.LoadCommand.ExecuteAsync(fileId);
         }
     }
 }

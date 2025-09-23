@@ -1,101 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Page
-    x:Class="Veriado.WinUI.Views.FileDetailPage"
+    x:Class="Veriado.Views.FileDetailPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:converters="using:CommunityToolkit.WinUI.Converters"
-    xmlns:core="using:Microsoft.Xaml.Interactions.Core"
-    xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
     xmlns:i="using:Microsoft.Xaml.Interactivity"
-    xmlns:trig="using:CommunityToolkit.WinUI.Triggers"
-    xmlns:viewModels="using:Veriado.Presentation.ViewModels"
-    xmlns:winui="using:Microsoft.UI.Xaml.Controls"
-    x:DataType="viewModels:FileDetailViewModel">
+    xmlns:core="using:Microsoft.Xaml.Interactions.Core"
+    xmlns:vm="using:Veriado.ViewModels.Files"
+    x:DataType="vm:FileDetailViewModel">
 
-    <Page.DataContext>
-        <x:Bind Path="ViewModel" />
-    </Page.DataContext>
+  <Grid Padding="24" RowSpacing="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
 
-    <Page.Resources>
-        <converters:ObjectToVisibilityConverter x:Key="ObjectToVisibilityConverter" />
-    </Page.Resources>
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Button Content="Zpět" Command="{Binding CloseCommand}" />
+      <TextBlock Text="{Binding FileName}" Style="{StaticResource SectionTitleTextBlockStyle}" />
+    </StackPanel>
 
-    <ScrollViewer Padding="24">
-        <StackPanel Spacing="16">
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <TextBlock x:Name="DetailHeader" Text="Detail dokumentu" FontSize="24" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Detail.Id}" Opacity="0.6" />
-            </StackPanel>
-
-            <InfoBar
-                IsOpen="{Binding IsInfoBarOpen, Mode=TwoWay}"
-                Severity="{Binding HasError, Converter={StaticResource BoolToSeverity}}"
-                Title="Stav">
-                <StackPanel>
-                    <TextBlock Text="{Binding StatusMessage}" />
-                    <TextBlock
-                        Text="{Binding LastError}"
-                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                        Visibility="{Binding LastError, Converter={StaticResource ObjectToVisibilityConverter}}" />
-                </StackPanel>
-            </InfoBar>
-
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <TextBlock Width="140" Text="Název" />
-                <TextBox Width="320" Text="{Binding EditableName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <Button Content="Přejmenovat" Command="{Binding RenameCommand}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <TextBlock Width="140" Text="Autor" />
-                <TextBox Width="320" Text="{Binding EditableAuthor, Mode=TwoWay}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <TextBlock Width="140" Text="MIME" />
-                <TextBox Width="320" Text="{Binding EditableMime, Mode=TwoWay}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <TextBlock Width="140" Text="Jen pro čtení" />
-                <ToggleSwitch IsOn="{Binding EditableIsReadOnly, Mode=TwoWay}" />
-                <Button Content="Uložit metadata" Command="{Binding UpdateMetadataCommand}" />
-                <Button Content="Aktualizovat stav" Command="{Binding SetReadOnlyCommand}" />
-            </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="Platnost" FontSize="20" FontWeight="SemiBold" />
-                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <TextBlock Width="140" Text="Platí od" />
-                    <DatePicker Date="{Binding ValidityIssuedAt, Mode=TwoWay}" />
-                    <TextBlock Width="140" Text="Platí do" />
-                    <DatePicker Date="{Binding ValidityValidUntil, Mode=TwoWay}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <CheckBox Content="Fyzická kopie" IsChecked="{Binding ValidityHasPhysicalCopy, Mode=TwoWay}" />
-                    <CheckBox Content="Elektronická kopie" IsChecked="{Binding ValidityHasElectronicCopy, Mode=TwoWay}" />
-                    <Button Content="Uložit platnost" Command="{Binding ApplyValidityCommand}" />
-                    <Button Content="Zrušit platnost" Command="{Binding ClearValidityCommand}" />
-                </StackPanel>
-            </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="Obsah" FontSize="20" FontWeight="SemiBold" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="Načíst náhled" Command="{Binding LoadContentPreviewCommand}" Width="160" />
-                    <Button Content="Nahradit obsah" Command="{Binding ReplaceContentCommand}" Width="160" />
-                </StackPanel>
-                <Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
-                    <TextBlock Text="{Binding ContentPreview}" TextWrapping="Wrap" />
-                </Border>
-            </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="Systémová metadata" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Detail.CreatedUtc, StringFormat='Vytvořeno: {0:G}'}" />
-                <TextBlock Text="{Binding Detail.LastModifiedUtc, StringFormat='Upraveno: {0:G}'}" />
-                <TextBlock Text="{Binding Detail.Size, StringFormat='Velikost: {0:N0} B'}" />
-            </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
+    <InfoBar
+        Grid.Row="1"
+        x:Name="DetailStatusInfoBar"
+        IsOpen="True"
+        Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
+        Title="Stav detailu">
+      <i:Interaction.Behaviors>
+        <core:EventTriggerBehavior EventName="Loaded">
+          <core:CallMethodAction TargetObject="{Binding ElementName=DetailStatusInfoBar}" MethodName="BringIntoView" />
+        </core:EventTriggerBehavior>
+      </i:Interaction.Behaviors>
+      <StackPanel>
+        <TextBlock Text="{Binding StatusMessage}" />
+      </StackPanel>
+    </InfoBar>
+  </Grid>
 </Page>

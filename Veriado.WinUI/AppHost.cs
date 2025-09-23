@@ -1,99 +1,52 @@
-// BEGIN CHANGE Veriado.WinUI/AppHost.cs
 using System;
-using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Veriado.Application.DependencyInjection;
-using Veriado.Infrastructure.DependencyInjection;
-using Veriado.Mapping.DependencyInjection;
-using Veriado.Presentation.DependencyInjection;
-using Veriado.Presentation.Services;
-using Veriado.Services.DependencyInjection;
-using Veriado.WinUI.Services;
+using Veriado.Converters;
+using Veriado.Services;
+using Veriado.ViewModels.Files;
+using Veriado.ViewModels.Import;
+using Veriado.ViewModels.Shell;
 
 namespace Veriado;
 
-/// <summary>
-/// Configures and manages the WinUI host environment.
-/// </summary>
-internal static class AppHost
+internal sealed class AppHost : IAsyncDisposable
 {
-    private static readonly SemaphoreSlim StartLock = new(1, 1);
-    private static IHost? _host;
+    private readonly IHost _host;
 
-    public static IServiceProvider Services => _host?.Services
-        ?? throw new InvalidOperationException("Host is not initialized.");
-
-    public static async Task StartAsync(CancellationToken cancellationToken = default)
+    private AppHost(IHost host)
     {
-        if (_host is not null)
-        {
-            return;
-        }
-
-        await StartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (_host is null)
-            {
-                _host = BuildHost();
-                await _host.Services.InitializeInfrastructureAsync(cancellationToken).ConfigureAwait(false);
-                await _host.StartAsync(cancellationToken).ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            StartLock.Release();
-        }
+        _host = host;
     }
 
-    public static async Task StopAsync(CancellationToken cancellationToken = default)
-    {
-        if (_host is null)
-        {
-            return;
-        }
+    public IServiceProvider Services => _host.Services;
 
-        await _host.StopAsync(cancellationToken).ConfigureAwait(false);
-        _host.Dispose();
-        _host = null;
-    }
-
-    private static IHost BuildHost()
+    public static async Task<AppHost> StartAsync()
     {
-        return Host
+        var host = Host
             .CreateDefaultBuilder()
-            .UseContentRoot(AppContext.BaseDirectory)
             .ConfigureServices((_, services) =>
             {
-                services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
+                services.AddSingleton<ShellViewModel>();
+                services.AddTransient<FilesGridViewModel>();
+                services.AddTransient<FileDetailViewModel>();
+                services.AddTransient<ImportViewModel>();
 
-                services.AddApplication();
-                services.AddVeriadoMapping();
-                services.AddInfrastructure(options => options.DbPath = ResolveDatabasePath());
-                services.AddVeriadoServices();
+                services.AddSingleton<BoolToSeverityConverter>();
 
                 services.AddSingleton<INavigationService, NavigationService>();
-                services.AddSingleton<IDialogService, DialogService>();
-                services.AddSingleton<IPickerService, WinUIPickerService>();
 
-                services.AddWinUiPresentation();
-                services.AddPresentationModels();
-
-                services.AddSingleton<MainWindow>();
+                // TODO: Register application, infrastructure, mapping, and services layers when wiring the full stack.
             })
             .Build();
+
+        await host.StartAsync().ConfigureAwait(false);
+        return new AppHost(host);
     }
 
-    private static string ResolveDatabasePath()
+    public async ValueTask DisposeAsync()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var directory = Path.Combine(appData, "Veriado");
-        Directory.CreateDirectory(directory);
-        return Path.Combine(directory, "veriado.db");
+        await _host.StopAsync().ConfigureAwait(false);
+        _host.Dispose();
     }
 }
-// END CHANGE Veriado.WinUI/AppHost.cs

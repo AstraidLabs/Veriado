@@ -1,58 +1,44 @@
 using System;
-using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Animation;
-using Veriado.Presentation.Messages;
-using Veriado.Presentation.Services;
-using Veriado.WinUI.Views;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
-/// <summary>
-/// WinUI implementation of <see cref="INavigationService"/> that coordinates page navigation.
-/// </summary>
-public sealed class NavigationService : INavigationService, IRecipient<OpenFileDetailMessage>
+public interface INavigationService
 {
-    private readonly IMessenger _messenger;
+    void Initialize(Frame frame);
+    void NavigateToFiles();
+    void NavigateToFileDetail(Guid fileId);
+    void NavigateToImport();
+    bool CanGoBack { get; }
+    void GoBack();
+}
+
+internal sealed class NavigationService : INavigationService
+{
     private Frame? _frame;
 
-    public NavigationService(IMessenger messenger)
-    {
-        _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
-        _messenger.Register<NavigationService, OpenFileDetailMessage>(this, static (recipient, message) => recipient.Receive(message));
-    }
+    public bool CanGoBack => _frame?.CanGoBack == true;
 
-    /// <inheritdoc />
     public void Initialize(Frame frame)
     {
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
     }
 
-    /// <inheritdoc />
     public void NavigateToFiles()
-        => Navigate(typeof(FilesPage));
+        => Navigate(typeof(Views.FilesPage));
 
-    /// <inheritdoc />
+    public void NavigateToFileDetail(Guid fileId)
+        => Navigate(typeof(Views.FileDetailPage), fileId);
+
     public void NavigateToImport()
-        => Navigate(typeof(ImportPage));
+        => Navigate(typeof(Views.ImportPage));
 
-    /// <inheritdoc />
-    public void NavigateToDetail(Guid fileId)
-        => Navigate(typeof(FileDetailPage), fileId);
-
-    /// <inheritdoc />
     public void GoBack()
     {
         if (_frame?.CanGoBack == true)
         {
             _frame.GoBack();
         }
-    }
-
-    /// <inheritdoc />
-    public void Receive(OpenFileDetailMessage message)
-    {
-        NavigateToDetail(message.FileId);
     }
 
     private void Navigate(Type pageType, object? parameter = null)
@@ -62,6 +48,6 @@ public sealed class NavigationService : INavigationService, IRecipient<OpenFileD
             throw new InvalidOperationException("Navigation service has not been initialized.");
         }
 
-        _frame.Navigate(pageType, parameter, new DrillInNavigationTransitionInfo());
+        _frame.Navigate(pageType, parameter);
     }
 }
