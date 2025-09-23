@@ -7,7 +7,8 @@
     xmlns:i="using:Microsoft.Xaml.Interactivity"
     xmlns:core="using:Microsoft.Xaml.Interactions.Core"
     xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
-    xmlns:trig="using:CommunityToolkit.WinUI.Triggers">
+    xmlns:trig="using:CommunityToolkit.WinUI.Triggers"
+    xmlns:conv="using:CommunityToolkit.WinUI.Converters">
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
@@ -15,6 +16,7 @@
         <ResourceDictionary Source="Resources/Styles.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <converters:BoolToSeverityConverter x:Key="BoolToSeverityConverter" />
+      <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </ResourceDictionary>
   </Application.Resources>
 </Application>
