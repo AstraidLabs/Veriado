@@ -8,10 +8,12 @@ namespace Veriado.Views
     {
         public MainWindow(ShellViewModel viewModel)
         {
-            this.InitializeComponent(); // (this. je volitelné)
-            DataContext = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+            InitializeComponent();
+
+            ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+            LayoutRoot.DataContext = ViewModel;
         }
 
-        public ShellViewModel ViewModel => (ShellViewModel)DataContext!;
+        public ShellViewModel ViewModel { get; }
     }
 }
