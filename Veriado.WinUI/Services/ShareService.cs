@@ -1,15 +1,31 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Services.Abstractions;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
-using WinRT.Interop;
+using WinRT;
+using WinRT.Interop; // MarshalInterface<T>
 
 namespace Veriado.Services;
 
 public sealed class ShareService : IShareService
 {
+    // === COM interop pro DataTransferManager (oficiální pattern) ===
+    [ComImport]
+    [Guid("3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IDataTransferManagerInterop
+    {
+        // Vrací IInspectable* (přes IntPtr), který zabalíme přes WinRT.MarshalInterface
+        IntPtr GetForWindow(IntPtr appWindow, ref Guid riid);
+        void ShowShareUIForWindow(IntPtr appWindow);
+    }
+
+    private static readonly Guid _dtmIid =
+        new(0xA5CAEE9B, 0x8708, 0x49D1, 0x8D, 0x36, 0x67, 0xD2, 0x5A, 0x8D, 0xA0, 0x0C);
+
     private readonly IWindowProvider _windowProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -20,26 +36,24 @@ public sealed class ShareService : IShareService
 
     public async Task ShareTextAsync(string title, string text, CancellationToken cancellationToken = default)
     {
-        await ShareAsync(title, async request =>
+        await ShareAsync(title, request =>
         {
             request.Data.SetText(text ?? string.Empty);
-            await Task.CompletedTask.ConfigureAwait(false);
+            return Task.CompletedTask;
         }, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ShareFileAsync(string title, string filePath, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(filePath))
-        {
             throw new ArgumentNullException(nameof(filePath));
-        }
 
         var storageFile = await StorageFile.GetFileFromPathAsync(filePath).AsTask(cancellationToken).ConfigureAwait(false);
 
-        await ShareAsync(title, async request =>
+        await ShareAsync(title, request =>
         {
             request.Data.SetStorageItems(new[] { storageFile });
-            await Task.CompletedTask.ConfigureAwait(false);
+            return Task.CompletedTask;
         }, cancellationToken).ConfigureAwait(false);
     }
 
@@ -48,44 +62,51 @@ public sealed class ShareService : IShareService
         ArgumentNullException.ThrowIfNull(populateRequest);
 
         if (!_windowProvider.TryGetWindow(out var window) || window is null)
-        {
             throw new InvalidOperationException("Window has not been initialized.");
-        }
 
         var hwnd = _windowProvider.GetHwnd(window);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var manager = DataTransferManagerInterop.GetForWindow(hwnd, typeof(DataTransferManager).GUID);
-            TaskCompletionSource<object?>? completion = new();
+            // Získání interop rozhraní a DataTransferManager instance pro konkrétní HWND
+            var interop = DataTransferManager.As<IDataTransferManagerInterop>();
+            var riid = _dtmIid;
+            var dtmPtr = interop.GetForWindow(hwnd, ref riid);
+            var manager = MarshalInterface<DataTransferManager>.FromAbi(dtmPtr);
 
-            void Handler(DataTransferManager sender, DataRequestedEventArgs args)
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            void OnDataRequested(DataTransferManager sender, DataRequestedEventArgs args)
             {
-                sender.DataRequested -= Handler;
+                // odregistrovat hned, ať neunikají handlery
+                sender.DataRequested -= OnDataRequested;
+
                 var request = args.Request;
                 request.Data.Properties.Title = string.IsNullOrWhiteSpace(title) ? "Sdílet" : title;
-                populateRequest(request).ContinueWith(t =>
+
+                _ = populateRequest(request).ContinueWith(t =>
                 {
                     if (t.IsFaulted && t.Exception is not null)
-                    {
-                        completion.TrySetException(t.Exception);
-                    }
+                        tcs.TrySetException(t.Exception);
                     else if (t.IsCanceled)
-                    {
-                        completion.TrySetCanceled();
-                    }
+                        tcs.TrySetCanceled();
                     else
-                    {
-                        completion.TrySetResult(null);
-                    }
+                        tcs.TrySetResult(null);
                 }, TaskScheduler.Default);
             }
 
-            manager.DataRequested += Handler;
+            manager.DataRequested += OnDataRequested;
 
-            DataTransferManagerInterop.ShowShareUIForWindow(hwnd);
-            await completion.Task.ConfigureAwait(false);
+            // Zobrazení Share UI pro dané okno (HWND) přes interop
+            interop.ShowShareUIForWindow(hwnd);
+
+            // Ošetření případu, kdy uživatel UI zavře bez výběru cíle (DataRequested se nespustí)
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30), cancellationToken)).ConfigureAwait(false);
+            if (completed != tcs.Task)
+                tcs.TrySetCanceled();
+
+            await tcs.Task.ConfigureAwait(false);
         }
         finally
         {

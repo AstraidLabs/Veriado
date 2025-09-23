@@ -108,7 +108,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                 return;
             }
 
-            var fileId = response.Data ?? Detail.Id;
+            var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
             StatusService.Info("Název byl aktualizován.");
         }, "Aktualizuji název souboru…");
@@ -139,7 +139,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                 return;
             }
 
-            var fileId = response.Data ?? Detail.Id;
+            var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
             StatusService.Info("Metadata byla aktualizována.");
         }, "Aktualizuji metadata…");
@@ -166,7 +166,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                 return;
             }
 
-            var fileId = response.Data ?? Detail.Id;
+            var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
             StatusService.Info(isReadOnly
                 ? "Soubor je nyní jen pro čtení."
@@ -199,7 +199,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                 return;
             }
 
-            var fileId = response.Data ?? Detail.Id;
+            var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
             StatusService.Info("Platnost byla aktualizována.");
         }, "Ukládám platnost dokumentu…");

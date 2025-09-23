@@ -1,8 +1,10 @@
 using System;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Veriado.Services.Abstractions;
 using Veriado.Services.Messages;
+using Windows.System;
 
 namespace Veriado.Services;
 
@@ -21,19 +23,20 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
     public void RegisterDefaultShortcuts()
     {
         if (_registered)
-        {
             return;
-        }
 
         if (!_windowProvider.TryGetWindow(out var window) || window is null)
-        {
             return;
-        }
+
+        // KeyboardAccelerators patøí na UIElement (napø. koøen Content okna)
+        if (window.Content is not UIElement root)
+            return;
 
         var openSearch = new KeyboardAccelerator
         {
-            Key = Windows.System.VirtualKey.Space,
-            Modifiers = Windows.System.VirtualKeyModifiers.Control,
+            Key = VirtualKey.Space,
+            Modifiers = VirtualKeyModifiers.Control,
+            ScopeOwner = root // volitelné, zúží rozsah
         };
         openSearch.Invoked += (_, args) =>
         {
@@ -43,7 +46,8 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
 
         var closeSearch = new KeyboardAccelerator
         {
-            Key = Windows.System.VirtualKey.Escape,
+            Key = VirtualKey.Escape,
+            ScopeOwner = root
         };
         closeSearch.Invoked += (_, args) =>
         {
@@ -51,8 +55,9 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
             args.Handled = true;
         };
 
-        window.KeyboardAccelerators.Add(openSearch);
-        window.KeyboardAccelerators.Add(closeSearch);
+        root.KeyboardAccelerators.Add(openSearch);
+        root.KeyboardAccelerators.Add(closeSearch);
+
         _registered = true;
     }
 }
