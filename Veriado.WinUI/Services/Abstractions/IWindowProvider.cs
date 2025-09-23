@@ -1,7 +1,7 @@
 using System;
 using Microsoft.UI.Xaml;
 
-namespace Veriado.WinUI.Services.Abstractions;
+namespace Veriado.Services.Abstractions;
 
 public interface IWindowProvider
 {
@@ -11,7 +11,7 @@ public interface IWindowProvider
 
     Window GetMainWindow();
 
-    IntPtr GetHwnd(Window? window = null);
+    nint GetHwnd(Window? window = null);
 
     XamlRoot GetXamlRoot(Window? window = null);
 

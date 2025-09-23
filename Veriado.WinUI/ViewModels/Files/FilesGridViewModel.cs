@@ -8,8 +8,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
+using Veriado.Services.Abstractions;
 using Veriado.Services.Files;
-using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Views;
 

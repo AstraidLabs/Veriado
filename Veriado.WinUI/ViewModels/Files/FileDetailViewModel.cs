@@ -5,8 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Files;
+using Veriado.Services.Abstractions;
 using Veriado.Services.Files;
-using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 
 namespace Veriado.WinUI.ViewModels.Files;

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 

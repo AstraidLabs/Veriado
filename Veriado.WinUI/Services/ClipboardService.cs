@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 using Windows.ApplicationModel.DataTransfer;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class ClipboardService : IClipboardService
 {

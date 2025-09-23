@@ -1,9 +1,9 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
-using Veriado.WinUI.Services.Abstractions;
-using Veriado.WinUI.Views;
 using Veriado.WinUI.ViewModels.Settings;
+using Veriado.Services.Abstractions;
+using Veriado.Views;
 
 namespace Veriado;
 

@@ -2,7 +2,7 @@ using System;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 
-namespace Veriado.WinUI.Converters;
+namespace Veriado.Converters;
 
 public sealed class ItemClickEventArgsToItemConverter : IValueConverter
 {

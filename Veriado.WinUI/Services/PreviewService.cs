@@ -3,10 +3,10 @@ using System.Globalization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Veriado.Services.Abstractions;
 using Veriado.Services.Files;
-using Veriado.WinUI.Services.Abstractions;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class PreviewService : IPreviewService
 {
@@ -41,7 +41,7 @@ public sealed class PreviewService : IPreviewService
         return result;
     }
 
-    private static string? TryGetSnippet(Veriado.Contracts.Files.FileContentResponseDto content)
+    private static string? TryGetSnippet(Contracts.Files.FileContentResponseDto content)
     {
         if (content.Content is null || content.Content.Length == 0)
         {
@@ -87,7 +87,7 @@ public sealed class PreviewService : IPreviewService
             || mime.Equals("application/atom+xml", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string BuildFallback(Veriado.Contracts.Files.FileContentResponseDto content)
+    private static string BuildFallback(Contracts.Files.FileContentResponseDto content)
     {
         var mime = content.Mime;
         if (!string.IsNullOrWhiteSpace(mime))

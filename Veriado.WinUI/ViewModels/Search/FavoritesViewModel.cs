@@ -7,7 +7,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Search;
 

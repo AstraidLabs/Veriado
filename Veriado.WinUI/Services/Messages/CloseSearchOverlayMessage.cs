@@ -1,3 +1,3 @@
-namespace Veriado.WinUI.Services.Messages;
+namespace Veriado.Services.Messages;
 
 public sealed record CloseSearchOverlayMessage;

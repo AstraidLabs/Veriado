@@ -2,9 +2,9 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class ThemeService : IThemeService
 {

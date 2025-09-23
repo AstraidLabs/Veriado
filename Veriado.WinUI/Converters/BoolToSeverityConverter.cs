@@ -3,7 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 
-namespace Veriado.WinUI.Converters;
+namespace Veriado.Converters;
 
 public sealed class BoolToSeverityConverter : IValueConverter
 {

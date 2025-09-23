@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Search;
+using Veriado.Contracts.Search.Abstractions;
 
 namespace Veriado.Services.Search;
 

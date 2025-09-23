@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.Contracts.Search;
+namespace Veriado.Contracts.Search.Abstractions;
 
 public interface ISearchFacade
 {

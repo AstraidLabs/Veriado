@@ -1,12 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using WinRT.Interop;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class ShareService : IShareService
 {

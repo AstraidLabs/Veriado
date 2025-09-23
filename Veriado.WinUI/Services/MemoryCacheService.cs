@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Concurrent;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class MemoryCacheService : ICacheService
 {

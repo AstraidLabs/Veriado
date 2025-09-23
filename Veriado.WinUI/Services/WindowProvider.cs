@@ -1,8 +1,8 @@
 using System;
 using Microsoft.UI.Xaml;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class WindowProvider : IWindowProvider
 {
@@ -25,7 +25,7 @@ public sealed class WindowProvider : IWindowProvider
             ?? throw new InvalidOperationException("The main window has not been initialized yet.");
     }
 
-    public IntPtr GetHwnd(Window? window = null)
+    public nint GetHwnd(Window? window = null)
     {
         var target = window ?? _mainWindow
             ?? throw new InvalidOperationException("The main window has not been initialized yet.");

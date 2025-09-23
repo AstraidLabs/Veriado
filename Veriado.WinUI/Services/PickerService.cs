@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using Windows.Storage.Pickers;
-using Veriado.WinUI.Services.Abstractions;
+using Veriado.Services.Abstractions;
 
-namespace Veriado.WinUI.Services;
+namespace Veriado.Services;
 
 public sealed class PickerService : IPickerService
 {

@@ -1,7 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using Veriado.Views;
 using Veriado.WinUI.Views;
 
-namespace Veriado.WinUI.DependencyInjection;
+namespace Veriado.DependencyInjection;
 
 /// <summary>
 /// Provides dependency injection helpers for WinUI-specific components.

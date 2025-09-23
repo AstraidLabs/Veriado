@@ -9,8 +9,9 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Search;
-using Veriado.WinUI.Services.Abstractions;
-using Veriado.WinUI.Services.Messages;
+using Veriado.Contracts.Search.Abstractions;
+using Veriado.Services.Abstractions;
+using Veriado.Services.Messages;
 using Veriado.WinUI.ViewModels.Base;
 using Windows.System;
 

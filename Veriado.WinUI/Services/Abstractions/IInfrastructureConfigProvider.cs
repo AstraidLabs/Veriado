@@ -1,6 +1,6 @@
 using System;
 
-namespace Veriado.WinUI.Services.Abstractions;
+namespace Veriado.Services.Abstractions;
 
 public interface IInfrastructureConfigProvider
 {
