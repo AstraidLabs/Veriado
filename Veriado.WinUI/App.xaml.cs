@@ -18,9 +18,8 @@ public partial class App : Application
 
     public static new App Current => (App)Application.Current;
 
-    public static IServiceProvider Services => Current.Services;
-
-    public IServiceProvider Services => _appHost?.Services
+    public static IServiceProvider Services =>
+        Current._appHost?.Services
         ?? throw new InvalidOperationException("Application host has not been started.");
 
     public Window MainWindow { get; private set; } = default!;
@@ -34,12 +33,16 @@ public partial class App : Application
         MainWindow = Services.GetRequiredService<MainWindow>();
         var windowProvider = Services.GetRequiredService<IWindowProvider>();
         windowProvider.SetWindow(MainWindow);
+
         var keyboardShortcuts = Services.GetRequiredService<IKeyboardShortcutsService>();
         keyboardShortcuts.RegisterDefaultShortcuts();
+
         var themeService = Services.GetRequiredService<IThemeService>();
         themeService.InitializeAsync().GetAwaiter().GetResult();
+
         var settingsViewModel = Services.GetRequiredService<SettingsViewModel>();
         settingsViewModel.SelectedTheme = themeService.CurrentTheme;
+
         MainWindow.Closed += OnWindowClosed;
         MainWindow.Activate();
     }
