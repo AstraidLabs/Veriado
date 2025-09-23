@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -14,6 +15,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
 {
     private readonly IFileQueryService _queryService;
     private readonly IFileOperationsService _operations;
+    private readonly IDialogService _dialogService;
 
     [ObservableProperty]
     private FileDetailDto? detail;
@@ -48,11 +50,17 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     [ObservableProperty]
     private string? contentPreview;
 
-    public FileDetailViewModel(IMessenger messenger, IFileQueryService queryService, IFileOperationsService operations)
-        : base(messenger)
+    public FileDetailViewModel(
+        IMessenger messenger,
+        IStatusService statusService,
+        IFileQueryService queryService,
+        IFileOperationsService operations,
+        IDialogService dialogService)
+        : base(messenger, statusService)
     {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
     }
 
     [RelayCommand]
@@ -190,6 +198,15 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     private async Task ClearValidityAsync()
     {
         if (Detail is null)
+        {
+            return;
+        }
+
+        var confirmed = await _dialogService
+            .ConfirmAsync("Odebrat platnost", "Opravdu chcete odstranit platnost dokumentu?", "Odebrat", "Zrušit")
+            .ConfigureAwait(false);
+
+        if (!confirmed)
         {
             return;
         }

@@ -10,13 +10,16 @@ using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
-using Veriado.WinUI.ViewModels.Messages;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
 public sealed partial class FilesGridViewModel : ViewModelBase
 {
     private readonly IFileQueryService _queryService;
+    private readonly INavigationService _navigationService;
+    private readonly Func<FileDetailView> _detailViewFactory;
 
     [ObservableProperty]
     private string? searchText;
@@ -46,10 +49,17 @@ public sealed partial class FilesGridViewModel : ViewModelBase
 
     public ObservableCollection<SearchHistoryEntry> History { get; } = new();
 
-    public FilesGridViewModel(IMessenger messenger, IFileQueryService queryService)
-        : base(messenger)
+    public FilesGridViewModel(
+        IMessenger messenger,
+        IStatusService statusService,
+        IFileQueryService queryService,
+        INavigationService navigationService,
+        Func<FileDetailView> detailViewFactory)
+        : base(messenger, statusService)
     {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
+        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+        _detailViewFactory = detailViewFactory ?? throw new ArgumentNullException(nameof(detailViewFactory));
     }
 
     [RelayCommand]
@@ -87,7 +97,13 @@ public sealed partial class FilesGridViewModel : ViewModelBase
             return;
         }
 
-        Messenger.Send(new OpenFileDetailMessage(id));
+        var view = _detailViewFactory();
+        _navigationService.NavigateToDetail(view);
+
+        if (view.DataContext is FileDetailViewModel detailViewModel)
+        {
+            _ = detailViewModel.LoadCommand.ExecuteAsync(id);
+        }
     }
 
 }

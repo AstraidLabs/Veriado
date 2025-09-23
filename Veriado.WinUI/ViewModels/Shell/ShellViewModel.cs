@@ -1,12 +1,13 @@
 using System;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Services.Messages;
 using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
-using Veriado.WinUI.ViewModels.Messages;
 using Veriado.WinUI.ViewModels.Search;
 using Veriado.WinUI.Views;
 
@@ -14,7 +15,10 @@ namespace Veriado.WinUI.ViewModels;
 
 public sealed partial class ShellViewModel : ViewModelBase
 {
-    private readonly IServiceProvider _services;
+    private readonly INavigationService _navigationService;
+    private readonly FilesView _filesView;
+    private readonly ImportView _importView;
+    private readonly SettingsView _settingsView;
 
     [ObservableProperty]
     private object? currentContent;
@@ -32,30 +36,37 @@ public sealed partial class ShellViewModel : ViewModelBase
     public SearchOverlayViewModel Search { get; }
 
     public ShellViewModel(
-        IServiceProvider services,
+        IMessenger messenger,
+        IStatusService statusService,
+        INavigationService navigationService,
         FilesGridViewModel files,
         ImportViewModel import,
         SearchOverlayViewModel search,
-        IMessenger messenger)
-        : base(messenger)
+        FilesView filesView,
+        ImportView importView,
+        SettingsView settingsView)
+        : base(messenger, statusService)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         Files = files ?? throw new ArgumentNullException(nameof(files));
         Import = import ?? throw new ArgumentNullException(nameof(import));
         Search = search ?? throw new ArgumentNullException(nameof(search));
+        _filesView = filesView ?? throw new ArgumentNullException(nameof(filesView));
+        _importView = importView ?? throw new ArgumentNullException(nameof(importView));
+        _settingsView = settingsView ?? throw new ArgumentNullException(nameof(settingsView));
 
-        CurrentContent = _services.GetRequiredService<FilesView>();
-        CurrentDetail = null;
+        if (_navigationService is INotifyPropertyChanged notifier)
+        {
+            notifier.PropertyChanged += OnNavigationServicePropertyChanged;
+        }
+
+        _navigationService.NavigateToContent(_filesView);
+        UpdateNavigationState();
 
         Messenger.Register<StatusChangedMessage>(this, (_, message) =>
         {
-            HasError = message.IsError;
-            StatusMessage = message.Text;
-        });
-
-        Messenger.Register<OpenFileDetailMessage>(this, (_, message) =>
-        {
-            ShowFileDetail(message.FileId);
+            HasError = message.HasError;
+            StatusMessage = message.Message;
         });
     }
 
@@ -74,33 +85,30 @@ public sealed partial class ShellViewModel : ViewModelBase
         switch (tag?.ToString())
         {
             case "Files":
-                CurrentContent = _services.GetRequiredService<FilesView>();
-                CurrentDetail = null;
+                _navigationService.NavigateToContent(_filesView);
                 break;
             case "Import":
-                CurrentContent = _services.GetRequiredService<ImportView>();
-                CurrentDetail = null;
+                _navigationService.NavigateToContent(_importView);
                 break;
             case "Settings":
-                CurrentContent = _services.GetRequiredService<SettingsView>();
-                CurrentDetail = null;
+                _navigationService.NavigateToContent(_settingsView);
                 break;
         }
+
+        UpdateNavigationState();
     }
 
-    private void ShowFileDetail(Guid fileId)
+    private void UpdateNavigationState()
     {
-        if (fileId == Guid.Empty)
-        {
-            return;
-        }
+        CurrentContent = _navigationService.CurrentContent;
+        CurrentDetail = _navigationService.CurrentDetail;
+    }
 
-        var view = _services.GetRequiredService<FileDetailView>();
-        CurrentDetail = view;
-
-        if (view.DataContext is FileDetailViewModel detailViewModel)
+    private void OnNavigationServicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(INavigationService.CurrentContent) or nameof(INavigationService.CurrentDetail))
         {
-            _ = detailViewModel.LoadCommand.ExecuteAsync(fileId);
+            UpdateNavigationState();
         }
     }
 }

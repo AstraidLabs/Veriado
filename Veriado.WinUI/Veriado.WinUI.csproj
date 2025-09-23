@@ -45,7 +45,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Veriado.Contracts\Veriado.Contracts.csproj" />
-    <ProjectReference Include="..\Veriado.Application\Veriado.Application.csproj" />
     <ProjectReference Include="..\Veriado.Mapping\Veriado.Mapping.csproj" />
     <ProjectReference Include="..\Veriado.Infrastructure\Veriado.Infrastructure.csproj" />
     <ProjectReference Include="..\Veriado.Services\Veriado.Services.csproj" />

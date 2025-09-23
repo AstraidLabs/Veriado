@@ -7,8 +7,8 @@ using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services.DependencyInjection;
 using Veriado.WinUI.DependencyInjection;
-using Veriado.WinUI.Services.Pickers;
-using Veriado.WinUI.Services.Windowing;
+using Veriado.WinUI.Services;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
@@ -38,7 +38,10 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IMessenger>(messenger);
 
                 services.AddSingleton<IWindowProvider, WindowProvider>();
-                services.AddSingleton<IPickerService, WinUIPickerService>();
+                services.AddSingleton<INavigationService, NavigationService>();
+                services.AddSingleton<IDialogService, DialogService>();
+                services.AddSingleton<IPickerService, PickerService>();
+                services.AddSingleton<IStatusService, StatusService>();
 
                 services.AddSingleton<ShellViewModel>();
                 services.AddSingleton<SearchOverlayViewModel>();
@@ -50,7 +53,6 @@ internal sealed class AppHost : IAsyncDisposable
 
                 services.AddWinUiShell();
 
-                Veriado.Application.DependencyInjection.ServiceCollectionExtensions.AddApplication(services);
                 services.AddVeriadoMapping();
                 services.AddInfrastructure();
                 services.AddVeriadoServices();
