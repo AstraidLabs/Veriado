@@ -16,7 +16,7 @@ public sealed class DialogService : IDialogService
 
     public async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel")
     {
-        var hwnd = _window.GetWindowHandle();
+        var hwnd = _window.GetHwnd();
         var dialog = new ContentDialog
         {
             Title = title,

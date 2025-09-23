@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,6 +15,7 @@ public sealed partial class ImportViewModel : ViewModelBase
 {
     private readonly IImportService _import;
     private readonly IPickerService _picker;
+    private readonly IHotStateService _hotState;
 
     [ObservableProperty]
     private string? selectedFolderPath;
@@ -50,25 +50,32 @@ public sealed partial class ImportViewModel : ViewModelBase
     public ImportViewModel(
         IMessenger messenger,
         IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
         IImportService import,
-        IPickerService picker)
-        : base(messenger, statusService)
+        IPickerService picker,
+        IHotStateService hotState)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _import = import ?? throw new ArgumentNullException(nameof(import));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
+        _hotState = hotState ?? throw new ArgumentNullException(nameof(hotState));
+
+        SelectedFolderPath = _hotState.LastFolder;
     }
 
     [RelayCommand]
     private async Task BrowseFolderAsync()
     {
-        await SafeExecuteAsync(async ct =>
+        await SafeExecuteAsync(async _ =>
         {
-            var folder = await _picker.PickFolderAsync(ct).ConfigureAwait(false);
+            var folder = await _picker.PickFolderAsync().ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(folder))
             {
                 SelectedFolderPath = folder;
-                StatusMessage = null;
+                _hotState.LastFolder = folder;
                 LastError = null;
+                StatusService.Clear();
             }
         });
     }
@@ -79,8 +86,9 @@ public sealed partial class ImportViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(SelectedFolderPath))
         {
             HasError = true;
-            StatusMessage = "Vyberte složku pro import.";
-            LastError = StatusMessage;
+            var message = "Vyberte složku pro import.";
+            StatusService.Error(message);
+            LastError = message;
             return;
         }
 
@@ -107,10 +115,10 @@ public sealed partial class ImportViewModel : ViewModelBase
                 if (!response.IsSuccess || response.Data is null)
                 {
                     HasError = true;
-                    StatusMessage = "Import se nezdařil.";
+                    StatusService.Error("Import se nezdařil.");
                     LastError = response.Errors.Count > 0
                         ? string.Join(Environment.NewLine, response.Errors.Select(error => error.Message))
-                        : StatusMessage;
+                        : "Import se nezdařil.";
                     return;
                 }
 
@@ -122,12 +130,12 @@ public sealed partial class ImportViewModel : ViewModelBase
                 {
                     HasError = true;
                     LastError = string.Join(Environment.NewLine, result.Errors.Select(error => error.Message));
-                    StatusMessage = $"Import dokončen s chybami ({result.Succeeded}/{result.Total}).";
+                    StatusService.Error($"Import dokončen s chybami ({result.Succeeded}/{result.Total}).");
                 }
                 else
                 {
                     HasError = false;
-                    StatusMessage = $"Import dokončen ({result.Succeeded}/{result.Total}).";
+                    StatusService.Info($"Import dokončen ({result.Succeeded}/{result.Total}).");
                 }
             }, "Importuji dokumenty…");
         }
@@ -141,9 +149,8 @@ public sealed partial class ImportViewModel : ViewModelBase
     private void CancelImport()
     {
         TryCancelRunning();
-        StatusMessage = "Import byl zrušen.";
+        StatusService.Info("Import byl zrušen.");
         LastError = null;
         IsImporting = false;
     }
-
 }

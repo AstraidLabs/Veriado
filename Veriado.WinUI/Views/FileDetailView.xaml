@@ -55,7 +55,12 @@
                          Text="{Binding EditableMime, Mode=TwoWay}" />
                 <Button Content="Uložit metadata" Command="{Binding UpdateMetadataCommand}" />
             </StackPanel>
-            <TextBlock Text="{Binding StatusMessage}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Kopírovat ID" Command="{Binding CopyIdCommand}" />
+                <Button Content="Kopírovat ukázku" Command="{Binding CopySnippetCommand}" />
+                <Button Content="Sdílet ukázku" Command="{Binding ShareSnippetCommand}" />
+            </StackPanel>
+            <TextBlock Text="{Binding ContentPreview}" TextWrapping="Wrap" />
         </StackPanel>
     </Grid>
 </UserControl>

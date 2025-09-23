@@ -2,6 +2,9 @@ namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IWindowProvider
 {
-    nint GetWindowHandle();
     void SetWindow(Microsoft.UI.Xaml.Window window);
+
+    Microsoft.UI.Xaml.Window? TryGetWindow();
+
+    nint GetHwnd();
 }

@@ -2,10 +2,16 @@ namespace Veriado.WinUI.Services.Abstractions;
 
 public interface INavigationService
 {
-    object? CurrentContent { get; }
-    object? CurrentDetail { get; }
+    void AttachHost(INavigationHost host);
 
-    void NavigateToContent(object view);
-    void NavigateToDetail(object? view);
-    void ClearDetail();
+    void NavigateTo(object view, object? viewModel = null);
+
+    void NavigateDetail(object view, object? viewModel = null);
+}
+
+public interface INavigationHost
+{
+    object? CurrentContent { get; set; }
+
+    object? CurrentDetail { get; set; }
 }

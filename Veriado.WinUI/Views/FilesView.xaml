@@ -23,6 +23,11 @@
                      Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             <Button Content="Hledat"
                     Command="{Binding RefreshCommand}" />
+            <winui:NumberBox Width="140"
+                             Header="Položek na stránku"
+                             Value="{Binding PageSize, Mode=TwoWay}"
+                             Minimum="1"
+                             Maximum="500" />
         </StackPanel>
 
         <winui:ItemsRepeater Grid.Row="1" ItemsSource="{Binding Items}">

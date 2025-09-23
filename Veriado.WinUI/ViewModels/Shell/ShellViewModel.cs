@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
@@ -13,7 +12,7 @@ using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.ViewModels;
 
-public sealed partial class ShellViewModel : ViewModelBase
+public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
 {
     private readonly INavigationService _navigationService;
     private readonly FilesView _filesView;
@@ -29,6 +28,12 @@ public sealed partial class ShellViewModel : ViewModelBase
     [ObservableProperty]
     private object? selectedNavItem;
 
+    [ObservableProperty]
+    private string? statusMessage;
+
+    [ObservableProperty]
+    private bool isInfoBarOpen;
+
     public FilesGridViewModel Files { get; }
 
     public ImportViewModel Import { get; }
@@ -38,6 +43,8 @@ public sealed partial class ShellViewModel : ViewModelBase
     public ShellViewModel(
         IMessenger messenger,
         IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
         INavigationService navigationService,
         FilesGridViewModel files,
         ImportViewModel import,
@@ -45,7 +52,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         FilesView filesView,
         ImportView importView,
         SettingsView settingsView)
-        : base(messenger, statusService)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         Files = files ?? throw new ArgumentNullException(nameof(files));
@@ -55,22 +62,16 @@ public sealed partial class ShellViewModel : ViewModelBase
         _importView = importView ?? throw new ArgumentNullException(nameof(importView));
         _settingsView = settingsView ?? throw new ArgumentNullException(nameof(settingsView));
 
-        if (_navigationService is INotifyPropertyChanged notifier)
-        {
-            notifier.PropertyChanged += OnNavigationServicePropertyChanged;
-        }
-
-        _navigationService.NavigateToContent(_filesView);
-        UpdateNavigationState();
+        _navigationService.AttachHost(this);
+        _navigationService.NavigateTo(_filesView);
 
         Messenger.Register<StatusChangedMessage>(this, (_, message) =>
         {
             HasError = message.HasError;
             StatusMessage = message.Message;
+            IsInfoBarOpen = !string.IsNullOrEmpty(message.Message);
         });
     }
-
-    protected override bool BroadcastStatusChanges => false;
 
     partial void OnSelectedNavItemChanged(object? value)
     {
@@ -85,30 +86,14 @@ public sealed partial class ShellViewModel : ViewModelBase
         switch (tag?.ToString())
         {
             case "Files":
-                _navigationService.NavigateToContent(_filesView);
+                _navigationService.NavigateTo(_filesView);
                 break;
             case "Import":
-                _navigationService.NavigateToContent(_importView);
+                _navigationService.NavigateTo(_importView);
                 break;
             case "Settings":
-                _navigationService.NavigateToContent(_settingsView);
+                _navigationService.NavigateTo(_settingsView);
                 break;
-        }
-
-        UpdateNavigationState();
-    }
-
-    private void UpdateNavigationState()
-    {
-        CurrentContent = _navigationService.CurrentContent;
-        CurrentDetail = _navigationService.CurrentDetail;
-    }
-
-    private void OnNavigationServicePropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(INavigationService.CurrentContent) or nameof(INavigationService.CurrentDetail))
-        {
-            UpdateNavigationState();
         }
     }
 }

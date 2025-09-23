@@ -15,8 +15,13 @@ public sealed partial class FavoritesViewModel : ViewModelBase
 {
     private readonly IFileQueryService _fileQueryService;
 
-    public FavoritesViewModel(IMessenger messenger, IStatusService statusService, IFileQueryService fileQueryService)
-        : base(messenger, statusService)
+    public FavoritesViewModel(
+        IMessenger messenger,
+        IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
+        IFileQueryService fileQueryService)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
     }
@@ -36,9 +41,14 @@ public sealed partial class FavoritesViewModel : ViewModelBase
                 Items.Add(favorite);
             }
 
-            StatusMessage = Items.Count == 0
-                ? "Žádné uložené oblíbené položky."
-                : $"Načteno {Items.Count} oblíbených vyhledávání.";
+            if (Items.Count == 0)
+            {
+                StatusService.Info("Žádné uložené oblíbené položky.");
+            }
+            else
+            {
+                StatusService.Info($"Načteno {Items.Count} oblíbených vyhledávání.");
+            }
         }, "Načítám oblíbená vyhledávání…");
     }
 
@@ -53,7 +63,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
         await SafeExecuteAsync(async ct =>
         {
             await _fileQueryService.RemoveFavoriteAsync(id, ct).ConfigureAwait(false);
-            StatusMessage = "Oblíbené vyhledávání bylo odstraněno.";
+            StatusService.Info("Oblíbené vyhledávání bylo odstraněno.");
         }, "Odstraňuji oblíbené vyhledávání…");
 
         await LoadAsync();
@@ -65,7 +75,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
         if (favorite is null || string.IsNullOrWhiteSpace(favorite.Name))
         {
             HasError = true;
-            StatusMessage = "Název oblíbeného vyhledávání je povinný.";
+            StatusService.Error("Název oblíbeného vyhledávání je povinný.");
             return;
         }
 
@@ -78,7 +88,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
                 favorite.IsFuzzy);
 
             await _fileQueryService.AddFavoriteAsync(definition, ct).ConfigureAwait(false);
-            StatusMessage = "Oblíbené vyhledávání bylo uloženo.";
+            StatusService.Info("Oblíbené vyhledávání bylo uloženo.");
         }, "Ukládám oblíbené vyhledávání…");
 
         await LoadAsync();

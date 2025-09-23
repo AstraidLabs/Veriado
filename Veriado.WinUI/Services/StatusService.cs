@@ -14,7 +14,7 @@ public sealed class StatusService : IStatusService
         _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
     }
 
-    public void ShowInfo(string message)
+    public void Info(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -25,7 +25,7 @@ public sealed class StatusService : IStatusService
         _messenger.Send(new StatusChangedMessage(false, message));
     }
 
-    public void ShowError(string message)
+    public void Error(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -38,6 +38,6 @@ public sealed class StatusService : IStatusService
 
     public void Clear()
     {
-        _messenger.Send(new StatusChangedMessage(false, string.Empty));
+        _messenger.Send(new StatusChangedMessage(false, null));
     }
 }

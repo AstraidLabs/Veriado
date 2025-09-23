@@ -6,8 +6,8 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
-using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.ViewModels.Base;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -16,6 +16,9 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     private readonly IFileQueryService _queryService;
     private readonly IFileOperationsService _operations;
     private readonly IDialogService _dialogService;
+    private readonly IPreviewService _previewService;
+    private readonly IClipboardService _clipboardService;
+    private readonly IShareService _shareService;
 
     [ObservableProperty]
     private FileDetailDto? detail;
@@ -53,14 +56,22 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     public FileDetailViewModel(
         IMessenger messenger,
         IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
         IFileQueryService queryService,
         IFileOperationsService operations,
-        IDialogService dialogService)
-        : base(messenger, statusService)
+        IDialogService dialogService,
+        IPreviewService previewService,
+        IClipboardService clipboardService,
+        IShareService shareService)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
+        _clipboardService = clipboardService ?? throw new ArgumentNullException(nameof(clipboardService));
+        _shareService = shareService ?? throw new ArgumentNullException(nameof(shareService));
     }
 
     [RelayCommand]
@@ -80,7 +91,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         if (Detail is null || string.IsNullOrWhiteSpace(EditableName))
         {
             HasError = true;
-            StatusMessage = "Zadejte nový název souboru.";
+            StatusService.Error("Zadejte nový název souboru.");
             return;
         }
 
@@ -93,13 +104,13 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             if (!response.IsSuccess)
             {
                 HasError = true;
-                StatusMessage = "Přejmenování se nezdařilo.";
+                StatusService.Error("Přejmenování se nezdařilo.");
                 return;
             }
 
             var fileId = response.Data ?? Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
-            StatusMessage = "Název byl aktualizován.";
+            StatusService.Info("Název byl aktualizován.");
         }, "Aktualizuji název souboru…");
     }
 
@@ -124,13 +135,13 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             if (!response.IsSuccess)
             {
                 HasError = true;
-                StatusMessage = "Aktualizace metadat se nezdařila.";
+                StatusService.Error("Aktualizace metadat se nezdařila.");
                 return;
             }
 
             var fileId = response.Data ?? Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
-            StatusMessage = "Metadata byla aktualizována.";
+            StatusService.Info("Metadata byla aktualizována.");
         }, "Aktualizuji metadata…");
     }
 
@@ -151,15 +162,15 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             if (!response.IsSuccess)
             {
                 HasError = true;
-                StatusMessage = "Změna režimu se nezdařila.";
+                StatusService.Error("Změna režimu se nezdařila.");
                 return;
             }
 
             var fileId = response.Data ?? Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
-            StatusMessage = isReadOnly
+            StatusService.Info(isReadOnly
                 ? "Soubor je nyní jen pro čtení."
-                : "Soubor lze znovu upravovat.";
+                : "Soubor lze znovu upravovat.");
         }, "Aktualizuji režim jen pro čtení…");
     }
 
@@ -184,13 +195,13 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             if (!response.IsSuccess)
             {
                 HasError = true;
-                StatusMessage = "Uložení platnosti se nezdařilo.";
+                StatusService.Error("Uložení platnosti se nezdařilo.");
                 return;
             }
 
             var fileId = response.Data ?? Detail.Id;
             await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
-            StatusMessage = "Platnost byla aktualizována.";
+            StatusService.Info("Platnost byla aktualizována.");
         }, "Ukládám platnost dokumentu…");
     }
 
@@ -220,13 +231,48 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             if (!response.IsSuccess)
             {
                 HasError = true;
-                StatusMessage = "Odstranění platnosti se nezdařilo.";
+                StatusService.Error("Odstranění platnosti se nezdařilo.");
                 return;
             }
 
             await LoadCoreAsync(Detail.Id, ct).ConfigureAwait(false);
-            StatusMessage = "Platnost byla odstraněna.";
+            StatusService.Info("Platnost byla odstraněna.");
         }, "Odebírám platnost dokumentu…");
+    }
+
+    [RelayCommand]
+    private async Task CopyIdAsync()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        await _clipboardService.CopyTextAsync(Detail.Id.ToString());
+        StatusService.Info("Identifikátor byl zkopírován do schránky.");
+    }
+
+    [RelayCommand]
+    private async Task CopySnippetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ContentPreview))
+        {
+            return;
+        }
+
+        await _clipboardService.CopyTextAsync(ContentPreview);
+        StatusService.Info("Ukázka obsahu byla zkopírována.");
+    }
+
+    [RelayCommand]
+    private async Task ShareSnippetAsync()
+    {
+        if (Detail is null || string.IsNullOrWhiteSpace(ContentPreview))
+        {
+            return;
+        }
+
+        await _shareService.ShareTextAsync(Detail.Name ?? "Ukázka", ContentPreview);
     }
 
     private async Task LoadCoreAsync(Guid id, CancellationToken cancellationToken)
@@ -237,7 +283,8 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         if (detail is null)
         {
             HasError = true;
-            StatusMessage = "Dokument nebyl nalezen.";
+            ContentPreview = null;
+            StatusService.Error("Dokument nebyl nalezen.");
             return;
         }
 
@@ -262,7 +309,8 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             ValidityHasElectronicCopy = false;
         }
 
-        StatusMessage = null;
+        var preview = await _previewService.GetPreviewAsync(detail.Id, cancellationToken).ConfigureAwait(false);
+        ContentPreview = preview?.TextSnippet;
+        HasError = false;
     }
-
 }

@@ -9,9 +9,10 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Search;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Services.Messages;
 using Veriado.WinUI.ViewModels.Base;
 using Windows.System;
-using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Search;
 
@@ -20,12 +21,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     private const int SearchResultLimit = 50;
     private const int HistoryTake = 50;
     private readonly ISearchFacade _searchFacade;
-
-    public SearchOverlayViewModel(IMessenger messenger, IStatusService statusService, ISearchFacade searchFacade)
-        : base(messenger, statusService)
-    {
-        _searchFacade = searchFacade ?? throw new ArgumentNullException(nameof(searchFacade));
-    }
+    private readonly IHotStateService _hotState;
 
     [ObservableProperty]
     private bool isOpen;
@@ -41,11 +37,33 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
 
     public SearchSection<SearchHistoryEntry> History { get; } = new();
 
+    public SearchOverlayViewModel(
+        IMessenger messenger,
+        IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
+        ISearchFacade searchFacade,
+        IHotStateService hotState)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
+    {
+        _searchFacade = searchFacade ?? throw new ArgumentNullException(nameof(searchFacade));
+        _hotState = hotState ?? throw new ArgumentNullException(nameof(hotState));
+
+        QueryText = _hotState.LastQuery;
+
+        Messenger.Register<OpenSearchOverlayMessage>(this, (_, _) => _ = OpenAsync());
+        Messenger.Register<CloseSearchOverlayMessage>(this, (_, _) => Close());
+    }
+
     [RelayCommand]
     private async Task OpenAsync()
     {
         IsOpen = true;
-        StatusMessage = null;
+        if (string.IsNullOrWhiteSpace(QueryText))
+        {
+            QueryText = _hotState.LastQuery;
+        }
+
         await SafeExecuteAsync(async ct =>
         {
             await Task.WhenAll(
@@ -62,7 +80,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     {
         if (key == VirtualKey.Escape && string.IsNullOrWhiteSpace(QueryText))
         {
-            IsOpen = false;
+            Close();
         }
     }
 
@@ -228,9 +246,21 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
             }
         }
 
-        StatusMessage = Results.Count == 0
-            ? "Nebyl nalezen žádný výsledek."
-            : $"Nalezeno {Results.Count} výsledků.";
+        _hotState.LastQuery = query;
+
+        if (Results.Count == 0)
+        {
+            StatusService.Info("Nebyl nalezen žádný výsledek.");
+        }
+        else
+        {
+            StatusService.Info($"Nalezeno {Results.Count} výsledků.");
+        }
+    }
+
+    partial void OnQueryTextChanged(string? value)
+    {
+        _hotState.LastQuery = string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static void ReplaceItems<T>(ObservableCollection<T> target, IReadOnlyList<T> source)

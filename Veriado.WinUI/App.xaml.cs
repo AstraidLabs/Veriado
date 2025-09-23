@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Views;
+using Veriado.WinUI.ViewModels.Settings;
 
 namespace Veriado;
 
@@ -33,6 +34,12 @@ public partial class App : Application
         MainWindow = Services.GetRequiredService<MainWindow>();
         var windowProvider = Services.GetRequiredService<IWindowProvider>();
         windowProvider.SetWindow(MainWindow);
+        var keyboardShortcuts = Services.GetRequiredService<IKeyboardShortcutsService>();
+        keyboardShortcuts.RegisterDefaultShortcuts();
+        var themeService = Services.GetRequiredService<IThemeService>();
+        themeService.InitializeAsync().GetAwaiter().GetResult();
+        var settingsViewModel = Services.GetRequiredService<SettingsViewModel>();
+        settingsViewModel.SelectedTheme = themeService.CurrentTheme;
         MainWindow.Closed += OnWindowClosed;
         MainWindow.Activate();
     }

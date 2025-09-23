@@ -1,40 +1,47 @@
 using System;
-using CommunityToolkit.Mvvm.ComponentModel;
 using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 
-public sealed class NavigationService : ObservableObject, INavigationService
+public sealed class NavigationService : INavigationService
 {
-    private object? _currentContent;
-    private object? _currentDetail;
+    private INavigationHost? _host;
 
-    public object? CurrentContent
+    public void AttachHost(INavigationHost host)
     {
-        get => _currentContent;
-        private set => SetProperty(ref _currentContent, value);
+        _host = host ?? throw new ArgumentNullException(nameof(host));
     }
 
-    public object? CurrentDetail
-    {
-        get => _currentDetail;
-        private set => SetProperty(ref _currentDetail, value);
-    }
-
-    public void NavigateToContent(object view)
+    public void NavigateTo(object view, object? viewModel = null)
     {
         ArgumentNullException.ThrowIfNull(view);
-        CurrentContent = view;
-        ClearDetail();
+        if (_host is null)
+        {
+            throw new InvalidOperationException("Navigation host has not been attached.");
+        }
+
+        if (view is Microsoft.UI.Xaml.FrameworkElement frameworkElement && viewModel is not null)
+        {
+            frameworkElement.DataContext = viewModel;
+        }
+
+        _host.CurrentDetail = null;
+        _host.CurrentContent = view;
     }
 
-    public void NavigateToDetail(object? view)
+    public void NavigateDetail(object view, object? viewModel = null)
     {
-        CurrentDetail = view;
-    }
+        ArgumentNullException.ThrowIfNull(view);
+        if (_host is null)
+        {
+            throw new InvalidOperationException("Navigation host has not been attached.");
+        }
 
-    public void ClearDetail()
-    {
-        CurrentDetail = null;
+        if (view is Microsoft.UI.Xaml.FrameworkElement frameworkElement && viewModel is not null)
+        {
+            frameworkElement.DataContext = viewModel;
+        }
+
+        _host.CurrentDetail = view;
     }
 }

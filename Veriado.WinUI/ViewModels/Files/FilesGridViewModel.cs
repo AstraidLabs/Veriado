@@ -9,8 +9,8 @@ using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
 using Veriado.Services.Files;
-using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.ViewModels.Files;
@@ -20,6 +20,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     private readonly IFileQueryService _queryService;
     private readonly INavigationService _navigationService;
     private readonly Func<FileDetailView> _detailViewFactory;
+    private readonly IHotStateService _hotState;
 
     [ObservableProperty]
     private string? searchText;
@@ -39,6 +40,9 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     [ObservableProperty]
     private double? upperValue;
 
+    [ObservableProperty]
+    private int pageSize = AppSettings.DefaultPageSize;
+
     public ObservableCollection<FileSummaryDto> Items { get; } = new();
 
     public ObservableCollection<string> SearchSuggestions { get; } = new();
@@ -52,14 +56,21 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     public FilesGridViewModel(
         IMessenger messenger,
         IStatusService statusService,
+        IDispatcherService dispatcher,
+        IExceptionHandler exceptionHandler,
         IFileQueryService queryService,
         INavigationService navigationService,
+        IHotStateService hotState,
         Func<FileDetailView> detailViewFactory)
-        : base(messenger, statusService)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _detailViewFactory = detailViewFactory ?? throw new ArgumentNullException(nameof(detailViewFactory));
+        _hotState = hotState ?? throw new ArgumentNullException(nameof(hotState));
+
+        PageSize = Math.Max(1, _hotState.PageSize);
+        SearchText = _hotState.LastQuery;
     }
 
     [RelayCommand]
@@ -67,15 +78,17 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     {
         await SafeExecuteAsync(async ct =>
         {
-            var page = await _queryService.GetGridAsync(new FileGridQueryDto
+            var request = new FileGridQueryDto
             {
                 Text = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText,
                 Page = new PageRequest
                 {
                     Page = 1,
-                    PageSize = 50,
+                    PageSize = Math.Max(1, PageSize),
                 },
-            }, ct).ConfigureAwait(false);
+            };
+
+            var page = await _queryService.GetGridAsync(request, ct).ConfigureAwait(false);
 
             Items.Clear();
             foreach (var item in page.Items)
@@ -83,9 +96,14 @@ public sealed partial class FilesGridViewModel : ViewModelBase
                 Items.Add(item);
             }
 
-            StatusMessage = Items.Count == 0
-                ? "Žádné dokumenty neodpovídají aktuálnímu filtru."
-                : $"Načteno {Items.Count} dokumentů.";
+            if (Items.Count == 0)
+            {
+                StatusService.Info("Žádné dokumenty neodpovídají aktuálnímu filtru.");
+            }
+            else
+            {
+                StatusService.Info($"Načteno {Items.Count} dokumentů.");
+            }
         }, "Načítám dokumenty…");
     }
 
@@ -98,7 +116,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase
         }
 
         var view = _detailViewFactory();
-        _navigationService.NavigateToDetail(view);
+        _navigationService.NavigateDetail(view);
 
         if (view.DataContext is FileDetailViewModel detailViewModel)
         {
@@ -106,4 +124,20 @@ public sealed partial class FilesGridViewModel : ViewModelBase
         }
     }
 
+    partial void OnPageSizeChanged(int value)
+    {
+        var normalized = value <= 0 ? AppSettings.DefaultPageSize : value;
+        if (normalized != value)
+        {
+            PageSize = normalized;
+            return;
+        }
+
+        _hotState.PageSize = normalized;
+    }
+
+    partial void OnSearchTextChanged(string? value)
+    {
+        _hotState.LastQuery = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 }
