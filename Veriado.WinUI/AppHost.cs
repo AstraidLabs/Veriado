@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Veriado.Application.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services.DependencyInjection;
@@ -51,7 +50,7 @@ internal sealed class AppHost : IAsyncDisposable
 
                 services.AddWinUiShell();
 
-                services.AddApplication();
+                Veriado.Application.DependencyInjection.ServiceCollectionExtensions.AddApplication(services);
                 services.AddVeriadoMapping();
                 services.AddInfrastructure();
                 services.AddVeriadoServices();
