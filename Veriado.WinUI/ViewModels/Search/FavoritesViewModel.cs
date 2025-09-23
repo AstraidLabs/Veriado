@@ -3,10 +3,8 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Veriado.Contracts.Search;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.WinUI.Mappers;
-using Veriado.WinUI.Models.Search;
+using Veriado.Contracts.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
 
@@ -22,7 +20,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
     }
 
-    public ObservableCollection<SearchFavoriteItemModel> Items { get; } = new();
+    public ObservableCollection<SearchFavoriteItem> Items { get; } = new();
 
     [RelayCommand]
     private async Task LoadAsync()
@@ -34,7 +32,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
             Items.Clear();
             foreach (var favorite in favorites)
             {
-                Items.Add(favorite.ToSearchFavoriteItemModel());
+                Items.Add(favorite);
             }
 
             StatusMessage = Items.Count == 0
@@ -61,7 +59,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task AddAsync(SearchFavoriteDefinitionModel? favorite)
+    private async Task AddAsync(SearchFavoriteDefinition? favorite)
     {
         if (favorite is null || string.IsNullOrWhiteSpace(favorite.Name))
         {

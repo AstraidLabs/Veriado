@@ -24,10 +24,10 @@
             <Button Content="Zrušit" Command="{Binding CancelImportCommand}" />
         </StackPanel>
 
-        <winui:InfoBar IsOpen="True"
+        <winui:InfoBar IsOpen="{x:Bind ViewModel.IsInfoBarOpen, Mode=OneWay}"
                        Visibility="{x:Bind !string.IsNullOrEmpty(ViewModel.StatusMessage), Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
-                       Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
-                       Message="{Binding StatusMessage}" />
+                       Severity="{x:Bind ViewModel.HasError, Mode=OneWay, Converter={StaticResource BoolToSeverityConverter}}"
+                       Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" />
         <ProgressBar IsIndeterminate="{Binding IsBusy}"
                      Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
     </StackPanel>

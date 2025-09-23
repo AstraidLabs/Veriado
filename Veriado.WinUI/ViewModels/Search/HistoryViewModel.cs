@@ -4,8 +4,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.WinUI.Mappers;
-using Veriado.WinUI.Models.Search;
+using Veriado.Contracts.Search;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
 
@@ -21,7 +20,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
     }
 
-    public ObservableCollection<SearchHistoryItemModel> Items { get; } = new();
+    public ObservableCollection<SearchHistoryEntry> Items { get; } = new();
 
     [ObservableProperty]
     private int take = 50;
@@ -36,7 +35,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
             Items.Clear();
             foreach (var entry in entries)
             {
-                Items.Add(entry.ToSearchHistoryItemModel());
+                Items.Add(entry);
             }
 
             StatusMessage = Items.Count == 0

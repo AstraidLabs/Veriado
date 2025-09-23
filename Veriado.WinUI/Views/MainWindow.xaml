@@ -8,7 +8,6 @@
     xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
     xmlns:conv="using:CommunityToolkit.WinUI.Converters"
     xmlns:converters="using:Veriado.WinUI.Converters"
-    xmlns:models="using:Veriado.WinUI.Models.Search"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
     Title="Veriado"
     Width="1280"
@@ -146,8 +145,8 @@
                             <winui:ListView.ItemTemplate>
                                 <DataTemplate x:DataType="contracts:SearchHitDto">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{x:Bind Snippet}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind Snippet, Mode=OneWay}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </DataTemplate>
                             </winui:ListView.ItemTemplate>
@@ -165,10 +164,10 @@
                                                                     CommandParameterPath="ClickedItem" />
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
-                                        <DataTemplate x:DataType="models:SearchFavoriteItemModel">
+                                        <DataTemplate x:DataType="contracts:SearchFavoriteItem">
                                             <StackPanel Spacing="2">
-                                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind QueryText}" Style="{ThemeResource CaptionTextBlockStyle}" />
+                                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{x:Bind QueryText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </winui:ListView.ItemTemplate>
@@ -186,10 +185,10 @@
                                                                     CommandParameterPath="ClickedItem" />
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
-                                        <DataTemplate x:DataType="models:SearchHistoryItemModel">
+                                        <DataTemplate x:DataType="contracts:SearchHistoryEntry">
                                             <StackPanel Spacing="2">
-                                                <TextBlock Text="{x:Bind QueryText}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind LastQueriedUtc}"
+                                                <TextBlock Text="{x:Bind QueryText, Mode=OneWay}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{x:Bind LastQueriedUtc, Mode=OneWay}"
                                                            Style="{ThemeResource CaptionTextBlockStyle}" />
                                             </StackPanel>
                                         </DataTemplate>
