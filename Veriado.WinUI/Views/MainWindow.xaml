@@ -5,15 +5,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:contracts="using:Veriado.Contracts.Search"
     xmlns:i="using:Microsoft.Xaml.Interactivity"
-    xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
-    xmlns:conv="using:CommunityToolkit.WinUI.Converters"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls"
     Title="Veriado">
 
     <Grid x:Name="LayoutRoot">
-        <Grid.Resources>
-            <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -162,7 +157,7 @@
                                         <i:EventTriggerBehavior EventName="ItemClick">
                                             <i:InvokeCommandAction
                                                 Command="{x:Bind ViewModel.Search.UseFavoriteCommand, Mode=OneWay}"
-                                                CommandParameter="{Binding ClickedItem, RelativeSource={RelativeSource Mode=Self}}" />
+                                                InputConverter="{StaticResource ItemClickEventArgsToItemConverter}" />
                                         </i:EventTriggerBehavior>
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
@@ -185,7 +180,7 @@
                                         <i:EventTriggerBehavior EventName="ItemClick">
                                             <i:InvokeCommandAction
                                                 Command="{x:Bind ViewModel.Search.UseHistoryCommand, Mode=OneWay}"
-                                                CommandParameter="{Binding ClickedItem, RelativeSource={RelativeSource Mode=Self}}" />
+                                                InputConverter="{StaticResource ItemClickEventArgsToItemConverter}" />
                                         </i:EventTriggerBehavior>
                                     </i:Interaction.Behaviors>
                                     <winui:ListView.ItemTemplate>
