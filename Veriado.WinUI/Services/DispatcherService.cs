@@ -8,14 +8,12 @@ namespace Veriado.Services;
 
 public sealed class DispatcherService : IDispatcherService
 {
-    private readonly IWindowProvider _windowProvider;
     private readonly TaskCompletionSource<DispatcherQueue> _dispatcherReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly object _dispatcherLock = new();
     private DispatcherQueue? _dispatcher;
 
-    public DispatcherService(IWindowProvider windowProvider)
+    public DispatcherService()
     {
-        _windowProvider = windowProvider ?? throw new ArgumentNullException(nameof(windowProvider));
     }
 
     public bool HasThreadAccess
@@ -145,20 +143,6 @@ public sealed class DispatcherService : IDispatcherService
         if (dispatcher is not null)
         {
             return dispatcher;
-        }
-
-        if (_windowProvider.TryGetWindow(out var window) && window is not null)
-        {
-            dispatcher = window.DispatcherQueue;
-            lock (_dispatcherLock)
-            {
-                if (_dispatcher is null)
-                {
-                    SetDispatcherUnsafe(dispatcher);
-                }
-
-                return _dispatcher!;
-            }
         }
 
         return await _dispatcherReady.Task.ConfigureAwait(false);

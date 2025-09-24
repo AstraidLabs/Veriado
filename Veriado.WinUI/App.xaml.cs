@@ -71,7 +71,7 @@ public partial class App : Application
 
         try
         {
-            host = await Task.Run(AppHost.StartAsync).ConfigureAwait(true);
+            host = await AppHost.StartAsync().ConfigureAwait(true);
 
             var services = host.Services;
 
