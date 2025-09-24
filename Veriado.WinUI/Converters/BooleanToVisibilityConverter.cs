@@ -3,30 +3,29 @@
 using System;
 using System.Globalization;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 
 namespace Veriado.WinUI.Converters;
 
 /// <summary>
-/// Converts boolean-like values to <see cref="InfoBarSeverity"/> instances.
+/// Converts boolean-like values to <see cref="Visibility"/> values and back.
 /// </summary>
-public sealed class BoolToSeverityConverter : IValueConverter
+public sealed class BooleanToVisibilityConverter : IValueConverter
 {
     /// <summary>
-    /// Gets or sets the severity that is returned when the input resolves to <c>true</c>.
+    /// Gets or sets the <see cref="Visibility"/> that is returned when the input resolves to <c>true</c>.
     /// </summary>
-    public InfoBarSeverity TrueValue { get; set; } = InfoBarSeverity.Error;
+    public Visibility TrueValue { get; set; } = Visibility.Visible;
 
     /// <summary>
-    /// Gets or sets the severity that is returned when the input resolves to <c>false</c>.
+    /// Gets or sets the <see cref="Visibility"/> that is returned when the input resolves to <c>false</c>.
     /// </summary>
-    public InfoBarSeverity FalseValue { get; set; } = InfoBarSeverity.Informational;
+    public Visibility FalseValue { get; set; } = Visibility.Collapsed;
 
     /// <summary>
-    /// Gets or sets the severity that is returned when the input cannot be evaluated.
+    /// Gets or sets the <see cref="Visibility"/> that is returned when the input cannot be evaluated.
     /// </summary>
-    public InfoBarSeverity NullValue { get; set; } = InfoBarSeverity.Informational;
+    public Visibility NullValue { get; set; } = Visibility.Collapsed;
 
     /// <inheritdoc />
     public object Convert(object value, Type targetType, object parameter, string language)
@@ -44,25 +43,18 @@ public sealed class BoolToSeverityConverter : IValueConverter
     /// <inheritdoc />
     public object ConvertBack(object value, Type targetType, object parameter, string language)
     {
-        if (value is InfoBarSeverity severity)
+        if (value == DependencyProperty.UnsetValue)
         {
-            if (severity == TrueValue)
-            {
-                return true;
-            }
-
-            if (severity == FalseValue)
-            {
-                return false;
-            }
-
-            if (severity == NullValue && targetType == typeof(bool?))
-            {
-                return (bool?)null;
-            }
+            return DependencyProperty.UnsetValue;
         }
 
-        var boolean = TryConvertToBoolean(value);
+        bool? boolean = value switch
+        {
+            Visibility visibility when visibility == TrueValue => true,
+            Visibility visibility when visibility == FalseValue => false,
+            Visibility visibility when visibility == NullValue => (bool?)null,
+            _ => TryConvertToBoolean(value)
+        };
 
         if (targetType == typeof(bool))
         {
@@ -79,6 +71,11 @@ public sealed class BoolToSeverityConverter : IValueConverter
             return boolean.HasValue ? (object)boolean.Value : DependencyProperty.UnsetValue;
         }
 
+        if (targetType == typeof(Visibility))
+        {
+            return value is Visibility visibility ? visibility : DependencyProperty.UnsetValue;
+        }
+
         return DependencyProperty.UnsetValue;
     }
 
@@ -90,6 +87,8 @@ public sealed class BoolToSeverityConverter : IValueConverter
                 return null;
             case bool boolValue:
                 return boolValue;
+            case bool? nullableBool:
+                return nullableBool;
             case string text:
                 if (bool.TryParse(text, out var parsed))
                 {
