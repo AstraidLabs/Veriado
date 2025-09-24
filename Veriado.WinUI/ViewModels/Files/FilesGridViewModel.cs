@@ -88,7 +88,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase
                 },
             };
 
-            var page = await _queryService.GetGridAsync(request, ct).ConfigureAwait(false);
+            var page = await _queryService.GetGridAsync(request, ct);
 
             Items.Clear();
             foreach (var item in page.Items)

@@ -98,8 +98,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         await SafeExecuteAsync(async ct =>
         {
             var response = await _operations
-                .RenameAsync(Detail.Id, EditableName.Trim(), ct)
-                .ConfigureAwait(false);
+                .RenameAsync(Detail.Id, EditableName.Trim(), ct);
 
             if (!response.IsSuccess)
             {
@@ -109,7 +108,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             }
 
             var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
-            await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
+            await LoadCoreAsync(fileId, ct);
             StatusService.Info("Název byl aktualizován.");
         }, "Aktualizuji název souboru…");
     }
@@ -131,7 +130,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                 Mime = string.IsNullOrWhiteSpace(EditableMime) ? null : EditableMime,
             };
 
-            var response = await _operations.UpdateMetadataAsync(request, ct).ConfigureAwait(false);
+            var response = await _operations.UpdateMetadataAsync(request, ct);
             if (!response.IsSuccess)
             {
                 HasError = true;
@@ -140,7 +139,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             }
 
             var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
-            await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
+            await LoadCoreAsync(fileId, ct);
             StatusService.Info("Metadata byla aktualizována.");
         }, "Aktualizuji metadata…");
     }
@@ -156,8 +155,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         await SafeExecuteAsync(async ct =>
         {
             var response = await _operations
-                .SetReadOnlyAsync(Detail.Id, isReadOnly, ct)
-                .ConfigureAwait(false);
+                .SetReadOnlyAsync(Detail.Id, isReadOnly, ct);
 
             if (!response.IsSuccess)
             {
@@ -167,7 +165,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             }
 
             var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
-            await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
+            await LoadCoreAsync(fileId, ct);
             StatusService.Info(isReadOnly
                 ? "Soubor je nyní jen pro čtení."
                 : "Soubor lze znovu upravovat.");
@@ -189,8 +187,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             var validity = new FileValidityDto(issuedAt, validUntil, ValidityHasPhysicalCopy, ValidityHasElectronicCopy);
 
             var response = await _operations
-                .SetValidityAsync(Detail.Id, validity, ct)
-                .ConfigureAwait(false);
+                .SetValidityAsync(Detail.Id, validity, ct);
 
             if (!response.IsSuccess)
             {
@@ -200,7 +197,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             }
 
             var fileId = response.Data != Guid.Empty ? response.Data : Detail.Id;
-            await LoadCoreAsync(fileId, ct).ConfigureAwait(false);
+            await LoadCoreAsync(fileId, ct);
             StatusService.Info("Platnost byla aktualizována.");
         }, "Ukládám platnost dokumentu…");
     }
@@ -214,8 +211,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         }
 
         var confirmed = await _dialogService
-            .ConfirmAsync("Odebrat platnost", "Opravdu chcete odstranit platnost dokumentu?", "Odebrat", "Zrušit")
-            .ConfigureAwait(false);
+            .ConfirmAsync("Odebrat platnost", "Opravdu chcete odstranit platnost dokumentu?", "Odebrat", "Zrušit");
 
         if (!confirmed)
         {
@@ -225,8 +221,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
         await SafeExecuteAsync(async ct =>
         {
             var response = await _operations
-                .ClearValidityAsync(Detail.Id, ct)
-                .ConfigureAwait(false);
+                .ClearValidityAsync(Detail.Id, ct);
 
             if (!response.IsSuccess)
             {
@@ -235,7 +230,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
                 return;
             }
 
-            await LoadCoreAsync(Detail.Id, ct).ConfigureAwait(false);
+            await LoadCoreAsync(Detail.Id, ct);
             StatusService.Info("Platnost byla odstraněna.");
         }, "Odebírám platnost dokumentu…");
     }
@@ -277,7 +272,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
 
     private async Task LoadCoreAsync(Guid id, CancellationToken cancellationToken)
     {
-        var detail = await _queryService.GetDetailAsync(id, cancellationToken).ConfigureAwait(false);
+        var detail = await _queryService.GetDetailAsync(id, cancellationToken);
         Detail = detail;
 
         if (detail is null)
@@ -309,7 +304,7 @@ public sealed partial class FileDetailViewModel : ViewModelBase
             ValidityHasElectronicCopy = false;
         }
 
-        var preview = await _previewService.GetPreviewAsync(detail.Id, cancellationToken).ConfigureAwait(false);
+        var preview = await _previewService.GetPreviewAsync(detail.Id, cancellationToken);
         ContentPreview = preview?.TextSnippet;
         HasError = false;
     }

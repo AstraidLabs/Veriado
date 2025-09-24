@@ -69,8 +69,8 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
         {
             await Task.WhenAll(
                 LoadFavoritesAsync(ct),
-                LoadHistoryAsync(ct)).ConfigureAwait(false);
-        }).ConfigureAwait(false);
+                LoadHistoryAsync(ct));
+        });
     }
 
     [RelayCommand]
@@ -107,9 +107,9 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
             query,
             afterSearch: async ct =>
             {
-                await _searchFacade.AddToHistoryAsync(query, ct).ConfigureAwait(false);
-                await LoadHistoryAsync(ct).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+                await _searchFacade.AddToHistoryAsync(query, ct);
+                await LoadHistoryAsync(ct);
+            });
     }
 
     [RelayCommand]
@@ -179,7 +179,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
         await ExecuteSearchAsync(
             query,
             beforeSearch: ct => _searchFacade.UseFavoriteAsync(definition, ct),
-            afterSearch: LoadHistoryAsync).ConfigureAwait(false);
+            afterSearch: LoadHistoryAsync);
     }
 
     [RelayCommand]
@@ -198,7 +198,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
         }
 
         var query = QueryText!;
-        await ExecuteSearchAsync(query, afterSearch: LoadHistoryAsync).ConfigureAwait(false);
+        await ExecuteSearchAsync(query, afterSearch: LoadHistoryAsync);
     }
 
     private Task ExecuteSearchAsync(
@@ -210,27 +210,27 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
         {
             if (beforeSearch is not null)
             {
-                await beforeSearch(ct).ConfigureAwait(false);
+                await beforeSearch(ct);
             }
 
-            await SearchAsync(query, ct).ConfigureAwait(false);
+            await SearchAsync(query, ct);
 
             if (afterSearch is not null)
             {
-                await afterSearch(ct).ConfigureAwait(false);
+                await afterSearch(ct);
             }
         }, "Vyhledávám…");
     }
 
     private async Task LoadFavoritesAsync(CancellationToken ct)
     {
-        var favorites = await _searchFacade.GetFavoritesAsync(ct).ConfigureAwait(false);
+        var favorites = await _searchFacade.GetFavoritesAsync(ct);
         ReplaceItems(Favorites.Items, favorites);
     }
 
     private async Task LoadHistoryAsync(CancellationToken ct)
     {
-        var history = await _searchFacade.GetHistoryAsync(HistoryTake, ct).ConfigureAwait(false);
+        var history = await _searchFacade.GetHistoryAsync(HistoryTake, ct);
         ReplaceItems(History.Items, history);
     }
 
@@ -238,7 +238,7 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     {
         Results.Clear();
 
-        var hits = await _searchFacade.SearchAsync(query, SearchResultLimit, ct).ConfigureAwait(false);
+        var hits = await _searchFacade.SearchAsync(query, SearchResultLimit, ct);
         if (hits.Count > 0)
         {
             foreach (var hit in hits)

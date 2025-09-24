@@ -69,7 +69,7 @@ public sealed partial class ImportViewModel : ViewModelBase
     {
         await SafeExecuteAsync(async _ =>
         {
-            var folder = await _picker.PickFolderAsync().ConfigureAwait(false);
+            var folder = await _picker.PickFolderAsync();
             if (!string.IsNullOrWhiteSpace(folder))
             {
                 SelectedFolderPath = folder;
@@ -111,7 +111,7 @@ public sealed partial class ImportViewModel : ViewModelBase
                     SearchPattern = string.IsNullOrWhiteSpace(SearchPattern) ? null : SearchPattern,
                 };
 
-                var response = await _import.ImportFolderAsync(request, ct).ConfigureAwait(false);
+                var response = await _import.ImportFolderAsync(request, ct);
                 if (!response.IsSuccess || response.Data is null)
                 {
                     HasError = true;
