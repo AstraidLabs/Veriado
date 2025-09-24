@@ -60,10 +60,12 @@ internal sealed class WriteWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Write worker started");
+        Exception? terminationException = null;
         try
         {
-            while (!stoppingToken.IsCancellationRequested)
+            while (true)
             {
+                stoppingToken.ThrowIfCancellationRequested();
                 var batch = await CollectBatchAsync(stoppingToken).ConfigureAwait(false);
                 if (batch.Count == 0)
                 {
@@ -84,9 +86,46 @@ internal sealed class WriteWorker : BackgroundService
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException oce)
         {
+            terminationException = oce;
             _logger.LogInformation("Write worker stopping");
+        }
+        catch (Exception ex)
+        {
+            terminationException = ex;
+            _logger.LogError(ex, "Write worker terminated unexpectedly");
+            throw;
+        }
+        finally
+        {
+            _writeQueue.Complete(terminationException);
+            DrainPendingRequests(terminationException, stoppingToken);
+        }
+    }
+
+    private void DrainPendingRequests(Exception? terminationException, CancellationToken stoppingToken)
+    {
+        while (_writeQueue.TryDequeue(out var pending))
+        {
+            if (pending is null)
+            {
+                continue;
+            }
+
+            if (terminationException is OperationCanceledException || stoppingToken.IsCancellationRequested)
+            {
+                pending.TrySetCanceled();
+                continue;
+            }
+
+            if (terminationException is not null)
+            {
+                pending.TrySetException(terminationException);
+                continue;
+            }
+
+            pending.TrySetException(new InvalidOperationException("Write worker stopped before processing the request."));
         }
     }
 

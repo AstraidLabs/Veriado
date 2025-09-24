@@ -54,4 +54,8 @@ internal sealed class WriteQueue : IWriteQueue
 
         return null;
     }
+
+    public bool TryDequeue(out WriteRequest? request) => _channel.Reader.TryRead(out request);
+
+    public void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
 }
