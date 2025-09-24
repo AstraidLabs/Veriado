@@ -19,7 +19,7 @@ public static class CommandForwarder
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Command execution failed (param: {Param})", parameter);
+            LogErrorSafely(logger, ex, "Command execution failed (param: {Param})", parameter);
         }
     }
 
@@ -41,7 +41,25 @@ public static class CommandForwarder
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Async command execution failed (param: {Param})", parameter);
+            LogErrorSafely(logger, ex, "Async command execution failed (param: {Param})", parameter);
+        }
+    }
+
+    private static void LogErrorSafely(ILogger? logger, Exception exception, string message, object? parameter)
+    {
+        if (logger is null)
+        {
+            return;
+        }
+
+        try
+        {
+            logger.LogError(exception, message, parameter);
+        }
+        catch (ObjectDisposedException)
+        {
+            // The logging infrastructure may already be disposed (e.g. during application shutdown).
+            // Swallow the exception because the original command failure has already been handled.
         }
     }
 }
