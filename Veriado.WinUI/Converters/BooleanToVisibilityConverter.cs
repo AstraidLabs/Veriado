@@ -87,8 +87,6 @@ public sealed class BooleanToVisibilityConverter : IValueConverter
                 return null;
             case bool boolValue:
                 return boolValue;
-            case Nullable<bool> nullableBool:
-                return nullableBool;
             case string text:
                 if (bool.TryParse(text, out var parsed))
                 {
