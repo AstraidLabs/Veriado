@@ -11,7 +11,11 @@ public sealed partial class StartupWindow : Window
         InitializeComponent();
 
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        ContentRoot.DataContext = ViewModel;
+
+        if (Content is FrameworkElement contentRoot)
+        {
+            contentRoot.DataContext = ViewModel;
+        }
     }
 
     public StartupViewModel ViewModel { get; }
