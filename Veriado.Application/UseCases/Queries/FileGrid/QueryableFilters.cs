@@ -147,7 +147,7 @@ internal static class QueryableFilters
 
         if (sort is null || sort.Count == 0)
         {
-            return query.OrderBy(file => file.Name.Value)
+            return query.OrderBy(file => EF.Property<string>(file, nameof(FileEntity.Name)))
                 .ThenBy(file => file.Id);
         }
 
@@ -163,12 +163,12 @@ internal static class QueryableFilters
 
             orderedQuery = spec.Field.ToLowerInvariant() switch
             {
-                "name" => ApplyOrder(orderedQuery, file => file.Name.Value, spec.Descending, ref ordered),
-                "mime" => ApplyOrder(orderedQuery, file => file.Mime.Value, spec.Descending, ref ordered),
-                "extension" => ApplyOrder(orderedQuery, file => file.Extension.Value, spec.Descending, ref ordered),
-                "size" => ApplyOrder(orderedQuery, file => file.Size.Value, spec.Descending, ref ordered),
-                "createdutc" => ApplyOrder(orderedQuery, file => file.CreatedUtc.Value, spec.Descending, ref ordered),
-                "modifiedutc" => ApplyOrder(orderedQuery, file => file.LastModifiedUtc.Value, spec.Descending, ref ordered),
+                "name" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.Name)), spec.Descending, ref ordered),
+                "mime" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.Mime)), spec.Descending, ref ordered),
+                "extension" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.Extension)), spec.Descending, ref ordered),
+                "size" => ApplyOrder(orderedQuery, file => EF.Property<long>(file, nameof(FileEntity.Size)), spec.Descending, ref ordered),
+                "createdutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.CreatedUtc)), spec.Descending, ref ordered),
+                "modifiedutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)), spec.Descending, ref ordered),
                 "version" => ApplyOrder(orderedQuery, file => file.Version, spec.Descending, ref ordered),
                 "author" => ApplyOrder(orderedQuery, file => file.Author, spec.Descending, ref ordered),
                 "validuntil" => ApplyOrder(
@@ -182,7 +182,7 @@ internal static class QueryableFilters
 
         if (!ordered)
         {
-            orderedQuery = orderedQuery.OrderBy(file => file.Name.Value);
+            orderedQuery = orderedQuery.OrderBy(file => EF.Property<string>(file, nameof(FileEntity.Name)));
         }
 
         return ((IOrderedQueryable<FileEntity>)orderedQuery).ThenBy(file => file.Id);
