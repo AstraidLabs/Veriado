@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -60,6 +61,12 @@ public static class CommandForwarder
         {
             // The logging infrastructure may already be disposed (e.g. during application shutdown).
             // Swallow the exception because the original command failure has already been handled.
+        }
+        catch (AggregateException aggregateException) when (aggregateException.InnerExceptions.All(static ex => ex is ObjectDisposedException))
+        {
+            // When multiple logging providers are registered, the logging infrastructure wraps
+            // disposal-related errors in an AggregateException. These should be ignored for the
+            // same reason as a direct ObjectDisposedException.
         }
     }
 }
