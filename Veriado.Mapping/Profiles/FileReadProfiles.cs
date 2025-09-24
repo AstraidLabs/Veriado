@@ -40,11 +40,12 @@ public sealed class FileReadProfiles : Profile
             src.Length.Value,
             null));
 
-        CreateMap<FileDocumentValidityReadModel, FileValidityDto>().ConstructUsing(src => new FileValidityDto(
-            src.IssuedAtUtc,
-            src.ValidUntilUtc,
-            src.HasPhysicalCopy,
-            src.HasElectronicCopy));
+        CreateMap<FileDocumentValidityReadModel, FileValidityDto>()
+            .ConvertUsing(src => new FileValidityDto(
+                src.IssuedAtUtc,
+                src.ValidUntilUtc,
+                src.HasPhysicalCopy,
+                src.HasElectronicCopy));
 
         CreateMap<FileListItemReadModel, FileListItemDto>().ConstructUsing(src => new FileListItemDto(
             src.Id,
@@ -71,7 +72,8 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.LastIndexedUtc, opt => opt.MapFrom(src => src.SearchIndex.LastIndexedUtc))
             .ForMember(dest => dest.IndexedTitle, opt => opt.MapFrom(src => src.SearchIndex.IndexedTitle))
             .ForMember(dest => dest.IndexSchemaVersion, opt => opt.MapFrom(src => src.SearchIndex.SchemaVersion))
-            .ForMember(dest => dest.IndexedContentHash, opt => opt.MapFrom(src => src.SearchIndex.IndexedContentHash));
+            .ForMember(dest => dest.IndexedContentHash, opt => opt.MapFrom(src => src.SearchIndex.IndexedContentHash))
+            .ForMember(dest => dest.Score, opt => opt.Ignore());
 
         CreateMap<FileEntity, FileDetailDto>()
             .ForMember(dest => dest.Name, opt => opt.ConvertUsing(new CommonValueConverters.FileNameToStringConverter(), src => src.Name))
