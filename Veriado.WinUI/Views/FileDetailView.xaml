@@ -2,8 +2,6 @@
     x:Class="Veriado.WinUI.Views.FileDetailView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:ctb="using:CommunityToolkit.WinUI.Behaviors"
-    xmlns:i="using:Microsoft.Xaml.Interactivity"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls">
 
     <Grid x:Name="Root" RowSpacing="8">
@@ -19,16 +17,11 @@
                 <TextBox Width="220"
                          PlaceholderText="Nový název"
                          Text="{Binding EditableName, Mode=TwoWay}" />
-                <Button Content="Přejmenovat" Command="{Binding RenameCommand}" />
+                <Button Content="Přejmenovat" Click="RenameButton_Click" />
                 <ToggleSwitch Header="Jen pro čtení"
                               IsOn="{Binding EditableIsReadOnly, Mode=TwoWay}"
-                              IsEnabled="{Binding CanEdit}">
-                    <i:Interaction.Behaviors>
-                        <ctb:EventToCommandBehavior EventName="Toggled"
-                                                    Command="{x:Bind ViewModel.SetReadOnlyCommand, Mode=OneWay}"
-                                                    CommandParameter="{x:Bind ViewModel.EditableIsReadOnly, Mode=OneWay}" />
-                    </i:Interaction.Behaviors>
-                </ToggleSwitch>
+                              IsEnabled="{Binding CanEdit}"
+                              Toggled="ReadOnlySwitch_Toggled" />
             </StackPanel>
         </StackPanel>
 
@@ -39,8 +32,8 @@
                 <CheckBox Content="Fyzická kopie" IsChecked="{Binding ValidityHasPhysicalCopy, Mode=TwoWay}" />
                 <CheckBox Content="Elektronická kopie" IsChecked="{Binding ValidityHasElectronicCopy, Mode=TwoWay}" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="Uložit" Command="{Binding ApplyValidityCommand}" />
-                    <Button Content="Zrušit" Command="{Binding ClearValidityCommand}" />
+                    <Button Content="Uložit" Click="ApplyValidityButton_Click" />
+                    <Button Content="Zrušit" Click="ClearValidityButton_Click" />
                 </StackPanel>
             </StackPanel>
         </winui:Expander>
@@ -53,12 +46,12 @@
                 <TextBox Width="220"
                          PlaceholderText="MIME typ"
                          Text="{Binding EditableMime, Mode=TwoWay}" />
-                <Button Content="Uložit metadata" Command="{Binding UpdateMetadataCommand}" />
+                <Button Content="Uložit metadata" Click="UpdateMetadataButton_Click" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Kopírovat ID" Command="{Binding CopyIdCommand}" />
-                <Button Content="Kopírovat ukázku" Command="{Binding CopySnippetCommand}" />
-                <Button Content="Sdílet ukázku" Command="{Binding ShareSnippetCommand}" />
+                <Button Content="Kopírovat ID" Click="CopyIdButton_Click" />
+                <Button Content="Kopírovat ukázku" Click="CopySnippetButton_Click" />
+                <Button Content="Sdílet ukázku" Click="ShareSnippetButton_Click" />
             </StackPanel>
             <TextBlock Text="{Binding ContentPreview}" TextWrapping="Wrap" />
         </StackPanel>
