@@ -17,4 +17,8 @@ internal interface IWriteQueue
         CancellationToken cancellationToken = default);
 
     ValueTask<WriteRequest?> DequeueAsync(CancellationToken cancellationToken);
+
+    bool TryDequeue(out WriteRequest? request);
+
+    void Complete(Exception? error = null);
 }

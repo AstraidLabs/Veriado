@@ -41,5 +41,7 @@ internal sealed class WriteRequest
 
     public void TrySetException(Exception exception) => _completion.TrySetException(exception);
 
+    public void TrySetCanceled() => _completion.TrySetCanceled();
+
     public void TrySetCanceled(CancellationToken cancellationToken) => _completion.TrySetCanceled(cancellationToken);
 }
