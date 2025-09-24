@@ -26,18 +26,18 @@
         <winui:CommandBar Grid.Row="0" Grid.ColumnSpan="3">
             <winui:AppBarButton Icon="Refresh"
                                 Label="Obnovit"
-                                Command="{x:Bind ViewModel.Files.RefreshCommand, Mode=OneWay}" />
+                                Command="{Binding Files.RefreshCommand}" />
             <winui:AppBarSeparator />
             <winui:AppBarButton Icon="Find"
                                 Label="Spotlight"
-                                Command="{x:Bind ViewModel.Search.OpenCommand, Mode=OneWay}" />
+                                Command="{Binding Search.OpenCommand}" />
         </winui:CommandBar>
 
         <winui:NavigationView x:Name="ShellNavigationView"
                               Grid.Row="1"
                               Grid.Column="0"
                               IsSettingsVisible="True"
-                              SelectedItem="{x:Bind ViewModel.SelectedNavItem, Mode=TwoWay}">
+                              SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}">
             <winui:NavigationView.MenuItems>
                 <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" IsSelected="True" />
                 <winui:NavigationViewItem Content="Import" Icon="Upload" Tag="Import" />
@@ -47,7 +47,7 @@
 
         <ContentPresenter Grid.Row="1"
                           Grid.Column="1"
-                          Content="{x:Bind ViewModel.CurrentContent, Mode=OneWay}" />
+                          Content="{Binding CurrentContent}" />
 
         <Grid Grid.Row="1" Grid.Column="2" MinWidth="360">
             <VisualStateManager.VisualStateGroups>
@@ -72,22 +72,22 @@
             </VisualStateManager.VisualStateGroups>
 
             <Border x:Name="RightPane" Padding="12">
-                <ContentPresenter Content="{x:Bind ViewModel.CurrentDetail, Mode=OneWay}" />
+                <ContentPresenter Content="{Binding CurrentDetail}" />
             </Border>
         </Grid>
 
         <winui:InfoBar Grid.Row="2"
                        Grid.ColumnSpan="3"
-                       IsOpen="{x:Bind ViewModel.IsInfoBarOpen, Mode=OneWay}"
-                       Severity="{x:Bind ViewModel.HasError, Mode=OneWay, Converter={StaticResource BoolToSeverityConverter}}"
-                       Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" />
+                       IsOpen="{Binding IsInfoBarOpen}"
+                       Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
+                       Message="{Binding StatusMessage}" />
 
         <Grid x:Name="SearchOverlayRoot"
               Grid.RowSpan="3"
               Grid.ColumnSpan="3"
               Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-              Visibility="{x:Bind ViewModel.Search.IsOpen, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
-              IsHitTestVisible="{x:Bind ViewModel.Search.IsOpen, Mode=OneWay}"
+              Visibility="{Binding Search.IsOpen, Converter={StaticResource BoolToVisibility}}"
+              IsHitTestVisible="{Binding Search.IsOpen}"
               IsTabStop="True"
               KeyDown="SearchOverlayRoot_KeyDown">
             <Border MaxWidth="900"
@@ -112,15 +112,15 @@
                         <AutoSuggestBox Grid.Column="0"
                                         PlaceholderText="Hledat..."
                                         QueryIcon="Find"
-                                        Text="{x:Bind ViewModel.Search.QueryText, Mode=TwoWay}"
-                                        ItemsSource="{x:Bind ViewModel.Search.Suggestions, Mode=OneWay}"
+                                        Text="{Binding Search.QueryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        ItemsSource="{Binding Search.Suggestions}"
                                         TextChanged="SearchBox_TextChanged"
                                         QuerySubmitted="SearchBox_QuerySubmitted"
                                         SuggestionChosen="SearchBox_SuggestionChosen" />
 
                         <Button Grid.Column="1"
                                 Content="Zavřít"
-                                Command="{x:Bind ViewModel.Search.CloseCommand, Mode=OneWay}" />
+                                Command="{Binding Search.CloseCommand}" />
                     </Grid>
 
                     <Grid Grid.Row="1" ColumnSpacing="16">
@@ -129,13 +129,13 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Results, Mode=OneWay}"
+                        <winui:ListView ItemsSource="{Binding Search.Results}"
                                         SelectionMode="None">
                             <winui:ListView.ItemTemplate>
                                 <DataTemplate x:DataType="contracts:SearchHitDto">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{x:Bind Snippet, Mode=OneWay}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Snippet}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </DataTemplate>
                             </winui:ListView.ItemTemplate>
@@ -144,15 +144,15 @@
                         <StackPanel Grid.Column="1" Spacing="16">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Oblíbené" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.Favorites.Items, Mode=OneWay}"
+                                <winui:ListView ItemsSource="{Binding Search.Favorites.Items}"
                                                 SelectionMode="None"
                                                 IsItemClickEnabled="True"
                                                 ItemClick="FavoritesList_ItemClick">
                                     <winui:ListView.ItemTemplate>
                                         <DataTemplate x:DataType="contracts:SearchFavoriteItem">
                                             <StackPanel Spacing="2">
-                                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind QueryText, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}" />
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding QueryText}" Style="{ThemeResource CaptionTextBlockStyle}" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </winui:ListView.ItemTemplate>
@@ -161,15 +161,15 @@
 
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Historie" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                <winui:ListView ItemsSource="{x:Bind ViewModel.Search.History.Items, Mode=OneWay}"
+                                <winui:ListView ItemsSource="{Binding Search.History.Items}"
                                                 SelectionMode="None"
                                                 IsItemClickEnabled="True"
                                                 ItemClick="HistoryList_ItemClick">
                                     <winui:ListView.ItemTemplate>
                                         <DataTemplate x:DataType="contracts:SearchHistoryEntry">
                                             <StackPanel Spacing="2">
-                                                <TextBlock Text="{x:Bind QueryText, Mode=OneWay}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind LastQueriedUtc, Mode=OneWay}"
+                                                <TextBlock Text="{Binding QueryText}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding LastQueriedUtc}"
                                                            Style="{ThemeResource CaptionTextBlockStyle}" />
                                             </StackPanel>
                                         </DataTemplate>
