@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MainWindow>();
         services.AddTransient<FilesView>();
         services.AddTransient<FileDetailView>();
+        services.AddTransient<Func<FileDetailView>>(sp => () => sp.GetRequiredService<FileDetailView>());
         services.AddTransient<ImportView>();
         services.AddTransient<SettingsView>();
 
