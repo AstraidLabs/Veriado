@@ -64,12 +64,12 @@ public sealed class FileReadProfiles : Profile
             src.ValidUntilUtc));
 
         CreateMap<FileEntity, FileSummaryDto>()
-            .ForMember(dest => dest.Name, opt => opt.ConvertUsing(new CommonValueConverters.FileNameToStringConverter(), src => src.Name))
-            .ForMember(dest => dest.Extension, opt => opt.ConvertUsing(new CommonValueConverters.FileExtensionToStringConverter(), src => src.Extension))
-            .ForMember(dest => dest.Mime, opt => opt.ConvertUsing(new CommonValueConverters.MimeTypeToStringConverter(), src => src.Mime))
-            .ForMember(dest => dest.Size, opt => opt.ConvertUsing(new CommonValueConverters.ByteSizeToLongConverter(), src => src.Size))
-            .ForMember(dest => dest.CreatedUtc, opt => opt.ConvertUsing(new CommonValueConverters.UtcTimestampToDateTimeOffsetConverter(), src => src.CreatedUtc))
-            .ForMember(dest => dest.LastModifiedUtc, opt => opt.ConvertUsing(new CommonValueConverters.UtcTimestampToDateTimeOffsetConverter(), src => src.LastModifiedUtc))
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name.Value))
+            .ForMember(dest => dest.Extension, opt => opt.MapFrom(src => src.Extension.Value))
+            .ForMember(dest => dest.Mime, opt => opt.MapFrom(src => src.Mime.Value))
+            .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.Size.Value))
+            .ForMember(dest => dest.CreatedUtc, opt => opt.MapFrom(src => src.CreatedUtc.Value))
+            .ForMember(dest => dest.LastModifiedUtc, opt => opt.MapFrom(src => src.LastModifiedUtc.Value))
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity))
             .ForMember(dest => dest.IsIndexStale, opt => opt.MapFrom(src => src.SearchIndex.IsStale))
             .ForMember(dest => dest.LastIndexedUtc, opt => opt.MapFrom(src => src.SearchIndex.LastIndexedUtc))
@@ -79,12 +79,12 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.Score, opt => opt.Ignore());
 
         CreateMap<FileEntity, FileDetailDto>()
-            .ForMember(dest => dest.Name, opt => opt.ConvertUsing(new CommonValueConverters.FileNameToStringConverter(), src => src.Name))
-            .ForMember(dest => dest.Extension, opt => opt.ConvertUsing(new CommonValueConverters.FileExtensionToStringConverter(), src => src.Extension))
-            .ForMember(dest => dest.Mime, opt => opt.ConvertUsing(new CommonValueConverters.MimeTypeToStringConverter(), src => src.Mime))
-            .ForMember(dest => dest.Size, opt => opt.ConvertUsing(new CommonValueConverters.ByteSizeToLongConverter(), src => src.Size))
-            .ForMember(dest => dest.CreatedUtc, opt => opt.ConvertUsing(new CommonValueConverters.UtcTimestampToDateTimeOffsetConverter(), src => src.CreatedUtc))
-            .ForMember(dest => dest.LastModifiedUtc, opt => opt.ConvertUsing(new CommonValueConverters.UtcTimestampToDateTimeOffsetConverter(), src => src.LastModifiedUtc))
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name.Value))
+            .ForMember(dest => dest.Extension, opt => opt.MapFrom(src => src.Extension.Value))
+            .ForMember(dest => dest.Mime, opt => opt.MapFrom(src => src.Mime.Value))
+            .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.Size.Value))
+            .ForMember(dest => dest.CreatedUtc, opt => opt.MapFrom(src => src.CreatedUtc.Value))
+            .ForMember(dest => dest.LastModifiedUtc, opt => opt.MapFrom(src => src.LastModifiedUtc.Value))
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
             .ForMember(dest => dest.ExtendedMetadata, opt =>
