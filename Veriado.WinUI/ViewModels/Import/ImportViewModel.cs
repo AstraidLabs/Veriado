@@ -47,6 +47,20 @@ public sealed partial class ImportViewModel : ViewModelBase
     [ObservableProperty]
     private int total;
 
+    [RelayCommand]
+    private void UseFolderPath(string? folderPath)
+    {
+        if (IsBusy || IsImporting || string.IsNullOrWhiteSpace(folderPath))
+        {
+            return;
+        }
+
+        SelectedFolderPath = folderPath;
+        LastError = null;
+        HasError = false;
+        StatusService.Clear();
+    }
+
     public ImportViewModel(
         IMessenger messenger,
         IStatusService statusService,
@@ -73,7 +87,6 @@ public sealed partial class ImportViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(folder))
             {
                 SelectedFolderPath = folder;
-                _hotState.LastFolder = folder;
                 LastError = null;
                 StatusService.Clear();
             }
@@ -152,5 +165,10 @@ public sealed partial class ImportViewModel : ViewModelBase
         StatusService.Info("Import byl zrušen.");
         LastError = null;
         IsImporting = false;
+    }
+
+    partial void OnSelectedFolderPathChanged(string? value)
+    {
+        _hotState.LastFolder = string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }

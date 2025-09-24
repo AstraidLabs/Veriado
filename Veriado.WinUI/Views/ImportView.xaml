@@ -4,7 +4,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls">
 
-    <StackPanel Spacing="8">
+    <StackPanel x:Name="RootPanel"
+                Spacing="8"
+                AllowDrop="True"
+                DragOver="RootPanel_DragOver"
+                Drop="RootPanel_Drop">
         <TextBox Header="Autor"
                  Text="{Binding DefaultAuthor, Mode=TwoWay}"
                  Width="300" />
@@ -29,5 +33,7 @@
                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
         <ProgressBar IsIndeterminate="{Binding IsBusy}"
                      Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+        <TextBlock Text="Tip: Složku můžete také přetáhnout do tohoto panelu."
+                   Style="{ThemeResource CaptionTextBlockStyle}" />
     </StackPanel>
 </UserControl>
