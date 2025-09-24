@@ -74,7 +74,12 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.IndexedContentHash, opt => opt.MapFrom(src => src.SearchIndex.IndexedContentHash));
 
         CreateMap<FileEntity, FileDetailDto>()
-            .IncludeBase<FileEntity, FileSummaryDto>()
+            .ForMember(dest => dest.Name, opt => opt.ConvertUsing(new CommonValueConverters.FileNameToStringConverter(), src => src.Name))
+            .ForMember(dest => dest.Extension, opt => opt.ConvertUsing(new CommonValueConverters.FileExtensionToStringConverter(), src => src.Extension))
+            .ForMember(dest => dest.Mime, opt => opt.ConvertUsing(new CommonValueConverters.MimeTypeToStringConverter(), src => src.Mime))
+            .ForMember(dest => dest.Size, opt => opt.ConvertUsing(new CommonValueConverters.ByteSizeToLongConverter(), src => src.Size))
+            .ForMember(dest => dest.CreatedUtc, opt => opt.ConvertUsing(new CommonValueConverters.UtcTimestampToDateTimeOffsetConverter(), src => src.CreatedUtc))
+            .ForMember(dest => dest.LastModifiedUtc, opt => opt.ConvertUsing(new CommonValueConverters.UtcTimestampToDateTimeOffsetConverter(), src => src.LastModifiedUtc))
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
             .ForMember(dest => dest.ExtendedMetadata, opt =>
@@ -82,7 +87,12 @@ public sealed class FileReadProfiles : Profile
                 opt.MapFrom(src => src.ExtendedMetadata.AsEnumerable());
                 opt.NullSubstitute(Array.Empty<ExtendedMetadataItemDto>());
             })
-            .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity));
+            .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity))
+            .ForMember(dest => dest.IsIndexStale, opt => opt.MapFrom(src => src.SearchIndex.IsStale))
+            .ForMember(dest => dest.LastIndexedUtc, opt => opt.MapFrom(src => src.SearchIndex.LastIndexedUtc))
+            .ForMember(dest => dest.IndexedTitle, opt => opt.MapFrom(src => src.SearchIndex.IndexedTitle))
+            .ForMember(dest => dest.IndexSchemaVersion, opt => opt.MapFrom(src => src.SearchIndex.SchemaVersion))
+            .ForMember(dest => dest.IndexedContentHash, opt => opt.MapFrom(src => src.SearchIndex.IndexedContentHash));
 
         CreateMap<FileDetailReadModel, FileDetailDto>()
             .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
