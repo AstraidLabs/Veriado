@@ -1,5 +1,4 @@
 #nullable enable
-
 using System;
 using System.Globalization;
 using Microsoft.UI.Xaml;
@@ -9,128 +8,83 @@ using Microsoft.UI.Xaml.Data;
 namespace Veriado.WinUI.Converters;
 
 /// <summary>
-/// Converts boolean-like values to <see cref="InfoBarSeverity"/> instances.
+/// Converts boolean-like values to <see cref="InfoBarSeverity"/> instances and back.
 /// </summary>
-public sealed class BoolToSeverityConverter : IValueConverter
+public sealed partial class BoolToSeverityConverter : IValueConverter
 {
-    /// <summary>
-    /// Gets or sets the severity that is returned when the input resolves to <c>true</c>.
-    /// </summary>
     public InfoBarSeverity TrueValue { get; set; } = InfoBarSeverity.Error;
-
-    /// <summary>
-    /// Gets or sets the severity that is returned when the input resolves to <c>false</c>.
-    /// </summary>
     public InfoBarSeverity FalseValue { get; set; } = InfoBarSeverity.Informational;
-
-    /// <summary>
-    /// Gets or sets the severity that is returned when the input cannot be evaluated.
-    /// </summary>
     public InfoBarSeverity NullValue { get; set; } = InfoBarSeverity.Informational;
 
-    /// <inheritdoc />
     public object Convert(object value, Type targetType, object parameter, string language)
     {
-        var boolean = TryConvertToBoolean(value);
-
-        return boolean switch
-        {
-            true => TrueValue,
-            false => FalseValue,
-            null => NullValue
-        };
+        bool? b = TryToBool(value);
+        if (b == true) return TrueValue;
+        if (b == false) return FalseValue;
+        return NullValue;
     }
 
-    /// <inheritdoc />
     public object ConvertBack(object value, Type targetType, object parameter, string language)
     {
-        if (value is InfoBarSeverity severity)
+        bool? b = null;
+
+        if (value is InfoBarSeverity sev)
         {
-            if (severity == TrueValue)
-            {
-                return true;
-            }
-
-            if (severity == FalseValue)
-            {
-                return false;
-            }
-
-            if (severity == NullValue && targetType == typeof(bool?))
-            {
-                return null;
-            }
+            if (sev == TrueValue) b = true;
+            else if (sev == FalseValue) b = false;
+            else if (sev == NullValue) b = null;
         }
-
-        var boolean = TryConvertToBoolean(value);
+        else
+        {
+            b = TryToBool(value);
+        }
 
         if (targetType == typeof(bool))
-        {
-            return boolean.HasValue ? boolean.Value : DependencyProperty.UnsetValue;
-        }
+            return b.HasValue ? b.Value : DependencyProperty.UnsetValue;
 
         if (targetType == typeof(bool?))
-        {
-            return boolean;
-        }
+            return b;
 
         if (targetType == typeof(object))
-        {
-            return boolean.HasValue ? boolean.Value : DependencyProperty.UnsetValue;
-        }
+            return b.HasValue ? b.Value : DependencyProperty.UnsetValue;
 
         return DependencyProperty.UnsetValue;
     }
 
-    private static bool? TryConvertToBoolean(object value)
+    private static bool? TryToBool(object value)
     {
-        switch (value)
+        if (value is null) return null;
+        if (value is bool b) return b;
+        if (value is bool nb) return nb;
+
+        if (value is string s)
         {
-            case null:
-                return null;
-            case bool boolValue:
-                return boolValue;
-            case string text:
-                if (bool.TryParse(text, out var parsed))
-                {
-                    return parsed;
-                }
+            if (bool.TryParse(s, out var parsedBool))
+                return parsedBool;
 
-                if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var numeric))
-                {
-                    return Math.Abs(numeric) > double.Epsilon;
-                }
+            if (double.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands,
+                                CultureInfo.InvariantCulture, out var num))
+                return Math.Abs(num) > double.Epsilon;
 
-                return null;
-            case sbyte sb:
-                return sb != 0;
-            case byte b:
-                return b != 0;
-            case short s:
-                return s != 0;
-            case ushort us:
-                return us != 0;
-            case int i:
-                return i != 0;
-            case uint ui:
-                return ui != 0;
-            case long l:
-                return l != 0;
-            case ulong ul:
-                return ul != 0;
-            case float f:
-                return Math.Abs(f) > float.Epsilon;
-            case double d:
-                return Math.Abs(d) > double.Epsilon;
-            case decimal dec:
-                return dec != 0m;
-            case Enum enumValue:
-                return System.Convert.ToInt64(enumValue, CultureInfo.InvariantCulture) != 0;
-            case Visibility visibility:
-                return visibility == Visibility.Visible;
-            case GridLength gridLength:
-                return gridLength.Value > 0;
+            return null;
         }
+
+        // Numeric primitives – anything non-zero is true
+        if (value is sbyte sb) return sb != 0;
+        if (value is byte by) return by != 0;
+        if (value is short sh) return sh != 0;
+        if (value is ushort ush) return ush != 0;
+        if (value is int i) return i != 0;
+        if (value is uint ui) return ui != 0;
+        if (value is long l) return l != 0;
+        if (value is ulong ul) return ul != 0;
+        if (value is float f) return Math.Abs(f) > float.Epsilon;
+        if (value is double d) return Math.Abs(d) > double.Epsilon;
+        if (value is decimal dc) return dc != 0m;
+
+        // Specific WinUI helpers
+        if (value is Visibility vis) return vis == Visibility.Visible;
+        if (value is GridLength gl) return gl.Value > 0;
 
         return null;
     }
