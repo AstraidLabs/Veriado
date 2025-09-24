@@ -78,12 +78,32 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
         await using var connection = new SqliteConnection(_options.ConnectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        var cutoff = _clock.UtcNow - _options.IdempotencyKeyTtl;
-        await using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM idempotency_keys WHERE created_utc < $cutoff;";
-        command.Parameters.Add("$cutoff", SqliteType.Text).Value = cutoff.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+        await using var existsCommand = connection.CreateCommand();
+        existsCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'idempotency_keys' LIMIT 1;";
+        var tableExists = await existsCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (tableExists is null || tableExists == DBNull.Value)
+        {
+            _logger.LogDebug("Skipping idempotency cleanup because the idempotency_keys table does not exist yet");
+            return;
+        }
 
-        var removed = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var cutoff = _clock.UtcNow - _options.IdempotencyKeyTtl;
+        await using var deleteCommand = connection.CreateCommand();
+        deleteCommand.CommandText = "DELETE FROM idempotency_keys WHERE created_utc < $cutoff;";
+        deleteCommand.Parameters.Add("$cutoff", SqliteType.Text).Value =
+            cutoff.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+
+        int removed;
+        try
+        {
+            removed = await deleteCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug(ex, "Skipping idempotency cleanup because the idempotency_keys table does not exist yet");
+            return;
+        }
+
         if (removed > 0)
         {
             _logger.LogInformation("Removed {Removed} expired idempotency keys", removed);
