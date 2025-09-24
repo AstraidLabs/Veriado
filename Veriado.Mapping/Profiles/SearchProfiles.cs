@@ -22,22 +22,24 @@ public sealed class SearchProfiles : Profile
             src.Score,
             src.LastModifiedUtc));
 
-        CreateMap<SearchHistoryEntryEntity, SearchHistoryEntry>().ConstructUsing(src => new SearchHistoryEntry(
-            src.Id,
-            src.QueryText,
-            src.Match,
-            src.CreatedUtc,
-            src.Executions,
-            src.LastTotalHits,
-            src.IsFuzzy));
+        CreateMap<SearchHistoryEntryEntity, SearchHistoryEntry>()
+            .ConvertUsing(src => new SearchHistoryEntry(
+                src.Id,
+                src.QueryText,
+                src.Match,
+                src.CreatedUtc,
+                src.Executions,
+                src.LastTotalHits,
+                src.IsFuzzy));
 
-        CreateMap<SearchFavoriteEntity, SearchFavoriteItem>().ConstructUsing(src => new SearchFavoriteItem(
-            src.Id,
-            src.Name,
-            src.QueryText,
-            src.Match,
-            src.Position,
-            src.CreatedUtc,
-            src.IsFuzzy));
+        CreateMap<SearchFavoriteEntity, SearchFavoriteItem>()
+            .ConvertUsing(src => new SearchFavoriteItem(
+                src.Id,
+                src.Name,
+                src.QueryText,
+                src.Match,
+                src.Position,
+                src.CreatedUtc,
+                src.IsFuzzy));
     }
 }
