@@ -61,17 +61,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton<SqlitePragmaInterceptor>();
 
-        services.AddDbContextPool<AppDbContext>((serviceProvider, builder) =>
-        {
-            builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
-            builder.AddInterceptors(serviceProvider.GetRequiredService<SqlitePragmaInterceptor>());
-        }, poolSize: 128);
+        services.AddDbContextPool<AppDbContext>(ConfigureDbContext<AppDbContext>, poolSize: 128);
+        services.AddDbContextFactory<AppDbContext>(ConfigureDbContext<AppDbContext>);
 
-        services.AddDbContextPool<ReadOnlyDbContext>((serviceProvider, builder) =>
+        services.AddDbContextPool<ReadOnlyDbContext>(ConfigureDbContext<ReadOnlyDbContext>, poolSize: 256);
+        services.AddDbContextFactory<ReadOnlyDbContext>(ConfigureDbContext<ReadOnlyDbContext>);
+
+        void ConfigureDbContext<TContext>(IServiceProvider serviceProvider, DbContextOptionsBuilder<TContext> builder)
+            where TContext : DbContext
         {
             builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(serviceProvider.GetRequiredService<SqlitePragmaInterceptor>());
-        }, poolSize: 256);
+        }
 
         services.TryAddSingleton<IClock, SystemClock>();
 
