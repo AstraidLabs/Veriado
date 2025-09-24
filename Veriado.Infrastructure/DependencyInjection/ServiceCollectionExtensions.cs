@@ -59,19 +59,19 @@ public static class ServiceCollectionExtensions
         options.ConnectionString = connectionStringBuilder.ConnectionString;
 
         services.AddSingleton(options);
-        services.AddSingleton<SqlitePragmaInterceptor>();
+        var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
+        services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
 
-        services.AddDbContextPool<AppDbContext>(ConfigureDbContext<AppDbContext>, poolSize: 128);
-        services.AddDbContextFactory<AppDbContext>(ConfigureDbContext<AppDbContext>);
+        services.AddDbContextPool<AppDbContext>(ConfigureDbContext, poolSize: 128);
+        services.AddDbContextFactory<AppDbContext>(ConfigureDbContext);
 
-        services.AddDbContextPool<ReadOnlyDbContext>(ConfigureDbContext<ReadOnlyDbContext>, poolSize: 256);
-        services.AddDbContextFactory<ReadOnlyDbContext>(ConfigureDbContext<ReadOnlyDbContext>);
+        services.AddDbContextPool<ReadOnlyDbContext>(ConfigureDbContext, poolSize: 256);
+        services.AddDbContextFactory<ReadOnlyDbContext>(ConfigureDbContext);
 
-        void ConfigureDbContext<TContext>(IServiceProvider serviceProvider, DbContextOptionsBuilder<TContext> builder)
-            where TContext : DbContext
+        void ConfigureDbContext(DbContextOptionsBuilder builder)
         {
             builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
-            builder.AddInterceptors(serviceProvider.GetRequiredService<SqlitePragmaInterceptor>());
+            builder.AddInterceptors(sqlitePragmaInterceptor);
         }
 
         services.TryAddSingleton<IClock, SystemClock>();
