@@ -2,7 +2,7 @@ using System;
 using Microsoft.UI.Xaml;
 using Veriado.WinUI.ViewModels.Startup;
 
-namespace Veriado.Views;
+namespace Veriado.WinUI.Views;
 
 public sealed partial class StartupWindow : Window
 {

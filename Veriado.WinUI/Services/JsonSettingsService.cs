@@ -4,9 +4,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Services.Abstractions;
+using Veriado.WinUI.Services.Abstractions;
 
-namespace Veriado.Services;
+namespace Veriado.WinUI.Services;
 
 public sealed class JsonSettingsService : ISettingsService
 {

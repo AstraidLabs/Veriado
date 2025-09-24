@@ -3,11 +3,11 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Veriado.DependencyInjection;
+using Veriado.WinUI.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services;
-using Veriado.Services.Abstractions;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.Services.DependencyInjection;
 using Veriado.WinUI.Services;
 using Veriado.WinUI.ViewModels;
@@ -16,7 +16,7 @@ using Veriado.WinUI.ViewModels.Import;
 using Veriado.WinUI.ViewModels.Search;
 using Veriado.WinUI.ViewModels.Settings;
 
-namespace Veriado;
+namespace Veriado.WinUI;
 
 internal sealed class AppHost : IAsyncDisposable
 {

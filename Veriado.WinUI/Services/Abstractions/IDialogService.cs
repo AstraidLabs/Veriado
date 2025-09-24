@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace Veriado.Services.Abstractions;
+namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IDialogService
 {

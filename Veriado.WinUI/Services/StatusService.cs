@@ -1,9 +1,9 @@
 using System;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.Services.Abstractions;
-using Veriado.Services.Messages;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Services.Messages;
 
-namespace Veriado.Services;
+namespace Veriado.WinUI.Services;
 
 public sealed class StatusService : IStatusService
 {

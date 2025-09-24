@@ -1,8 +1,8 @@
 using System;
 using Microsoft.Extensions.Logging;
-using Veriado.Services.Abstractions;
+using Veriado.WinUI.Services.Abstractions;
 
-namespace Veriado.Services;
+namespace Veriado.WinUI.Services;
 
 public sealed class ExceptionHandler : IExceptionHandler
 {

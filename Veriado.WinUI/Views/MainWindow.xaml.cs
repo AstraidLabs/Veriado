@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Veriado.Infrastructure;
+using Veriado.WinUI.Infrastructure;
 using Veriado.WinUI.ViewModels;
 using Windows.System;
 
-namespace Veriado.Views;
+namespace Veriado.WinUI.Views;
 
 public sealed partial class MainWindow : Window
 {

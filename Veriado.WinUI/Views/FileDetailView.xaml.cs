@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Infrastructure;
+using Veriado.WinUI.Infrastructure;
 using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.Views;

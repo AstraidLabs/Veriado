@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
-namespace Veriado.Infrastructure;
+namespace Veriado.WinUI.Infrastructure;
 
 public interface IUiDispatcher
 {

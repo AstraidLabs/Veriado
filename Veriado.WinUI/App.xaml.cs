@@ -4,12 +4,12 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
-using Veriado.Services.Abstractions;
-using Veriado.Views;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Views;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.ViewModels.Startup;
 
-namespace Veriado;
+namespace Veriado.WinUI;
 
 public partial class App : Application
 {
