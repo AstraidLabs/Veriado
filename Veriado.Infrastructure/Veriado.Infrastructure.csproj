@@ -25,6 +25,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Page>
   </ItemGroup>
+	<ItemGroup>
+		<EmbeddedResource Include="Persistence\Schema\Fts5.sql" />
+	</ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
     <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
