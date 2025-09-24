@@ -74,7 +74,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         await SafeExecuteAsync(async _ =>
         {
-            await _themeService.SetThemeAsync(theme).ConfigureAwait(false);
+            await _themeService.SetThemeAsync(theme);
             StatusService.Info("Téma aplikace bylo aktualizováno.");
         });
     }

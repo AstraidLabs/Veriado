@@ -36,7 +36,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
     {
         await SafeExecuteAsync(async ct =>
         {
-            var entries = await _fileQueryService.GetSearchHistoryAsync(Take, ct).ConfigureAwait(false);
+            var entries = await _fileQueryService.GetSearchHistoryAsync(Take, ct);
 
             Items.Clear();
             foreach (var entry in entries)

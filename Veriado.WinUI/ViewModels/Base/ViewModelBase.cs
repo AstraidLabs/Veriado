@@ -77,7 +77,7 @@ public abstract partial class ViewModelBase : ObservableObject
         {
             HasError = false;
             IsBusy = true;
-        }).ConfigureAwait(false);
+        });
 
         if (!string.IsNullOrWhiteSpace(busyMessage))
         {
@@ -86,18 +86,18 @@ public abstract partial class ViewModelBase : ObservableObject
 
         try
         {
-            await action(cts.Token).ConfigureAwait(false);
-            await _dispatcher.Enqueue(() => HasError = false).ConfigureAwait(false);
+            await action(cts.Token);
+            await _dispatcher.Enqueue(() => HasError = false);
         }
         catch (OperationCanceledException)
         {
-            await _dispatcher.Enqueue(() => HasError = false).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => HasError = false);
             _statusService.Info("Operace byla zrušena.");
         }
         catch (Exception ex)
         {
             var message = _exceptionHandler.Handle(ex);
-            await _dispatcher.Enqueue(() => HasError = true).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => HasError = true);
             if (!string.IsNullOrWhiteSpace(message))
             {
                 _statusService.Error(message);
@@ -106,7 +106,7 @@ public abstract partial class ViewModelBase : ObservableObject
         finally
         {
             _cancellationSource = null;
-            await _dispatcher.Enqueue(() => IsBusy = false).ConfigureAwait(false);
+            await _dispatcher.Enqueue(() => IsBusy = false);
 
             if (!HasError && !string.IsNullOrWhiteSpace(busyMessage))
             {

@@ -33,7 +33,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
     {
         await SafeExecuteAsync(async ct =>
         {
-            var favorites = await _fileQueryService.GetFavoritesAsync(ct).ConfigureAwait(false);
+            var favorites = await _fileQueryService.GetFavoritesAsync(ct);
 
             Items.Clear();
             foreach (var favorite in favorites)
@@ -62,7 +62,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
 
         await SafeExecuteAsync(async ct =>
         {
-            await _fileQueryService.RemoveFavoriteAsync(id, ct).ConfigureAwait(false);
+            await _fileQueryService.RemoveFavoriteAsync(id, ct);
             StatusService.Info("Oblíbené vyhledávání bylo odstraněno.");
         }, "Odstraňuji oblíbené vyhledávání…");
 
@@ -87,7 +87,7 @@ public sealed partial class FavoritesViewModel : ViewModelBase
                 favorite.QueryText,
                 favorite.IsFuzzy);
 
-            await _fileQueryService.AddFavoriteAsync(definition, ct).ConfigureAwait(false);
+            await _fileQueryService.AddFavoriteAsync(definition, ct);
             StatusService.Info("Oblíbené vyhledávání bylo uloženo.");
         }, "Ukládám oblíbené vyhledávání…");
 
