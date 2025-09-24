@@ -15,6 +15,7 @@ using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
 using Veriado.WinUI.ViewModels.Search;
 using Veriado.WinUI.ViewModels.Settings;
+using Veriado.Appl.DependencyInjection;
 
 namespace Veriado.WinUI;
 
@@ -77,6 +78,7 @@ internal sealed class AppHost : IAsyncDisposable
                     infrastructureConfig.EnsureStorageExists(databasePath);
                     options.DbPath = databasePath;
                 });
+                services.AddApplication();
                 services.AddVeriadoServices();
             })
             .Build();
