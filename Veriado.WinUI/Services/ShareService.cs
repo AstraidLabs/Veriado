@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Services.Abstractions;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Foundation;
 using Windows.Storage;
 using WinRT;
 using WinRT.Interop; // MarshalInterface<T>
@@ -77,36 +78,57 @@ public sealed class ShareService : IShareService
 
             var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            void OnDataRequested(DataTransferManager sender, DataRequestedEventArgs args)
+            TypedEventHandler<DataTransferManager, DataRequestedEventArgs>? handler = null;
+            handler = async (sender, args) =>
             {
-                // odregistrovat hned, ať neunikají handlery
-                sender.DataRequested -= OnDataRequested;
-
-                var request = args.Request;
-                request.Data.Properties.Title = string.IsNullOrWhiteSpace(title) ? "Sdílet" : title;
-
-                _ = populateRequest(request).ContinueWith(t =>
+                try
                 {
-                    if (t.IsFaulted && t.Exception is not null)
-                        tcs.TrySetException(t.Exception);
-                    else if (t.IsCanceled)
-                        tcs.TrySetCanceled();
-                    else
-                        tcs.TrySetResult(null);
-                }, TaskScheduler.Default);
+                    var request = args.Request;
+                    request.Data.Properties.Title = string.IsNullOrWhiteSpace(title) ? "Sdílet" : title;
+
+                    var populateTask = populateRequest(request);
+                    if (populateTask is null)
+                    {
+                        tcs.TrySetException(new InvalidOperationException("The share callback returned a null task."));
+                        return;
+                    }
+
+                    await populateTask.ConfigureAwait(false);
+                    tcs.TrySetResult(null);
+                }
+                catch (OperationCanceledException)
+                {
+                    tcs.TrySetCanceled();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            };
+
+            manager.DataRequested += handler;
+
+            try
+            {
+                // Zobrazení Share UI pro dané okno (HWND) přes interop
+                interop.ShowShareUIForWindow(hwnd);
+
+                // Ošetření případu, kdy uživatel UI zavře bez výběru cíle (DataRequested se nespustí)
+                var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30), cancellationToken)).ConfigureAwait(false);
+                if (completed != tcs.Task)
+                {
+                    tcs.TrySetCanceled();
+                }
+
+                await tcs.Task.ConfigureAwait(false);
             }
-
-            manager.DataRequested += OnDataRequested;
-
-            // Zobrazení Share UI pro dané okno (HWND) přes interop
-            interop.ShowShareUIForWindow(hwnd);
-
-            // Ošetření případu, kdy uživatel UI zavře bez výběru cíle (DataRequested se nespustí)
-            var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30), cancellationToken)).ConfigureAwait(false);
-            if (completed != tcs.Task)
-                tcs.TrySetCanceled();
-
-            await tcs.Task.ConfigureAwait(false);
+            finally
+            {
+                if (handler is not null)
+                {
+                    manager.DataRequested -= handler;
+                }
+            }
         }
         finally
         {
