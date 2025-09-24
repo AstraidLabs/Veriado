@@ -20,25 +20,28 @@ public sealed class FileReadProfiles : Profile
     /// </summary>
     public FileReadProfiles()
     {
-        CreateMap<FileDocumentValidityEntity, FileValidityDto>().ConstructUsing(src => new FileValidityDto(
-            src.IssuedAt.Value,
-            src.ValidUntil.Value,
-            src.HasPhysicalCopy,
-            src.HasElectronicCopy));
+        CreateMap<FileDocumentValidityEntity, FileValidityDto>()
+            .ConvertUsing(src => new FileValidityDto(
+                src.IssuedAt.Value,
+                src.ValidUntil.Value,
+                src.HasPhysicalCopy,
+                src.HasElectronicCopy));
 
-        CreateMap<FileSystemMetadata, FileSystemMetadataDto>().ConstructUsing(src => new FileSystemMetadataDto(
-            (int)src.Attributes,
-            src.CreatedUtc.Value,
-            src.LastWriteUtc.Value,
-            src.LastAccessUtc.Value,
-            src.OwnerSid,
-            src.HardLinkCount,
-            src.AlternateDataStreamCount));
+        CreateMap<FileSystemMetadata, FileSystemMetadataDto>()
+            .ConvertUsing(src => new FileSystemMetadataDto(
+                (int)src.Attributes,
+                src.CreatedUtc.Value,
+                src.LastWriteUtc.Value,
+                src.LastAccessUtc.Value,
+                src.OwnerSid,
+                src.HardLinkCount,
+                src.AlternateDataStreamCount));
 
-        CreateMap<FileContentEntity, FileContentDto>().ConstructUsing(src => new FileContentDto(
-            src.Hash.Value,
-            src.Length.Value,
-            null));
+        CreateMap<FileContentEntity, FileContentDto>()
+            .ConvertUsing(src => new FileContentDto(
+                src.Hash.Value,
+                src.Length.Value,
+                null));
 
         CreateMap<FileDocumentValidityReadModel, FileValidityDto>()
             .ConvertUsing(src => new FileValidityDto(
