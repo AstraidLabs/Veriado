@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Veriado.WinUI.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
+using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services;
 using Veriado.WinUI.Services.Abstractions;
@@ -77,6 +78,8 @@ internal sealed class AppHost : IAsyncDisposable
                     var databasePath = infrastructureConfig.GetDatabasePath();
                     infrastructureConfig.EnsureStorageExists(databasePath);
                     options.DbPath = databasePath;
+                    options.UseKvMetadata = true;
+                    options.FtsIndexingMode = FtsIndexingMode.Outbox;
                 });
                 services.AddApplication();
                 services.AddVeriadoServices();
