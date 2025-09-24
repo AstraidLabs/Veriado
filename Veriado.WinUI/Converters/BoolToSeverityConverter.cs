@@ -6,7 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 
-namespace Veriado.WinUI.Converters;
+namespace Veriado.Converters;
 
 /// <summary>
 /// Converts boolean-like values to <see cref="InfoBarSeverity"/> instances.
@@ -58,7 +58,7 @@ public sealed class BoolToSeverityConverter : IValueConverter
 
             if (severity == NullValue && targetType == typeof(bool?))
             {
-                return (bool?)null;
+                return null;
             }
         }
 
@@ -76,7 +76,7 @@ public sealed class BoolToSeverityConverter : IValueConverter
 
         if (targetType == typeof(object))
         {
-            return boolean.HasValue ? (object)boolean.Value : DependencyProperty.UnsetValue;
+            return boolean.HasValue ? boolean.Value : DependencyProperty.UnsetValue;
         }
 
         return DependencyProperty.UnsetValue;
@@ -125,7 +125,7 @@ public sealed class BoolToSeverityConverter : IValueConverter
             case decimal dec:
                 return dec != 0m;
             case Enum enumValue:
-                return Convert.ToInt64(enumValue, CultureInfo.InvariantCulture) != 0;
+                return System.Convert.ToInt64(enumValue, CultureInfo.InvariantCulture) != 0;
             case Visibility visibility:
                 return visibility == Visibility.Visible;
             case GridLength gridLength:

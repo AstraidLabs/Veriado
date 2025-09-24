@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Veriado.WinUI.Infrastructure;
+using Veriado.Infrastructure;
 using Veriado.WinUI.ViewModels;
 using Windows.System;
 

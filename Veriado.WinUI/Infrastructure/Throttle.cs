@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.WinUI.Infrastructure;
+namespace Veriado.Infrastructure;
 
 public sealed class Throttle : IDisposable
 {

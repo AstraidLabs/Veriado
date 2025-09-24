@@ -5,7 +5,7 @@ using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 
-namespace Veriado.WinUI.Converters;
+namespace Veriado.Converters;
 
 /// <summary>
 /// Converts boolean-like values to <see cref="Visibility"/> values and back.
@@ -52,7 +52,7 @@ public sealed class BooleanToVisibilityConverter : IValueConverter
         {
             Visibility visibility when visibility == TrueValue => true,
             Visibility visibility when visibility == FalseValue => false,
-            Visibility visibility when visibility == NullValue => (bool?)null,
+            Visibility visibility when visibility == NullValue => null,
             _ => TryConvertToBoolean(value)
         };
 
@@ -68,7 +68,7 @@ public sealed class BooleanToVisibilityConverter : IValueConverter
 
         if (targetType == typeof(object))
         {
-            return boolean.HasValue ? (object)boolean.Value : DependencyProperty.UnsetValue;
+            return boolean.HasValue ? boolean.Value : DependencyProperty.UnsetValue;
         }
 
         if (targetType == typeof(Visibility))

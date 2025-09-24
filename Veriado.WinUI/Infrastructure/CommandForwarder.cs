@@ -4,7 +4,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 
-namespace Veriado.WinUI.Infrastructure;
+namespace Veriado.Infrastructure;
 
 public static class CommandForwarder
 {
