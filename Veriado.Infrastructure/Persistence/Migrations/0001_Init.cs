@@ -8,6 +8,8 @@ namespace Veriado.Infrastructure.Persistence.Migrations
 {
     public partial class _0001_Init : Migration
     {
+        private const string Fts5SchemaResourceName = "Veriado.Infrastructure.Persistence.Schema.Fts5.sql";
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -185,36 +187,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 table: "outbox_events",
                 column: "processed_utc");
 
-            var schemaRelativePath = Path.Combine("Persistence", "Schema", "Fts5.sql");
-            var baseDirectory = AppContext.BaseDirectory;
-            var currentDirectory = baseDirectory;
-            string schemaPath = null;
-
-            while (!string.IsNullOrEmpty(currentDirectory))
-            {
-                var candidate = Path.Combine(currentDirectory, schemaRelativePath);
-                if (File.Exists(candidate))
-                {
-                    schemaPath = candidate;
-                    break;
-                }
-
-                var parentDirectory = Directory.GetParent(currentDirectory);
-                if (parentDirectory is null)
-                {
-                    break;
-                }
-
-                currentDirectory = parentDirectory.FullName;
-            }
-
-            if (schemaPath is null)
-            {
-                throw new FileNotFoundException($"Unable to locate the schema script '{schemaRelativePath}' relative to base directory '{baseDirectory}'.");
-            }
-
-            var schemaSql = File.ReadAllText(schemaPath);
-            migrationBuilder.Sql(schemaSql);
+            migrationBuilder.Sql(ReadEmbeddedSql(Fts5SchemaResourceName));
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
@@ -229,6 +202,21 @@ namespace Veriado.Infrastructure.Persistence.Migrations
             migrationBuilder.DropTable(name: "files");
             migrationBuilder.Sql("DROP TABLE IF EXISTS file_search;");
             migrationBuilder.Sql("DROP TABLE IF EXISTS file_search_map;");
+        }
+
+        private static string ReadEmbeddedSql(string resourceName)
+        {
+            var assembly = typeof(_0001_Init).Assembly;
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+
+            if (stream is null)
+            {
+                var availableResources = string.Join(", ", assembly.GetManifestResourceNames());
+                throw new FileNotFoundException($"Embedded SQL resource '{resourceName}' was not found. Available resources: {availableResources}");
+            }
+
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
         }
     }
 }
