@@ -1,4 +1,4 @@
-namespace Veriado.Services.Abstractions;
+namespace Veriado.WinUI.Services.Abstractions;
 
 public interface INavigationService
 {

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.Services.Abstractions;
+namespace Veriado.WinUI.Services.Abstractions;
 
 public interface ISettingsService
 {

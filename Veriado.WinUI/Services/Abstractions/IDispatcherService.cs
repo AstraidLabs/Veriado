@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
-namespace Veriado.Services.Abstractions;
+namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IDispatcherService
 {

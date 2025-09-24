@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
-using Veriado.Services.Abstractions;
+using Veriado.WinUI.Services.Abstractions;
 
-namespace Veriado.Services;
+namespace Veriado.WinUI.Services;
 
 public sealed class DialogService : IDialogService
 {

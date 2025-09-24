@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Import;
-using Veriado.Services.Abstractions;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.Services.Import;
 using Veriado.WinUI.ViewModels.Base;
 

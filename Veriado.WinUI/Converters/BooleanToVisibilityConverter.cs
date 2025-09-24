@@ -5,7 +5,7 @@ using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 
-namespace Veriado.Converters;
+namespace Veriado.WinUI.Converters;
 
 /// <summary>
 /// Converts boolean-like values to <see cref="Visibility"/> values and back.

@@ -3,10 +3,10 @@ using System.Globalization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Services.Abstractions;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.Services.Files;
 
-namespace Veriado.Services;
+namespace Veriado.WinUI.Services;
 
 public sealed class PreviewService : IPreviewService
 {

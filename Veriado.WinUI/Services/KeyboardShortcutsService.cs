@@ -2,11 +2,11 @@ using System;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using Veriado.Services.Abstractions;
-using Veriado.Services.Messages;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Services.Messages;
 using Windows.System;
 
-namespace Veriado.Services;
+namespace Veriado.WinUI.Services;
 
 public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
 {
@@ -28,7 +28,7 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
         if (!_windowProvider.TryGetWindow(out var window) || window is null)
             return;
 
-        // KeyboardAccelerators patøí na UIElement (napø. koøen Content okna)
+        // KeyboardAccelerators patÃ¸Ã­ na UIElement (napÃ¸. koÃ¸en Content okna)
         if (window.Content is not UIElement root)
             return;
 
@@ -36,7 +36,7 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
         {
             Key = VirtualKey.Space,
             Modifiers = VirtualKeyModifiers.Control,
-            ScopeOwner = root // volitelné, zúží rozsah
+            ScopeOwner = root // volitelnÃ©, zÃºÅ¾Ã­ rozsah
         };
         openSearch.Invoked += (_, args) =>
         {
