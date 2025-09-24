@@ -124,7 +124,7 @@ public sealed class BooleanToVisibilityConverter : IValueConverter
             case decimal dec:
                 return dec != 0m;
             case Enum enumValue:
-                return Convert.ToInt64(enumValue, CultureInfo.InvariantCulture) != 0;
+                return System.Convert.ToInt64(enumValue, CultureInfo.InvariantCulture) != 0;
             case Visibility visibility:
                 return visibility == Visibility.Visible;
             case GridLength gridLength:
