@@ -1,11 +1,14 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.UI.Dispatching;
 
 namespace Veriado.Services.Abstractions;
 
 public interface IDispatcherService
 {
     bool HasThreadAccess { get; }
+
+    void ResetDispatcher(DispatcherQueue dispatcher);
 
     Task Enqueue(Action action);
 

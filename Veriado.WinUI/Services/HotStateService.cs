@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Extensions.Logging;
 using Veriado.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
@@ -9,6 +10,8 @@ namespace Veriado.WinUI.Services;
 public sealed partial class HotStateService : ObservableObject, IHotStateService
 {
     private readonly ISettingsService _settingsService;
+    private readonly IStatusService _statusService;
+    private readonly ILogger<HotStateService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _initialized;
 
@@ -21,9 +24,14 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     [ObservableProperty]
     private int pageSize = AppSettings.DefaultPageSize;
 
-    public HotStateService(ISettingsService settingsService)
+    public HotStateService(
+        ISettingsService settingsService,
+        IStatusService statusService,
+        ILogger<HotStateService> logger)
     {
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -70,6 +78,21 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
     private async Task PersistStateAsync()
     {
+        var result = await PersistStateInternalAsync().ConfigureAwait(false);
+        if (!result.Success)
+        {
+            var message = "Nepodařilo se uložit poslední použitý stav.";
+            if (!string.IsNullOrWhiteSpace(result.Exception?.Message))
+            {
+                message = $"{message} {result.Exception.Message}";
+            }
+
+            _statusService.Error(message);
+        }
+    }
+
+    private async Task<PersistStateResult> PersistStateInternalAsync()
+    {
         try
         {
             await _gate.WaitAsync().ConfigureAwait(false);
@@ -86,10 +109,30 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             {
                 _gate.Release();
             }
+
+            return PersistStateResult.CreateSuccess();
         }
-        catch
+        catch (Exception ex)
         {
-            // Persistence of hot state should not crash the UI layer.
+            _logger.LogError(ex, "Failed to persist hot state.");
+            return PersistStateResult.CreateFailure(ex);
         }
+    }
+
+    private readonly struct PersistStateResult
+    {
+        private PersistStateResult(bool success, Exception? exception)
+        {
+            Success = success;
+            Exception = exception;
+        }
+
+        public bool Success { get; }
+
+        public Exception? Exception { get; }
+
+        public static PersistStateResult CreateSuccess() => new(true, null);
+
+        public static PersistStateResult CreateFailure(Exception exception) => new(false, exception);
     }
 }
