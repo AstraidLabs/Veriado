@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
+using Veriado.Appl.DependencyInjection;
 using Veriado.Contracts.Search.Abstractions;
 using Veriado.Services.Diagnostics;
 using Veriado.Services.Files;
@@ -25,6 +26,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddVeriadoServices(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        services.AddApplication();
 
         services.AddScoped<IImportService, ImportService>();
         services.AddScoped<IFileQueryService, FileQueryService>();
