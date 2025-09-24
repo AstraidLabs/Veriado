@@ -30,7 +30,7 @@ public partial class App : Application
         Current._appHost?.Services
         ?? throw new InvalidOperationException("Application host has not been started.");
 
-    public Window MainWindow { get; private set; } = default!;
+    public Window? MainWindow { get; private set; }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -113,7 +113,7 @@ public partial class App : Application
             }
 
             _appHost = null;
-            MainWindow = null!;
+            MainWindow = null;
             return false;
         }
     }
@@ -139,13 +139,18 @@ public partial class App : Application
 
     private async void OnWindowClosed(object sender, WindowEventArgs e)
     {
+        if (sender is Window window)
+        {
+            window.Closed -= OnWindowClosed;
+        }
+
         if (_appHost is not null)
         {
             await _appHost.DisposeAsync().ConfigureAwait(false);
             _appHost = null;
         }
 
-        MainWindow = null!;
+        MainWindow = null;
     }
 
     private sealed class DebugLoggerProvider : ILoggerProvider

@@ -9,7 +9,7 @@
                  Text="{Binding DefaultAuthor, Mode=TwoWay}"
                  Width="300" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Vybrat složku" Command="{Binding BrowseFolderCommand}" />
+            <Button Content="Vybrat složku" Click="BrowseFolderButton_Click" />
             <TextBlock Text="{Binding SelectedFolderPath}" />
         </StackPanel>
         <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
@@ -20,8 +20,8 @@
                          Maximum="16"
                          Width="200" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Importovat" Command="{Binding ImportCommand}" />
-            <Button Content="Zrušit" Command="{Binding CancelImportCommand}" />
+            <Button Content="Importovat" Click="ImportButton_Click" />
+            <Button Content="Zrušit" Click="CancelButton_Click" />
         </StackPanel>
 
         <TextBlock Text="{Binding LastError}"
