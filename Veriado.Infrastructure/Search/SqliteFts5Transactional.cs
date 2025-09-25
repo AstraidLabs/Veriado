@@ -22,7 +22,7 @@ internal sealed class SqliteFts5Transactional
         {
             delete.Transaction = transaction;
             delete.CommandText = "DELETE FROM file_search WHERE rowid = $rowid;";
-            delete.Parameters.AddWithValue("$rowid", searchRowId);
+            delete.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
             await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -30,7 +30,7 @@ internal sealed class SqliteFts5Transactional
         {
             insert.Transaction = transaction;
             insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author, content) VALUES ($rowid, $title, $mime, $author, $content);";
-            insert.Parameters.AddWithValue("$rowid", searchRowId);
+            insert.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
             insert.Parameters.AddWithValue("$title", (object?)document.Title ?? DBNull.Value);
             insert.Parameters.AddWithValue("$mime", document.Mime);
             insert.Parameters.AddWithValue("$author", (object?)document.Author ?? DBNull.Value);
@@ -44,7 +44,7 @@ internal sealed class SqliteFts5Transactional
         {
             deleteTrgm.Transaction = transaction;
             deleteTrgm.CommandText = "DELETE FROM file_trgm WHERE rowid = $rowid;";
-            deleteTrgm.Parameters.AddWithValue("$rowid", trigramRowId);
+            deleteTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId;
             await deleteTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -52,7 +52,7 @@ internal sealed class SqliteFts5Transactional
         {
             insertTrgm.Transaction = transaction;
             insertTrgm.CommandText = "INSERT INTO file_trgm(rowid, trgm) VALUES ($rowid, $trgm);";
-            insertTrgm.Parameters.AddWithValue("$rowid", trigramRowId);
+            insertTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId;
             insertTrgm.Parameters.AddWithValue("$trgm", trigramText);
             await insertTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -70,7 +70,7 @@ internal sealed class SqliteFts5Transactional
             await using var deleteFts = connection.CreateCommand();
             deleteFts.Transaction = transaction;
             deleteFts.CommandText = "DELETE FROM file_search WHERE rowid = $rowid;";
-            deleteFts.Parameters.AddWithValue("$rowid", searchRowId.Value);
+            deleteFts.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId.Value;
             await deleteFts.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -80,7 +80,7 @@ internal sealed class SqliteFts5Transactional
             await using var deleteTrgm = connection.CreateCommand();
             deleteTrgm.Transaction = transaction;
             deleteTrgm.CommandText = "DELETE FROM file_trgm WHERE rowid = $rowid;";
-            deleteTrgm.Parameters.AddWithValue("$rowid", trigramRowId.Value);
+            deleteTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId.Value;
             await deleteTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
