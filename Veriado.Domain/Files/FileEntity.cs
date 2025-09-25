@@ -112,7 +112,7 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the extended metadata collection.
     /// </summary>
-    public ExtendedMetadata ExtendedMetadata { get; private set; } = null!;
+    public ExtendedMetadata ExtendedMetadata { get; private set; } = ExtendedMetadata.Empty;
 
     /// <summary>
     /// Gets the search index state.
