@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Shell;
 using Veriado.WinUI.ViewModels.Startup;
+using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
 
 namespace Veriado.WinUI;
