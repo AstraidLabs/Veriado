@@ -10,7 +10,7 @@
                 Width="48"
                 Height="48"
                 IsActive="{Binding IsLoading}"
-                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <TextBlock
                 Text="{Binding StatusMessage}"
                 TextAlignment="Center"
@@ -21,13 +21,13 @@
                 Text="{Binding DetailsMessage}"
                 TextAlignment="Center"
                 TextWrapping="Wrap"
-                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button
                 Width="160"
                 HorizontalAlignment="Center"
                 Content="Zkusit znovu"
                 Command="{Binding RetryCommand}"
-                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
     </Grid>
 </Window>
