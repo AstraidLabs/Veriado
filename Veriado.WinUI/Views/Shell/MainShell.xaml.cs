@@ -48,6 +48,24 @@ public sealed partial class MainShell : Window
         }
     }
 
+    private void OnToggleNavAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (_viewModel?.ToggleNavCommand.CanExecute(null) == true)
+        {
+            _viewModel.ToggleNavCommand.Execute(null);
+            args.Handled = true;
+        }
+    }
+
+    private void OnCloseNavAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (_viewModel?.CloseNavCommand.CanExecute(null) == true)
+        {
+            _viewModel.CloseNavCommand.Execute(null);
+            args.Handled = true;
+        }
+    }
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_viewModel is null)

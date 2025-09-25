@@ -7,8 +7,8 @@
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     mc:Ignorable="d">
     <Window.KeyboardAccelerators>
-        <KeyboardAccelerator Key="M" Modifiers="Alt" Command="{Binding ToggleNavCommand}" />
-        <KeyboardAccelerator Key="Escape" Command="{Binding CloseNavCommand}" />
+        <KeyboardAccelerator Key="M" Modifiers="Alt" Invoked="OnToggleNavAcceleratorInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnCloseNavAcceleratorInvoked" />
     </Window.KeyboardAccelerators>
 
     <Grid>
@@ -16,14 +16,14 @@
 
         <Rectangle
             Fill="Transparent"
-            Panel.ZIndex="998"
+            Canvas.ZIndex="998"
             IsHitTestVisible="{Binding IsNavOpen}"
             Visibility="{Binding IsNavOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
             Tapped="OnOverlayTapped" />
 
         <controls:NavigationView
             x:Name="RootNavigation"
-            Panel.ZIndex="999"
+            Canvas.ZIndex="999"
             IsSettingsVisible="False"
             PaneDisplayMode="LeftMinimal"
             Width="320"
