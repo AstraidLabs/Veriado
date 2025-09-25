@@ -21,37 +21,37 @@ public sealed partial class FileDetailViewModel : ViewModelBase
     private readonly IShareService _shareService;
 
     [ObservableProperty]
-    private FileDetailDto? detail;
+    private partial FileDetailDto? detail;
 
     [ObservableProperty]
-    private DateTimeOffset? validityIssuedAt;
+    private partial DateTimeOffset? validityIssuedAt;
 
     [ObservableProperty]
-    private DateTimeOffset? validityValidUntil;
+    private partial DateTimeOffset? validityValidUntil;
 
     [ObservableProperty]
-    private bool validityHasPhysicalCopy;
+    private partial bool validityHasPhysicalCopy;
 
     [ObservableProperty]
-    private bool validityHasElectronicCopy;
+    private partial bool validityHasElectronicCopy;
 
     [ObservableProperty]
-    private bool editableIsReadOnly;
+    private partial bool editableIsReadOnly;
 
     [ObservableProperty]
-    private bool canEdit = true;
+    private partial bool canEdit = true;
 
     [ObservableProperty]
-    private string? editableName;
+    private partial string? editableName;
 
     [ObservableProperty]
-    private string? editableAuthor;
+    private partial string? editableAuthor;
 
     [ObservableProperty]
-    private string? editableMime;
+    private partial string? editableMime;
 
     [ObservableProperty]
-    private string? contentPreview;
+    private partial string? contentPreview;
 
     public FileDetailViewModel(
         IMessenger messenger,

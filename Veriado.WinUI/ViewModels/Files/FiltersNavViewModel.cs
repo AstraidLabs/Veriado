@@ -21,7 +21,7 @@ public sealed partial class FiltersNavViewModel : ViewModelBase
     private readonly IFilesSearchSuggestionsProvider _suggestionsProvider;
 
     [ObservableProperty]
-    private string? searchText;
+    private partial string? searchText;
 
     public ObservableCollection<string> SearchSuggestions { get; } = new();
 
