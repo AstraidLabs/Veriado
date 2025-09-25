@@ -58,6 +58,12 @@ public static class ServiceCollectionExtensions
         };
         options.ConnectionString = connectionStringBuilder.ConnectionString;
 
+        if (!File.Exists(options.DbPath))
+        {
+            using var connection = new SqliteConnection(options.ConnectionString);
+            connection.Open();
+        }
+
         services.AddSingleton(options);
         var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
