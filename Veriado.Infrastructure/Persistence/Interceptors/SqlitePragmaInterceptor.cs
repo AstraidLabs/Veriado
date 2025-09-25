@@ -21,7 +21,7 @@ public sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
         await using var command = sqlite.CreateCommand();
         command.CommandText = string.Join(";",
             "PRAGMA journal_mode=WAL",
-            "PRAGMA synchronous=NORMAL",
+            "PRAGMA synchronous=FULL",
             "PRAGMA foreign_keys=ON",
             "PRAGMA temp_store=MEMORY",
             "PRAGMA mmap_size=134217728",
