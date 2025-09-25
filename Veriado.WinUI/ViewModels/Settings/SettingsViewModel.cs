@@ -17,13 +17,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<AppTheme> Themes { get; } = new(Enum.GetValues<AppTheme>());
 
     [ObservableProperty]
-    private partial AppTheme selectedTheme;
+    private AppTheme selectedTheme;
 
     [ObservableProperty]
-    private partial int pageSize;
+    private int pageSize;
 
     [ObservableProperty]
-    private partial string? lastFolder;
+    private string? lastFolder;
 
     public SettingsViewModel(
         IMessenger messenger,
