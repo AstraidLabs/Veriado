@@ -87,9 +87,6 @@ public partial class App : Application
             var dispatcherService = services.GetRequiredService<IDispatcherService>();
             dispatcherService.ResetDispatcher(shell.DispatcherQueue);
 
-            var keyboardShortcuts = services.GetRequiredService<IKeyboardShortcutsService>();
-            keyboardShortcuts.RegisterDefaultShortcuts();
-
             var themeService = services.GetRequiredService<IThemeService>();
             await themeService.InitializeAsync().ConfigureAwait(true);
 
