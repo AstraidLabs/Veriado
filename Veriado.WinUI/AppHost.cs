@@ -64,7 +64,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<ShellViewModel>();
                 services.AddSingleton<SearchOverlayViewModel>();
                 services.AddTransient<FilesGridViewModel>();
-                services.AddSingleton<FiltersNavViewModel>();
+                services.AddTransient<FiltersNavViewModel>();
                 services.AddTransient<FileDetailViewModel>();
                 services.AddTransient<ImportViewModel>();
                 services.AddSingleton<FavoritesViewModel>();

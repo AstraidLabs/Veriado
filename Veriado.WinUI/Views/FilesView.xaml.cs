@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Veriado.Contracts.Files;
 using Veriado.WinUI.Infrastructure;
 using Veriado.WinUI.ViewModels.Files;
 
@@ -28,17 +30,28 @@ public sealed partial class FilesView : UserControl
             .ConfigureAwait(false);
     }
 
-    private async void SearchButton_Click(object sender, RoutedEventArgs e)
-    {
-        await CommandForwarder.TryExecuteAsync(ViewModel.RefreshCommand, null, _logger)
-            .ConfigureAwait(false);
-    }
-
     private void OpenDetail_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: Guid id })
         {
             CommandForwarder.TryExecute(ViewModel.OpenDetailCommand, id, _logger);
+        }
+    }
+
+    private void FilesList_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e?.ClickedItem is FileSummaryDto summary)
+        {
+            CommandForwarder.TryExecute(ViewModel.OpenDetailCommand, summary.Id, _logger);
+        }
+    }
+
+    private void FilesList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (sender is ListView { SelectedItem: FileSummaryDto summary })
+        {
+            CommandForwarder.TryExecute(ViewModel.OpenDetailCommand, summary.Id, _logger);
+            e.Handled = true;
         }
     }
 }

@@ -40,7 +40,7 @@ public sealed class KeyboardShortcutsService : IKeyboardShortcutsService
         };
         openSearch.Invoked += (_, args) =>
         {
-            _messenger.Send(new OpenSearchOverlayMessage());
+            _messenger.Send(new FocusSearchRequestedMessage());
             args.Handled = true;
         };
 

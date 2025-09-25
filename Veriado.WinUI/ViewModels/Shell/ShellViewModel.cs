@@ -34,6 +34,9 @@ public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
     [ObservableProperty]
     private bool isInfoBarOpen;
 
+    [ObservableProperty]
+    private bool isNavOpen;
+
     public FilesGridViewModel Files { get; }
 
     public ImportViewModel Import { get; }
@@ -95,5 +98,7 @@ public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
                 _navigationService.NavigateTo(_settingsView);
                 break;
         }
+
+        IsNavOpen = false;
     }
 }
