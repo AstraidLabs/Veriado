@@ -19,7 +19,7 @@ public sealed class InfrastructureOptions
     /// Gets or sets a value indicating whether the key/value metadata store should be used instead of JSON.
     /// </summary>
     public bool UseKvMetadata { get; set; }
-        = false;
+        = true;
 
     /// <summary>
     /// Gets or sets the optional maximum number of bytes allowed for stored file content.
