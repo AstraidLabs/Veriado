@@ -64,6 +64,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<ShellViewModel>();
                 services.AddSingleton<SearchOverlayViewModel>();
                 services.AddTransient<FilesGridViewModel>();
+                services.AddSingleton<FiltersNavViewModel>();
                 services.AddTransient<FileDetailViewModel>();
                 services.AddTransient<ImportViewModel>();
                 services.AddSingleton<FavoritesViewModel>();
@@ -83,6 +84,7 @@ internal sealed class AppHost : IAsyncDisposable
                 });
                 services.AddApplication();
                 services.AddVeriadoServices();
+                services.AddSingleton<IFilesSearchSuggestionsProvider, FilesSearchSuggestionsProvider>();
             })
             .Build();
 
