@@ -1,6 +1,5 @@
 using System;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,14 +15,16 @@ public sealed partial class FiltersNavPane : UserControl, IRecipient<FocusSearch
     private readonly ILogger<FiltersNavPane> _logger;
     private readonly IMessenger _messenger;
 
-    public FiltersNavPane()
+    public FiltersNavPane(
+        FiltersNavViewModel viewModel,
+        ILogger<FiltersNavPane> logger,
+        IMessenger messenger)
     {
         InitializeComponent();
 
-        var services = App.Services;
-        DataContext = services.GetRequiredService<FiltersNavViewModel>();
-        _logger = services.GetRequiredService<ILogger<FiltersNavPane>>();
-        _messenger = services.GetRequiredService<IMessenger>();
+        DataContext = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
 
         _messenger.Register<FiltersNavPane, FocusSearchRequestedMessage>(this, static (recipient, message) => recipient.Receive(message));
     }

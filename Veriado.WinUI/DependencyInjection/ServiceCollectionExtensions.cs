@@ -17,7 +17,6 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddWinUiShell(this IServiceCollection services)
     {
         services.AddSingleton<MainWindow>();
-        services.AddTransient<MainShell>();
         services.AddTransient<FiltersNavPane>();
         services.AddTransient<FilesView>();
         services.AddTransient<FileDetailView>();

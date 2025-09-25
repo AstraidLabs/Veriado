@@ -11,17 +11,55 @@
     <Grid x:Name="LayoutRoot">
         <Grid.Resources>
             <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+            <conv:BooleanToVisibilityConverterEx x:Key="BoolToVisibilityEx" />
         </Grid.Resources>
+
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="PreviewDetailPane.Visibility" Value="Collapsed" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="1200" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="PreviewDetailPane.Visibility" Value="Visible" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="280" />
+            <ColumnDefinition Width="300" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="400" />
         </Grid.ColumnDefinitions>
+
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="FocusSearch_Invoked" />
+            <KeyboardAccelerator Key="M" Modifiers="Menu" Invoked="ToggleNavigation_Invoked" />
+            <KeyboardAccelerator Key="Escape" Invoked="CloseNavigation_Invoked" />
+            <KeyboardAccelerator Key="F5" Invoked="RefreshAccelerator_Invoked" />
+            <KeyboardAccelerator Key="F6" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="F7" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="F8" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="Delete" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="F6" Modifiers="Shift" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="R" Modifiers="Control" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="Q" Modifiers="Control" Invoked="ForwardAccelerator_Invoked" />
+            <KeyboardAccelerator Key="Tab" Invoked="ForwardAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
 
         <winui:CommandBar Grid.Row="0" Grid.ColumnSpan="3">
             <winui:AppBarButton Icon="Refresh"
@@ -33,54 +71,58 @@
                                 Command="{Binding Search.OpenCommand}" />
         </winui:CommandBar>
 
-        <winui:NavigationView x:Name="ShellNavigationView"
-                              Grid.Row="1"
-                              Grid.Column="0"
-                              IsSettingsVisible="True"
-                              SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}">
-            <winui:NavigationView.MenuItems>
-                <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" IsSelected="True" />
-                <winui:NavigationViewItem Content="Import" Icon="Upload" Tag="Import" />
-                <winui:NavigationViewItem Content="Nastavení" Icon="Setting" Tag="Settings" />
-            </winui:NavigationView.MenuItems>
-        </winui:NavigationView>
+        <ContentControl x:Name="FiltersNavHost"
+                         Grid.Row="1"
+                         Grid.Column="0"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Stretch" />
 
         <ContentPresenter Grid.Row="1"
                           Grid.Column="1"
+                          Margin="12"
                           Content="{Binding CurrentContent}" />
 
-        <Grid Grid.Row="1" Grid.Column="2" MinWidth="360">
-            <VisualStateManager.VisualStateGroups>
-                <VisualStateGroup>
-                    <VisualState x:Name="Narrow">
-                        <VisualState.StateTriggers>
-                            <AdaptiveTrigger MinWindowWidth="0" />
-                        </VisualState.StateTriggers>
-                        <VisualState.Setters>
-                            <Setter Target="RightPane.Visibility" Value="Collapsed" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="Wide">
-                        <VisualState.StateTriggers>
-                            <AdaptiveTrigger MinWindowWidth="1200" />
-                        </VisualState.StateTriggers>
-                        <VisualState.Setters>
-                            <Setter Target="RightPane.Visibility" Value="Visible" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateManager.VisualStateGroups>
+        <Border x:Name="PreviewDetailPane"
+                Grid.Row="1"
+                Grid.Column="2"
+                Margin="12"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <ContentPresenter Content="{Binding CurrentDetail}" />
+        </Border>
 
-            <Border x:Name="RightPane" Padding="12">
-                <ContentPresenter Content="{Binding CurrentDetail}" />
-            </Border>
+        <Grid x:Name="StatusBar"
+              Grid.Row="2"
+              Grid.ColumnSpan="3"
+              Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+              Padding="8">
+            <winui:InfoBar IsOpen="{Binding IsInfoBarOpen}"
+                           Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
+                           Message="{Binding StatusMessage}" />
         </Grid>
 
-        <winui:InfoBar Grid.Row="2"
-                       Grid.ColumnSpan="3"
-                       IsOpen="{Binding IsInfoBarOpen}"
-                       Severity="{Binding HasError, Converter={StaticResource BoolToSeverityConverter}}"
-                       Message="{Binding StatusMessage}" />
+        <Grid x:Name="NavigationOverlay"
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
+              Background="{ThemeResource LayerOnAcrylicDefaultBrush}"
+              Visibility="{Binding IsNavOpen, Converter={StaticResource BoolToVisibilityEx}}"
+              IsHitTestVisible="{Binding IsNavOpen}"
+              Tapped="NavigationOverlay_Tapped">
+            <winui:NavigationView x:Name="OverlayNavView"
+                                  Width="320"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Stretch"
+                                  IsSettingsVisible="True"
+                                  PaneDisplayMode="LeftMinimal"
+                                  IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
+                                  SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}">
+                <winui:NavigationView.MenuItems>
+                    <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" />
+                    <winui:NavigationViewItem Content="Import" Icon="Upload" Tag="Import" />
+                    <winui:NavigationViewItem Content="Nastavení" Icon="Setting" Tag="Settings" />
+                </winui:NavigationView.MenuItems>
+            </winui:NavigationView>
+        </Grid>
 
         <Grid x:Name="SearchOverlayRoot"
               Grid.RowSpan="3"
@@ -169,8 +211,7 @@
                                         <DataTemplate x:DataType="contracts:SearchHistoryEntry">
                                             <StackPanel Spacing="2">
                                                 <TextBlock Text="{Binding QueryText}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding LastQueriedUtc}"
-                                                           Style="{ThemeResource CaptionTextBlockStyle}" />
+                                                <TextBlock Text="{Binding LastQueriedUtc}" Style="{ThemeResource CaptionTextBlockStyle}" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </winui:ListView.ItemTemplate>
