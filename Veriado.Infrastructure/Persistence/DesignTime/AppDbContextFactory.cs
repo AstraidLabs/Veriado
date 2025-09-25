@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Logging.Abstractions;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Persistence.Options;
@@ -26,7 +27,7 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         builder.UseSqlite(connectionString, sqlite => sqlite.CommandTimeout(30));
         builder.AddInterceptors(pragmaInterceptor);
 
-        return new AppDbContext(builder.Options, infrastructureOptions);
+        return new AppDbContext(builder.Options, infrastructureOptions, NullLogger<AppDbContext>.Instance);
     }
 
     private static InfrastructureOptions BuildInfrastructureOptions()
