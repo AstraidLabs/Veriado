@@ -616,7 +616,7 @@ public sealed class FileEntity : AggregateRoot
 
     private string? GetMetadataString(PropertyKey key)
     {
-        return ExtendedMetadata.TryGet(key, out var metadata) && metadata.TryGetString(out var value)
+          return ExtendedMetadata.TryGet(key, out var metadata) && metadata.TryGetString(out var value)
             ? value
             : null;
     }
