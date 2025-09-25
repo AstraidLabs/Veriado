@@ -1,6 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Services.Messages;
@@ -36,6 +37,12 @@ public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
 
     [ObservableProperty]
     private bool isNavOpen;
+
+    [ObservableProperty]
+    private bool isFiltersPaneVisible = true;
+
+    [ObservableProperty]
+    private GridLength filtersColumnWidth = new(300);
 
     public FilesGridViewModel Files { get; }
 
@@ -86,7 +93,11 @@ public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
 
     private void NavigateTo(object? tag)
     {
-        switch (tag?.ToString())
+        var target = tag?.ToString();
+
+        UpdateFiltersPaneVisibility(string.Equals(target, "Files", StringComparison.Ordinal));
+
+        switch (target)
         {
             case "Files":
                 _navigationService.NavigateTo(_filesView);
@@ -100,5 +111,11 @@ public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
         }
 
         IsNavOpen = false;
+    }
+
+    private void UpdateFiltersPaneVisibility(bool isVisible)
+    {
+        IsFiltersPaneVisible = isVisible;
+        FiltersColumnWidth = isVisible ? new GridLength(300) : new GridLength(0);
     }
 }
