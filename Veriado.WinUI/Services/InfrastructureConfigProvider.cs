@@ -15,10 +15,20 @@ public sealed class InfrastructureConfigProvider : IInfrastructureConfigProvider
 
     public void EnsureStorageExists(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
+        }
+
+        if (!File.Exists(path))
+        {
+            using var _ = File.Create(path);
         }
     }
 }
