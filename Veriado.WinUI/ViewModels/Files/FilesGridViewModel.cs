@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Contracts.Search;
 using Veriado.WinUI.Services.Abstractions;
@@ -81,11 +80,8 @@ public sealed partial class FilesGridViewModel : ViewModelBase
             var request = new FileGridQueryDto
             {
                 Text = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText,
-                Page = new PageRequest
-                {
-                    Page = 1,
-                    PageSize = Math.Max(1, PageSize),
-                },
+                Page = 1,
+                PageSize = Math.Max(1, PageSize),
             };
 
             var page = await _queryService.GetGridAsync(request, ct);

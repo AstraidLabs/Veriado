@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Veriado.Contracts.Common;
 
 namespace Veriado.Contracts.Files;
 
@@ -130,14 +129,26 @@ public sealed record FileGridQueryDto
         = null;
 
     /// <summary>
+    /// Gets or sets a filter applied to the file version.
+    /// </summary>
+    public int? Version { get; init; }
+        = null;
+
+    /// <summary>
     /// Gets the sort specifications applied to the result set.
     /// </summary>
     public List<FileSortSpecDto> Sort { get; init; }
         = new();
 
     /// <summary>
-    /// Gets the paging request applied to the result set.
+    /// Gets or sets the requested page number (1-based).
     /// </summary>
-    public PageRequest Page { get; init; }
-        = new();
+    public int Page { get; init; }
+        = 1;
+
+    /// <summary>
+    /// Gets or sets the requested page size.
+    /// </summary>
+    public int PageSize { get; init; }
+        = 25;
 }

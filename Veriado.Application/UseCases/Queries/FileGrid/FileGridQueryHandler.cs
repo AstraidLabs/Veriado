@@ -57,8 +57,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
     {
         ArgumentNullException.ThrowIfNull(request);
         var dto = request.Parameters;
-        var pageNumber = Math.Max(dto.Page.Page, 1);
-        var pageSize = Math.Clamp(dto.Page.PageSize, 1, _options.MaxPageSize);
+        var pageNumber = Math.Max(dto.Page, 1);
+        var pageSize = Math.Clamp(dto.PageSize, 1, _options.MaxPageSize);
         var today = DateOnly.FromDateTime(_clock.UtcNow.UtcDateTime);
 
         SearchFavoriteItem? favorite = null;
@@ -105,7 +105,9 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         var filesQuery = context.Files;
 
         var filteredQuery = QueryableFilters.ApplyFilters(filesQuery, dto, today);
-        bool sortByScore = dto.Sort.Count > 0 && string.Equals(dto.Sort[0].Field, "score", StringComparison.OrdinalIgnoreCase);
+        var sortSpecifications = dto.Sort ?? new List<FileSortSpecDto>();
+        bool sortByScore = sortSpecifications.Count > 0
+            && string.Equals(sortSpecifications[0].Field, "score", StringComparison.OrdinalIgnoreCase);
 
         var fuzzyMode = (fuzzyRequestedByFavorite || fuzzyRequestedByDto) && !string.IsNullOrWhiteSpace(fuzzyMatchQuery);
 
@@ -202,7 +204,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                 }
             }
 
-            var orderedItems = OrderSummaries(enrichedSummaries, dto.Sort);
+            var orderedItems = OrderSummaries(enrichedSummaries, sortSpecifications);
             var totalCountNonScore = orderedItems.Count;
             var skipCount = (pageNumber - 1) * pageSize;
             var pageItems = orderedItems.Skip(skipCount).Take(pageSize).ToList();
@@ -309,7 +311,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                 }
             }
 
-            var orderedItems = OrderSummaries(enrichedSummaries, dto.Sort);
+            var orderedItems = OrderSummaries(enrichedSummaries, sortSpecifications);
             var totalCountNonScore = orderedItems.Count;
             var skipCount = (pageNumber - 1) * pageSize;
             var pageItems = orderedItems.Skip(skipCount).Take(pageSize).ToList();
@@ -319,7 +321,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         }
 
         var total = await context.CountAsync(filteredQuery, cancellationToken).ConfigureAwait(false);
-        var orderedQuery = QueryableFilters.ApplyOrdering(filteredQuery, dto.Sort);
+        var orderedQuery = QueryableFilters.ApplyOrdering(filteredQuery, sortSpecifications);
         var offset = (pageNumber - 1) * pageSize;
         var pageQueryProjection = orderedQuery
             .Skip(offset)
