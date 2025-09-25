@@ -12,6 +12,7 @@ using Veriado.WinUI.Services.Abstractions;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Views;
+using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -21,6 +22,7 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     private readonly INavigationService _navigationService;
     private readonly Func<FileDetailView> _detailViewFactory;
     private readonly IHotStateService _hotState;
+    private readonly ISearchHistoryService _historyService;
 
     [ObservableProperty]
     private string? searchText;
@@ -61,16 +63,20 @@ public sealed partial class FilesGridViewModel : ViewModelBase
         IFileQueryService queryService,
         INavigationService navigationService,
         IHotStateService hotState,
-        Func<FileDetailView> detailViewFactory)
+        Func<FileDetailView> detailViewFactory,
+        ISearchHistoryService historyService)
         : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _detailViewFactory = detailViewFactory ?? throw new ArgumentNullException(nameof(detailViewFactory));
         _hotState = hotState ?? throw new ArgumentNullException(nameof(hotState));
+        _historyService = historyService ?? throw new ArgumentNullException(nameof(historyService));
 
         PageSize = Math.Max(1, _hotState.PageSize);
         SearchText = _hotState.LastQuery;
+
+        Messenger.RegisterAll(this);
     }
 
     [RelayCommand]
