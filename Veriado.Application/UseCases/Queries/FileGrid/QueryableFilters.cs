@@ -133,6 +133,11 @@ internal static class QueryableFilters
             query = query.Where(file => file.LastModifiedUtc.Value <= to);
         }
 
+        if (dto.Version.HasValue)
+        {
+            query = query.Where(file => file.Version == dto.Version.Value);
+        }
+
         return query;
     }
 

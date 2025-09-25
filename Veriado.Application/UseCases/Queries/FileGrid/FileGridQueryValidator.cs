@@ -31,10 +31,10 @@ public sealed class FileGridQueryValidator : AbstractValidator<FileGridQueryDto>
     /// </summary>
     public FileGridQueryValidator(FileGridQueryOptions options)
     {
-        RuleFor(dto => dto.Page.Page)
+        RuleFor(dto => dto.Page)
             .GreaterThanOrEqualTo(1);
 
-        RuleFor(dto => dto.Page.PageSize)
+        RuleFor(dto => dto.PageSize)
             .InclusiveBetween(1, options.MaxPageSize);
 
         RuleFor(dto => dto.Text)
