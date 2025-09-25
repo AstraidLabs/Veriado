@@ -45,7 +45,7 @@
             <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="FocusSearch_Invoked" />
             <KeyboardAccelerator Key="M" Modifiers="Menu" Invoked="ToggleNavigation_Invoked" />
             <KeyboardAccelerator Key="Escape" Invoked="CloseNavigation_Invoked" />
-            <KeyboardAccelerator Key="F5" Command="{Binding Files.RefreshCommand}" />
+            <KeyboardAccelerator Key="F5" Invoked="RefreshAccelerator_Invoked" />
             <KeyboardAccelerator Key="F6" Invoked="ForwardAccelerator_Invoked" />
             <KeyboardAccelerator Key="F7" Invoked="ForwardAccelerator_Invoked" />
             <KeyboardAccelerator Key="F8" Invoked="ForwardAccelerator_Invoked" />

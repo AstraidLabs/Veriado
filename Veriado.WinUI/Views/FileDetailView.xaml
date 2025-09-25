@@ -12,7 +12,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Spacing="8">
-            <TextBlock Text="{x:Bind ViewModel.Detail?.Name, Mode=OneWay}" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Detail.Name}" FontSize="18" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBox Width="220"
                          PlaceholderText="Nový název"

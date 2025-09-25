@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Veriado.WinUI.Infrastructure;
 using Veriado.WinUI.Services.Messages;
 using Veriado.WinUI.ViewModels;
 
@@ -38,6 +39,15 @@ public sealed partial class MainShell : UserControl
         if (DataContext is ShellViewModel vm && vm.IsNavOpen)
         {
             vm.IsNavOpen = false;
+            args.Handled = true;
+        }
+    }
+
+    private async void RefreshAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (DataContext is ShellViewModel vm)
+        {
+            await CommandForwarder.TryExecuteAsync(vm.Files.RefreshCommand, null);
             args.Handled = true;
         }
     }
