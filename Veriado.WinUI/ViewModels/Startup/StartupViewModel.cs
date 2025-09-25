@@ -7,16 +7,16 @@ namespace Veriado.WinUI.ViewModels.Startup;
 public partial class StartupViewModel : ObservableObject
 {
     [ObservableProperty]
-    private partial bool isLoading;
+    private bool isLoading;
 
     [ObservableProperty]
-    private partial bool hasError;
+    private bool hasError;
 
     [ObservableProperty]
-    private partial string? statusMessage;
+    private string? statusMessage;
 
     [ObservableProperty]
-    private partial string? detailsMessage;
+    private string? detailsMessage;
 
     public event EventHandler? RetryRequested;
 

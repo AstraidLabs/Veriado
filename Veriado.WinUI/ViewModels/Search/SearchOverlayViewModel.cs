@@ -25,10 +25,10 @@ public sealed partial class SearchOverlayViewModel : ViewModelBase
     private readonly IHotStateService _hotState;
 
     [ObservableProperty]
-    private partial bool isOpen;
+    private bool isOpen;
 
     [ObservableProperty]
-    private partial string? queryText;
+    private string? queryText;
 
     public ObservableCollection<string> Suggestions { get; } = new();
 

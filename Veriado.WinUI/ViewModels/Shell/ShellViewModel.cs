@@ -20,22 +20,22 @@ public sealed partial class ShellViewModel : ViewModelBase, INavigationHost
     private readonly SettingsView _settingsView;
 
     [ObservableProperty]
-    private partial object? currentContent;
+    private object? currentContent;
 
     [ObservableProperty]
-    private partial object? currentDetail;
+    private object? currentDetail;
 
     [ObservableProperty]
-    private partial object? selectedNavItem;
+    private object? selectedNavItem;
 
     [ObservableProperty]
-    private partial string? statusMessage;
+    private string? statusMessage;
 
     [ObservableProperty]
-    private partial bool isInfoBarOpen;
+    private bool isInfoBarOpen;
 
     [ObservableProperty]
-    private partial bool isNavOpen;
+    private bool isNavOpen;
 
     public FilesGridViewModel Files { get; }
 

@@ -16,13 +16,13 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     private bool _initialized;
 
     [ObservableProperty]
-    private partial string? lastQuery;
+    private string? lastQuery;
 
     [ObservableProperty]
-    private partial string? lastFolder;
+    private string? lastFolder;
 
     [ObservableProperty]
-    private partial int pageSize = AppSettings.DefaultPageSize;
+    private int pageSize = AppSettings.DefaultPageSize;
 
     public HotStateService(
         ISettingsService settingsService,

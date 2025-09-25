@@ -24,25 +24,25 @@ public sealed partial class FilesGridViewModel : ViewModelBase
     private readonly ISearchHistoryService _historyService;
 
     [ObservableProperty]
-    private partial string? searchText;
+    private string? searchText;
 
     [ObservableProperty]
-    private partial int searchModeIndex;
+    private int searchModeIndex;
 
     [ObservableProperty]
-    private partial DateTimeOffset? createdFrom;
+    private DateTimeOffset? createdFrom;
 
     [ObservableProperty]
-    private partial DateTimeOffset? createdTo;
+    private DateTimeOffset? createdTo;
 
     [ObservableProperty]
-    private partial double? lowerValue;
+    private double? lowerValue;
 
     [ObservableProperty]
-    private partial double? upperValue;
+    private double? upperValue;
 
     [ObservableProperty]
-    private partial int pageSize = AppSettings.DefaultPageSize;
+    private int pageSize = AppSettings.DefaultPageSize;
 
     public ObservableCollection<FileSummaryDto> Items { get; } = new();
 
