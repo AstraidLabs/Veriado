@@ -5,9 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Veriado.WinUI.Services.Abstractions;
-using Veriado.WinUI.Views;
-using Veriado.WinUI.ViewModels.Settings;
+using Veriado.WinUI.ViewModels.Shell;
 using Veriado.WinUI.ViewModels.Startup;
+using Veriado.WinUI.Views.Shell;
 
 namespace Veriado.WinUI;
 
@@ -77,12 +77,15 @@ public partial class App : Application
 
             var services = host.Services;
 
-            var mainWindow = services.GetRequiredService<MainWindow>();
+            var shell = services.GetRequiredService<MainShell>();
+            var shellViewModel = services.GetRequiredService<MainShellViewModel>();
+            shell.Initialize(shellViewModel);
+
             var windowProvider = services.GetRequiredService<IWindowProvider>();
-            windowProvider.SetWindow(mainWindow);
+            windowProvider.SetWindow(shell);
 
             var dispatcherService = services.GetRequiredService<IDispatcherService>();
-            dispatcherService.ResetDispatcher(mainWindow.DispatcherQueue);
+            dispatcherService.ResetDispatcher(shell.DispatcherQueue);
 
             var keyboardShortcuts = services.GetRequiredService<IKeyboardShortcutsService>();
             keyboardShortcuts.RegisterDefaultShortcuts();
@@ -90,13 +93,10 @@ public partial class App : Application
             var themeService = services.GetRequiredService<IThemeService>();
             await themeService.InitializeAsync().ConfigureAwait(true);
 
-            var settingsViewModel = services.GetRequiredService<SettingsViewModel>();
-            settingsViewModel.SelectedTheme = themeService.CurrentTheme;
+            shell.Activate();
+            shell.Closed += OnWindowClosed;
 
-            mainWindow.Activate();
-            mainWindow.Closed += OnWindowClosed;
-
-            MainWindow = mainWindow;
+            MainWindow = shell;
 
             return true;
         }
