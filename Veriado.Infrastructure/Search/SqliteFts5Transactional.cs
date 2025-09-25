@@ -21,7 +21,7 @@ internal sealed class SqliteFts5Transactional
         await using (var delete = connection.CreateCommand())
         {
             delete.Transaction = transaction;
-            delete.CommandText = "DELETE FROM file_search WHERE rowid = $rowid;";
+            delete.CommandText = "INSERT INTO file_search(file_search, rowid) VALUES ('delete', $rowid);";
             delete.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
             await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -43,7 +43,7 @@ internal sealed class SqliteFts5Transactional
         await using (var deleteTrgm = connection.CreateCommand())
         {
             deleteTrgm.Transaction = transaction;
-            deleteTrgm.CommandText = "DELETE FROM file_trgm WHERE rowid = $rowid;";
+            deleteTrgm.CommandText = "INSERT INTO file_trgm(file_trgm, rowid) VALUES ('delete', $rowid);";
             deleteTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId;
             await deleteTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -69,7 +69,7 @@ internal sealed class SqliteFts5Transactional
         {
             await using var deleteFts = connection.CreateCommand();
             deleteFts.Transaction = transaction;
-            deleteFts.CommandText = "DELETE FROM file_search WHERE rowid = $rowid;";
+            deleteFts.CommandText = "INSERT INTO file_search(file_search, rowid) VALUES ('delete', $rowid);";
             deleteFts.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId.Value;
             await deleteFts.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -79,7 +79,7 @@ internal sealed class SqliteFts5Transactional
         {
             await using var deleteTrgm = connection.CreateCommand();
             deleteTrgm.Transaction = transaction;
-            deleteTrgm.CommandText = "DELETE FROM file_trgm WHERE rowid = $rowid;";
+            deleteTrgm.CommandText = "INSERT INTO file_trgm(file_trgm, rowid) VALUES ('delete', $rowid);";
             deleteTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId.Value;
             await deleteTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
