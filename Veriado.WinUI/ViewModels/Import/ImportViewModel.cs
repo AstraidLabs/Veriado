@@ -18,34 +18,34 @@ public sealed partial class ImportViewModel : ViewModelBase
     private readonly IHotStateService _hotState;
 
     [ObservableProperty]
-    private string? selectedFolderPath;
+    private partial string? selectedFolderPath;
 
     [ObservableProperty]
-    private string? defaultAuthor;
+    private partial string? defaultAuthor;
 
     [ObservableProperty]
-    private bool recursive = true;
+    private partial bool recursive = true;
 
     [ObservableProperty]
-    private bool extractContent = true;
+    private partial bool extractContent = true;
 
     [ObservableProperty]
-    private int maxDegreeOfParallelism = 4;
+    private partial int maxDegreeOfParallelism = 4;
 
     [ObservableProperty]
-    private string? lastError;
+    private partial string? lastError;
 
     [ObservableProperty]
-    private bool isImporting;
+    private partial bool isImporting;
 
     [ObservableProperty]
-    private string? searchPattern;
+    private partial string? searchPattern;
 
     [ObservableProperty]
-    private int processed;
+    private partial int processed;
 
     [ObservableProperty]
-    private int total;
+    private partial int total;
 
     [RelayCommand]
     private void UseFolderPath(string? folderPath)

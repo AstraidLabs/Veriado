@@ -37,10 +37,10 @@ public abstract partial class ViewModelBase : ObservableObject
     protected IDispatcherService Dispatcher => _dispatcher;
 
     [ObservableProperty]
-    private bool isBusy;
+    private partial bool isBusy;
 
     [ObservableProperty]
-    private bool hasError;
+    private partial bool hasError;
 
     /// <summary>
     /// Attempts to cancel the currently running operation, if any.

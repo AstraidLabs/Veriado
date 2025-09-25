@@ -29,7 +29,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
     public ObservableCollection<SearchHistoryEntry> Items { get; } = new();
 
     [ObservableProperty]
-    private int take = 50;
+    private partial int take = 50;
 
     [RelayCommand]
     private async Task LoadAsync()
