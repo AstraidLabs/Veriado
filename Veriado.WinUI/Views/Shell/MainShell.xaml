@@ -6,7 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     mc:Ignorable="d">
-    <Grid>
+    <Grid x:Name="RootGrid">
 
         <ContentPresenter x:Name="ContentHost" />
 

@@ -24,7 +24,7 @@ public sealed partial class MainShell : Window
     public void Initialize(MainShellViewModel viewModel)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        DataContext = viewModel;
+        RootGrid.DataContext = viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         LoadPage(_viewModel.CurrentPage);
     }
@@ -65,9 +65,9 @@ public sealed partial class MainShell : Window
     {
         var content = pageId switch
         {
-            PageId.Files => _serviceProvider.GetRequiredService<Views.Files.FilesPage>(),
-            PageId.Import => _serviceProvider.GetRequiredService<Views.Import.ImportPage>(),
-            PageId.Settings => _serviceProvider.GetRequiredService<Views.Settings.SettingsPage>(),
+            PageId.Files => (Page)_serviceProvider.GetRequiredService<Views.Files.FilesPage>(),
+            PageId.Import => (Page)_serviceProvider.GetRequiredService<Views.Import.ImportPage>(),
+            PageId.Settings => (Page)_serviceProvider.GetRequiredService<Views.Settings.SettingsPage>(),
             _ => throw new ArgumentOutOfRangeException(nameof(pageId), pageId, null),
         };
 
