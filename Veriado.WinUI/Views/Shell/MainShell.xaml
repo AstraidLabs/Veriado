@@ -8,7 +8,9 @@
     mc:Ignorable="d">
     <Grid x:Name="RootGrid">
 
-        <ContentPresenter x:Name="ContentHost" />
+        <ContentPresenter
+            x:Name="ContentHost"
+            Content="{x:Bind CurrentContent, Mode=OneWay}" />
 
         <Rectangle
             Fill="Transparent"

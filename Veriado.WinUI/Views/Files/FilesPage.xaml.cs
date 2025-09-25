@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.ViewModels.Files;
@@ -11,11 +10,10 @@ public sealed partial class FilesPage : Page
     public FilesPage()
     {
         InitializeComponent();
-        DataContext = App.Services.GetRequiredService<FilesPageViewModel>();
         Loaded += OnLoaded;
     }
 
-    private FilesPageViewModel ViewModel => (FilesPageViewModel)DataContext;
+    private FilesPageViewModel? ViewModel => DataContext as FilesPageViewModel;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -25,6 +23,8 @@ public sealed partial class FilesPage : Page
 
     private Task ExecuteInitialRefreshAsync()
     {
-        return ViewModel.RefreshCommand.ExecuteAsync(null);
+        return ViewModel is not null
+            ? ViewModel.RefreshCommand.ExecuteAsync(null)
+            : Task.CompletedTask;
     }
 }

@@ -1,48 +1,63 @@
 using System;
 using System.ComponentModel;
 using System.Linq;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Veriado.WinUI.Navigation;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Shell;
 
 namespace Veriado.WinUI.Views.Shell;
 
-public sealed partial class MainShell : Window
+public sealed partial class MainShell : Window, INavigationHost
 {
-    private readonly IServiceProvider _serviceProvider;
-    private MainShellViewModel? _viewModel;
+    private readonly MainShellViewModel _viewModel;
+    private readonly INavigationService _navigationService;
 
-    public MainShell()
+    public MainShell(MainShellViewModel viewModel, INavigationService navigationService)
     {
         InitializeComponent();
-        _serviceProvider = App.Services;
+
+        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+
+        RootGrid.DataContext = _viewModel;
+        _navigationService.AttachHost(this);
+
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        Loaded += OnLoaded;
+        Closed += OnClosed;
     }
 
-    public void Initialize(MainShellViewModel viewModel)
+    public object? CurrentContent
     {
-        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        RootGrid.DataContext = viewModel;
-        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        LoadPage(_viewModel.CurrentPage);
+        get => ContentHost.Content;
+        set => ContentHost.Content = value;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        _viewModel.Initialize();
+        UpdateNavigationSelection(_viewModel.CurrentPage);
+    }
+
+    private void OnClosed(object sender, WindowEventArgs e)
+    {
+        Closed -= OnClosed;
+        _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
     }
 
     private void OnNavigationViewItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
-        if (_viewModel is null)
-        {
-            return;
-        }
-
         var tag = args.InvokedItemContainer?.Tag as string;
         _viewModel.NavigateToTag(tag);
     }
 
     private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
     {
-        if (_viewModel?.CloseNavCommand.CanExecute(null) == true)
+        if (_viewModel.CloseNavCommand.CanExecute(null))
         {
             _viewModel.CloseNavCommand.Execute(null);
         }
@@ -50,29 +65,10 @@ public sealed partial class MainShell : Window
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (_viewModel is null)
-        {
-            return;
-        }
-
         if (e.PropertyName == nameof(MainShellViewModel.CurrentPage))
         {
-            LoadPage(_viewModel.CurrentPage);
+            UpdateNavigationSelection(_viewModel.CurrentPage);
         }
-    }
-
-    private void LoadPage(PageId pageId)
-    {
-        var content = pageId switch
-        {
-            PageId.Files => (Page)_serviceProvider.GetRequiredService<Views.Files.FilesPage>(),
-            PageId.Import => (Page)_serviceProvider.GetRequiredService<Views.Import.ImportPage>(),
-            PageId.Settings => (Page)_serviceProvider.GetRequiredService<Views.Settings.SettingsPage>(),
-            _ => throw new ArgumentOutOfRangeException(nameof(pageId), pageId, null),
-        };
-
-        ContentHost.Content = content;
-        UpdateNavigationSelection(pageId);
     }
 
     private void UpdateNavigationSelection(PageId pageId)
