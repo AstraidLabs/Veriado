@@ -44,7 +44,7 @@ public sealed class FileEntity : AggregateRoot
         Version = InitialVersion;
         IsReadOnly = false;
         SystemMetadata = systemMetadata;
-        ExtendedMetadata = extendedMetadata;
+        ExtendedMetadata = extendedMetadata ?? ExtendedMetadata.Empty;
         SearchIndex = new SearchIndexState(schemaVersion: 1);
         FtsPolicy = Fts5Policy.Default;
     }
@@ -117,12 +117,12 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the search index state.
     /// </summary>
-    public SearchIndexState SearchIndex { get; private set; } = null!;
+    public SearchIndexState SearchIndex { get; private set; } = new SearchIndexState(schemaVersion: 1);
 
     /// <summary>
     /// Gets the FTS5 tokenizer policy.
     /// </summary>
-    public Fts5Policy FtsPolicy { get; private set; } = null!;
+    public Fts5Policy FtsPolicy { get; private set; } = Fts5Policy.Default;
 
     /// <summary>
     /// Creates a new file aggregate from the provided core information and binary content.
@@ -341,10 +341,11 @@ public sealed class FileEntity : AggregateRoot
         EnsureWritable();
         ArgumentNullException.ThrowIfNull(configure);
 
-        var builder = ExtendedMetadata.ToBuilder();
+        var current = ExtendedMetadata ?? ExtendedMetadata.Empty;
+        var builder = current.ToBuilder();
         configure(builder);
         var updated = builder.Build();
-        if (ExtendedMetadata.Equals(updated))
+        if (current.Equals(updated))
         {
             return;
         }
@@ -570,6 +571,7 @@ public sealed class FileEntity : AggregateRoot
     /// <param name="whenUtc">The time of indexing.</param>
     public void ConfirmIndexed(int schemaVersion, UtcTimestamp whenUtc)
     {
+        SearchIndex ??= new SearchIndexState(schemaVersion: 1);
         SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Content.Hash.Value, GetTitle());
     }
 
@@ -579,17 +581,20 @@ public sealed class FileEntity : AggregateRoot
     /// <param name="newSchemaVersion">The new schema version.</param>
     public void BumpSchemaVersion(int newSchemaVersion, UtcTimestamp whenUtc)
     {
-        if (newSchemaVersion <= SearchIndex.SchemaVersion)
+        SearchIndex ??= new SearchIndexState(schemaVersion: 1);
+        var current = SearchIndex;
+
+        if (newSchemaVersion <= current.SchemaVersion)
         {
             return;
         }
 
         SearchIndex = new SearchIndexState(
             newSchemaVersion,
-            SearchIndex.IsStale,
-            SearchIndex.LastIndexedUtc,
-            SearchIndex.IndexedContentHash,
-            SearchIndex.IndexedTitle);
+            current.IsStale,
+            current.LastIndexedUtc,
+            current.IndexedContentHash,
+            current.IndexedTitle);
         MarkSearchDirty(whenUtc, ReindexReason.SchemaUpgrade);
     }
 
@@ -616,7 +621,8 @@ public sealed class FileEntity : AggregateRoot
 
     private string? GetMetadataString(PropertyKey key)
     {
-        return ExtendedMetadata.TryGet(key, out var metadata) && metadata.TryGetString(out var value)
+        var extendedMetadata = ExtendedMetadata ?? ExtendedMetadata.Empty;
+        return extendedMetadata.TryGet(key, out var metadata) && metadata.TryGetString(out var value)
             ? value
             : null;
     }
@@ -657,16 +663,16 @@ public sealed class FileEntity : AggregateRoot
 
     internal void LoadExtendedMetadata(ExtendedMetadata metadata)
     {
-        ArgumentNullException.ThrowIfNull(metadata);
-        ExtendedMetadata = metadata;
+        ExtendedMetadata = metadata ?? ExtendedMetadata.Empty;
     }
 
     private bool ApplyExtendedMetadataMutation(Action<ExtendedMetadata.Builder> configure)
     {
-        var builder = ExtendedMetadata.ToBuilder();
+        var current = ExtendedMetadata ?? ExtendedMetadata.Empty;
+        var builder = current.ToBuilder();
         configure(builder);
         var updated = builder.Build();
-        if (ExtendedMetadata.Equals(updated))
+        if (current.Equals(updated))
         {
             return false;
         }
@@ -700,13 +706,16 @@ public sealed class FileEntity : AggregateRoot
 
     private void MarkSearchDirty(UtcTimestamp whenUtc, ReindexReason reason)
     {
+        SearchIndex ??= new SearchIndexState(schemaVersion: 1);
         SearchIndex.MarkStale();
         RaiseDomainEvent(new SearchReindexRequested(Id, reason, whenUtc));
     }
 
     private void AlignAuthorWithMetadata()
     {
-        if (ExtendedMetadata.TryGet(WindowsPropertyIds.Author, out var metadata) && metadata.TryGetString(out var value))
+        var extendedMetadata = ExtendedMetadata ?? ExtendedMetadata.Empty;
+
+        if (extendedMetadata.TryGet(WindowsPropertyIds.Author, out var metadata) && metadata.TryGetString(out var value))
         {
             var normalized = NormalizeAuthor(value);
             Author = normalized;
