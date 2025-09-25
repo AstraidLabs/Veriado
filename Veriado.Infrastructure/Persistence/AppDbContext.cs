@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Extensions.Logging;
 using Veriado.Domain.Audit;
 using Veriado.Domain.Files;
 using Veriado.Infrastructure.MetadataStore.Kv;
@@ -18,11 +19,13 @@ namespace Veriado.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext
 {
     private readonly InfrastructureOptions _options;
+    private readonly ILogger<AppDbContext> _logger;
 
-    public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions)
+    public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions, ILogger<AppDbContext> logger)
         : base(options)
     {
         _options = infrastructureOptions;
+        _logger = logger;
     }
 
     public DbSet<FileEntity> Files => Set<FileEntity>();
@@ -65,7 +68,29 @@ public sealed class AppDbContext : DbContext
     /// <param name="cancellationToken">The cancellation token.</param>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        if (Database.IsSqlite())
+        {
+            await EnsureSqliteMigrationsLockClearedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-        await Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken).ConfigureAwait(false);
+
+        if (Database.IsSqlite())
+        {
+            await Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task EnsureSqliteMigrationsLockClearedAsync(CancellationToken cancellationToken)
+    {
+        const string createTableSql = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsLock\"(\n  \"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY,\n  \"Timestamp\" TEXT NOT NULL\n);";
+        const string deleteSql = "DELETE FROM \"__EFMigrationsLock\";";
+
+        await Database.ExecuteSqlRawAsync(createTableSql, cancellationToken).ConfigureAwait(false);
+        var cleared = await Database.ExecuteSqlRawAsync(deleteSql, cancellationToken).ConfigureAwait(false);
+        if (cleared > 0)
+        {
+            _logger.LogInformation("Stale EF migrations lock cleared (removed {LockRows} rows).", cleared);
+        }
     }
 }

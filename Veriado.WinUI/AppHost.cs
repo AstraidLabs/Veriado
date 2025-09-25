@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
@@ -88,7 +90,15 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
-        await host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
+        var configProvider = host.Services.GetRequiredService<IInfrastructureConfigProvider>();
+        var databasePath = configProvider.GetDatabasePath();
+        var mutexKey = BuildMigrationMutexKey(databasePath);
+
+        using (var gate = new NamedGlobalMutex(mutexKey))
+        {
+            gate.Acquire(TimeSpan.FromSeconds(30));
+            await host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
+        }
         await host.StartAsync().ConfigureAwait(false);
         await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
         return new AppHost(host);
@@ -98,5 +108,53 @@ internal sealed class AppHost : IAsyncDisposable
     {
         await _host.StopAsync().ConfigureAwait(false);
         _host.Dispose();
+    }
+
+    private static string BuildMigrationMutexKey(string databasePath)
+    {
+        var sanitized = databasePath
+            .Replace(Path.DirectorySeparatorChar, '_')
+            .Replace(Path.AltDirectorySeparatorChar, '_')
+            .Replace(':', '_');
+        return $"Veriado-Migrate-{sanitized}";
+    }
+}
+
+internal sealed class NamedGlobalMutex : IDisposable
+{
+    private readonly Mutex _mutex;
+    private bool _hasHandle;
+
+    public NamedGlobalMutex(string name)
+    {
+        var mutexName = OperatingSystem.IsWindows() ? @$"Global\{name}" : name;
+        _mutex = new Mutex(false, mutexName);
+    }
+
+    public void Acquire(TimeSpan timeout)
+    {
+        try
+        {
+            _hasHandle = _mutex.WaitOne(timeout);
+        }
+        catch (AbandonedMutexException)
+        {
+            _hasHandle = true;
+        }
+
+        if (!_hasHandle)
+        {
+            throw new TimeoutException("Nelze získat migrační mutex – pravděpodobně běží jiná instance.");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_hasHandle)
+        {
+            _mutex.ReleaseMutex();
+        }
+
+        _mutex.Dispose();
     }
 }
