@@ -8,6 +8,7 @@ using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.ViewModels.Startup;
+using Veriado.WinUI.ViewModels;
 
 namespace Veriado.WinUI;
 
