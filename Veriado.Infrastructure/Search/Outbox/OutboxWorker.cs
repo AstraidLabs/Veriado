@@ -12,6 +12,7 @@ using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
+using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Search.Outbox;
 
@@ -107,6 +108,11 @@ internal sealed class OutboxWorker : BackgroundService
 
                 await ReindexFileAsync(writeContext, fileId, extractContent, cancellationToken).ConfigureAwait(false);
                 outbox.ProcessedUtc = _clock.UtcNow;
+            }
+            catch (SearchIndexCorruptedException ex)
+            {
+                _logger.LogCritical(ex, "Full-text search index is corrupted. Please run the integrity repair operation before retrying outbox event {EventId}.", outbox.Id);
+                throw;
             }
             catch (Exception ex)
             {
