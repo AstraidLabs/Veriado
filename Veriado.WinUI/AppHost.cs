@@ -88,8 +88,8 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
-        await host.StartAsync().ConfigureAwait(false);
         await host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
+        await host.StartAsync().ConfigureAwait(false);
         await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
         return new AppHost(host);
     }
