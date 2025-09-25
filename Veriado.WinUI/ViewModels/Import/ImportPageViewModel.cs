@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -89,11 +90,12 @@ public partial class ImportPageViewModel : ViewModelBase
                 };
 
                 var response = await _importService.ImportFolderAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.Success)
+                if (!response.IsSuccess)
                 {
-                    var message = string.IsNullOrWhiteSpace(response.Message)
+                    var errorMessage = response.Errors.FirstOrDefault()?.Message;
+                    var message = string.IsNullOrWhiteSpace(errorMessage)
                         ? "Import se nezdařil."
-                        : response.Message;
+                        : errorMessage;
                     StatusService.Error(message);
                     return;
                 }
