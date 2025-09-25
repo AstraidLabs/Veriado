@@ -135,6 +135,10 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         if (requiresFullRebuild)
         {
+            // Ensure we are working with a clean connection pool before we attempt to
+            // rebuild the virtual tables. Otherwise pooled connections may continue to
+            // serve corrupted pages and cause the rebuild to fail.
+            SqliteConnection.ClearAllPools();
             await RecreateFulltextSchemaAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -221,6 +225,15 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        // Reset any outstanding WAL state before we drop and recreate the tables. A corrupted
+        // or stale WAL file would otherwise continue to surface "database disk image is malformed"
+        // errors even after the schema is rebuilt.
+        await using (var checkpoint = connection.CreateCommand())
+        {
+            checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            await checkpoint.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         var dropStatements = new[]
         {
