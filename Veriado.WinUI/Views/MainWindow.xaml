@@ -41,7 +41,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="{Binding FiltersColumnWidth}" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="400" />
         </Grid.ColumnDefinitions>
@@ -75,7 +75,9 @@
                          Grid.Row="1"
                          Grid.Column="0"
                          HorizontalAlignment="Stretch"
-                         VerticalAlignment="Stretch" />
+                         VerticalAlignment="Stretch"
+                         Visibility="{Binding IsFiltersPaneVisible, Converter={StaticResource BoolToVisibility}}"
+                         IsHitTestVisible="{Binding IsFiltersPaneVisible}" />
 
         <ContentPresenter Grid.Row="1"
                           Grid.Column="1"
@@ -108,7 +110,7 @@
               Visibility="{Binding IsNavOpen, Converter={StaticResource BoolToVisibilityEx}}"
               IsHitTestVisible="{Binding IsNavOpen}"
               Tapped="NavigationOverlay_Tapped">
-            <winui:NavigationView x:Name="OverlayNavView"
+                <winui:NavigationView x:Name="OverlayNavView"
                                   Width="320"
                                   HorizontalAlignment="Left"
                                   VerticalAlignment="Stretch"
@@ -117,8 +119,8 @@
                                   IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
                                   SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}">
                 <winui:NavigationView.MenuItems>
-                    <winui:NavigationViewItem Content="Soubory" Icon="Folder" Tag="Files" />
-                    <winui:NavigationViewItem Content="Import" Icon="Upload" Tag="Import" />
+                    <winui:NavigationViewItem Content="Správa souborů" Icon="Folder" Tag="Files" />
+                    <winui:NavigationViewItem Content="Import souborů" Icon="Upload" Tag="Import" />
                     <winui:NavigationViewItem Content="Nastavení" Icon="Setting" Tag="Settings" />
                 </winui:NavigationView.MenuItems>
             </winui:NavigationView>
