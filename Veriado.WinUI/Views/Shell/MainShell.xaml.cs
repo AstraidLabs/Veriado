@@ -26,7 +26,7 @@ public sealed partial class MainShell : Window, INavigationHost
         _navigationService.AttachHost(this);
 
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        Loaded += OnLoaded;
+        RootGrid.Loaded += OnLoaded;
         Closed += OnClosed;
     }
 
@@ -38,7 +38,7 @@ public sealed partial class MainShell : Window, INavigationHost
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        Loaded -= OnLoaded;
+        RootGrid.Loaded -= OnLoaded;
         _viewModel.Initialize();
         UpdateNavigationSelection(_viewModel.CurrentPage);
     }
