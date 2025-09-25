@@ -120,10 +120,15 @@ public sealed class BooleanToVisibilityConverterEx : IValueConverter
             return flag ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        if (value is bool? nullable && nullable.HasValue)
+        if (value is bool?)
         {
-            var flagValue = invert ? !nullable.Value : nullable.Value;
-            return flagValue ? Visibility.Visible : Visibility.Collapsed;
+            var nullable = (bool?)value;
+
+            if (nullable.HasValue)
+            {
+                var flagValue = invert ? !nullable.Value : nullable.Value;
+                return flagValue ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         return Visibility.Collapsed;
