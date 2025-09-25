@@ -74,6 +74,8 @@ public partial class App : Application
         {
             host = await AppHost.StartAsync().ConfigureAwait(true);
 
+            _appHost = host;
+
             var services = host.Services;
 
             var mainWindow = services.GetRequiredService<MainWindow>();
@@ -100,7 +102,6 @@ public partial class App : Application
             mainWindow.Activate();
             mainWindow.Closed += OnWindowClosed;
 
-            _appHost = host;
             MainWindow = mainWindow;
 
             return true;
