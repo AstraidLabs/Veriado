@@ -1,6 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.DependencyInjection;
 
@@ -16,13 +14,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The same service collection for chaining.</returns>
     public static IServiceCollection AddWinUiShell(this IServiceCollection services)
     {
-        services.AddSingleton<MainWindow>();
-        services.AddTransient<FiltersNavPane>();
-        services.AddTransient<FilesView>();
-        services.AddTransient<FileDetailView>();
-        services.AddTransient<Func<FileDetailView>>(sp => () => sp.GetRequiredService<FileDetailView>());
-        services.AddTransient<ImportView>();
-        services.AddTransient<SettingsView>();
+        services.AddTransient<Views.Shell.MainShell>();
+        services.AddTransient<Views.Files.FilesPage>();
+        services.AddTransient<Views.Import.ImportPage>();
+        services.AddTransient<Views.Settings.SettingsPage>();
 
         return services;
     }

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Veriado.WinUI.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Mapping.DependencyInjection;
@@ -13,12 +12,12 @@ using Veriado.Services;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.Services.DependencyInjection;
 using Veriado.WinUI.Services;
-using Veriado.WinUI.ViewModels;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
-using Veriado.WinUI.ViewModels.Search;
 using Veriado.WinUI.ViewModels.Settings;
+using Veriado.WinUI.ViewModels.Shell;
 using Veriado.Appl.DependencyInjection;
+using Veriado.WinUI.DependencyInjection;
 
 namespace Veriado.WinUI;
 
@@ -63,15 +62,10 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IPickerService, PickerService>();
                 services.AddSingleton<IStatusService, StatusService>();
 
-                services.AddSingleton<ShellViewModel>();
-                services.AddSingleton<SearchOverlayViewModel>();
-                services.AddTransient<FilesGridViewModel>();
-                services.AddTransient<FiltersNavViewModel>();
-                services.AddTransient<FileDetailViewModel>();
-                services.AddTransient<ImportViewModel>();
-                services.AddSingleton<FavoritesViewModel>();
-                services.AddSingleton<HistoryViewModel>();
-                services.AddSingleton<SettingsViewModel>();
+                services.AddSingleton<MainShellViewModel>();
+                services.AddTransient<FilesPageViewModel>();
+                services.AddTransient<ImportPageViewModel>();
+                services.AddTransient<SettingsPageViewModel>();
 
                 services.AddWinUiShell();
 

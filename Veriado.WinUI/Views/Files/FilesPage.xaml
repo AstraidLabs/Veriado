@@ -1,0 +1,54 @@
+<Page
+    x:Class="Veriado.WinUI.Views.Files.FilesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:contracts="using:Veriado.Contracts.Files"
+    mc:Ignorable="d">
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox
+                Width="320"
+                PlaceholderText="Hledat soubory"
+                Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Hledat" Command="{Binding RefreshCommand}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <ItemsRepeater ItemsSource="{Binding Items}">
+                <ItemsRepeater.Layout>
+                    <controls:UniformGridLayout
+                        Orientation="Vertical"
+                        MinItemWidth="220"
+                        MinItemHeight="120"
+                        ItemsJustification="Start" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="contracts:FileSummaryDto">
+                        <Border
+                            Margin="8"
+                            Padding="12"
+                            CornerRadius="6"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind Mime}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
+                                    FontSize="12" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </ScrollViewer>
+    </Grid>
+</Page>
