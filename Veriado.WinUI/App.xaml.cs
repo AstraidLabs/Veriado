@@ -8,7 +8,6 @@ using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.ViewModels.Startup;
-using Veriado.WinUI.ViewModels;
 
 namespace Veriado.WinUI;
 
@@ -93,11 +92,6 @@ public partial class App : Application
 
             var settingsViewModel = services.GetRequiredService<SettingsViewModel>();
             settingsViewModel.SelectedTheme = themeService.CurrentTheme;
-
-            var shellViewModel = services.GetRequiredService<ShellViewModel>();
-            var shellView = services.GetRequiredService<MainShell>();
-            shellView.DataContext = shellViewModel;
-            mainWindow.Content = shellView;
 
             mainWindow.Activate();
             mainWindow.Closed += OnWindowClosed;
