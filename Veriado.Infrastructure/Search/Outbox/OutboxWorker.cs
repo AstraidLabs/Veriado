@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -168,8 +169,27 @@ internal sealed class OutboxWorker : BackgroundService
 
     private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
     {
-        await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var file = await readContext.Files
+        FileEntity? file = null;
+
+        try
+        {
+            await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            file = await readContext.Files
+                .AsNoTracking()
+                .Include(f => f.Content)
+                .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (SqliteException ex) when (IsMissingColumnError(ex))
+        {
+            _logger.LogWarning(
+                ex,
+                "Falling back to write database when loading file {FileId} due to schema mismatch in the read replica.",
+                fileId);
+        }
+
+        file ??= await writeContext.Files
+            .AsNoTracking()
             .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
             .ConfigureAwait(false);
@@ -187,5 +207,11 @@ internal sealed class OutboxWorker : BackgroundService
         {
             tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
         }
+    }
+
+    private static bool IsMissingColumnError(SqliteException ex)
+    {
+        return ex.SqliteErrorCode == 1
+            && ex.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase);
     }
 }
