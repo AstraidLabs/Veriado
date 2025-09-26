@@ -605,33 +605,51 @@ public partial class ImportPageViewModel : ViewModelBase
 
     partial void OnSelectedFolderChanged(string? value)
     {
-        _hotStateService?.LastFolder = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.LastFolder = value;
+        }
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnRecursiveChanged(bool value)
     {
-        _hotStateService?.ImportRecursive = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportRecursive = value;
+        }
     }
 
     partial void OnExtractContentChanged(bool value)
     {
-        _hotStateService?.ImportExtractContent = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportExtractContent = value;
+        }
     }
 
     partial void OnKeepFsMetadataChanged(bool value)
     {
-        _hotStateService?.ImportKeepFsMetadata = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportKeepFsMetadata = value;
+        }
     }
 
     partial void OnSetReadOnlyChanged(bool value)
     {
-        _hotStateService?.ImportSetReadOnly = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportSetReadOnly = value;
+        }
     }
 
     partial void OnUseParallelChanged(bool value)
     {
-        _hotStateService?.ImportUseParallel = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportUseParallel = value;
+        }
     }
 
     partial void OnMaxDegreeOfParallelismChanged(int value)
@@ -643,12 +661,18 @@ public partial class ImportPageViewModel : ViewModelBase
             OnPropertyChanged(nameof(MaxDegreeOfParallelism));
         }
 
-        _hotStateService?.ImportMaxDegreeOfParallelism = normalized;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportMaxDegreeOfParallelism = normalized;
+        }
     }
 
     partial void OnDefaultAuthorChanged(string? value)
     {
-        _hotStateService?.ImportDefaultAuthor = value;
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportDefaultAuthor = value;
+        }
     }
 
     partial void OnIsImportingChanged(bool value)
