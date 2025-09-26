@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.Files;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Appl.Abstractions;
 
@@ -33,6 +34,14 @@ public interface IFileRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An asynchronous sequence of file aggregates.</returns>
     IAsyncEnumerable<FileEntity> StreamAllAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Checks whether a file with the specified content hash already exists.
+    /// </summary>
+    /// <param name="hash">The content hash to look up.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true"/> when a file with the given hash exists; otherwise <see langword="false"/>.</returns>
+    Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds a newly created file aggregate to the persistence store.
