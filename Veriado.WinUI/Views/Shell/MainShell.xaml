@@ -5,8 +5,17 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:media="using:Microsoft.UI.Xaml.Media"
     mc:Ignorable="d">
     <Grid x:Name="RootGrid">
+        <Grid.Resources>
+            <media:AcrylicBrush
+                x:Key="NavigationPaneBrush"
+                FallbackColor="{ThemeResource SystemBaseLowColor}"
+                TintColor="{ThemeResource SystemChromeAltLowColor}"
+                TintOpacity="0.6"
+                AlwaysUseFallback="False" />
+        </Grid.Resources>
 
         <ContentPresenter
             x:Name="ContentHost"
@@ -29,6 +38,12 @@
             IsPaneToggleButtonVisible="True"
             IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
             ItemInvoked="OnNavigationViewItemInvoked">
+            <controls:NavigationView.Resources>
+                <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="NavigationPaneBrush" />
+                <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="NavigationPaneBrush" />
+                <StaticResource x:Key="NavigationViewMinimalPaneBackground" ResourceKey="NavigationPaneBrush" />
+                <StaticResource x:Key="NavigationViewTopPaneBackground" ResourceKey="NavigationPaneBrush" />
+            </controls:NavigationView.Resources>
             <controls:NavigationView.MenuItems>
                 <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
                 <controls:NavigationViewItem Tag="import" Content="Import souborů" Icon="OpenFile" />
