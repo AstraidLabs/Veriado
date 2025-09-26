@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Data.Sqlite;
 
 namespace Veriado.Appl.Common;
 
@@ -10,6 +11,8 @@ namespace Veriado.Appl.Common;
 /// <typeparam name="T">The type of value returned on success.</typeparam>
 public readonly struct AppResult<T>
 {
+    private const string DefaultDatabaseErrorMessage = "A database error occurred while processing the request.";
+
     private readonly T? _value;
     private readonly AppError? _error;
 
@@ -128,6 +131,12 @@ public readonly struct AppResult<T>
     public static AppResult<T> FromException(Exception exception, string? defaultMessage = null)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        if (TryExtractSqliteException(exception, out var sqliteException))
+        {
+            var message = defaultMessage ?? DefaultDatabaseErrorMessage;
+            return Failure(AppError.Database(message, sqliteException.Message));
+        }
+
         return exception switch
         {
             ArgumentException or ArgumentNullException or ArgumentOutOfRangeException
@@ -136,6 +145,30 @@ public readonly struct AppResult<T>
                 => Failure(AppError.Conflict(defaultMessage ?? exception.Message)),
             _ => Failure(AppError.Unexpected(defaultMessage ?? "An unexpected error occurred.")),
         };
+    }
+
+    private static bool TryExtractSqliteException(Exception exception, out SqliteException sqliteException)
+    {
+        switch (exception)
+        {
+            case SqliteException direct:
+                sqliteException = direct;
+                return true;
+            case AggregateException aggregate:
+                foreach (var inner in aggregate.InnerExceptions)
+                {
+                    if (TryExtractSqliteException(inner, out sqliteException))
+                    {
+                        return true;
+                    }
+                }
+                break;
+            case { InnerException: { } inner }:
+                return TryExtractSqliteException(inner, out sqliteException);
+        }
+
+        sqliteException = null!;
+        return false;
     }
 
     /// <inheritdoc />
@@ -178,6 +211,18 @@ public sealed record AppError(ErrorCode Code, string Message, IReadOnlyCollectio
     public static AppError TooLarge(string message) => new(ErrorCode.TooLarge, message);
 
     /// <summary>
+    /// Creates a database error.
+    /// </summary>
+    public static AppError Database(string message, string? detail = null)
+    {
+        IReadOnlyCollection<string>? details = detail is { Length: > 0 }
+            ? new[] { detail }
+            : null;
+
+        return new AppError(ErrorCode.Database, message, details);
+    }
+
+    /// <summary>
     /// Creates an unexpected error.
     /// </summary>
     public static AppError Unexpected(string message) => new(ErrorCode.Unexpected, message);
@@ -212,6 +257,11 @@ public enum ErrorCode
     /// Represents that the payload exceeds allowed limits.
     /// </summary>
     TooLarge,
+
+    /// <summary>
+    /// Represents a database-related failure.
+    /// </summary>
+    Database,
 
     /// <summary>
     /// Represents an unexpected failure.

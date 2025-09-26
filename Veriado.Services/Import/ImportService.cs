@@ -318,6 +318,7 @@ public sealed class ImportService : IImportService
             ErrorCode.Validation => "validation_error",
             ErrorCode.Forbidden => "forbidden",
             ErrorCode.TooLarge => "payload_too_large",
+            ErrorCode.Database => "database_error",
             _ => "unexpected_error",
         };
 
