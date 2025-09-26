@@ -23,6 +23,18 @@ public sealed record class ImportFolderRequest
         = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether captured file system metadata should be preserved.
+    /// </summary>
+    public bool KeepFsMetadata { get; init; }
+        = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether imported files should be marked as read only.
+    /// </summary>
+    public bool SetReadOnly { get; init; }
+        = false;
+
+    /// <summary>
     /// Gets or sets the maximum number of concurrent file imports.
     /// </summary>
     public int MaxDegreeOfParallelism { get; init; }

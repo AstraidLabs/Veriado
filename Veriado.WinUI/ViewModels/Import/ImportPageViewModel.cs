@@ -288,6 +288,8 @@ public partial class ImportPageViewModel : ViewModelBase
             FolderPath = SelectedFolder!.Trim(),
             Recursive = Recursive,
             ExtractContent = ExtractContent,
+            KeepFsMetadata = KeepFsMetadata,
+            SetReadOnly = SetReadOnly,
             MaxDegreeOfParallelism = maxParallel,
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
         };

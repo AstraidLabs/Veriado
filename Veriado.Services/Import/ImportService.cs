@@ -235,21 +235,28 @@ public sealed class ImportService : IImportService
 
         var author = string.IsNullOrWhiteSpace(options.DefaultAuthor) ? string.Empty : options.DefaultAuthor;
         FileSystemMetadataDto? systemMetadata = null;
-        var isReadOnly = false;
+        var isReadOnly = options.SetReadOnly;
 
         try
         {
             var info = new FileInfo(filePath);
             info.Refresh();
-            systemMetadata = new FileSystemMetadataDto(
-                (int)info.Attributes,
-                CoerceToUtc(info.CreationTimeUtc),
-                CoerceToUtc(info.LastWriteTimeUtc),
-                CoerceToUtc(info.LastAccessTimeUtc),
-                OwnerSid: null,
-                HardLinkCount: null,
-                AlternateDataStreamCount: null);
-            isReadOnly = info.IsReadOnly;
+            if (options.KeepFsMetadata)
+            {
+                systemMetadata = new FileSystemMetadataDto(
+                    (int)info.Attributes,
+                    CoerceToUtc(info.CreationTimeUtc),
+                    CoerceToUtc(info.LastWriteTimeUtc),
+                    CoerceToUtc(info.LastAccessTimeUtc),
+                    OwnerSid: null,
+                    HardLinkCount: null,
+                    AlternateDataStreamCount: null);
+            }
+
+            if (!options.SetReadOnly)
+            {
+                isReadOnly = info.IsReadOnly;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
