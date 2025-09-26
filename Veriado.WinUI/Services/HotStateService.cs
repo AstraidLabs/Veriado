@@ -24,6 +24,27 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     [ObservableProperty]
     private int pageSize = AppSettings.DefaultPageSize;
 
+    [ObservableProperty]
+    private bool importRecursive = true;
+
+    [ObservableProperty]
+    private bool importExtractContent = true;
+
+    [ObservableProperty]
+    private bool importKeepFsMetadata = true;
+
+    [ObservableProperty]
+    private bool importSetReadOnly;
+
+    [ObservableProperty]
+    private bool importUseParallel = true;
+
+    [ObservableProperty]
+    private int importMaxDegreeOfParallelism = Environment.ProcessorCount;
+
+    [ObservableProperty]
+    private string? importDefaultAuthor;
+
     public HotStateService(
         ISettingsService settingsService,
         IStatusService statusService,
@@ -43,6 +64,25 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             lastQuery = settings.LastQuery;
             lastFolder = settings.LastFolder;
             pageSize = settings.PageSize > 0 ? settings.PageSize : AppSettings.DefaultPageSize;
+
+            var import = settings.Import ?? new ImportPreferences();
+            importRecursive = import.Recursive ?? true;
+            importExtractContent = import.ExtractContent ?? true;
+            importKeepFsMetadata = import.KeepFsMetadata ?? true;
+            importSetReadOnly = import.SetReadOnly ?? false;
+            importUseParallel = import.UseParallel ?? true;
+            importMaxDegreeOfParallelism = import.MaxDegreeOfParallelism.HasValue && import.MaxDegreeOfParallelism.Value > 0
+                ? import.MaxDegreeOfParallelism.Value
+                : Environment.ProcessorCount;
+            importDefaultAuthor = import.DefaultAuthor;
+
+            OnPropertyChanged(nameof(ImportRecursive));
+            OnPropertyChanged(nameof(ImportExtractContent));
+            OnPropertyChanged(nameof(ImportKeepFsMetadata));
+            OnPropertyChanged(nameof(ImportSetReadOnly));
+            OnPropertyChanged(nameof(ImportUseParallel));
+            OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
+            OnPropertyChanged(nameof(ImportDefaultAuthor));
             _initialized = true;
         }
         finally
@@ -65,6 +105,29 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
         PersistAsync();
     }
+
+    partial void OnImportRecursiveChanged(bool value) => PersistAsync();
+
+    partial void OnImportExtractContentChanged(bool value) => PersistAsync();
+
+    partial void OnImportKeepFsMetadataChanged(bool value) => PersistAsync();
+
+    partial void OnImportSetReadOnlyChanged(bool value) => PersistAsync();
+
+    partial void OnImportUseParallelChanged(bool value) => PersistAsync();
+
+    partial void OnImportMaxDegreeOfParallelismChanged(int value)
+    {
+        if (value <= 0)
+        {
+            importMaxDegreeOfParallelism = Environment.ProcessorCount;
+            OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
+        }
+
+        PersistAsync();
+    }
+
+    partial void OnImportDefaultAuthorChanged(string? value) => PersistAsync();
 
     private void PersistAsync()
     {
@@ -103,6 +166,17 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                     settings.LastQuery = LastQuery;
                     settings.LastFolder = LastFolder;
                     settings.PageSize = PageSize > 0 ? PageSize : AppSettings.DefaultPageSize;
+
+                    settings.Import ??= new ImportPreferences();
+                    settings.Import.Recursive = ImportRecursive;
+                    settings.Import.ExtractContent = ImportExtractContent;
+                    settings.Import.KeepFsMetadata = ImportKeepFsMetadata;
+                    settings.Import.SetReadOnly = ImportSetReadOnly;
+                    settings.Import.UseParallel = ImportUseParallel;
+                    settings.Import.MaxDegreeOfParallelism = ImportMaxDegreeOfParallelism > 0
+                        ? ImportMaxDegreeOfParallelism
+                        : Environment.ProcessorCount;
+                    settings.Import.DefaultAuthor = ImportDefaultAuthor;
                 }).ConfigureAwait(false);
             }
             finally
