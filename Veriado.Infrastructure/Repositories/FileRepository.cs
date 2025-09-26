@@ -95,7 +95,7 @@ internal sealed class FileRepository : IFileRepository
         }
     }
 
-    public async Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken)
     {
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         return await context.Files.AnyAsync(f => f.Content.Hash == hash, cancellationToken).ConfigureAwait(false);

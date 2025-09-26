@@ -46,6 +46,11 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             var createdAt = CurrentTimestamp();
             var file = FileEntity.CreateNew(name, extension, mime, request.Author, request.Content, createdAt, _importPolicy.MaxContentLengthBytes);
 
+            if (await Repository.ExistsByHashAsync(file.Content.Hash, cancellationToken).ConfigureAwait(false))
+            {
+                return AppResult<Guid>.Conflict("A file with identical content already exists.");
+            }
+
             var options = new FilePersistenceOptions { ExtractContent = true };
             await PersistNewAsync(file, options, cancellationToken);
             return AppResult<Guid>.Success(file.Id);
