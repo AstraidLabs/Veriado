@@ -39,6 +39,11 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             skip = 0;
         }
 
+        if (!_options.IsFulltextAvailable)
+        {
+            return Array.Empty<(Guid, double)>();
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -83,6 +88,11 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             skip = 0;
         }
 
+        if (!_options.IsFulltextAvailable)
+        {
+            return Array.Empty<(Guid, double)>();
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -116,6 +126,11 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
     public async Task<int> CountAsync(string matchQuery, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
+        if (!_options.IsFulltextAvailable)
+        {
+            return 0;
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -133,6 +148,11 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         if (take <= 0)
         {
             take = 10;
+        }
+
+        if (!_options.IsFulltextAvailable)
+        {
+            return Array.Empty<SearchHit>();
         }
 
         await using var connection = CreateConnection();

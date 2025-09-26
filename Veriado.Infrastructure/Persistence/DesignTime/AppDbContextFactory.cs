@@ -57,6 +57,7 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         };
 
         options.ConnectionString = connectionStringBuilder.ConnectionString;
+        SqliteFulltextSupportDetector.Detect(options);
         return options;
     }
 }

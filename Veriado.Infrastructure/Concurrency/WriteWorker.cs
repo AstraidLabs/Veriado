@@ -337,6 +337,22 @@ internal sealed class WriteWorker : BackgroundService
             return false;
         }
 
+        if (!_options.IsFulltextAvailable)
+        {
+            if (filesToIndex.Count == 0)
+            {
+                return false;
+            }
+
+            var timestamp = UtcTimestamp.From(_clock.UtcNow);
+            foreach (var (file, _) in filesToIndex)
+            {
+                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, timestamp);
+            }
+
+            return true;
+        }
+
         var handled = false;
         var dbTransaction = context.Database.CurrentTransaction?.GetDbTransaction();
 

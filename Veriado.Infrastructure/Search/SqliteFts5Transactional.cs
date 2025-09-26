@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
 using Veriado.Domain.Search;
+using Veriado.Infrastructure.Persistence;
 
 namespace Veriado.Infrastructure.Search;
 
@@ -17,6 +18,10 @@ internal sealed class SqliteFts5Transactional
         try
         {
             ArgumentNullException.ThrowIfNull(document);
+            if (!SqliteFulltextSupport.IsAvailable)
+            {
+                return;
+            }
             var searchRowId = await EnsureMapRowIdAsync("file_search_map", document.FileId, connection, transaction, cancellationToken).ConfigureAwait(false);
             var trigramRowId = await EnsureMapRowIdAsync("file_trgm_map", document.FileId, connection, transaction, cancellationToken).ConfigureAwait(false);
 
@@ -75,6 +80,10 @@ internal sealed class SqliteFts5Transactional
         {
             ArgumentNullException.ThrowIfNull(connection);
             ArgumentNullException.ThrowIfNull(transaction);
+            if (!SqliteFulltextSupport.IsAvailable)
+            {
+                return;
+            }
             var fileKey = fileId.ToByteArray();
 
             var searchRowId = await TryGetRowIdAsync("file_search_map", fileId, connection, transaction, cancellationToken).ConfigureAwait(false);
@@ -129,7 +138,7 @@ internal sealed class SqliteFts5Transactional
         await using (var insert = connection.CreateCommand())
         {
             insert.Transaction = transaction;
-            insert.CommandText = $"INSERT INTO {mapTable}(file_id) VALUES ($fileId) ON CONFLICT(file_id) DO NOTHING;";
+            insert.CommandText = $"INSERT OR IGNORE INTO {mapTable}(file_id) VALUES ($fileId);";
             insert.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
             await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }

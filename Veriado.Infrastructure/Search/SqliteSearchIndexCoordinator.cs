@@ -36,6 +36,12 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
     {
         ArgumentNullException.ThrowIfNull(file);
 
+        if (!_options.IsFulltextAvailable)
+        {
+            _logger.LogDebug("Skipping full-text indexing for file {FileId} because FTS5 support is unavailable.", file.Id);
+            return false;
+        }
+
         if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && options.AllowDeferredIndexing)
         {
             _logger.LogDebug("Search indexing deferred to outbox for file {FileId}", file.Id);
