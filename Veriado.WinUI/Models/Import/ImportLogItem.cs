@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace Veriado.WinUI.Models.Import;
 
@@ -19,4 +20,6 @@ public sealed class ImportLogItem
     public string Message { get; }
 
     public string Status { get; }
+
+    public string FormattedTimestamp => Timestamp.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
 }
