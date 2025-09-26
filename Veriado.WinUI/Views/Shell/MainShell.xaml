@@ -5,50 +5,39 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
-    xmlns:media="using:Microsoft.UI.Xaml.Media"
     mc:Ignorable="d">
-    <Grid x:Name="RootGrid">
-        <Grid.Resources>
-            <media:AcrylicBrush
-                x:Key="NavigationPaneBrush"
-                FallbackColor="{ThemeResource SystemBaseLowColor}"
-                TintColor="{ThemeResource SystemChromeAltLowColor}"
-                TintOpacity="0.6"
-                AlwaysUseFallback="False" />
-        </Grid.Resources>
-
-        <ContentPresenter
-            x:Name="ContentHost"
-            Content="{x:Bind CurrentContent, Mode=OneWay}" />
-
-        <Rectangle
-            Fill="Transparent"
-            Canvas.ZIndex="998"
-            IsHitTestVisible="{Binding IsNavOpen}"
-            Visibility="{Binding IsNavOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
-            Tapped="OnOverlayTapped" />
-
-        <controls:NavigationView
-            x:Name="RootNavigation"
-            Canvas.ZIndex="999"
-            IsSettingsVisible="False"
-            PaneDisplayMode="LeftMinimal"
-            Width="320"
-            HorizontalAlignment="Left"
-            IsPaneToggleButtonVisible="True"
-            IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
-            ItemInvoked="OnNavigationViewItemInvoked">
-            <controls:NavigationView.Resources>
-                <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="NavigationPaneBrush" />
-                <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="NavigationPaneBrush" />
-                <StaticResource x:Key="NavigationViewMinimalPaneBackground" ResourceKey="NavigationPaneBrush" />
-                <StaticResource x:Key="NavigationViewTopPaneBackground" ResourceKey="NavigationPaneBrush" />
-            </controls:NavigationView.Resources>
-            <controls:NavigationView.MenuItems>
-                <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
-                <controls:NavigationViewItem Tag="import" Content="Import souborů" Icon="OpenFile" />
-                <controls:NavigationViewItem Tag="settings" Content="Nastavení" Icon="Setting" />
-            </controls:NavigationView.MenuItems>
-        </controls:NavigationView>
-    </Grid>
+    <controls:NavigationView
+        x:Name="RootNavigation"
+        IsSettingsVisible="False"
+        PaneDisplayMode="LeftCompact"
+        CompactPaneLength="56"
+        OpenPaneLength="320"
+        IsPaneToggleButtonVisible="True"
+        IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
+        ItemInvoked="OnNavigationViewItemInvoked">
+        <controls:NavigationView.Resources>
+            <SolidColorBrush
+                x:Key="NavigationViewDefaultPaneBackground"
+                Color="{ThemeResource SystemChromeHighColor}" />
+            <SolidColorBrush
+                x:Key="NavigationViewExpandedPaneBackground"
+                Color="{ThemeResource SystemChromeHighColor}" />
+            <SolidColorBrush
+                x:Key="NavigationViewMinimalPaneBackground"
+                Color="{ThemeResource SystemChromeHighColor}" />
+            <SolidColorBrush
+                x:Key="NavigationViewTopPaneBackground"
+                Color="{ThemeResource SystemChromeHighColor}" />
+        </controls:NavigationView.Resources>
+        <controls:NavigationView.MenuItems>
+            <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
+            <controls:NavigationViewItem Tag="import" Content="Import souborů" Icon="OpenFile" />
+            <controls:NavigationViewItem Tag="settings" Content="Nastavení" Icon="Setting" />
+        </controls:NavigationView.MenuItems>
+        <controls:NavigationView.Content>
+            <ContentPresenter
+                x:Name="ContentHost"
+                Content="{x:Bind CurrentContent, Mode=OneWay}" />
+        </controls:NavigationView.Content>
+    </controls:NavigationView>
 </Window>
