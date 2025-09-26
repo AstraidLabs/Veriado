@@ -14,12 +14,34 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5Indexer : ISearchIndexer
 {
     private readonly InfrastructureOptions _options;
+
     public SqliteFts5Indexer(InfrastructureOptions options)
     {
         _options = options;
     }
 
-    public async Task IndexAsync(SearchDocument document, CancellationToken cancellationToken = default)
+    public Task IndexAsync(SearchDocument document, CancellationToken cancellationToken = default)
+        => IndexInternalAsync(document, beforeCommit: null, cancellationToken);
+
+    public Task DeleteAsync(Guid fileId, CancellationToken cancellationToken = default)
+        => DeleteInternalAsync(fileId, beforeCommit: null, cancellationToken);
+
+    internal Task IndexAsync(
+        SearchDocument document,
+        Func<CancellationToken, Task>? beforeCommit,
+        CancellationToken cancellationToken)
+        => IndexInternalAsync(document, beforeCommit, cancellationToken);
+
+    internal Task DeleteAsync(
+        Guid fileId,
+        Func<CancellationToken, Task>? beforeCommit,
+        CancellationToken cancellationToken)
+        => DeleteInternalAsync(fileId, beforeCommit, cancellationToken);
+
+    private async Task IndexInternalAsync(
+        SearchDocument document,
+        Func<CancellationToken, Task>? beforeCommit,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (!_options.IsFulltextAvailable)
@@ -29,13 +51,31 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var transaction = (SqliteTransaction)dbTransaction;
         var helper = new SqliteFts5Transactional();
-        await helper.IndexAsync(document, connection, (SqliteTransaction)transaction, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await helper.IndexAsync(document, connection, transaction, cancellationToken).ConfigureAwait(false);
+            if (beforeCommit is not null)
+            {
+                await beforeCommit(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
-    public async Task DeleteAsync(Guid fileId, CancellationToken cancellationToken = default)
+    private async Task DeleteInternalAsync(
+        Guid fileId,
+        Func<CancellationToken, Task>? beforeCommit,
+        CancellationToken cancellationToken)
     {
         if (!_options.IsFulltextAvailable)
         {
@@ -44,10 +84,25 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var transaction = (SqliteTransaction)dbTransaction;
         var helper = new SqliteFts5Transactional();
-        await helper.DeleteAsync(fileId, connection, (SqliteTransaction)transaction, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await helper.DeleteAsync(fileId, connection, transaction, cancellationToken).ConfigureAwait(false);
+            if (beforeCommit is not null)
+            {
+                await beforeCommit(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
     private SqliteConnection CreateConnection()

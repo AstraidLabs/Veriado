@@ -20,16 +20,20 @@ internal sealed class HybridSearchIndexer : ISearchIndexer
         _luceneIndexer = luceneIndexer ?? throw new ArgumentNullException(nameof(luceneIndexer));
     }
 
-    public async Task IndexAsync(SearchDocument document, CancellationToken cancellationToken)
+    public Task IndexAsync(SearchDocument document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
-        await _ftsIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
-        await _luceneIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+        return _ftsIndexer.IndexAsync(
+            document,
+            beforeCommit: ct => _luceneIndexer.IndexAsync(document, ct),
+            cancellationToken);
     }
 
-    public async Task DeleteAsync(Guid fileId, CancellationToken cancellationToken)
+    public Task DeleteAsync(Guid fileId, CancellationToken cancellationToken)
     {
-        await _ftsIndexer.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
-        await _luceneIndexer.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
+        return _ftsIndexer.DeleteAsync(
+            fileId,
+            beforeCommit: ct => _luceneIndexer.DeleteAsync(fileId, ct),
+            cancellationToken);
     }
 }
