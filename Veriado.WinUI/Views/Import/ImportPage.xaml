@@ -5,7 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:Veriado.WinUI.Models.Import"
-    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls" xmlns:import="using:Veriado.WinUI.ViewModels.Import" d:DataContext="{d:DesignInstance Type=import:ImportPageViewModel}"
     AllowDrop="True"
     DragOver="OnPageDragOver"
     Drop="OnPageDrop"
@@ -108,7 +108,7 @@
             <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
                 <ItemsRepeater ItemsSource="{Binding Log}">
                     <ItemsRepeater.Layout>
-                        <muxc:ItemsStackLayout Orientation="Vertical" />
+                        <muxc:StackLayout Orientation="Vertical" />
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="models:ImportLogItem">
@@ -117,7 +117,7 @@
                                     <TextBlock
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{x:Bind Timestamp, Mode=OneWay, StringFormat='{}{0:HH:mm:ss}'}" />
+                                        Text="{x:Bind Timestamp.ToString(&quot;HH:mm:ss&quot;), Mode=OneWay}" />
                                     <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
                                     <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
                                 </StackPanel>
