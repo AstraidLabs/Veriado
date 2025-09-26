@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Veriado.WinUI.Navigation;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Shell;
@@ -22,11 +21,11 @@ public sealed partial class MainShell : Window, INavigationHost
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
 
-        RootGrid.DataContext = _viewModel;
+        RootNavigation.DataContext = _viewModel;
         _navigationService.AttachHost(this);
 
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        RootGrid.Loaded += OnLoaded;
+        RootNavigation.Loaded += OnLoaded;
         Closed += OnClosed;
     }
 
@@ -38,7 +37,7 @@ public sealed partial class MainShell : Window, INavigationHost
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        RootGrid.Loaded -= OnLoaded;
+        RootNavigation.Loaded -= OnLoaded;
         _viewModel.Initialize();
         UpdateNavigationSelection(_viewModel.CurrentPage);
     }
@@ -53,14 +52,6 @@ public sealed partial class MainShell : Window, INavigationHost
     {
         var tag = args.InvokedItemContainer?.Tag as string;
         _viewModel.NavigateToTag(tag);
-    }
-
-    private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
-    {
-        if (_viewModel.CloseNavCommand.CanExecute(null))
-        {
-            _viewModel.CloseNavCommand.Execute(null);
-        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
