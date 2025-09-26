@@ -117,7 +117,7 @@
                                     <TextBlock
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{x:Bind Timestamp.ToString(&quot;HH:mm:ss&quot;), Mode=OneWay}" />
+                                        Text="{x:Bind Timestamp, Mode=OneWay, StringFormat='{}{0:HH:mm:ss}'}" />
                                     <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
                                     <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
                                 </StackPanel>
