@@ -33,6 +33,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly InfrastructureOptions _options;
     private readonly ISearchIndexCoordinator _searchCoordinator;
     private readonly ISearchIndexer _searchIndexer;
+    private readonly IFulltextIntegrityService _integrityService;
     private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
 
@@ -43,6 +44,7 @@ internal sealed class WriteWorker : BackgroundService
         InfrastructureOptions options,
         ISearchIndexCoordinator searchCoordinator,
         ISearchIndexer searchIndexer,
+        IFulltextIntegrityService integrityService,
         IEventPublisher eventPublisher,
         IClock clock)
     {
@@ -52,6 +54,7 @@ internal sealed class WriteWorker : BackgroundService
         _options = options;
         _searchCoordinator = searchCoordinator;
         _searchIndexer = searchIndexer;
+        _integrityService = integrityService;
         _eventPublisher = eventPublisher;
         _clock = clock;
     }
@@ -172,6 +175,38 @@ internal sealed class WriteWorker : BackgroundService
     }
 
     private async Task ProcessBatchAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
+    {
+        var repairAttempted = false;
+
+        while (true)
+        {
+            try
+            {
+                await ProcessBatchAttemptAsync(batch, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (SearchIndexCorruptedException ex)
+            {
+                if (repairAttempted)
+                {
+                    _logger.LogCritical(
+                        ex,
+                        "Full-text search index corruption persists after automatic repair. Manual intervention is required.");
+                    throw;
+                }
+
+                repairAttempted = true;
+                _logger.LogWarning(
+                    ex,
+                    "Full-text search index corruption detected while processing a write batch. Initiating automatic repair.");
+
+                await AttemptIntegrityRepairAsync(cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Retrying write batch after repairing the full-text search index.");
+            }
+        }
+    }
+
+    private async Task ProcessBatchAttemptAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
     {
         var batchStopwatch = Stopwatch.StartNew();
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
@@ -421,6 +456,10 @@ internal sealed class WriteWorker : BackgroundService
             {
                 throw;
             }
+            catch (SearchIndexCorruptedException)
+            {
+                throw;
+            }
             catch (Exception ex) when (attempt < maxAttempts)
             {
                 lastError = ex;
@@ -440,5 +479,21 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         throw lastError ?? new InvalidOperationException($"Operation '{description}' failed without emitting an exception.");
+    }
+
+    private async Task AttemptIntegrityRepairAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogWarning("Attempting automatic full rebuild of the full-text search index due to detected corruption.");
+            var repaired = await _integrityService.RepairAsync(reindexAll: true, cancellationToken)
+                .ConfigureAwait(false);
+            _logger.LogInformation("Automatic full-text index repair completed ({Repaired} entries updated).", repaired);
+        }
+        catch (Exception repairEx)
+        {
+            _logger.LogCritical(repairEx, "Automatic full-text index repair failed. Manual intervention is required.");
+            throw;
+        }
     }
 }
