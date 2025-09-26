@@ -5,6 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:Veriado.WinUI.Models.Import"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     AllowDrop="True"
     DragOver="OnPageDragOver"
     Drop="OnPageDrop"
@@ -107,7 +108,7 @@
             <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
                 <ItemsRepeater ItemsSource="{Binding Log}">
                     <ItemsRepeater.Layout>
-                        <ItemsStackLayout Orientation="Vertical" />
+                        <muxc:ItemsStackLayout Orientation="Vertical" />
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="models:ImportLogItem">
@@ -116,7 +117,7 @@
                                     <TextBlock
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}" />
+                                        Text="{x:Bind Timestamp, Mode=OneWay, StringFormat='{}{0:HH:mm:ss}'}" />
                                     <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
                                     <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
                                 </StackPanel>
@@ -131,7 +132,7 @@
                 Header="Chyby"
                 IsExpanded="{Binding HasErrors}"
                 HorizontalAlignment="Stretch">
-                <ItemsControl ItemsSource="{Binding Errors}">
+                <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding Errors}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="models:ImportErrorItem">
                             <Grid Padding="8" ColumnSpacing="12">
@@ -146,7 +147,7 @@
                                 <Button
                                     Grid.Column="1"
                                     Content="Detail"
-                                    Command="{Binding DataContext.OpenErrorDetailCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    Command="{Binding ElementName=ErrorsItemsControl, Path=DataContext.OpenErrorDetailCommand}"
                                     CommandParameter="{Binding}" />
                             </Grid>
                         </DataTemplate>
