@@ -48,10 +48,19 @@ public sealed class NavigationService : INavigationService
 
         if (registration.ViewModelType is not null)
         {
-            viewModel = _serviceProvider.GetRequiredService(registration.ViewModelType);
+            if (view is FrameworkElement existingElement
+                && existingElement.DataContext is not null
+                && registration.ViewModelType.IsInstanceOfType(existingElement.DataContext))
+            {
+                viewModel = existingElement.DataContext;
+            }
+            else
+            {
+                viewModel = _serviceProvider.GetRequiredService(registration.ViewModelType);
+            }
         }
 
-        if (view is FrameworkElement frameworkElement && viewModel is not null)
+        if (view is FrameworkElement frameworkElement && viewModel is not null && !ReferenceEquals(frameworkElement.DataContext, viewModel))
         {
             frameworkElement.DataContext = viewModel;
         }

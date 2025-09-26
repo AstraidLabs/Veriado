@@ -26,4 +26,30 @@ public sealed class AppSettings
 
     public string? LastQuery { get; set; }
         = null;
+
+    public ImportPreferences Import { get; set; } = new();
+}
+
+public sealed class ImportPreferences
+{
+    public bool? Recursive { get; set; }
+        = null;
+
+    public bool? ExtractContent { get; set; }
+        = null;
+
+    public bool? KeepFsMetadata { get; set; }
+        = null;
+
+    public bool? SetReadOnly { get; set; }
+        = null;
+
+    public bool? UseParallel { get; set; }
+        = null;
+
+    public int? MaxDegreeOfParallelism { get; set; }
+        = null;
+
+    public string? DefaultAuthor { get; set; }
+        = null;
 }

@@ -4,22 +4,155 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:Veriado.WinUI.Models.Import"
+    AllowDrop="True"
+    DragOver="OnPageDragOver"
+    Drop="OnPageDrop"
     mc:Ignorable="d">
-    <StackPanel Padding="24" Spacing="12">
-        <TextBlock Text="Import souborů" FontSize="20" FontWeight="SemiBold" />
+    <Page.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Enter" Invoked="OnEnterAcceleratorInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAcceleratorInvoked" />
+        <KeyboardAccelerator Key="O" Modifiers="Control" Invoked="OnOpenAcceleratorInvoked" />
+    </Page.KeyboardAccelerators>
 
-        <TextBox
-            IsReadOnly="True"
-            PlaceholderText="Vybraná složka"
-            Text="{Binding SelectedFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Vybrat složku" Command="{Binding PickFolderCommand}" />
-            <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
+        <!-- Zdroj -->
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button
+                Grid.Column="0"
+                Content="Vybrat složku"
+                Command="{Binding PickFolderCommand}" />
+            <TextBox
+                Grid.Column="1"
+                MinWidth="320"
+                IsReadOnly="True"
+                Text="{Binding SelectedFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+        </Grid>
+
+        <!-- Volby -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="16">
+            <StackPanel Orientation="Vertical" Spacing="8">
+                <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+                <CheckBox Content="Extrahovat obsah" IsChecked="{Binding ExtractContent, Mode=TwoWay}" />
+                <CheckBox Content="Zachovat FS metadata" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Orientation="Vertical" Spacing="8">
+                <CheckBox Content="Nastavit jen pro čtení" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
+                <CheckBox Content="Paralelně" IsChecked="{Binding UseParallel, Mode=TwoWay}" />
+                <NumberBox
+                    Header="Max. paralelních vláken"
+                    Minimum="1"
+                    SpinButtonPlacementMode="Compact"
+                    IsEnabled="{Binding UseParallel}"
+                    Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Orientation="Vertical" Spacing="8" Width="200">
+                <TextBox
+                    Header="Výchozí autor"
+                    PlaceholderText="(nevyplněno)"
+                    Text="{Binding DefaultAuthor, Mode=TwoWay}" />
+            </StackPanel>
         </StackPanel>
 
-        <ProgressBar
-            IsIndeterminate="{Binding IsImporting}"
-            Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}" />
-    </StackPanel>
+        <!-- Akce a průběh -->
+        <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button
+                    Content="Spustit import"
+                    Command="{Binding RunImportCommand}" />
+                <Button
+                    Content="Zastavit"
+                    Command="{Binding StopImportCommand}"
+                    IsEnabled="{Binding IsImporting}" />
+                <Button
+                    Content="Vymazat výsledky"
+                    Command="{Binding ClearResultsCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
+                <ProgressBar
+                    Minimum="0"
+                    Maximum="{Binding Total, Mode=OneWay}"
+                    Value="{Binding Processed, Mode=OneWay}"
+                    IsIndeterminate="{Binding IsIndeterminate}" />
+                <TextBlock
+                    Margin="0,4,0,0"
+                    Text="{Binding ProgressText}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Log a chyby -->
+        <Grid Grid.Row="3" RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                <ItemsRepeater ItemsSource="{Binding Log}">
+                    <ItemsRepeater.Layout>
+                        <ItemsStackLayout Orientation="Vertical" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="models:ImportLogItem">
+                            <Border BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" Padding="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}" />
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                                    <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <Expander
+                Grid.Row="1"
+                Header="Chyby"
+                IsExpanded="{Binding HasErrors}"
+                HorizontalAlignment="Stretch">
+                <ItemsControl ItemsSource="{Binding Errors}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="models:ImportErrorItem">
+                            <Grid Padding="8" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Vertical" Spacing="4">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding FileName}" />
+                                    <TextBlock TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+                                </StackPanel>
+                                <Button
+                                    Grid.Column="1"
+                                    Content="Detail"
+                                    Command="{Binding DataContext.OpenErrorDetailCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Expander>
+        </Grid>
+    </Grid>
 </Page>
