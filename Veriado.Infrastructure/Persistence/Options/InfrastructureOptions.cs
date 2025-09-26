@@ -28,6 +28,16 @@ public sealed class InfrastructureOptions
         = FtsIndexingMode.SameTransaction;
 
     /// <summary>
+    /// Gets or sets a value indicating whether Lucene.Net integration is enabled.
+    /// </summary>
+    public bool EnableLuceneIntegration { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the absolute path to the Lucene.Net index directory.
+    /// </summary>
+    public string LuceneIndexPath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets a value indicating whether the runtime environment provides the required SQLite FTS5 features.
     /// </summary>
     public bool IsFulltextAvailable { get; internal set; } = true;
