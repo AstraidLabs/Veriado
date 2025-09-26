@@ -16,6 +16,14 @@
             TintOpacity="0.6" />
     </Window.Resources>
     <Grid x:Name="RootGrid">
+        <Grid.Resources>
+            <media:AcrylicBrush
+                x:Key="NavigationPaneBrush"
+                FallbackColor="{ThemeResource SystemBaseLowColor}"
+                TintColor="{ThemeResource SystemChromeAltLowColor}"
+                TintOpacity="0.6"
+                AlwaysUseFallback="False" />
+        </Grid.Resources>
 
         <ContentPresenter
             x:Name="ContentHost"
@@ -39,6 +47,12 @@
             PaneBackground="{StaticResource NavigationPaneBrush}"
             IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
             ItemInvoked="OnNavigationViewItemInvoked">
+            <controls:NavigationView.Resources>
+                <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="NavigationPaneBrush" />
+                <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="NavigationPaneBrush" />
+                <StaticResource x:Key="NavigationViewMinimalPaneBackground" ResourceKey="NavigationPaneBrush" />
+                <StaticResource x:Key="NavigationViewTopPaneBackground" ResourceKey="NavigationPaneBrush" />
+            </controls:NavigationView.Resources>
             <controls:NavigationView.MenuItems>
                 <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
                 <controls:NavigationViewItem Tag="import" Content="Import souborů" Icon="OpenFile" />
