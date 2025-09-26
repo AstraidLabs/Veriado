@@ -125,7 +125,7 @@ public sealed class FileOperationsService : IFileOperationsService
         return ToIdResponse(result);
     }
 
-    public async Task<ApiResponse<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, bool extractContent, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
         var request = new ReplaceContentRequest
@@ -145,17 +145,6 @@ public sealed class FileOperationsService : IFileOperationsService
         if (result.IsFailure)
         {
             return ToIdResponse(result);
-        }
-
-        if (!extractContent)
-        {
-            var reindexResult = await _mediator
-                .Send(new ReindexFileCommand(fileId, ExtractContent: false), cancellationToken)
-                .ConfigureAwait(false);
-            if (reindexResult.IsFailure)
-            {
-                return ToIdResponse(reindexResult);
-            }
         }
 
         return ToIdResponse(result);

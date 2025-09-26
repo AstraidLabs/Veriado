@@ -44,6 +44,10 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasMaxLength(256)
             .IsRequired();
 
+        builder.Property(file => file.Title)
+            .HasColumnName("title")
+            .HasMaxLength(300);
+
         builder.Property(file => file.Size)
             .HasColumnName("size_bytes")
             .HasConversion(Converters.ByteSizeToLong)
@@ -74,19 +78,6 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasColumnType("TEXT")
             .HasConversion(Converters.FtsPolicyToJson)
             .IsRequired();
-
-        if (options.UseKvMetadata)
-        {
-            builder.Ignore(file => file.ExtendedMetadata);
-        }
-        else
-        {
-            builder.Property(file => file.ExtendedMetadata)
-                .HasColumnName("metadata_json")
-                .HasColumnType("TEXT")
-                .HasConversion(Converters.ExtendedMetadataToJson)
-                .Metadata.SetValueComparer(Converters.ExtendedMetadataComparer);
-        }
 
         builder.Ignore(file => file.DomainEvents);
 

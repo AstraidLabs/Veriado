@@ -7,12 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
 using Veriado.Domain.Files;
-using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Concurrency;
-using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Repositories;
 
@@ -23,13 +20,11 @@ internal sealed class FileRepository : IFileRepository
 {
     private readonly IWriteQueue _writeQueue;
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
-    private readonly InfrastructureOptions _options;
 
-    public FileRepository(IWriteQueue writeQueue, IDbContextFactory<ReadOnlyDbContext> readFactory, InfrastructureOptions options)
+    public FileRepository(IWriteQueue writeQueue, IDbContextFactory<ReadOnlyDbContext> readFactory)
     {
         _writeQueue = writeQueue;
         _readFactory = readFactory;
-        _options = options;
     }
 
     public async Task<FileEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default)
@@ -40,11 +35,6 @@ internal sealed class FileRepository : IFileRepository
             .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
             .ConfigureAwait(false);
-
-        if (entity is not null && _options.UseKvMetadata)
-        {
-            await HydrateExtendedMetadataAsync(context, new[] { entity }, cancellationToken).ConfigureAwait(false);
-        }
 
         return entity;
     }
@@ -67,11 +57,6 @@ internal sealed class FileRepository : IFileRepository
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (_options.UseKvMetadata && files.Count > 0)
-        {
-            await HydrateExtendedMetadataAsync(context, files, cancellationToken).ConfigureAwait(false);
-        }
-
         return files;
     }
 
@@ -86,11 +71,6 @@ internal sealed class FileRepository : IFileRepository
 
         await foreach (var file in query.ConfigureAwait(false))
         {
-            if (_options.UseKvMetadata)
-            {
-                await HydrateExtendedMetadataAsync(context, new[] { file }, cancellationToken).ConfigureAwait(false);
-            }
-
             yield return file;
         }
     }
@@ -136,37 +116,5 @@ internal sealed class FileRepository : IFileRepository
             db.Files.Remove(entity);
             return true;
         }, null, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task HydrateExtendedMetadataAsync(
-        ReadOnlyDbContext context,
-        IReadOnlyList<FileEntity> files,
-        CancellationToken cancellationToken)
-    {
-        if (files.Count == 0)
-        {
-            return;
-        }
-
-        var ids = files.Select(file => file.Id).ToArray();
-        var entries = await context.ExtendedMetadataEntries
-            .Where(entry => ids.Contains(entry.FileId))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var grouped = entries.GroupBy(entry => entry.FileId)
-            .ToDictionary(group => group.Key, group => group.ToList());
-
-        foreach (var file in files)
-        {
-            if (grouped.TryGetValue(file.Id, out var metadataEntries))
-            {
-                file.LoadExtendedMetadata(ExtMetadataMapper.FromEntries(metadataEntries));
-            }
-            else
-            {
-                file.LoadExtendedMetadata(ExtendedMetadata.Empty);
-            }
-        }
     }
 }

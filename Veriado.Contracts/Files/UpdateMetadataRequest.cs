@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-
 namespace Veriado.Contracts.Files;
 
 /// <summary>
@@ -33,8 +31,4 @@ public sealed class UpdateMetadataRequest
     /// </summary>
     public FileSystemMetadataDto? SystemMetadata { get; init; }
 
-    /// <summary>
-    /// Gets or sets optional extended metadata patches to apply.
-    /// </summary>
-    public IReadOnlyList<ExtendedMetadataItemDto>? ExtendedMetadata { get; init; }
 }

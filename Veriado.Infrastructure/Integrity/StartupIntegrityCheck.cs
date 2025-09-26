@@ -40,7 +40,7 @@ internal static class StartupIntegrityCheck
         logger.LogWarning("Full-text index inconsistencies detected: {Missing} missing, {Orphans} orphans", report.MissingCount, report.OrphanCount);
         if (options.RepairIntegrityAutomatically)
         {
-            var repaired = await integrity.RepairAsync(reindexAll: false, extractContent: true, cancellationToken)
+            var repaired = await integrity.RepairAsync(reindexAll: false, cancellationToken)
                 .ConfigureAwait(false);
             logger.LogInformation("Full-text index repair completed ({Repaired} entries)", repaired);
         }

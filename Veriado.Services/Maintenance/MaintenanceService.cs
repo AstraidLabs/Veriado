@@ -28,9 +28,9 @@ public sealed class MaintenanceService : IMaintenanceService
         await RunVacuumAndOptimizeAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<AppResult<int>> VerifyAndRepairAsync(bool forceRepair, bool extractContent, CancellationToken cancellationToken)
+    public Task<AppResult<int>> VerifyAndRepairAsync(bool forceRepair, CancellationToken cancellationToken)
     {
-        var command = new VerifyAndRepairFulltextCommand(extractContent, forceRepair);
+        var command = new VerifyAndRepairFulltextCommand(forceRepair);
         return _mediator.Send(command, cancellationToken);
     }
 
@@ -39,9 +39,9 @@ public sealed class MaintenanceService : IMaintenanceService
         return _mediator.Send(new VacuumAndOptimizeDatabaseCommand(), cancellationToken);
     }
 
-    public Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, bool extractContent, bool allowDeferredIndexing, CancellationToken cancellationToken)
+    public Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, bool allowDeferredIndexing, CancellationToken cancellationToken)
     {
-        var command = new ReindexCorpusAfterSchemaUpgradeCommand(targetSchemaVersion, extractContent, allowDeferredIndexing);
+        var command = new ReindexCorpusAfterSchemaUpgradeCommand(targetSchemaVersion, allowDeferredIndexing);
         return _mediator.Send(command, cancellationToken);
     }
 }

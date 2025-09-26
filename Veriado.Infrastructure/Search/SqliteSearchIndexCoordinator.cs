@@ -15,18 +15,15 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
 {
-    private readonly ITextExtractor _textExtractor;
     private readonly ISearchIndexer _searchIndexer;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<SqliteSearchIndexCoordinator> _logger;
 
     public SqliteSearchIndexCoordinator(
-        ITextExtractor textExtractor,
         ISearchIndexer searchIndexer,
         InfrastructureOptions options,
         ILogger<SqliteSearchIndexCoordinator> logger)
     {
-        _textExtractor = textExtractor;
         _searchIndexer = searchIndexer;
         _options = options;
         _logger = logger;
@@ -55,11 +52,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
 
         var sqliteTransaction = (SqliteTransaction?)transaction;
 
-        var text = options.ExtractContent
-            ? await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false)
-            : null;
-
-        var document = file.ToSearchDocument(text);
+        var document = file.ToSearchDocument();
         if (sqliteTransaction is not null)
         {
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;

@@ -18,7 +18,6 @@ using Veriado.Appl.UseCases.Files.CreateFile;
 using Veriado.Appl.UseCases.Files.ReplaceFileContent;
 using Veriado.Appl.UseCases.Files.SetFileReadOnly;
 using Veriado.Appl.UseCases.Files.ClearFileValidity;
-using Veriado.Appl.UseCases.Files.SetExtendedMetadata;
 
 namespace Veriado.Mapping.AC;
 
@@ -64,7 +63,6 @@ public sealed class WriteMappingPipeline
         var nameResult = Parsers.ParseFileName(request.Name, nameof(request.Name));
         var extensionResult = Parsers.ParseFileExtension(request.Extension, nameof(request.Extension));
         var mimeResult = Parsers.ParseMimeType(request.Mime, nameof(request.Mime));
-        var metadataEntries = Parsers.ParseMetadataPatches(request.ExtendedMetadata, nameof(request.ExtendedMetadata), errors);
         var systemMetadata = Parsers.ParseOptionalMetadata(request.SystemMetadata, nameof(request.SystemMetadata), errors);
 
         CollectError(nameResult, errors);
@@ -90,7 +88,7 @@ public sealed class WriteMappingPipeline
             return ApiResponse<CreateFileMappedRequest>.Failure(errors);
         }
 
-        var mapped = new CreateFileMappedRequest(command, metadataEntries, systemMetadata, request.IsReadOnly);
+        var mapped = new CreateFileMappedRequest(command, systemMetadata, request.IsReadOnly);
         return ApiResponse<CreateFileMappedRequest>.Success(mapped);
     }
 
@@ -135,7 +133,6 @@ public sealed class WriteMappingPipeline
         }
 
         var systemMetadata = Parsers.ParseOptionalMetadata(request.SystemMetadata, nameof(request.SystemMetadata), errors);
-        var metadataEntries = Parsers.ParseMetadataPatches(request.ExtendedMetadata, nameof(request.ExtendedMetadata), errors);
 
         if (errors.Count > 0)
         {
@@ -157,10 +154,6 @@ public sealed class WriteMappingPipeline
             ? CreateSystemMetadataCommand(request.FileId, metadata)
             : null;
 
-        SetExtendedMetadataCommand? metadataSetCommand = metadataEntries.Count == 0
-            ? null
-            : new SetExtendedMetadataCommand(request.FileId, metadataEntries);
-
         SetFileReadOnlyCommand? readOnlyCommand = request.IsReadOnly.HasValue
             ? new SetFileReadOnlyCommand(request.FileId, request.IsReadOnly.Value)
             : null;
@@ -170,13 +163,13 @@ public sealed class WriteMappingPipeline
             return ApiResponse<UpdateFileMetadataMappedRequest>.Failure(errors);
         }
 
-        if (metadataCommand is null && systemCommand is null && metadataSetCommand is null && readOnlyCommand is null)
+        if (metadataCommand is null && systemCommand is null && readOnlyCommand is null)
         {
             errors.Add(ApiError.ForValue(nameof(UpdateMetadataRequest), "At least one metadata change must be provided."));
             return ApiResponse<UpdateFileMetadataMappedRequest>.Failure(errors);
         }
 
-        var mapped = new UpdateFileMetadataMappedRequest(metadataCommand, systemCommand, metadataSetCommand, readOnlyCommand);
+        var mapped = new UpdateFileMetadataMappedRequest(metadataCommand, systemCommand, readOnlyCommand);
         return ApiResponse<UpdateFileMetadataMappedRequest>.Success(mapped);
     }
 
@@ -297,17 +290,11 @@ public sealed class WriteMappingPipeline
 /// </summary>
 public sealed record CreateFileMappedRequest(
     CreateFileCommand Command,
-    IReadOnlyCollection<ExtendedMetadataEntry> ExtendedMetadata,
     FileSystemMetadata? SystemMetadata,
     bool SetReadOnly)
 {
     public IEnumerable<IRequest<AppResult<FileSummaryDto>>> BuildFollowUpCommands(Guid fileId)
     {
-        if (ExtendedMetadata.Count > 0)
-        {
-            yield return new SetExtendedMetadataCommand(fileId, ExtendedMetadata);
-        }
-
         if (SystemMetadata is { } metadata)
         {
             yield return new ApplySystemMetadataCommand(
@@ -334,7 +321,6 @@ public sealed record CreateFileMappedRequest(
 public sealed record UpdateFileMetadataMappedRequest(
     UpdateFileMetadataCommand? MetadataCommand,
     ApplySystemMetadataCommand? SystemMetadataCommand,
-    SetExtendedMetadataCommand? ExtendedMetadataCommand,
     SetFileReadOnlyCommand? ReadOnlyCommand)
 {
     public IEnumerable<IRequest<AppResult<FileSummaryDto>>> Commands()
@@ -347,11 +333,6 @@ public sealed record UpdateFileMetadataMappedRequest(
         if (SystemMetadataCommand is not null)
         {
             yield return SystemMetadataCommand;
-        }
-
-        if (ExtendedMetadataCommand is not null)
-        {
-            yield return ExtendedMetadataCommand;
         }
 
         if (ReadOnlyCommand is not null)

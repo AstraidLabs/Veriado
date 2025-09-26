@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
 using AutoMapper;
 using Veriado.Appl.Abstractions;
 using Veriado.Contracts.Files;
@@ -67,6 +64,7 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name.Value))
             .ForMember(dest => dest.Extension, opt => opt.MapFrom(src => src.Extension.Value))
             .ForMember(dest => dest.Mime, opt => opt.MapFrom(src => src.Mime.Value))
+            .ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
             .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.Size.Value))
             .ForMember(dest => dest.CreatedUtc, opt => opt.MapFrom(src => src.CreatedUtc.Value))
             .ForMember(dest => dest.LastModifiedUtc, opt => opt.MapFrom(src => src.LastModifiedUtc.Value))
@@ -82,16 +80,12 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name.Value))
             .ForMember(dest => dest.Extension, opt => opt.MapFrom(src => src.Extension.Value))
             .ForMember(dest => dest.Mime, opt => opt.MapFrom(src => src.Mime.Value))
+            .ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
             .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.Size.Value))
             .ForMember(dest => dest.CreatedUtc, opt => opt.MapFrom(src => src.CreatedUtc.Value))
             .ForMember(dest => dest.LastModifiedUtc, opt => opt.MapFrom(src => src.LastModifiedUtc.Value))
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
-            .ForMember(dest => dest.ExtendedMetadata, opt =>
-            {
-                opt.MapFrom(src => src.ExtendedMetadata.AsEnumerable());
-                opt.NullSubstitute(Array.Empty<ExtendedMetadataItemDto>());
-            })
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity))
             .ForMember(dest => dest.IsIndexStale, opt => opt.MapFrom(src => src.SearchIndex.IsStale))
             .ForMember(dest => dest.LastIndexedUtc, opt => opt.MapFrom(src => src.SearchIndex.LastIndexedUtc))
@@ -112,89 +106,12 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.Version, opt => opt.MapFrom(src => src.Version))
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => new FileContentDto(string.Empty, src.SizeBytes, null)))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
-            .ForMember(dest => dest.ExtendedMetadata, opt =>
-            {
-                opt.MapFrom(src => src.ExtendedMetadata ?? new Dictionary<string, string?>(StringComparer.Ordinal));
-                opt.NullSubstitute(Array.Empty<ExtendedMetadataItemDto>());
-            })
+            .ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity))
             .ForMember(dest => dest.IsIndexStale, opt => opt.MapFrom(_ => false))
             .ForMember(dest => dest.LastIndexedUtc, opt => opt.MapFrom(_ => (DateTimeOffset?)null))
             .ForMember(dest => dest.IndexedTitle, opt => opt.MapFrom(_ => (string?)null))
             .ForMember(dest => dest.IndexSchemaVersion, opt => opt.MapFrom(_ => 0))
             .ForMember(dest => dest.IndexedContentHash, opt => opt.MapFrom(_ => (string?)null));
-
-        CreateMap<IReadOnlyDictionary<string, string?>, IReadOnlyList<ExtendedMetadataItemDto>>()
-            .ConvertUsing(ConvertExtendedMetadataDictionary);
-    }
-
-    private static IReadOnlyList<ExtendedMetadataItemDto> ConvertExtendedMetadataDictionary(
-        IReadOnlyDictionary<string, string?> source,
-        IReadOnlyList<ExtendedMetadataItemDto> destination,
-        ResolutionContext context)
-    {
-        if (source is null || source.Count == 0)
-        {
-            return Array.Empty<ExtendedMetadataItemDto>();
-        }
-
-        var items = new List<ExtendedMetadataItemDto>(source.Count);
-        foreach (var pair in source)
-        {
-            if (!TryParsePropertyKey(pair.Key, out var formatId, out var propertyId))
-            {
-                continue;
-            }
-
-            var value = pair.Value is null
-                ? new MetadataValueDto { Kind = MetadataValueDtoKind.Null }
-                : new MetadataValueDto
-                {
-                    Kind = MetadataValueDtoKind.String,
-                    StringValue = pair.Value,
-                };
-
-            items.Add(new ExtendedMetadataItemDto
-            {
-                FormatId = formatId,
-                PropertyId = propertyId,
-                Value = value,
-                Remove = false,
-            });
-        }
-
-        return items.Count == 0 ? Array.Empty<ExtendedMetadataItemDto>() : items;
-    }
-
-    private static bool TryParsePropertyKey(string key, out Guid formatId, out int propertyId)
-    {
-        formatId = Guid.Empty;
-        propertyId = 0;
-
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return false;
-        }
-
-        var parts = key.Split('/', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2)
-        {
-            return false;
-        }
-
-        if (!Guid.TryParse(parts[0], out formatId))
-        {
-            formatId = Guid.Empty;
-            return false;
-        }
-
-        if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out propertyId))
-        {
-            formatId = Guid.Empty;
-            propertyId = 0;
-            return false;
-        }
-
-        return true;
     }
 }

@@ -108,6 +108,11 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("author");
 
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
                     b.Property<string>("CreatedUtc")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -309,42 +314,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.HasKey("Key");
 
                     b.ToTable("idempotency_keys", (string)null);
-                });
-
-            modelBuilder.Entity("Veriado.Infrastructure.MetadataStore.Kv.ExtMetadataEntry", b =>
-                {
-                    b.Property<byte[]>("FileId")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("file_id");
-
-                    b.Property<byte[]>("FormatId")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("fmtid");
-
-                    b.Property<int>("PropertyId")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("pid");
-
-                    b.Property<byte[]>("BinaryValue")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("value_blob");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("TextValue")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("value_text");
-
-                    b.HasKey("FileId", "FormatId", "PropertyId");
-
-                    b.HasIndex("FileId")
-                        .HasDatabaseName("idx_file_ext_metadata_file");
-
-                    b.ToTable("file_ext_metadata", (string)null);
                 });
 
             modelBuilder.Entity("Veriado.Infrastructure.Search.Outbox.OutboxEvent", b =>

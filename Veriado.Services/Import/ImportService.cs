@@ -50,7 +50,7 @@ public sealed class ImportService : IImportService
 
         var normalized = NormalizeRequest(request);
         var descriptor = string.IsNullOrWhiteSpace(normalized.Name) ? normalized.Extension : normalized.Name;
-        return await ImportFileInternalAsync(normalized, extractContent: true, descriptor, cancellationToken)
+        return await ImportFileInternalAsync(normalized, descriptor, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -94,7 +94,7 @@ public sealed class ImportService : IImportService
                     try
                     {
                         var createRequest = await CreateRequestFromFileAsync(filePath, request, token).ConfigureAwait(false);
-                        var response = await ImportFileInternalAsync(createRequest, request.ExtractContent, filePath, token)
+                        var response = await ImportFileInternalAsync(createRequest, filePath, token)
                             .ConfigureAwait(false);
 
                         if (response.IsSuccess)
@@ -168,7 +168,6 @@ public sealed class ImportService : IImportService
 
     private async Task<ApiResponse<Guid>> ImportFileInternalAsync(
         CreateFileRequest request,
-        bool extractContent,
         string? descriptor,
         CancellationToken cancellationToken)
     {
@@ -198,19 +197,6 @@ public sealed class ImportService : IImportService
             if (followUpResult.IsFailure)
             {
                 var apiError = ConvertAppError(followUpResult.Error);
-                LogApiError(descriptor, apiError);
-                return ApiResponse<Guid>.Failure(apiError);
-            }
-        }
-
-        if (!extractContent)
-        {
-            var reindexResult = await _mediator
-                .Send(new ReindexFileCommand(fileId, ExtractContent: false), cancellationToken)
-                .ConfigureAwait(false);
-            if (reindexResult.IsFailure)
-            {
-                var apiError = ConvertAppError(reindexResult.Error);
                 LogApiError(descriptor, apiError);
                 return ApiResponse<Guid>.Failure(apiError);
             }
@@ -271,7 +257,6 @@ public sealed class ImportService : IImportService
             Author = author,
             Content = bytes,
             SystemMetadata = systemMetadata,
-            ExtendedMetadata = null,
             IsReadOnly = isReadOnly,
         });
     }
@@ -292,7 +277,6 @@ public sealed class ImportService : IImportService
             Content = request.Content ?? Array.Empty<byte>(),
             MaxContentLength = request.MaxContentLength,
             SystemMetadata = request.SystemMetadata,
-            ExtendedMetadata = request.ExtendedMetadata,
             IsReadOnly = request.IsReadOnly,
         };
     }

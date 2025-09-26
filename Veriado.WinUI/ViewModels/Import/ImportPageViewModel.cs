@@ -72,9 +72,6 @@ public partial class ImportPageViewModel : ViewModelBase
     private bool recursive = true;
 
     [ObservableProperty]
-    private bool extractContent = true;
-
-    [ObservableProperty]
     private bool keepFsMetadata = true;
 
     [ObservableProperty]
@@ -287,7 +284,6 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             FolderPath = SelectedFolder!.Trim(),
             Recursive = Recursive,
-            ExtractContent = ExtractContent,
             KeepFsMetadata = KeepFsMetadata,
             SetReadOnly = SetReadOnly,
             MaxDegreeOfParallelism = maxParallel,
@@ -584,7 +580,6 @@ public partial class ImportPageViewModel : ViewModelBase
 
         SelectedFolder = _hotStateService.LastFolder;
         Recursive = _hotStateService.ImportRecursive;
-        ExtractContent = _hotStateService.ImportExtractContent;
         KeepFsMetadata = _hotStateService.ImportKeepFsMetadata;
         SetReadOnly = _hotStateService.ImportSetReadOnly;
         UseParallel = _hotStateService.ImportUseParallel;
@@ -619,14 +614,6 @@ public partial class ImportPageViewModel : ViewModelBase
         if (_hotStateService is not null)
         {
             _hotStateService.ImportRecursive = value;
-        }
-    }
-
-    partial void OnExtractContentChanged(bool value)
-    {
-        if (_hotStateService is not null)
-        {
-            _hotStateService.ImportExtractContent = value;
         }
     }
 

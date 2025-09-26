@@ -34,7 +34,7 @@ public sealed class VerifyAndRepairFulltextHandler : IRequestHandler<VerifyAndRe
         }
 
         var repaired = await _integrityService
-            .RepairAsync(request.Force, request.ExtractContent, cancellationToken)
+            .RepairAsync(request.Force, cancellationToken)
             .ConfigureAwait(false);
 
         return AppResult<int>.Success(repaired);

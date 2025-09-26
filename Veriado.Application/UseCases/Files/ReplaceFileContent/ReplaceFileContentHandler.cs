@@ -48,8 +48,7 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
 
             var timestamp = CurrentTimestamp();
             file.ReplaceContent(request.Content, timestamp, _importPolicy.MaxContentLengthBytes);
-            var options = new FilePersistenceOptions { ExtractContent = true };
-            await PersistAsync(file, options, cancellationToken);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

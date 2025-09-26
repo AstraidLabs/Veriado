@@ -21,10 +21,9 @@ public interface IFulltextIntegrityService
     /// Repairs the full-text index based on the supplied options.
     /// </summary>
     /// <param name="reindexAll">When <see langword="true"/>, all files are reindexed regardless of the current state.</param>
-    /// <param name="extractContent">Indicates whether binary content should be reprocessed.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The number of index entries that were updated.</returns>
-    Task<int> RepairAsync(bool reindexAll, bool extractContent, CancellationToken cancellationToken = default);
+    Task<int> RepairAsync(bool reindexAll, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

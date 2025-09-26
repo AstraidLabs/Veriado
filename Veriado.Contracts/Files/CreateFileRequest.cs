@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-
 namespace Veriado.Contracts.Files;
 
 /// <summary>
@@ -42,11 +40,6 @@ public sealed class CreateFileRequest
     /// Gets or sets an optional initial file system metadata snapshot.
     /// </summary>
     public FileSystemMetadataDto? SystemMetadata { get; init; }
-
-    /// <summary>
-    /// Gets or sets optional extended metadata entries to apply after creation.
-    /// </summary>
-    public IReadOnlyList<ExtendedMetadataItemDto>? ExtendedMetadata { get; init; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the file should be marked read-only after creation.

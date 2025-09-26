@@ -41,6 +41,7 @@ public sealed record FileDocumentValidityReadModel(
 public sealed record FileDetailReadModel(
     Guid Id,
     string Name,
+    string? Title,
     string Extension,
     string Mime,
     string Author,
@@ -50,5 +51,4 @@ public sealed record FileDetailReadModel(
     DateTimeOffset CreatedUtc,
     DateTimeOffset LastModifiedUtc,
     FileDocumentValidityReadModel? Validity,
-    FileSystemMetadata SystemMetadata,
-    IReadOnlyDictionary<string, string?> ExtendedMetadata);
+    FileSystemMetadata SystemMetadata);

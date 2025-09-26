@@ -17,12 +17,6 @@ public sealed record class ImportFolderRequest
         = null;
 
     /// <summary>
-    /// Gets or sets a value indicating whether binary content extraction should be performed.
-    /// </summary>
-    public bool ExtractContent { get; init; }
-        = true;
-
-    /// <summary>
     /// Gets or sets a value indicating whether captured file system metadata should be preserved.
     /// </summary>
     public bool KeepFsMetadata { get; init; }

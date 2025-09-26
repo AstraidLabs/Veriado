@@ -24,7 +24,6 @@ internal sealed class OutboxWorker : BackgroundService
     private readonly IDbContextFactory<AppDbContext> _writeFactory;
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly ISearchIndexer _searchIndexer;
-    private readonly ITextExtractor _textExtractor;
     private readonly ILogger<OutboxWorker> _logger;
     private readonly InfrastructureOptions _options;
     private readonly IClock _clock;
@@ -34,7 +33,6 @@ internal sealed class OutboxWorker : BackgroundService
         IDbContextFactory<AppDbContext> writeFactory,
         IDbContextFactory<ReadOnlyDbContext> readFactory,
         ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
         ILogger<OutboxWorker> logger,
         InfrastructureOptions options,
         IClock clock,
@@ -43,7 +41,6 @@ internal sealed class OutboxWorker : BackgroundService
         _writeFactory = writeFactory;
         _readFactory = readFactory;
         _searchIndexer = searchIndexer;
-        _textExtractor = textExtractor;
         _logger = logger;
         _options = options;
         _clock = clock;
@@ -137,12 +134,6 @@ internal sealed class OutboxWorker : BackgroundService
             return;
         }
 
-        var extractContent = true;
-        if (payload.RootElement.TryGetProperty("ExtractContent", out var extractElement) && extractElement.ValueKind == JsonValueKind.False)
-        {
-            extractContent = false;
-        }
-
         if (!_options.IsFulltextAvailable)
         {
             var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
@@ -155,7 +146,7 @@ internal sealed class OutboxWorker : BackgroundService
             return;
         }
 
-        await ReindexFileAsync(writeContext, fileId, extractContent, cancellationToken).ConfigureAwait(false);
+        await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
         outbox.ProcessedUtc = _clock.UtcNow;
     }
 
@@ -164,7 +155,7 @@ internal sealed class OutboxWorker : BackgroundService
         try
         {
             _logger.LogWarning("Attempting automatic full rebuild of the full-text search index due to detected corruption.");
-            var repaired = await _integrityService.RepairAsync(reindexAll: true, extractContent: true, cancellationToken)
+            var repaired = await _integrityService.RepairAsync(reindexAll: true, cancellationToken)
                 .ConfigureAwait(false);
             _logger.LogInformation("Automatic full-text index repair completed ({Repaired} entries updated).", repaired);
         }
@@ -175,7 +166,7 @@ internal sealed class OutboxWorker : BackgroundService
         }
     }
 
-    private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, bool extractContent, CancellationToken cancellationToken)
+    private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
     {
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
@@ -188,10 +179,7 @@ internal sealed class OutboxWorker : BackgroundService
             return;
         }
 
-        var text = extractContent
-            ? await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false)
-            : null;
-        var document = file.ToSearchDocument(text);
+        var document = file.ToSearchDocument();
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
 
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);

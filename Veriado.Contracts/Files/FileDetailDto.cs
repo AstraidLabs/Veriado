@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-
 namespace Veriado.Contracts.Files;
 
 /// <summary>
@@ -70,9 +68,9 @@ public sealed record FileDetailDto
         new(0, DateTimeOffset.MinValue, DateTimeOffset.MinValue, DateTimeOffset.MinValue, null, null, null);
 
     /// <summary>
-    /// Gets the extended metadata entries associated with the file.
+    /// Gets the optional document title.
     /// </summary>
-    public IReadOnlyList<ExtendedMetadataItemDto> ExtendedMetadata { get; init; } = Array.Empty<ExtendedMetadataItemDto>();
+    public string? Title { get; init; }
 
     /// <summary>
     /// Gets the optional validity information for the document.

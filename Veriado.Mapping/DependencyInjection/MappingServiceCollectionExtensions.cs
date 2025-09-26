@@ -13,7 +13,6 @@ using Veriado.Appl.UseCases.Files.CreateFile;
 using Veriado.Appl.UseCases.Files.ReplaceFileContent;
 using Veriado.Appl.UseCases.Files.SetFileReadOnly;
 using Veriado.Appl.UseCases.Files.ClearFileValidity;
-using Veriado.Appl.UseCases.Files.SetExtendedMetadata;
 
 namespace Veriado.Mapping.DependencyInjection;
 
@@ -36,7 +35,6 @@ public static class MappingServiceCollectionExtensions
             var configuration = new MapperConfiguration(cfg =>
             {
                 cfg.AddProfile<FileReadProfiles>();
-                cfg.AddProfile<MetadataProfiles>();
                 cfg.AddProfile<FileWriteProfiles>();
                 cfg.AddProfile<SearchProfiles>();
             });
@@ -59,7 +57,6 @@ public static class MappingServiceCollectionExtensions
         services.AddTransient<IValidator<SetFileValidityCommand>, SetFileValidityCommandValidator>();
         services.AddTransient<IValidator<ClearFileValidityCommand>, ClearFileValidityCommandValidator>();
         services.AddTransient<IValidator<ApplySystemMetadataCommand>, ApplySystemMetadataCommandValidator>();
-        services.AddTransient<IValidator<SetExtendedMetadataCommand>, SetExtendedMetadataCommandValidator>();
         services.AddTransient<IValidator<SetFileReadOnlyCommand>, SetFileReadOnlyCommandValidator>();
 
         services.AddTransient<WriteMappingPipeline>();

@@ -18,6 +18,11 @@ public sealed record FileSummaryDto
     public string Name { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets the optional document title.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
     /// Gets the file extension without the leading dot.
     /// </summary>
     public string Extension { get; init; } = string.Empty;
