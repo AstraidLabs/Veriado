@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Veriado.Infrastructure.Persistence;
 
 #nullable disable
 
@@ -187,7 +188,10 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 table: "outbox_events",
                 column: "processed_utc");
 
-            migrationBuilder.Sql(ReadEmbeddedSql(Fts5SchemaResourceName));
+            if (SqliteFulltextSupport.IsAvailable)
+            {
+                migrationBuilder.Sql(ReadEmbeddedSql(Fts5SchemaResourceName));
+            }
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

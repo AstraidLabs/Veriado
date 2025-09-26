@@ -51,16 +51,29 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
     {
+        if (!_options.IsFulltextAvailable)
+        {
+            var reason = _options.FulltextAvailabilityError ?? "SQLite FTS5 support is unavailable.";
+            _logger.LogWarning("Skipping full-text integrity verification because FTS5 support is unavailable: {Reason}", reason);
+            return new IntegrityReport(Array.Empty<Guid>(), Array.Empty<Guid>());
+        }
+
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var fileIds = await readContext.Files.Select(f => f.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
 
         var searchIndexIds = new HashSet<Guid>();
         var trigramIndexIds = new HashSet<Guid>();
+        var searchMapExists = false;
+        var trigramMapExists = false;
         await using (var connection = CreateConnection())
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await using (var command = connection.CreateCommand())
+            searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
+            trigramMapExists = await TableExistsAsync(connection, "file_trgm_map", cancellationToken).ConfigureAwait(false);
+
+            if (searchMapExists)
             {
+                await using var command = connection.CreateCommand();
                 command.CommandText = "SELECT file_id FROM file_search_map;";
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -70,8 +83,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 }
             }
 
-            await using (var trigramCommand = connection.CreateCommand())
+            if (trigramMapExists)
             {
+                await using var trigramCommand = connection.CreateCommand();
                 trigramCommand.CommandText = "SELECT file_id FROM file_trgm_map;";
                 await using var reader = await trigramCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -80,6 +94,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     trigramIndexIds.Add(new Guid(blob));
                 }
             }
+        }
+
+        if (!searchMapExists || !trigramMapExists)
+        {
+            _logger.LogWarning("Full-text index metadata tables are missing; a rebuild will be required when repairs run.");
         }
 
         var missing = fileIds
@@ -98,6 +117,13 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
     public async Task<int> RepairAsync(bool reindexAll, bool extractContent, CancellationToken cancellationToken = default)
     {
+        if (!_options.IsFulltextAvailable)
+        {
+            var reason = _options.FulltextAvailabilityError ?? "SQLite FTS5 support is unavailable.";
+            _logger.LogWarning("Skipping full-text repair because FTS5 support is unavailable: {Reason}", reason);
+            return 0;
+        }
+
         IntegrityReport report;
         var requiresFullRebuild = reindexAll;
 
@@ -116,6 +142,16 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
 
         IReadOnlyCollection<Guid> targetFileIds;
+
+        if (!requiresFullRebuild)
+        {
+            var (searchMapExists, trigramMapExists) = await GetFulltextTableStateAsync(cancellationToken).ConfigureAwait(false);
+            if (!searchMapExists || !trigramMapExists)
+            {
+                requiresFullRebuild = true;
+                _logger.LogInformation("Full-text metadata tables missing; forcing full rebuild before repair.");
+            }
+        }
 
         if (requiresFullRebuild)
         {
@@ -221,8 +257,31 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return new SqliteConnection(_options.ConnectionString);
     }
 
+    private async Task<(bool SearchMapExists, bool TrigramMapExists)> GetFulltextTableStateAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
+        var trigramMapExists = await TableExistsAsync(connection, "file_trgm_map", cancellationToken).ConfigureAwait(false);
+        return (searchMapExists, trigramMapExists);
+    }
+
+    private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = $name;";
+        command.Parameters.AddWithValue("$name", tableName);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is not null;
+    }
+
     private async Task RecreateFulltextSchemaAsync(CancellationToken cancellationToken)
     {
+        if (!_options.IsFulltextAvailable)
+        {
+            return;
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 

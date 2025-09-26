@@ -64,6 +64,8 @@ public static class ServiceCollectionExtensions
             connection.Open();
         }
 
+        SqliteFulltextSupportDetector.Detect(options);
+
         services.AddSingleton(options);
         var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
