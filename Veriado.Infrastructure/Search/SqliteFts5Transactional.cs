@@ -40,7 +40,11 @@ internal sealed class SqliteFts5Transactional
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var trigramText = TrigramQueryBuilder.BuildIndexEntry(document.Title, document.Author, document.Subject);
+            var trigramText = TrigramQueryBuilder.BuildIndexEntry(
+                document.Title,
+                document.Author,
+                document.Subject,
+                document.Comments);
 
             await using (var deleteTrgm = connection.CreateCommand())
             {
