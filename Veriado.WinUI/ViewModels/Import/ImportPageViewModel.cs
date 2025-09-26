@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -89,17 +90,43 @@ public partial class ImportPageViewModel : ViewModelBase
                 };
 
                 var response = await _importService.ImportFolderAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.Success)
+                if (!response.IsSuccess)
                 {
-                    var message = string.IsNullOrWhiteSpace(response.Message)
+                    var errorMessage = response.Errors.FirstOrDefault()?.Message;
+                    var message = string.IsNullOrWhiteSpace(errorMessage)
                         ? "Import se nezdařil."
-                        : response.Message;
+                        : errorMessage;
                     StatusService.Error(message);
                     return;
                 }
 
+                if (response.Data is null)
+                {
+                    StatusService.Error("Import vrátil neplatnou odpověď.");
+                    return;
+                }
+
+                var result = response.Data;
+                switch (result.Status)
+                {
+                    case ImportBatchStatus.Success:
+                        StatusService.Info($"Import dokončen. Importováno {result.Succeeded} z {result.Total} souborů.");
+                        break;
+                    case ImportBatchStatus.PartialSuccess:
+                        StatusService.Error($"Import dokončen s chybami. Úspěšně importováno {result.Succeeded} z {result.Total} souborů.");
+                        break;
+                    case ImportBatchStatus.Failure:
+                        StatusService.Error("Import se nezdařil. Zkontrolujte protokol chyb.");
+                        break;
+                    case ImportBatchStatus.FatalError:
+                        StatusService.Error("Import byl přerušen kvůli fatální chybě. Zkontrolujte protokol chyb.");
+                        break;
+                    default:
+                        StatusService.Info("Import dokončen.");
+                        break;
+                }
+
                 _hotStateService.LastFolder = SelectedFolder;
-                StatusService.Info("Import dokončen.");
             }
             finally
             {

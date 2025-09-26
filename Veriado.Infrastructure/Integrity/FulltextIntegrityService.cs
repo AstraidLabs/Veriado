@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -10,6 +12,7 @@ using Veriado.Appl.Abstractions;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Options;
+using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
 
@@ -18,6 +21,8 @@ namespace Veriado.Infrastructure.Integrity;
 /// </summary>
 internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 {
+    private const string Fts5SchemaResourceName = "Veriado.Infrastructure.Persistence.Schema.Fts5.sql";
+
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly IDbContextFactory<AppDbContext> _writeFactory;
     private readonly ISearchIndexer _searchIndexer;
@@ -93,10 +98,26 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
     public async Task<int> RepairAsync(bool reindexAll, bool extractContent, CancellationToken cancellationToken = default)
     {
-        var report = await VerifyAsync(cancellationToken).ConfigureAwait(false);
+        IntegrityReport report;
+        var requiresFullRebuild = reindexAll;
+
+        try
+        {
+            report = await VerifyAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (SqliteException ex)
+        {
+            requiresFullRebuild = true;
+            var message = ex.IndicatesDatabaseCorruption()
+                ? "Full-text index metadata is corrupted; forcing full rebuild before repair."
+                : "Full-text index metadata could not be read; forcing full rebuild before repair.";
+            _logger.LogWarning(ex, message);
+            report = new IntegrityReport(Array.Empty<Guid>(), Array.Empty<Guid>());
+        }
+
         IReadOnlyCollection<Guid> targetFileIds;
 
-        if (reindexAll)
+        if (requiresFullRebuild)
         {
             await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             targetFileIds = await readContext.Files.Select(f => f.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -112,17 +133,29 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             targetFileIds = report.MissingFileIds;
         }
 
+        if (requiresFullRebuild)
+        {
+            // Ensure we are working with a clean connection pool before we attempt to
+            // rebuild the virtual tables. Otherwise pooled connections may continue to
+            // serve corrupted pages and cause the rebuild to fail.
+            SqliteConnection.ClearAllPools();
+            await RecreateFulltextSchemaAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        foreach (var orphan in report.OrphanIndexIds)
+        if (!requiresFullRebuild)
         {
-            try
+            foreach (var orphan in report.OrphanIndexIds)
             {
-                await _searchIndexer.DeleteAsync(orphan, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete orphaned search index row for file {FileId}", orphan);
+                try
+                {
+                    await _searchIndexer.DeleteAsync(orphan, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete orphaned search index row for file {FileId}", orphan);
+                }
             }
         }
 
@@ -186,5 +219,70 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
 
         return new SqliteConnection(_options.ConnectionString);
+    }
+
+    private async Task RecreateFulltextSchemaAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        // Reset any outstanding WAL state before we drop and recreate the tables. A corrupted
+        // or stale WAL file would otherwise continue to surface "database disk image is malformed"
+        // errors even after the schema is rebuilt.
+        await using (var checkpoint = connection.CreateCommand())
+        {
+            checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            await checkpoint.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var dropStatements = new[]
+        {
+            "DROP TABLE IF EXISTS file_search;",
+            "DROP TABLE IF EXISTS file_search_map;",
+            "DROP TABLE IF EXISTS file_trgm;",
+            "DROP TABLE IF EXISTS file_trgm_map;"
+        };
+
+        foreach (var statement in dropStatements)
+        {
+            await using var dropCommand = connection.CreateCommand();
+            dropCommand.CommandText = statement;
+            await dropCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var schemaSql = ReadEmbeddedSql(Fts5SchemaResourceName);
+        foreach (var statement in SplitSqlStatements(schemaSql))
+        {
+            await using var createCommand = connection.CreateCommand();
+            createCommand.CommandText = statement;
+            await createCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static string ReadEmbeddedSql(string resourceName)
+    {
+        var assembly = typeof(FulltextIntegrityService).GetTypeInfo().Assembly;
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+
+        if (stream is null)
+        {
+            var availableResources = string.Join(", ", assembly.GetManifestResourceNames());
+            throw new FileNotFoundException($"Embedded SQL resource '{resourceName}' was not found. Available resources: {availableResources}");
+        }
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    private static IEnumerable<string> SplitSqlStatements(string script)
+    {
+        foreach (var statement in script.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = statement.Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+            {
+                yield return trimmed + ';';
+            }
+        }
     }
 }

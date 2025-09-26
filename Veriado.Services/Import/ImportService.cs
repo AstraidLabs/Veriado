@@ -72,6 +72,7 @@ public sealed class ImportService : IImportService
         var errors = new ConcurrentBag<ImportError>();
         var total = 0;
         var succeeded = 0;
+        var fatalEncountered = false;
 
         try
         {
@@ -117,18 +118,52 @@ public sealed class ImportService : IImportService
         }
         catch (OperationCanceledException)
         {
-            errors.Add(new ImportError(request.FolderPath, "Canceled", "The import operation was canceled."));
+            fatalEncountered = true;
+            errors.Add(new ImportError(request.FolderPath, "canceled", "The import operation was canceled."));
         }
         catch (Exception ex)
         {
+            fatalEncountered = true;
             _logger.LogError(ex, "Folder import failed for {FolderPath}", request.FolderPath);
             errors.Add(new ImportError(request.FolderPath, "unexpected_error", ex.Message));
         }
 
         var processed = total;
         var failed = Math.Max(0, processed - succeeded);
-        var batchResult = new ImportBatchResult(processed, succeeded, failed, errors.ToArray());
+        var errorArray = errors.ToArray();
+        var status = DetermineStatus(processed, succeeded, failed, fatalEncountered, errorArray);
+        var batchResult = new ImportBatchResult(status, processed, succeeded, failed, errorArray);
         return ApiResponse<ImportBatchResult>.Success(batchResult);
+    }
+
+    private static ImportBatchStatus DetermineStatus(
+        int total,
+        int succeeded,
+        int failed,
+        bool fatalEncountered,
+        IReadOnlyCollection<ImportError> errors)
+    {
+        if (fatalEncountered)
+        {
+            return ImportBatchStatus.FatalError;
+        }
+
+        if (total == 0 && errors.Count == 0)
+        {
+            return ImportBatchStatus.Success;
+        }
+
+        if (failed == 0)
+        {
+            return ImportBatchStatus.Success;
+        }
+
+        if (succeeded == 0)
+        {
+            return ImportBatchStatus.Failure;
+        }
+
+        return ImportBatchStatus.PartialSuccess;
     }
 
     private async Task<ApiResponse<Guid>> ImportFileInternalAsync(

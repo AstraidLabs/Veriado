@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Veriado.WinUI.Services.Abstractions;
-using Veriado.WinUI.ViewModels.Shell;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
@@ -79,8 +78,6 @@ public partial class App : Application
             var services = host.Services;
 
             var shell = services.GetRequiredService<MainShell>();
-            var shellViewModel = services.GetRequiredService<MainShellViewModel>();
-            shell.Initialize(shellViewModel);
 
             var windowProvider = services.GetRequiredService<IWindowProvider>();
             windowProvider.SetWindow(shell);
