@@ -34,6 +34,17 @@ public sealed class InfrastructureOptions
         = FtsIndexingMode.SameTransaction;
 
     /// <summary>
+    /// Gets a value indicating whether the runtime environment provides the required SQLite FTS5 features.
+    /// </summary>
+    public bool IsFulltextAvailable { get; internal set; } = true;
+
+    /// <summary>
+    /// Gets the last detected failure reason when SQLite FTS5 support is unavailable.
+    /// </summary>
+    public string? FulltextAvailabilityError { get; internal set; }
+        = null;
+
+    /// <summary>
     /// Gets or sets the maximum number of work items processed in a single batch.
     /// </summary>
     public int BatchSize

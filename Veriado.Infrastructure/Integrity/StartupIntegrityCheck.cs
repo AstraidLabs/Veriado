@@ -22,6 +22,13 @@ internal static class StartupIntegrityCheck
         }
 
         var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("FulltextIntegrity");
+        if (!options.IsFulltextAvailable)
+        {
+            var reason = options.FulltextAvailabilityError ?? "SQLite FTS5 support is unavailable.";
+            logger.LogWarning("Skipping full-text integrity check because FTS5 support is unavailable: {Reason}", reason);
+            return;
+        }
+
         var integrity = provider.GetRequiredService<IFulltextIntegrityService>();
         var report = await integrity.VerifyAsync(cancellationToken).ConfigureAwait(false);
         if (report.MissingCount == 0 && report.OrphanCount == 0)

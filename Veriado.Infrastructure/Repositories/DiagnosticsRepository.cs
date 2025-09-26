@@ -58,12 +58,21 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 
         var total = await GetScalarAsync(connection, "SELECT COUNT(*) FROM files;", cancellationToken).ConfigureAwait(false);
         var stale = await GetScalarAsync(connection, "SELECT COUNT(*) FROM files WHERE fts_is_stale = 1;", cancellationToken).ConfigureAwait(false);
-        var version = await GetScalarAsync(connection, "SELECT fts5();", cancellationToken).ConfigureAwait(false);
+        string? version;
+        if (_options.IsFulltextAvailable)
+        {
+            var rawVersion = await GetScalarAsync(connection, "SELECT fts5();", cancellationToken).ConfigureAwait(false);
+            version = string.IsNullOrWhiteSpace(rawVersion) ? null : rawVersion;
+        }
+        else
+        {
+            version = _options.FulltextAvailabilityError;
+        }
 
         var totalCount = int.TryParse(total, out var parsedTotal) ? parsedTotal : 0;
         var staleCount = int.TryParse(stale, out var parsedStale) ? parsedStale : 0;
 
-        return new SearchIndexSnapshot(totalCount, staleCount, string.IsNullOrWhiteSpace(version) ? null : version);
+        return new SearchIndexSnapshot(totalCount, staleCount, version);
     }
 
     private static async Task<string> GetScalarAsync(SqliteConnection connection, string sql, CancellationToken cancellationToken)

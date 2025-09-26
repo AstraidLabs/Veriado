@@ -22,6 +22,11 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     public async Task IndexAsync(SearchDocument document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
+        if (!_options.IsFulltextAvailable)
+        {
+            return;
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -32,6 +37,11 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
     public async Task DeleteAsync(Guid fileId, CancellationToken cancellationToken = default)
     {
+        if (!_options.IsFulltextAvailable)
+        {
+            return;
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Veriado.Infrastructure.Persistence;
 
 #nullable disable
 
@@ -22,14 +23,17 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 nullable: false,
                 defaultValue: false);
 
-            migrationBuilder.Sql(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS file_trgm USING fts5(trgm, tokenize='unicode61 remove_diacritics 2', content='', columnsize=0);");
+            if (SqliteFulltextSupport.IsAvailable)
+            {
+                migrationBuilder.Sql(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS file_trgm USING fts5(trgm, tokenize='unicode61 remove_diacritics 2', content='', columnsize=0);");
 
-            migrationBuilder.Sql(
-                "CREATE TABLE IF NOT EXISTS file_trgm_map (rowid INTEGER PRIMARY KEY, file_id BLOB NOT NULL UNIQUE);");
+                migrationBuilder.Sql(
+                    "CREATE TABLE IF NOT EXISTS file_trgm_map (rowid INTEGER PRIMARY KEY, file_id BLOB NOT NULL UNIQUE);");
 
-            migrationBuilder.Sql(
-                "CREATE INDEX IF NOT EXISTS idx_file_trgm_map_file ON file_trgm_map(file_id);");
+                migrationBuilder.Sql(
+                    "CREATE INDEX IF NOT EXISTS idx_file_trgm_map_file ON file_trgm_map(file_id);");
+            }
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

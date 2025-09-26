@@ -143,6 +143,18 @@ internal sealed class OutboxWorker : BackgroundService
             extractContent = false;
         }
 
+        if (!_options.IsFulltextAvailable)
+        {
+            var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
+            if (tracked is not null)
+            {
+                tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
+            }
+
+            outbox.ProcessedUtc = _clock.UtcNow;
+            return;
+        }
+
         await ReindexFileAsync(writeContext, fileId, extractContent, cancellationToken).ConfigureAwait(false);
         outbox.ProcessedUtc = _clock.UtcNow;
     }
