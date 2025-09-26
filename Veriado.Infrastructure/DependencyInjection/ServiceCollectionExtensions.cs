@@ -50,6 +50,21 @@ public static class ServiceCollectionExtensions
             Directory.CreateDirectory(directory);
         }
 
+        if (options.EnableLuceneIntegration)
+        {
+            if (string.IsNullOrWhiteSpace(options.LuceneIndexPath))
+            {
+                options.LuceneIndexPath = string.IsNullOrWhiteSpace(directory)
+                    ? Path.Combine(AppContext.BaseDirectory, "lucene-index")
+                    : Path.Combine(directory!, "lucene-index");
+            }
+
+            if (!Directory.Exists(options.LuceneIndexPath))
+            {
+                Directory.CreateDirectory(options.LuceneIndexPath);
+            }
+        }
+
         var connectionStringBuilder = new SqliteConnectionStringBuilder
         {
             DataSource = options.DbPath,
@@ -85,10 +100,14 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IClock, SystemClock>();
 
         services.AddSingleton<IWriteQueue, WriteQueue>();
-        services.AddSingleton<ISearchIndexer, SqliteFts5Indexer>();
+        services.AddSingleton<SqliteFts5Indexer>();
+        services.AddSingleton<LuceneSearchIndexer>();
+        services.AddSingleton<ISearchIndexer, HybridSearchIndexer>();
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
-        services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
+        services.AddSingleton<SqliteFts5QueryService>();
+        services.AddSingleton<LuceneSearchQueryService>();
+        services.AddSingleton<ISearchQueryService, HybridSearchQueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
