@@ -100,8 +100,33 @@ public partial class ImportPageViewModel : ViewModelBase
                     return;
                 }
 
+                if (response.Data is null)
+                {
+                    StatusService.Error("Import vrátil neplatnou odpověď.");
+                    return;
+                }
+
+                var result = response.Data;
+                switch (result.Status)
+                {
+                    case ImportBatchStatus.Success:
+                        StatusService.Info($"Import dokončen. Importováno {result.Succeeded} z {result.Total} souborů.");
+                        break;
+                    case ImportBatchStatus.PartialSuccess:
+                        StatusService.Error($"Import dokončen s chybami. Úspěšně importováno {result.Succeeded} z {result.Total} souborů.");
+                        break;
+                    case ImportBatchStatus.Failure:
+                        StatusService.Error("Import se nezdařil. Zkontrolujte protokol chyb.");
+                        break;
+                    case ImportBatchStatus.FatalError:
+                        StatusService.Error("Import byl přerušen kvůli fatální chybě. Zkontrolujte protokol chyb.");
+                        break;
+                    default:
+                        StatusService.Info("Import dokončen.");
+                        break;
+                }
+
                 _hotStateService.LastFolder = SelectedFolder;
-                StatusService.Info("Import dokončen.");
             }
             finally
             {
