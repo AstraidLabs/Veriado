@@ -15,11 +15,6 @@ public readonly struct FilePersistenceOptions
     }
 
     /// <summary>
-    /// Gets a value indicating whether the binary content should be passed through the text extractor.
-    /// </summary>
-    public bool ExtractContent { get; init; }
-
-    /// <summary>
     /// Gets a value indicating whether the search coordinator may defer indexing to the outbox pipeline.
     /// </summary>
     public bool AllowDeferredIndexing { get; init; } = true;

@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Veriado.Domain.Audit;
 using Veriado.Domain.Files;
-using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Configurations;
 using Veriado.Infrastructure.Persistence.Options;
@@ -32,8 +31,6 @@ public sealed class ReadOnlyDbContext : DbContext
     public DbSet<FileContentAuditEntity> FileContentAudits => Set<FileContentAuditEntity>();
 
     public DbSet<FileDocumentValidityAuditEntity> FileValidityAudits => Set<FileDocumentValidityAuditEntity>();
-
-    public DbSet<ExtMetadataEntry> ExtendedMetadataEntries => Set<ExtMetadataEntry>();
 
     public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
 

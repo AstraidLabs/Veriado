@@ -36,7 +36,6 @@ public sealed class ReindexCorpusAfterSchemaUpgradeHandler : IRequestHandler<Rei
         {
             var options = new FilePersistenceOptions
             {
-                ExtractContent = request.ExtractContent,
                 AllowDeferredIndexing = request.AllowDeferredIndexing,
             };
 

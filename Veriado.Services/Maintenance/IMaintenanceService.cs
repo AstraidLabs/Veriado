@@ -11,9 +11,9 @@ public interface IMaintenanceService
 {
     Task InitializeAsync(CancellationToken cancellationToken);
 
-    Task<AppResult<int>> VerifyAndRepairAsync(bool forceRepair, bool extractContent, CancellationToken cancellationToken);
+    Task<AppResult<int>> VerifyAndRepairAsync(bool forceRepair, CancellationToken cancellationToken);
 
     Task<AppResult<int>> RunVacuumAndOptimizeAsync(CancellationToken cancellationToken);
 
-    Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, bool extractContent, bool allowDeferredIndexing, CancellationToken cancellationToken);
+    Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, bool allowDeferredIndexing, CancellationToken cancellationToken);
 }

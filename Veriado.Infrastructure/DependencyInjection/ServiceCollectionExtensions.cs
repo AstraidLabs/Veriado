@@ -91,15 +91,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
-        services.AddSingleton<PlainTextExtractor>();
-        services.AddSingleton<PdfTextExtractor>();
-        services.AddSingleton<DocxTextExtractor>();
-        services.AddSingleton<PptxTextExtractor>();
-        services.AddSingleton<XlsxTextExtractor>();
-        services.AddSingleton<OdtTextExtractor>();
-        services.AddSingleton<OdpTextExtractor>();
-        services.AddSingleton<OdsTextExtractor>();
-        services.AddSingleton<ITextExtractor, CompositeTextExtractor>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
         services.AddSingleton<IEventPublisher, AuditEventPublisher>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();

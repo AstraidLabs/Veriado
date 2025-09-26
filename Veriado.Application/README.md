@@ -10,7 +10,6 @@ Aplikační projekt vystavuje veřejné API výhradně prostřednictvím MediatR
 | `UseCases.Files.ReplaceFileContent.ReplaceFileContentCommand` | Náhrada binárního obsahu a přegenerování fulltextu. |
 | `UseCases.Files.RenameFile.RenameFileCommand` | Přejmenování souboru a synchronizace indexu. |
 | `UseCases.Files.UpdateFileMetadata.UpdateFileMetadataCommand` | Aktualizace MIME a autora. |
-| `UseCases.Files.SetExtendedMetadata.SetExtendedMetadataCommand` | Hromadná správa rozšířené metadatové struktury. |
 | `UseCases.Files.ApplySystemMetadata.ApplySystemMetadataCommand` | Import systémových metadat (atributy, časová razítka). |
 | `UseCases.Files.SetFileReadOnly.SetFileReadOnlyCommand` | Přepnutí příznaku pouze pro čtení. |
 | `UseCases.Files.SetFileValidity.SetFileValidityCommand` / `ClearFileValidityCommand` | Správa platnosti dokumentu. |

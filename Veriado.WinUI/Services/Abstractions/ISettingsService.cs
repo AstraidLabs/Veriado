@@ -35,9 +35,6 @@ public sealed class ImportPreferences
     public bool? Recursive { get; set; }
         = null;
 
-    public bool? ExtractContent { get; set; }
-        = null;
-
     public bool? KeepFsMetadata { get; set; }
         = null;
 

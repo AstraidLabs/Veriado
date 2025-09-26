@@ -36,20 +36,17 @@ internal sealed class SqliteFts5Transactional
             await using (var insert = connection.CreateCommand())
             {
                 insert.Transaction = transaction;
-                insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author, content) VALUES ($rowid, $title, $mime, $author, $content);";
+                insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author) VALUES ($rowid, $title, $mime, $author);";
                 insert.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
                 insert.Parameters.AddWithValue("$title", (object?)document.Title ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$mime", document.Mime);
                 insert.Parameters.AddWithValue("$author", (object?)document.Author ?? DBNull.Value);
-                insert.Parameters.AddWithValue("$content", (object?)document.ContentText ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
             var trigramText = TrigramQueryBuilder.BuildIndexEntry(
                 document.Title,
-                document.Author,
-                document.Subject,
-                document.Comments);
+                document.Author);
 
             await using (var deleteTrgm = connection.CreateCommand())
             {

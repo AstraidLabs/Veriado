@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.Search;
 using Veriado.Domain.ValueObjects;
-using Veriado.Infrastructure.MetadataStore.Json;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
@@ -69,18 +68,9 @@ internal static class Converters
         flags => (int)flags,
         value => (FileAttributesFlags)value);
 
-    public static readonly ValueConverter<ExtendedMetadata, string> ExtendedMetadataToJson = new(
-        metadata => ExtendedMetadataJsonBridge.Serialize(metadata),
-        json => ExtendedMetadataJsonBridge.Deserialize(json));
-
     public static readonly ValueConverter<Fts5Policy, string> FtsPolicyToJson = new(
         policy => JsonSerializer.Serialize(policy, JsonOptions),
         json => string.IsNullOrWhiteSpace(json)
             ? Fts5Policy.Default
             : JsonSerializer.Deserialize<Fts5Policy>(json, JsonOptions) ?? Fts5Policy.Default);
-
-    public static readonly ValueComparer<ExtendedMetadata> ExtendedMetadataComparer = new(
-        (left, right) => left.Equals(right),
-        value => value.GetHashCode(),
-        value => ExtendedMetadataJsonBridge.Deserialize(ExtendedMetadataJsonBridge.Serialize(value)));
 }

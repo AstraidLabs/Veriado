@@ -43,8 +43,7 @@ public sealed class ReindexFileHandler : IRequestHandler<ReindexFileCommand, App
 
             var timestamp = UtcTimestamp.From(_clock.UtcNow);
             file.RequestManualReindex(timestamp);
-            var options = new FilePersistenceOptions { ExtractContent = request.ExtractContent };
-            await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
+            await _repository.UpdateAsync(file, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
             return AppResult<FileSummaryDto>.Success(_mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex)

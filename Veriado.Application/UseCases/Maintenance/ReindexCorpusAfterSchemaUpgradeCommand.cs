@@ -8,5 +8,4 @@ namespace Veriado.Appl.UseCases.Maintenance;
 /// </summary>
 public sealed record ReindexCorpusAfterSchemaUpgradeCommand(
     int TargetSchemaVersion,
-    bool ExtractContent = true,
     bool AllowDeferredIndexing = false) : IRequest<AppResult<int>>;

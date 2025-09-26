@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Logging;
 using Veriado.Domain.Audit;
 using Veriado.Domain.Files;
-using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Configurations;
 using Veriado.Infrastructure.Persistence.Options;
@@ -36,8 +35,6 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<FileDocumentValidityAuditEntity> FileValidityAudits => Set<FileDocumentValidityAuditEntity>();
 
-    public DbSet<ExtMetadataEntry> ExtendedMetadataEntries => Set<ExtMetadataEntry>();
-
     public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
 
     public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
@@ -49,11 +46,6 @@ public sealed class AppDbContext : DbContext
         using (InfrastructureModel.UseOptions(_options))
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
-        }
-
-        if (!_options.UseKvMetadata)
-        {
-            modelBuilder.Entity<ExtMetadataEntry>().ToTable("file_ext_metadata").Metadata.SetIsTableExcludedFromMigrations(true);
         }
 
         if (_options.FtsIndexingMode != FtsIndexingMode.Outbox)

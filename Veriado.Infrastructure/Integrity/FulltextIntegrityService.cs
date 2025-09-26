@@ -26,7 +26,6 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly IDbContextFactory<AppDbContext> _writeFactory;
     private readonly ISearchIndexer _searchIndexer;
-    private readonly ITextExtractor _textExtractor;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<FulltextIntegrityService> _logger;
     private readonly IClock _clock;
@@ -35,7 +34,6 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         IDbContextFactory<ReadOnlyDbContext> readFactory,
         IDbContextFactory<AppDbContext> writeFactory,
         ISearchIndexer searchIndexer,
-        ITextExtractor textExtractor,
         InfrastructureOptions options,
         ILogger<FulltextIntegrityService> logger,
         IClock clock)
@@ -43,7 +41,6 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         _readFactory = readFactory;
         _writeFactory = writeFactory;
         _searchIndexer = searchIndexer;
-        _textExtractor = textExtractor;
         _options = options;
         _logger = logger;
         _clock = clock;
@@ -115,7 +112,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return new IntegrityReport(missing, orphans);
     }
 
-    public async Task<int> RepairAsync(bool reindexAll, bool extractContent, CancellationToken cancellationToken = default)
+    public async Task<int> RepairAsync(bool reindexAll, CancellationToken cancellationToken = default)
     {
         if (!_options.IsFulltextAvailable)
         {
@@ -200,7 +197,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         {
             try
             {
-                if (await ReindexFileAsync(writeContext, fileId, extractContent, cancellationToken).ConfigureAwait(false))
+                if (await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false))
                 {
                     processed++;
                 }
@@ -219,7 +216,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return processed;
     }
 
-    private async Task<bool> ReindexFileAsync(AppDbContext writeContext, Guid fileId, bool extractContent, CancellationToken cancellationToken)
+    private async Task<bool> ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
     {
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
@@ -231,10 +228,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return false;
         }
 
-        var text = extractContent
-            ? await _textExtractor.ExtractTextAsync(file, cancellationToken).ConfigureAwait(false)
-            : null;
-        var document = file.ToSearchDocument(text);
+        var document = file.ToSearchDocument();
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
 
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);

@@ -13,8 +13,6 @@ public interface IHotStateService
 
     bool ImportRecursive { get; set; }
 
-    bool ImportExtractContent { get; set; }
-
     bool ImportKeepFsMetadata { get; set; }
 
     bool ImportSetReadOnly { get; set; }

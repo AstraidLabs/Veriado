@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,10 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Common;
 using Veriado.Domain.Files;
-using Veriado.Domain.Metadata;
-using Veriado.Infrastructure.MetadataStore.Kv;
 using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Repositories;
 
@@ -20,79 +16,25 @@ namespace Veriado.Infrastructure.Repositories;
 /// </summary>
 internal sealed class FileReadRepository : IFileReadRepository
 {
-
     private readonly IDbContextFactory<ReadOnlyDbContext> _contextFactory;
-    private readonly InfrastructureOptions _options;
 
-    public FileReadRepository(IDbContextFactory<ReadOnlyDbContext> contextFactory, InfrastructureOptions options)
+    public FileReadRepository(IDbContextFactory<ReadOnlyDbContext> contextFactory)
     {
         _contextFactory = contextFactory;
-        _options = options;
     }
 
     public async Task<FileDetailReadModel?> GetDetailAsync(Guid id, CancellationToken cancellationToken)
     {
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        if (_options.UseKvMetadata)
-        {
-            var projection = await context.Files
-                .AsNoTracking()
-                .Where(file => file.Id == id)
-                .Select(file => new
-                {
-                    file.Id,
-                    Name = file.Name.Value,
-                    Extension = file.Extension.Value,
-                    Mime = file.Mime.Value,
-                    file.Author,
-                    Size = file.Size.Value,
-                    file.Version,
-                    file.IsReadOnly,
-                    CreatedUtc = file.CreatedUtc.Value,
-                    LastModifiedUtc = file.LastModifiedUtc.Value,
-                    Validity = file.Validity,
-                    file.SystemMetadata,
-                })
-                .FirstOrDefaultAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (projection is null)
-            {
-                return null;
-            }
-
-            var metadataEntries = await context.ExtendedMetadataEntries
-                .Where(entry => entry.FileId == id)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            var metadata = MapExtendedMetadata(ExtMetadataMapper.FromEntries(metadataEntries));
-            var validity = MapValidity(projection.Validity);
-
-            return new FileDetailReadModel(
-                projection.Id,
-                projection.Name,
-                projection.Extension,
-                projection.Mime,
-                projection.Author,
-                projection.Size,
-                projection.Version,
-                projection.IsReadOnly,
-                projection.CreatedUtc,
-                projection.LastModifiedUtc,
-                validity,
-                projection.SystemMetadata,
-                metadata);
-        }
-
-        var defaultProjection = await context.Files
+        var projection = await context.Files
             .AsNoTracking()
             .Where(file => file.Id == id)
             .Select(file => new
             {
                 file.Id,
                 Name = file.Name.Value,
+                Title = file.Title,
                 Extension = file.Extension.Value,
                 Mime = file.Mime.Value,
                 file.Author,
@@ -103,33 +45,31 @@ internal sealed class FileReadRepository : IFileReadRepository
                 LastModifiedUtc = file.LastModifiedUtc.Value,
                 Validity = file.Validity,
                 file.SystemMetadata,
-                file.ExtendedMetadata,
             })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (defaultProjection is null)
+        if (projection is null)
         {
             return null;
         }
 
-        var defaultValidity = MapValidity(defaultProjection.Validity);
-        var defaultMetadata = MapExtendedMetadata(defaultProjection.ExtendedMetadata);
+        var validity = MapValidity(projection.Validity);
 
         return new FileDetailReadModel(
-            defaultProjection.Id,
-            defaultProjection.Name,
-            defaultProjection.Extension,
-            defaultProjection.Mime,
-            defaultProjection.Author,
-            defaultProjection.Size,
-            defaultProjection.Version,
-            defaultProjection.IsReadOnly,
-            defaultProjection.CreatedUtc,
-            defaultProjection.LastModifiedUtc,
-            defaultValidity,
-            defaultProjection.SystemMetadata,
-            defaultMetadata);
+            projection.Id,
+            projection.Name,
+            projection.Title,
+            projection.Extension,
+            projection.Mime,
+            projection.Author,
+            projection.Size,
+            projection.Version,
+            projection.IsReadOnly,
+            projection.CreatedUtc,
+            projection.LastModifiedUtc,
+            validity,
+            projection.SystemMetadata);
     }
 
     public async Task<Page<FileListItemReadModel>> ListAsync(PageRequest request, CancellationToken cancellationToken)
@@ -137,7 +77,6 @@ internal sealed class FileReadRepository : IFileReadRepository
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
         var baseQuery = context.Files.AsNoTracking();
-
         var totalCount = await baseQuery.CountAsync(cancellationToken).ConfigureAwait(false);
 
         var items = await baseQuery
@@ -203,67 +142,5 @@ internal sealed class FileReadRepository : IFileReadRepository
             validity.ValidUntil.Value,
             validity.HasPhysicalCopy,
             validity.HasElectronicCopy);
-    }
-
-    private static IReadOnlyDictionary<string, string?> MapExtendedMetadata(ExtendedMetadata metadata)
-    {
-        var dictionary = new Dictionary<string, string?>(StringComparer.Ordinal);
-
-        foreach (var pair in metadata.AsEnumerable())
-        {
-            dictionary[pair.Key.ToString()] = FormatMetadataValue(pair.Value);
-        }
-
-        return dictionary;
-    }
-
-    private static string? FormatMetadataValue(MetadataValue value)
-    {
-        if (value.TryGetString(out var single))
-        {
-            return single;
-        }
-
-        if (value.TryGetStringArray(out var array) && array is { Length: > 0 })
-        {
-            return string.Join(", ", array);
-        }
-
-        if (value.TryGetGuid(out var guid))
-        {
-            return guid.ToString("D", CultureInfo.InvariantCulture);
-        }
-
-        if (value.TryGetFileTime(out var fileTime))
-        {
-            return fileTime.ToString("O", CultureInfo.InvariantCulture);
-        }
-
-        if (value.TryGetBinary(out var binary) && binary is { Length: > 0 })
-        {
-            return Convert.ToBase64String(binary);
-        }
-
-        if (value.TryGetBoolean(out var boolean))
-        {
-            return boolean.ToString(CultureInfo.InvariantCulture);
-        }
-
-        if (value.TryGetInt32(out var intValue))
-        {
-            return intValue.ToString(CultureInfo.InvariantCulture);
-        }
-
-        if (value.TryGetUInt32(out var uintValue))
-        {
-            return uintValue.ToString(CultureInfo.InvariantCulture);
-        }
-
-        if (value.TryGetDouble(out var doubleValue))
-        {
-            return doubleValue.ToString(CultureInfo.InvariantCulture);
-        }
-
-        return null;
     }
 }

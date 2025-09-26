@@ -22,13 +22,13 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     extension = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
                     mime = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
                     author = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
+                    title = table.Column<string>(type: "TEXT", maxLength: 300, nullable: true),
                     size_bytes = table.Column<long>(type: "INTEGER", nullable: false),
                     created_utc = table.Column<string>(type: "TEXT", nullable: false),
                     modified_utc = table.Column<string>(type: "TEXT", nullable: false),
                     version = table.Column<int>(type: "INTEGER", nullable: false),
                     is_read_only = table.Column<bool>(type: "INTEGER", nullable: false),
                     fts_policy = table.Column<string>(type: "TEXT", nullable: false),
-                    metadata_json = table.Column<string>(type: "TEXT", nullable: true),
                     fs_attr = table.Column<int>(type: "INTEGER", nullable: false),
                     fs_created_utc = table.Column<string>(type: "TEXT", nullable: false),
                     fs_write_utc = table.Column<string>(type: "TEXT", nullable: false),
@@ -88,22 +88,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_audit_file_validity", x => new { x.file_id, x.occurred_utc });
-                });
-
-            migrationBuilder.CreateTable(
-                name: "file_ext_metadata",
-                columns: table => new
-                {
-                    file_id = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    fmtid = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    pid = table.Column<int>(type: "INTEGER", nullable: false),
-                    kind = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    value_text = table.Column<string>(type: "TEXT", nullable: true),
-                    value_blob = table.Column<byte[]>(type: "BLOB", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_file_ext_metadata", x => new { x.file_id, x.fmtid, x.pid });
                 });
 
             migrationBuilder.CreateTable(
@@ -179,11 +163,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "idx_file_ext_metadata_file",
-                table: "file_ext_metadata",
-                column: "file_id");
-
-            migrationBuilder.CreateIndex(
                 name: "idx_outbox_processed",
                 table: "outbox_events",
                 column: "processed_utc");
@@ -199,7 +178,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
             migrationBuilder.DropTable(name: "audit_file");
             migrationBuilder.DropTable(name: "audit_file_content");
             migrationBuilder.DropTable(name: "audit_file_validity");
-            migrationBuilder.DropTable(name: "file_ext_metadata");
             migrationBuilder.DropTable(name: "files_content");
             migrationBuilder.DropTable(name: "files_validity");
             migrationBuilder.DropTable(name: "outbox_events");

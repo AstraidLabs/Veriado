@@ -87,7 +87,6 @@
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <StackPanel Orientation="Vertical" Spacing="8">
                     <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
-                    <CheckBox Content="Extrahovat obsah" IsChecked="{Binding ExtractContent, Mode=TwoWay}" />
                     <CheckBox Content="Zachovat FS metadata" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8">

@@ -16,12 +16,6 @@ public sealed class InfrastructureOptions
     public string DbPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the key/value metadata store should be used instead of JSON.
-    /// </summary>
-    public bool UseKvMetadata { get; set; }
-        = true;
-
-    /// <summary>
     /// Gets or sets the optional maximum number of bytes allowed for stored file content.
     /// </summary>
     public int? MaxContentBytes { get; set; }

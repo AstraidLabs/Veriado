@@ -28,9 +28,6 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     private bool importRecursive = true;
 
     [ObservableProperty]
-    private bool importExtractContent = true;
-
-    [ObservableProperty]
     private bool importKeepFsMetadata = true;
 
     [ObservableProperty]
@@ -67,7 +64,6 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
             var import = settings.Import ?? new ImportPreferences();
             importRecursive = import.Recursive ?? true;
-            importExtractContent = import.ExtractContent ?? true;
             importKeepFsMetadata = import.KeepFsMetadata ?? true;
             importSetReadOnly = import.SetReadOnly ?? false;
             importUseParallel = import.UseParallel ?? true;
@@ -77,7 +73,6 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             importDefaultAuthor = import.DefaultAuthor;
 
             OnPropertyChanged(nameof(ImportRecursive));
-            OnPropertyChanged(nameof(ImportExtractContent));
             OnPropertyChanged(nameof(ImportKeepFsMetadata));
             OnPropertyChanged(nameof(ImportSetReadOnly));
             OnPropertyChanged(nameof(ImportUseParallel));
@@ -107,8 +102,6 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     }
 
     partial void OnImportRecursiveChanged(bool value) => PersistAsync();
-
-    partial void OnImportExtractContentChanged(bool value) => PersistAsync();
 
     partial void OnImportKeepFsMetadataChanged(bool value) => PersistAsync();
 
@@ -169,7 +162,6 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
                     settings.Import ??= new ImportPreferences();
                     settings.Import.Recursive = ImportRecursive;
-                    settings.Import.ExtractContent = ImportExtractContent;
                     settings.Import.KeepFsMetadata = ImportKeepFsMetadata;
                     settings.Import.SetReadOnly = ImportSetReadOnly;
                     settings.Import.UseParallel = ImportUseParallel;

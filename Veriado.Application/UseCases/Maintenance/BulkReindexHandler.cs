@@ -46,11 +46,10 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
         }
 
         var timestamp = UtcTimestamp.From(_clock.UtcNow);
-        var options = new FilePersistenceOptions { ExtractContent = request.ExtractContent };
         foreach (var file in files)
         {
             file.RequestManualReindex(timestamp);
-            await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
+            await _repository.UpdateAsync(file, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
         }
 
         return AppResult<int>.Success(files.Count);

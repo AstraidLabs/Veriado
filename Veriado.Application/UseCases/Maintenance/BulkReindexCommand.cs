@@ -9,5 +9,4 @@ namespace Veriado.Appl.UseCases.Maintenance;
 /// Command to reindex multiple files in bulk.
 /// </summary>
 /// <param name="FileIds">The collection of file identifiers.</param>
-/// <param name="ExtractContent">Indicates whether binary content should be reprocessed.</param>
-public sealed record BulkReindexCommand(IReadOnlyCollection<Guid> FileIds, bool ExtractContent = false) : IRequest<AppResult<int>>;
+public sealed record BulkReindexCommand(IReadOnlyCollection<Guid> FileIds) : IRequest<AppResult<int>>;

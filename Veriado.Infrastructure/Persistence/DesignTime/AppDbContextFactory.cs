@@ -34,7 +34,6 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     {
         var options = new InfrastructureOptions
         {
-            UseKvMetadata = true,
             FtsIndexingMode = FtsIndexingMode.Outbox,
         };
 

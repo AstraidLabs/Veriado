@@ -51,8 +51,7 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
                 return AppResult<Guid>.Conflict("A file with identical content already exists.");
             }
 
-            var options = new FilePersistenceOptions { ExtractContent = true };
-            await PersistNewAsync(file, options, cancellationToken);
+            await PersistNewAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<Guid>.Success(file.Id);
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
