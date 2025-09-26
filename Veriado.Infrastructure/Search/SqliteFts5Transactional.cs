@@ -65,7 +65,7 @@ internal sealed class SqliteFts5Transactional
                 await insertTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption())
+        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
         {
             throw new SearchIndexCorruptedException("SQLite full-text index is corrupted and needs to be repaired.", ex);
         }
@@ -119,7 +119,7 @@ internal sealed class SqliteFts5Transactional
                 await deleteTrgmMap.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption())
+        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
         {
             throw new SearchIndexCorruptedException("SQLite full-text index is corrupted and needs to be repaired.", ex);
         }
