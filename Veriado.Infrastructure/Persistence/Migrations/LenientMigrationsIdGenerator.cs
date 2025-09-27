@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
+using System;
+using System.Collections.Generic;
 
 namespace Veriado.Infrastructure.Persistence.Migrations;
 
