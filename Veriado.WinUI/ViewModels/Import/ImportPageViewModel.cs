@@ -87,6 +87,9 @@ public partial class ImportPageViewModel : ViewModelBase
     private string? defaultAuthor;
 
     [ObservableProperty]
+    private double maxFileSizeMegabytes;
+
+    [ObservableProperty]
     private bool isImporting;
 
     [ObservableProperty]
@@ -288,7 +291,29 @@ public partial class ImportPageViewModel : ViewModelBase
             SetReadOnly = SetReadOnly,
             MaxDegreeOfParallelism = maxParallel,
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
+            MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
         };
+    }
+
+    private long? CalculateMaxFileSizeBytes()
+    {
+        if (MaxFileSizeMegabytes <= 0)
+        {
+            return null;
+        }
+
+        var bytes = MaxFileSizeMegabytes * 1024d * 1024d;
+        if (double.IsNaN(bytes) || double.IsInfinity(bytes))
+        {
+            return null;
+        }
+
+        if (bytes >= long.MaxValue)
+        {
+            return long.MaxValue;
+        }
+
+        return (long)Math.Round(bytes, MidpointRounding.AwayFromZero);
     }
 
     private async Task<bool> TryProcessStreamingAsync(ImportFolderRequest request, CancellationToken cancellationToken)
@@ -505,21 +530,36 @@ public partial class ImportPageViewModel : ViewModelBase
         var summary = result.Status switch
         {
             ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {result.Succeeded} z {result.Total} souborů.",
-            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({result.Succeeded}/{result.Total}).",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({result.Succeeded}/{result.Total}). Zkontrolujte prosím chyby.",
             ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
-            ImportBatchStatus.FatalError => "Import skončil fatální chybou.",
+            ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
             _ => "Import dokončen.",
         };
 
-        await AddLogAsync("Výsledek", summary, result.Status == ImportBatchStatus.Success ? "success" : "warning").ConfigureAwait(false);
+        var logStatus = result.Status switch
+        {
+            ImportBatchStatus.Success => "success",
+            ImportBatchStatus.PartialSuccess => "warning",
+            ImportBatchStatus.Failure => "error",
+            ImportBatchStatus.FatalError => "error",
+            _ => "info",
+        };
 
-        if (result.Status == ImportBatchStatus.Success)
+        await AddLogAsync("Výsledek", summary, logStatus).ConfigureAwait(false);
+
+        switch (result.Status)
         {
-            StatusService.Info("Import dokončen.");
-        }
-        else
-        {
-            StatusService.Info(summary);
+            case ImportBatchStatus.Success:
+                StatusService.Info("Import dokončen.");
+                break;
+            case ImportBatchStatus.PartialSuccess:
+            case ImportBatchStatus.Failure:
+            case ImportBatchStatus.FatalError:
+                StatusService.Error(summary);
+                break;
+            default:
+                StatusService.Info(summary);
+                break;
         }
 
         return true;
@@ -587,6 +627,7 @@ public partial class ImportPageViewModel : ViewModelBase
             ? _hotStateService.ImportMaxDegreeOfParallelism
             : Environment.ProcessorCount;
         DefaultAuthor = _hotStateService.ImportDefaultAuthor;
+        MaxFileSizeMegabytes = _hotStateService.ImportMaxFileSizeMegabytes ?? 0;
     }
 
     private void OnErrorsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -661,6 +702,21 @@ public partial class ImportPageViewModel : ViewModelBase
         if (_hotStateService is not null)
         {
             _hotStateService.ImportDefaultAuthor = value;
+        }
+    }
+
+    partial void OnMaxFileSizeMegabytesChanged(double value)
+    {
+        if (double.IsNaN(value) || value < 0)
+        {
+            maxFileSizeMegabytes = 0;
+            OnPropertyChanged(nameof(MaxFileSizeMegabytes));
+            value = 0;
+        }
+
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportMaxFileSizeMegabytes = value > 0 ? value : null;
         }
     }
 

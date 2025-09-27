@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -105,6 +106,16 @@ public sealed class ImportService : IImportService
 
                         RecordErrors(filePath, response.Errors, errors);
                     }
+                    catch (FileTooLargeException ex)
+                    {
+                        var message = $"File size {ex.ActualSizeBytes} bytes exceeds the configured maximum of {ex.MaxAllowedBytes} bytes.";
+                        errors.Add(new ImportError(filePath, "file_too_large", message));
+                        _logger.LogWarning(
+                            "Skipping file {FilePath} because it exceeds the configured maximum size (actual {Actual} bytes, limit {Limit} bytes).",
+                            filePath,
+                            ex.ActualSizeBytes,
+                            ex.MaxAllowedBytes);
+                    }
                     catch (OperationCanceledException)
                     {
                         throw;
@@ -133,6 +144,17 @@ public sealed class ImportService : IImportService
         var errorArray = errors.ToArray();
         var status = DetermineStatus(processed, succeeded, failed, fatalEncountered, errorArray);
         var batchResult = new ImportBatchResult(status, processed, succeeded, failed, errorArray);
+
+        if (status == ImportBatchStatus.FatalError)
+        {
+            var firstError = errorArray.FirstOrDefault();
+            var message = firstError is null
+                ? "Import was stopped due to a fatal error. Resolve the issue and try again."
+                : $"Import was stopped due to a fatal error: {firstError.Message}";
+            var code = string.IsNullOrWhiteSpace(firstError?.Code) ? "import_fatal_error" : firstError!.Code;
+            return ApiResponse<ImportBatchResult>.Failure(new ApiError(code, message, firstError?.FilePath));
+        }
+
         return ApiResponse<ImportBatchResult>.Success(batchResult);
     }
 
@@ -210,7 +232,9 @@ public sealed class ImportService : IImportService
         ImportFolderRequest options,
         CancellationToken cancellationToken)
     {
-        var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+        var maxFileSizeBytes = options.MaxFileSizeBytes.HasValue && options.MaxFileSizeBytes.Value > 0
+            ? options.MaxFileSizeBytes.Value
+            : (long?)null;
         var extensionWithDot = Path.GetExtension(filePath);
         var extension = string.IsNullOrWhiteSpace(extensionWithDot) ? string.Empty : extensionWithDot.TrimStart('.');
         var name = Path.GetFileNameWithoutExtension(filePath);
@@ -227,6 +251,10 @@ public sealed class ImportService : IImportService
         {
             var info = new FileInfo(filePath);
             info.Refresh();
+            if (maxFileSizeBytes.HasValue && info.Exists && info.Length > maxFileSizeBytes.Value)
+            {
+                throw new FileTooLargeException(filePath, info.Length, maxFileSizeBytes.Value);
+            }
             if (options.KeepFsMetadata)
             {
                 systemMetadata = new FileSystemMetadataDto(
@@ -249,6 +277,12 @@ public sealed class ImportService : IImportService
             _logger.LogDebug(ex, "Failed to capture file metadata for {FilePath}", filePath);
         }
 
+        var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+        if (maxFileSizeBytes.HasValue && bytes.LongLength > maxFileSizeBytes.Value)
+        {
+            throw new FileTooLargeException(filePath, bytes.LongLength, maxFileSizeBytes.Value);
+        }
+
         return NormalizeRequest(new CreateFileRequest
         {
             Name = name,
@@ -256,6 +290,9 @@ public sealed class ImportService : IImportService
             Mime = MimeMap.GetMimeType(extension),
             Author = author,
             Content = bytes,
+            MaxContentLength = maxFileSizeBytes.HasValue && maxFileSizeBytes.Value <= int.MaxValue
+                ? (int?)maxFileSizeBytes.Value
+                : null,
             SystemMetadata = systemMetadata,
             IsReadOnly = isReadOnly,
         });
@@ -356,5 +393,19 @@ public sealed class ImportService : IImportService
         }
 
         return new DateTimeOffset(value, TimeSpan.Zero);
+    }
+
+    private sealed class FileTooLargeException : Exception
+    {
+        public FileTooLargeException(string filePath, long actualSizeBytes, long maxAllowedBytes)
+            : base($"File '{filePath}' exceeds the configured maximum size.")
+        {
+            ActualSizeBytes = actualSizeBytes;
+            MaxAllowedBytes = maxAllowedBytes;
+        }
+
+        public long ActualSizeBytes { get; }
+
+        public long MaxAllowedBytes { get; }
     }
 }
