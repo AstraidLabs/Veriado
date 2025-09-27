@@ -21,6 +21,7 @@ public sealed class AppDbContext : DbContext
 {
     private readonly InfrastructureOptions _options;
     private readonly ILogger<AppDbContext> _logger;
+    private const string LegacyBaselineMigrationId = "20250927104926_Init";
 
     public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions, ILogger<AppDbContext> logger)
         : base(options)
@@ -101,11 +102,25 @@ public sealed class AppDbContext : DbContext
             using var historyCommand = connection.CreateCommand();
             historyCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory' LIMIT 1;";
             var historyResult = await historyCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            var hasHistory = historyResult is not null && historyResult != DBNull.Value;
+            var hasHistoryTable = historyResult is not null && historyResult != DBNull.Value;
 
-            if (hasHistory)
+            if (hasHistoryTable)
             {
-                return false;
+                using var baselineCommand = connection.CreateCommand();
+                baselineCommand.CommandText = "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = @MigrationId LIMIT 1;";
+
+                var migrationIdParameter = baselineCommand.CreateParameter();
+                migrationIdParameter.ParameterName = "@MigrationId";
+                migrationIdParameter.Value = LegacyBaselineMigrationId;
+                baselineCommand.Parameters.Add(migrationIdParameter);
+
+                var baselineResult = await baselineCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                var hasBaselineRow = baselineResult is not null && baselineResult != DBNull.Value;
+
+                if (hasBaselineRow)
+                {
+                    return false;
+                }
             }
 
             using var coreTableCommand = connection.CreateCommand();
@@ -131,7 +146,7 @@ public sealed class AppDbContext : DbContext
         }
 
         const string createTableSql = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\n    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY,\n    \"ProductVersion\" TEXT NOT NULL\n);";
-        const string insertBaselineSql = "INSERT OR IGNORE INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20250927104926_Init', '9.0.9');";
+        var insertBaselineSql = $"INSERT OR IGNORE INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('{LegacyBaselineMigrationId}', '9.0.9');";
 
         await Database.ExecuteSqlRawAsync(createTableSql, cancellationToken).ConfigureAwait(false);
         var inserted = await Database.ExecuteSqlRawAsync(insertBaselineSql, cancellationToken).ConfigureAwait(false);
