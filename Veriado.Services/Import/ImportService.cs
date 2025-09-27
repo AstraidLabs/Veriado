@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -133,6 +134,17 @@ public sealed class ImportService : IImportService
         var errorArray = errors.ToArray();
         var status = DetermineStatus(processed, succeeded, failed, fatalEncountered, errorArray);
         var batchResult = new ImportBatchResult(status, processed, succeeded, failed, errorArray);
+
+        if (status == ImportBatchStatus.FatalError)
+        {
+            var firstError = errorArray.FirstOrDefault();
+            var message = firstError is null
+                ? "Import was stopped due to a fatal error. Resolve the issue and try again."
+                : $"Import was stopped due to a fatal error: {firstError.Message}";
+            var code = string.IsNullOrWhiteSpace(firstError?.Code) ? "import_fatal_error" : firstError!.Code;
+            return ApiResponse<ImportBatchResult>.Failure(new ApiError(code, message, firstError?.FilePath));
+        }
+
         return ApiResponse<ImportBatchResult>.Success(batchResult);
     }
 
