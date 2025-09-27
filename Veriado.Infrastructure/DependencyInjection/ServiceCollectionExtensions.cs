@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
@@ -82,6 +84,7 @@ public static class ServiceCollectionExtensions
         SqliteFulltextSupportDetector.Detect(options);
 
         services.AddSingleton(options);
+        services.AddSingleton<InfrastructureInitializationState>();
         var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
 
@@ -129,12 +132,25 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static async Task InitializeInfrastructureAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+    public static async Task InitializeInfrastructureAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default, [CallerMemberName] string? callerName = null)
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var scopedProvider = scope.ServiceProvider;
-        var dbContext = scopedProvider.GetRequiredService<AppDbContext>();
-        await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
-        await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);
+        var options = scopedProvider.GetRequiredService<InfrastructureOptions>();
+        var state = scopedProvider.GetRequiredService<InfrastructureInitializationState>();
+        var logger = scopedProvider.GetService<ILogger<InfrastructureInitializationState>>();
+
+        var ranInitialization = await state.EnsureInitializedAsync(async () =>
+        {
+            var dbContext = scopedProvider.GetRequiredService<AppDbContext>();
+            await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+
+        logger?.LogInformation(
+            "InitializeInfrastructureAsync invoked by {Caller} for database {DatabasePath}. RanInitialization: {RanInitialization}",
+            callerName ?? "unknown",
+            options.DbPath,
+            ranInitialization);
     }
 }
