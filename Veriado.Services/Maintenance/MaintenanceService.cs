@@ -24,7 +24,6 @@ public sealed class MaintenanceService : IMaintenanceService
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        await _serviceProvider.InitializeInfrastructureAsync(cancellationToken).ConfigureAwait(false);
         await RunVacuumAndOptimizeAsync(cancellationToken).ConfigureAwait(false);
     }
 
