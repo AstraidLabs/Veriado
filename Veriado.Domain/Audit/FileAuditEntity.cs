@@ -67,11 +67,17 @@ public sealed class FileAuditEntity
     /// <param name="fileId">The file identifier.</param>
     /// <param name="mime">The MIME type after the update.</param>
     /// <param name="author">The author after the update.</param>
+    /// <param name="title">The optional title after the update.</param>
     /// <param name="occurredUtc">The timestamp when the event occurred.</param>
     /// <returns>The created audit entry.</returns>
-    public static FileAuditEntity MetadataUpdated(Guid fileId, MimeType mime, string author, UtcTimestamp occurredUtc)
+    public static FileAuditEntity MetadataUpdated(Guid fileId, MimeType mime, string author, string? title, UtcTimestamp occurredUtc)
     {
-        return new FileAuditEntity(fileId, FileAuditAction.MetadataUpdated, $"Metadata updated (MIME: {mime.Value}, Author: {author})", occurredUtc);
+        var titleText = string.IsNullOrWhiteSpace(title) ? "(none)" : $"'{title}'";
+        return new FileAuditEntity(
+            fileId,
+            FileAuditAction.MetadataUpdated,
+            $"Metadata updated (MIME: {mime.Value}, Author: {author}, Title: {titleText})",
+            occurredUtc);
     }
 
     /// <summary>

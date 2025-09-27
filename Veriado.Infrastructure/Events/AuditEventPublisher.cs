@@ -60,7 +60,12 @@ internal sealed class AuditEventPublisher : IEventPublisher
                     break;
 
                 case FileMetadataUpdated metadata:
-                    context.FileAudits.Add(FileAuditEntity.MetadataUpdated(metadata.FileId, metadata.Mime, metadata.Author, UtcTimestamp.From(metadata.OccurredOnUtc)));
+                    context.FileAudits.Add(FileAuditEntity.MetadataUpdated(
+                        metadata.FileId,
+                        metadata.Mime,
+                        metadata.Author,
+                        metadata.Title,
+                        UtcTimestamp.From(metadata.OccurredOnUtc)));
                     hasChanges = true;
                     break;
 

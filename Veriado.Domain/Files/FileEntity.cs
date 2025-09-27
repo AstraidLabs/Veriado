@@ -168,7 +168,7 @@ public sealed class FileEntity : AggregateRoot
         Name = newName;
         Touch(whenUtc);
         RaiseDomainEvent(new FileRenamed(Id, previous, newName, whenUtc));
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, Title, SystemMetadata, whenUtc));
         MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
@@ -204,7 +204,7 @@ public sealed class FileEntity : AggregateRoot
         }
 
         Touch(whenUtc);
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, Title, SystemMetadata, whenUtc));
         MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
@@ -319,7 +319,7 @@ public sealed class FileEntity : AggregateRoot
 
         SystemMetadata = metadata;
         Touch(whenUtc);
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, Title, SystemMetadata, whenUtc));
         MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
@@ -338,7 +338,7 @@ public sealed class FileEntity : AggregateRoot
 
         Title = normalized;
         Touch(whenUtc);
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, Title, SystemMetadata, whenUtc));
         MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
@@ -357,7 +357,7 @@ public sealed class FileEntity : AggregateRoot
 
         Author = normalized;
         Touch(whenUtc);
-        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, SystemMetadata, whenUtc));
+        RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, Title, SystemMetadata, whenUtc));
         MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
     }
 
