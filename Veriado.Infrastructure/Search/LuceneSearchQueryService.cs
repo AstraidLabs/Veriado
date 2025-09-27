@@ -22,7 +22,7 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class LuceneSearchQueryService
 {
-    private const double ScoreTolerance = 0.0001d;
+    private const float ScoreTolerance = 0.0001f;
 
     private readonly InfrastructureOptions _options;
     private readonly Analyzer? _analyzer;
@@ -243,11 +243,7 @@ internal sealed class LuceneSearchQueryService
 
             return DirectoryReader.Open(_directory);
         }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-        catch (DirectoryNotFoundException)
+        catch (IOException)
         {
             return null;
         }
@@ -266,7 +262,7 @@ internal sealed class LuceneSearchQueryService
 
         var parser = new MultiFieldQueryParser(LuceneVersion.LUCENE_48, _searchFields, _analyzer)
         {
-            DefaultOperator = QueryParser.Operator.AND,
+            DefaultOperator = QueryParserBase.Operator.AND,
             AllowLeadingWildcard = true,
         };
 
