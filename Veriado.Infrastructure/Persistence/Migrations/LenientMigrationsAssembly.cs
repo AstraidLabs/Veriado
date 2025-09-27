@@ -188,3 +188,20 @@ public sealed class LenientMigrationsAssembly : IMigrationsAssembly
         return id[..separatorIndex];
     }
 }
+
+internal static class AssemblyExtensions
+{
+    public static IEnumerable<TypeInfo> GetConstructibleTypes(this Assembly assembly)
+        => assembly
+            .DefinedTypes
+            .Where(type => !type.IsAbstract)
+            .Where(type => !type.IsGenericTypeDefinition)
+            .Where(HasAccessibleConstructor);
+
+    private static bool HasAccessibleConstructor(TypeInfo type)
+        => type.DeclaredConstructors.Any(
+            constructor => !constructor.IsStatic
+                            && (constructor.IsPublic
+                                || constructor.IsFamily
+                                || constructor.IsFamilyOrAssembly));
+}
