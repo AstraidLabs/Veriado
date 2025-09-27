@@ -258,7 +258,7 @@ internal sealed class LuceneSearchQueryService
 
         var parser = new MultiFieldQueryParser(LuceneVersion.LUCENE_48, _searchFields, _analyzer)
         {
-            DefaultOperator = QueryParserBase.Operator.AND,
+            DefaultOperator = QueryParser.Operator.AND,
             AllowLeadingWildcard = true,
         };
 
