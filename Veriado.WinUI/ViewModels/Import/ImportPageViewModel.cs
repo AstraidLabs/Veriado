@@ -505,21 +505,36 @@ public partial class ImportPageViewModel : ViewModelBase
         var summary = result.Status switch
         {
             ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {result.Succeeded} z {result.Total} souborů.",
-            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({result.Succeeded}/{result.Total}).",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({result.Succeeded}/{result.Total}). Zkontrolujte prosím chyby.",
             ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
-            ImportBatchStatus.FatalError => "Import skončil fatální chybou.",
+            ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
             _ => "Import dokončen.",
         };
 
-        await AddLogAsync("Výsledek", summary, result.Status == ImportBatchStatus.Success ? "success" : "warning").ConfigureAwait(false);
+        var logStatus = result.Status switch
+        {
+            ImportBatchStatus.Success => "success",
+            ImportBatchStatus.PartialSuccess => "warning",
+            ImportBatchStatus.Failure => "error",
+            ImportBatchStatus.FatalError => "error",
+            _ => "info",
+        };
 
-        if (result.Status == ImportBatchStatus.Success)
+        await AddLogAsync("Výsledek", summary, logStatus).ConfigureAwait(false);
+
+        switch (result.Status)
         {
-            StatusService.Info("Import dokončen.");
-        }
-        else
-        {
-            StatusService.Info(summary);
+            case ImportBatchStatus.Success:
+                StatusService.Info("Import dokončen.");
+                break;
+            case ImportBatchStatus.PartialSuccess:
+            case ImportBatchStatus.Failure:
+            case ImportBatchStatus.FatalError:
+                StatusService.Error(summary);
+                break;
+            default:
+                StatusService.Info(summary);
+                break;
         }
 
         return true;
