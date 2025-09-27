@@ -247,10 +247,6 @@ internal sealed class LuceneSearchQueryService
         {
             return null;
         }
-        catch (IndexNotFoundException)
-        {
-            return null;
-        }
     }
 
     private Query? TryParse(string text, bool allowFuzzy)
