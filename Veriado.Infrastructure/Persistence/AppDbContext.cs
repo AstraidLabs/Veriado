@@ -1,3 +1,5 @@
+using System;
+using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +78,66 @@ public sealed class AppDbContext : DbContext
         if (cleared > 0)
         {
             _logger.LogInformation("Stale EF migrations lock cleared (removed {LockRows} rows).", cleared);
+        }
+    }
+
+    internal async Task<bool> NeedsSqliteMigrationsHistoryBaselineAsync(CancellationToken cancellationToken)
+    {
+        if (!Database.IsSqlite())
+        {
+            return false;
+        }
+
+        var connection = Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            using var historyCommand = connection.CreateCommand();
+            historyCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory' LIMIT 1;";
+            var historyResult = await historyCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            var hasHistory = historyResult is not null && historyResult != DBNull.Value;
+
+            if (hasHistory)
+            {
+                return false;
+            }
+
+            using var coreTableCommand = connection.CreateCommand();
+            coreTableCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name IN ('audit_file', 'files') LIMIT 1;";
+            var coreTableResult = await coreTableCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            return coreTableResult is not null && coreTableResult != DBNull.Value;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                connection.Close();
+            }
+        }
+    }
+
+    internal async Task EnsureSqliteMigrationsHistoryBaselinedAsync(CancellationToken cancellationToken)
+    {
+        if (!Database.IsSqlite())
+        {
+            return;
+        }
+
+        const string createTableSql = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\n    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY,\n    \"ProductVersion\" TEXT NOT NULL\n);";
+        const string insertBaselineSql = "INSERT OR IGNORE INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20250927104926_Init', '9.0.9');";
+
+        await Database.ExecuteSqlRawAsync(createTableSql, cancellationToken).ConfigureAwait(false);
+        var inserted = await Database.ExecuteSqlRawAsync(insertBaselineSql, cancellationToken).ConfigureAwait(false);
+        if (inserted > 0)
+        {
+            _logger.LogInformation("Baselined EF migrations history with initial migration for legacy SQLite database.");
         }
     }
 }

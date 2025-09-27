@@ -147,6 +147,13 @@ public static class ServiceCollectionExtensions
             if (dbContext.Database.IsSqlite())
             {
                 await dbContext.EnsureSqliteMigrationsLockClearedAsync(cancellationToken).ConfigureAwait(false);
+
+                var needsBaseline = await dbContext.NeedsSqliteMigrationsHistoryBaselineAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                if (needsBaseline)
+                {
+                    await dbContext.EnsureSqliteMigrationsHistoryBaselinedAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
             await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
