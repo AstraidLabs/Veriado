@@ -55,25 +55,18 @@ public sealed class AppDbContext : DbContext
     }
 
     /// <summary>
-    /// Applies database migrations and runs PRAGMA optimize.
+    /// Runs post-migration maintenance tasks such as PRAGMA optimize.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (Database.IsSqlite())
         {
-            await EnsureSqliteMigrationsLockClearedAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        await Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-
-        if (Database.IsSqlite())
-        {
             await Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task EnsureSqliteMigrationsLockClearedAsync(CancellationToken cancellationToken)
+    internal async Task EnsureSqliteMigrationsLockClearedAsync(CancellationToken cancellationToken)
     {
         const string createTableSql = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsLock\"(\n  \"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY,\n  \"Timestamp\" TEXT NOT NULL\n);";
         const string deleteSql = "DELETE FROM \"__EFMigrationsLock\";";

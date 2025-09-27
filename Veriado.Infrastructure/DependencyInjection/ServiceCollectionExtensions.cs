@@ -134,15 +134,22 @@ public static class ServiceCollectionExtensions
 
     public static async Task InitializeInfrastructureAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default, [CallerMemberName] string? callerName = null)
     {
-        await using var scope = serviceProvider.CreateAsyncScope();
-        var scopedProvider = scope.ServiceProvider;
-        var options = scopedProvider.GetRequiredService<InfrastructureOptions>();
-        var state = scopedProvider.GetRequiredService<InfrastructureInitializationState>();
-        var logger = scopedProvider.GetService<ILogger<InfrastructureInitializationState>>();
+        var options = serviceProvider.GetRequiredService<InfrastructureOptions>();
+        var state = serviceProvider.GetRequiredService<InfrastructureInitializationState>();
+        var logger = serviceProvider.GetService<ILogger<InfrastructureInitializationState>>();
 
         var ranInitialization = await state.EnsureInitializedAsync(async () =>
         {
+            await using var scope = serviceProvider.CreateAsyncScope();
+            var scopedProvider = scope.ServiceProvider;
             var dbContext = scopedProvider.GetRequiredService<AppDbContext>();
+
+            if (dbContext.Database.IsSqlite())
+            {
+                await dbContext.EnsureSqliteMigrationsLockClearedAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
             await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
             await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
