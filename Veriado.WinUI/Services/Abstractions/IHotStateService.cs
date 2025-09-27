@@ -23,5 +23,7 @@ public interface IHotStateService
 
     string? ImportDefaultAuthor { get; set; }
 
+    double? ImportMaxFileSizeMegabytes { get; set; }
+
     Task InitializeAsync(CancellationToken cancellationToken = default);
 }

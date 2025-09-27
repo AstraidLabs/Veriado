@@ -42,6 +42,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     [ObservableProperty]
     private string? importDefaultAuthor;
 
+    [ObservableProperty]
+    private double? importMaxFileSizeMegabytes;
+
     public HotStateService(
         ISettingsService settingsService,
         IStatusService statusService,
@@ -71,6 +74,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                 ? import.MaxDegreeOfParallelism.Value
                 : Environment.ProcessorCount;
             importDefaultAuthor = import.DefaultAuthor;
+            importMaxFileSizeMegabytes = import.MaxFileSizeMegabytes.HasValue && import.MaxFileSizeMegabytes.Value > 0
+                ? import.MaxFileSizeMegabytes
+                : null;
 
             OnPropertyChanged(nameof(ImportRecursive));
             OnPropertyChanged(nameof(ImportKeepFsMetadata));
@@ -78,6 +84,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportUseParallel));
             OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
             OnPropertyChanged(nameof(ImportDefaultAuthor));
+            OnPropertyChanged(nameof(ImportMaxFileSizeMegabytes));
             _initialized = true;
         }
         finally
@@ -121,6 +128,17 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     }
 
     partial void OnImportDefaultAuthorChanged(string? value) => PersistAsync();
+
+    partial void OnImportMaxFileSizeMegabytesChanged(double? value)
+    {
+        if (value.HasValue && value.Value <= 0)
+        {
+            importMaxFileSizeMegabytes = null;
+            OnPropertyChanged(nameof(ImportMaxFileSizeMegabytes));
+        }
+
+        PersistAsync();
+    }
 
     private void PersistAsync()
     {
@@ -169,6 +187,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                         ? ImportMaxDegreeOfParallelism
                         : Environment.ProcessorCount;
                     settings.Import.DefaultAuthor = ImportDefaultAuthor;
+                    settings.Import.MaxFileSizeMegabytes = ImportMaxFileSizeMegabytes.HasValue && ImportMaxFileSizeMegabytes.Value > 0
+                        ? ImportMaxFileSizeMegabytes
+                        : null;
                 }).ConfigureAwait(false);
             }
             finally

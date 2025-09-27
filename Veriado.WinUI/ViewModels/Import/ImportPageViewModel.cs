@@ -87,6 +87,9 @@ public partial class ImportPageViewModel : ViewModelBase
     private string? defaultAuthor;
 
     [ObservableProperty]
+    private double maxFileSizeMegabytes;
+
+    [ObservableProperty]
     private bool isImporting;
 
     [ObservableProperty]
@@ -288,7 +291,29 @@ public partial class ImportPageViewModel : ViewModelBase
             SetReadOnly = SetReadOnly,
             MaxDegreeOfParallelism = maxParallel,
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
+            MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
         };
+    }
+
+    private long? CalculateMaxFileSizeBytes()
+    {
+        if (MaxFileSizeMegabytes <= 0)
+        {
+            return null;
+        }
+
+        var bytes = MaxFileSizeMegabytes * 1024d * 1024d;
+        if (double.IsNaN(bytes) || double.IsInfinity(bytes))
+        {
+            return null;
+        }
+
+        if (bytes >= long.MaxValue)
+        {
+            return long.MaxValue;
+        }
+
+        return (long)Math.Round(bytes, MidpointRounding.AwayFromZero);
     }
 
     private async Task<bool> TryProcessStreamingAsync(ImportFolderRequest request, CancellationToken cancellationToken)
@@ -602,6 +627,7 @@ public partial class ImportPageViewModel : ViewModelBase
             ? _hotStateService.ImportMaxDegreeOfParallelism
             : Environment.ProcessorCount;
         DefaultAuthor = _hotStateService.ImportDefaultAuthor;
+        MaxFileSizeMegabytes = _hotStateService.ImportMaxFileSizeMegabytes ?? 0;
     }
 
     private void OnErrorsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -676,6 +702,21 @@ public partial class ImportPageViewModel : ViewModelBase
         if (_hotStateService is not null)
         {
             _hotStateService.ImportDefaultAuthor = value;
+        }
+    }
+
+    partial void OnMaxFileSizeMegabytesChanged(double value)
+    {
+        if (double.IsNaN(value) || value < 0)
+        {
+            maxFileSizeMegabytes = 0;
+            OnPropertyChanged(nameof(MaxFileSizeMegabytes));
+            value = 0;
+        }
+
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportMaxFileSizeMegabytes = value > 0 ? value : null;
         }
     }
 

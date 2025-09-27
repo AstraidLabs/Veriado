@@ -49,4 +49,7 @@ public sealed class ImportPreferences
 
     public string? DefaultAuthor { get; set; }
         = null;
+
+    public double? MaxFileSizeMegabytes { get; set; }
+        = null;
 }

@@ -104,6 +104,15 @@
                         Header="Výchozí autor"
                         PlaceholderText="(nevyplněno)"
                         Text="{Binding DefaultAuthor, Mode=TwoWay}" />
+                    <NumberBox
+                        Header="Max. velikost souboru (MB)"
+                        Minimum="0"
+                        SpinButtonPlacementMode="Compact"
+                        Value="{Binding MaxFileSizeMegabytes, Mode=TwoWay}" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="0 = bez limitu" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>

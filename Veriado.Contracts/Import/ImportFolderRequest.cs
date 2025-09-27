@@ -45,4 +45,11 @@ public sealed record class ImportFolderRequest
     /// </summary>
     public bool Recursive { get; init; }
         = true;
+
+    /// <summary>
+    /// Gets or sets the optional maximum allowed size of a single imported file in bytes.
+    /// A non-positive value or <c>null</c> means no limit is applied.
+    /// </summary>
+    public long? MaxFileSizeBytes { get; init; }
+        = null;
 }
