@@ -13,8 +13,9 @@ public sealed class NullableIntToDoubleConverter : IValueConverter
             return (double)intValue;
         }
 
-        if (value is int? nullable)
+        if (value is int?)
         {
+            var nullable = (int?)value;
             return nullable.HasValue ? (double)nullable.Value : 0d;
         }
 
