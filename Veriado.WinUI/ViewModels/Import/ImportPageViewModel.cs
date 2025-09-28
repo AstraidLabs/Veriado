@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +16,7 @@ using Veriado.Services.Import;
 using Veriado.WinUI.Models.Import;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.Views.Import;
 
 namespace Veriado.WinUI.ViewModels.Import;
 
@@ -27,16 +27,19 @@ public partial class ImportPageViewModel : ViewModelBase
     private readonly IImportService _importService;
     private readonly IHotStateService? _hotStateService;
     private readonly IPickerService? _pickerService;
+    private readonly IDialogService _dialogService;
     private readonly AsyncRelayCommand _pickFolderCommand;
     private readonly AsyncRelayCommand _runImportCommand;
     private readonly RelayCommand _stopImportCommand;
     private readonly RelayCommand _clearResultsCommand;
-    private readonly RelayCommand<ImportErrorItem> _openErrorDetailCommand;
+    private readonly AsyncRelayCommand<ImportError> _openErrorDetailCommand;
+    private readonly AsyncRelayCommand _exportLogCommand;
     private CancellationTokenSource? _importCancellation;
 
     private int _okCount;
     private int _errorCount;
     private int _skipCount;
+    private readonly Dictionary<string, long> _fileSizeCache = new(StringComparer.OrdinalIgnoreCase);
 
     public ImportPageViewModel(
         IImportService importService,
@@ -44,11 +47,13 @@ public partial class ImportPageViewModel : ViewModelBase
         IStatusService statusService,
         IDispatcherService dispatcher,
         IExceptionHandler exceptionHandler,
+        IDialogService dialogService,
         IHotStateService? hotStateService = null,
         IPickerService? pickerService = null)
         : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _importService = importService ?? throw new ArgumentNullException(nameof(importService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _hotStateService = hotStateService;
         _pickerService = pickerService;
 
@@ -61,7 +66,8 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand = new AsyncRelayCommand(ExecuteRunImportAsync, CanRunImport);
         _stopImportCommand = new RelayCommand(ExecuteStopImport, () => IsImporting);
         _clearResultsCommand = new RelayCommand(ExecuteClearResults, CanClearResults);
-        _openErrorDetailCommand = new RelayCommand<ImportErrorItem>(ExecuteOpenErrorDetail);
+        _openErrorDetailCommand = new AsyncRelayCommand<ImportError>(ExecuteOpenErrorDetailAsync);
+        _exportLogCommand = new AsyncRelayCommand(ExecuteExportLogAsync, () => Log.Count > 0);
 
         RestoreStateFromHotStorage();
         PopulateDefaultAuthorFromCurrentUser();
@@ -83,13 +89,13 @@ public partial class ImportPageViewModel : ViewModelBase
     private bool useParallel = true;
 
     [ObservableProperty]
-    private int maxDegreeOfParallelism = Environment.ProcessorCount;
+    private int? maxDegreeOfParallelism = Environment.ProcessorCount;
 
     [ObservableProperty]
     private string? defaultAuthor;
 
     [ObservableProperty]
-    private double maxFileSizeMegabytes;
+    private double? maxFileSizeMegabytes;
 
     [ObservableProperty]
     private bool isImporting;
@@ -102,6 +108,30 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private int total;
+
+    [ObservableProperty]
+    private long processedBytes;
+
+    [ObservableProperty]
+    private long totalBytes;
+
+    [ObservableProperty]
+    private double? progressPercent;
+
+    [ObservableProperty]
+    private string? currentFileName;
+
+    [ObservableProperty]
+    private string? currentFilePath;
+
+    [ObservableProperty]
+    private bool hasMaxFileSizeError;
+
+    [ObservableProperty]
+    private bool hasParallelismError;
+
+    [ObservableProperty]
+    private ImportErrorSeverity selectedErrorFilter = ImportErrorSeverity.All;
 
     public ObservableCollection<ImportLogItem> Log { get; }
 
@@ -159,9 +189,17 @@ public partial class ImportPageViewModel : ViewModelBase
 
     public IRelayCommand ClearResultsCommand => _clearResultsCommand;
 
-    public IRelayCommand<ImportErrorItem> OpenErrorDetailCommand => _openErrorDetailCommand;
+    public IAsyncRelayCommand<ImportError> OpenErrorDetailCommand => _openErrorDetailCommand;
 
-    private bool CanRunImport() => !IsImporting && !string.IsNullOrWhiteSpace(SelectedFolder);
+    public IAsyncRelayCommand ExportLogCommand => _exportLogCommand;
+
+    public event EventHandler? ErrorFilterChanged;
+
+    private bool CanRunImport() =>
+        !IsImporting
+        && !string.IsNullOrWhiteSpace(SelectedFolder)
+        && !HasParallelismError
+        && !HasMaxFileSizeError;
 
     private bool CanClearResults() => Log.Count > 0 || Errors.Count > 0 || Processed > 0 || Total > 0 || OkCount > 0 || ErrorCount > 0 || SkipCount > 0;
 
@@ -191,7 +229,7 @@ public partial class ImportPageViewModel : ViewModelBase
             return Task.CompletedTask;
         }
 
-        return SafeExecuteAsync(RunImportInternalAsync, "Importuji…");
+        return SafeExecuteAsync(RunImportAsync, "Importuji…");
     }
 
     private void ExecuteStopImport()
@@ -210,20 +248,75 @@ public partial class ImportPageViewModel : ViewModelBase
         ErrorCount = 0;
         SkipCount = 0;
         IsIndeterminate = false;
+        ProcessedBytes = 0;
+        TotalBytes = 0;
+        ProgressPercent = null;
+        CurrentFileName = null;
+        CurrentFilePath = null;
+        _fileSizeCache.Clear();
+        _exportLogCommand.NotifyCanExecuteChanged();
         StatusService.Info("Výsledky importu byly vymazány.");
     }
 
-    private void ExecuteOpenErrorDetail(ImportErrorItem? item)
+    private Task ExecuteOpenErrorDetailAsync(ImportError? error)
     {
-        if (item is null)
+        if (error is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        // TODO: Implement navigation to import error detail page.
+        return Dispatcher.EnqueueAsync(async () =>
+        {
+            var view = new ErrorDetailView
+            {
+                DataContext = new ErrorDetailViewModel(error),
+            };
+
+            await _dialogService.ShowAsync("Detail chyby importu", view, "Zavřít").ConfigureAwait(false);
+        });
     }
 
-    private async Task RunImportInternalAsync(CancellationToken cancellationToken)
+    private Task ExecuteExportLogAsync()
+    {
+        if (Log.Count == 0)
+        {
+            StatusService.Info("Protokol je prázdný, není co exportovat.");
+            return Task.CompletedTask;
+        }
+
+        return SafeExecuteAsync(async token =>
+        {
+            var folder = !string.IsNullOrWhiteSpace(SelectedFolder) && Directory.Exists(SelectedFolder)
+                ? SelectedFolder!
+                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                folder = Path.GetTempPath();
+            }
+
+            var timestamp = DateTimeOffset.Now.ToString("yyyyMMddHHmmss");
+            var fileName = $"import-log-{timestamp}.txt";
+            var targetPath = Path.Combine(folder, fileName);
+
+            var builder = new StringBuilder();
+            foreach (var item in Log)
+            {
+                builder.AppendLine($"[{item.FormattedTimestamp}] {item.Title}: {item.Message}");
+                if (!string.IsNullOrWhiteSpace(item.Detail))
+                {
+                    builder.AppendLine(item.Detail);
+                }
+
+                builder.AppendLine();
+            }
+
+            await File.WriteAllTextAsync(targetPath, builder.ToString(), Encoding.UTF8, token).ConfigureAwait(false);
+            StatusService.Info($"Protokol byl exportován do souboru '{targetPath}'.");
+        }, "Exportuji protokol…");
+    }
+
+    private async Task RunImportAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(SelectedFolder))
         {
@@ -243,6 +336,21 @@ public partial class ImportPageViewModel : ViewModelBase
             });
 
             await ResetProgressAsync().ConfigureAwait(false);
+
+            var request = BuildRequest();
+            var options = BuildImportOptions();
+            var folderPath = request.FolderPath;
+
+            try
+            {
+                await InitializeFileSizeCacheAsync(folderPath, _importCancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await AddLogAsync("Import", "Příprava byla zrušena.", "warning").ConfigureAwait(false);
+                throw;
+            }
+
             await AddLogAsync(
                     "Import",
                     $"Spouštím import ze složky '{SelectedFolder}'.",
@@ -250,19 +358,28 @@ public partial class ImportPageViewModel : ViewModelBase
                     string.IsNullOrWhiteSpace(SelectedFolder) ? null : $"Složka: {SelectedFolder}")
                 .ConfigureAwait(false);
 
-            var request = BuildRequest();
-
-            var handledStreaming = await TryProcessStreamingAsync(request, _importCancellation.Token).ConfigureAwait(false);
             var statusReported = false;
 
-            if (handledStreaming)
+            try
             {
-                statusReported = true;
-                StatusService.Info("Import dokončen.");
+                await foreach (var progress in _importService.ImportFolderStreamAsync(folderPath, options, _importCancellation.Token).ConfigureAwait(false))
+                {
+                    await HandleProgressEventAsync(progress).ConfigureAwait(false);
+                    if (progress.Kind == ImportProgressKind.BatchCompleted)
+                    {
+                        statusReported = true;
+                    }
+                }
             }
-            else
+            catch (NotSupportedException)
             {
                 statusReported = await ProcessBatchImportAsync(request, _importCancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await AddLogAsync("Import", "Import byl zrušen uživatelem.", "warning").ConfigureAwait(false);
+                StatusService.Info("Import byl zrušen.");
+                return;
             }
 
             await Dispatcher.Enqueue(() => IsIndeterminate = false);
@@ -286,30 +403,50 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private ImportFolderRequest BuildRequest()
     {
-        var maxParallel = UseParallel
-            ? Math.Max(1, MaxDegreeOfParallelism)
-            : 1;
-
         return new ImportFolderRequest
         {
             FolderPath = SelectedFolder!.Trim(),
             Recursive = Recursive,
             KeepFsMetadata = KeepFsMetadata,
             SetReadOnly = SetReadOnly,
-            MaxDegreeOfParallelism = maxParallel,
+            MaxDegreeOfParallelism = ResolveParallelism(),
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
         };
     }
 
+    private ImportOptions BuildImportOptions()
+    {
+        return new ImportOptions
+        {
+            MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
+            MaxDegreeOfParallelism = ResolveParallelism(),
+        };
+    }
+
+    private int ResolveParallelism()
+    {
+        if (!UseParallel)
+        {
+            return 1;
+        }
+
+        if (!MaxDegreeOfParallelism.HasValue || MaxDegreeOfParallelism.Value <= 0)
+        {
+            return Environment.ProcessorCount;
+        }
+
+        return MaxDegreeOfParallelism.Value;
+    }
+
     private long? CalculateMaxFileSizeBytes()
     {
-        if (MaxFileSizeMegabytes <= 0)
+        if (!MaxFileSizeMegabytes.HasValue || MaxFileSizeMegabytes.Value <= 0)
         {
             return null;
         }
 
-        var bytes = MaxFileSizeMegabytes * 1024d * 1024d;
+        var bytes = MaxFileSizeMegabytes.Value * 1024d * 1024d;
         if (double.IsNaN(bytes) || double.IsInfinity(bytes))
         {
             return null;
@@ -323,193 +460,295 @@ public partial class ImportPageViewModel : ViewModelBase
         return (long)Math.Round(bytes, MidpointRounding.AwayFromZero);
     }
 
-    private async Task<bool> TryProcessStreamingAsync(ImportFolderRequest request, CancellationToken cancellationToken)
+    private async Task InitializeFileSizeCacheAsync(string folderPath, CancellationToken cancellationToken)
     {
-        var method = _importService
-            .GetType()
-            .GetMethod("ImportFolderStreamAsync", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        var recursive = Recursive;
 
-        if (method is null)
+        var (cache, totalBytes) = await Task.Run(() =>
         {
-            return false;
-        }
+            var dictionary = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            long total = 0;
+            var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
-        var returnType = method.ReturnType;
-        object? invocationResult = method.Invoke(_importService, new object[] { request, cancellationToken });
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(folderPath, "*", option))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        dictionary[file] = info.Length;
+                        total += info.Length;
+                    }
+                    catch (IOException)
+                    {
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+            {
+            }
 
-        if (invocationResult is Task task)
+            return (dictionary, total);
+        }, cancellationToken).ConfigureAwait(false);
+
+        await Dispatcher.Enqueue(() =>
         {
-            await task.ConfigureAwait(false);
-            invocationResult = GetTaskResult(task);
-            returnType = invocationResult?.GetType() ?? returnType;
-        }
-        else if (invocationResult is not null)
-        {
-            returnType = invocationResult.GetType();
-        }
+            _fileSizeCache.Clear();
+            foreach (var kvp in cache)
+            {
+                _fileSizeCache[kvp.Key] = kvp.Value;
+            }
 
-        if (invocationResult is null)
-        {
-            return false;
-        }
-
-        var asyncEnumerableInterface = returnType
-            .GetInterfaces()
-            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>));
-
-        if (asyncEnumerableInterface is null)
-        {
-            return false;
-        }
-
-        var eventType = asyncEnumerableInterface.GetGenericArguments()[0];
-        var processMethod = typeof(ImportPageViewModel)
-            .GetMethod(nameof(ProcessStreamingEventsAsync), BindingFlags.Instance | BindingFlags.NonPublic)!
-            .MakeGenericMethod(eventType);
-
-        var taskResult = (Task<bool>)processMethod.Invoke(this, new object[] { invocationResult, cancellationToken })!;
-        return await taskResult.ConfigureAwait(false);
+            TotalBytes = totalBytes;
+            ProcessedBytes = 0;
+        });
     }
 
-    private async Task<bool> ProcessStreamingEventsAsync<TEvent>(IAsyncEnumerable<TEvent> events, CancellationToken cancellationToken)
-        where TEvent : class
+    private async Task HandleProgressEventAsync(ImportProgressEvent progress)
     {
-        try
+        switch (progress.Kind)
         {
-            await foreach (var evt in events.WithCancellation(cancellationToken).ConfigureAwait(false))
+            case ImportProgressKind.BatchStarted:
+                await HandleBatchStartedAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.Progress:
+            case ImportProgressKind.FileStarted:
+                await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.FileCompleted:
+                await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+                await HandleFileCompletedAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.Error:
+                await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+                await HandleErrorEventAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.BatchCompleted:
+                await HandleBatchCompletedAsync(progress).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    private async Task HandleBatchStartedAsync(ImportProgressEvent progress)
+    {
+        await Dispatcher.Enqueue(() =>
+        {
+            Total = progress.TotalFiles ?? 0;
+            Processed = 0;
+            OkCount = 0;
+            ErrorCount = 0;
+            SkipCount = 0;
+            ProcessedBytes = 0;
+            ProgressPercent = progress.ProgressPercent;
+            CurrentFileName = null;
+            CurrentFilePath = null;
+            IsIndeterminate = !progress.TotalFiles.HasValue || progress.TotalFiles.Value <= 0;
+        });
+
+        var message = string.IsNullOrWhiteSpace(progress.Message)
+            ? "Import byl spuštěn."
+            : progress.Message;
+        await AddLogAsync("Import", message, "info").ConfigureAwait(false);
+    }
+
+    private Task HandleProgressSnapshotAsync(ImportProgressEvent progress)
+    {
+        return Dispatcher.Enqueue(() =>
+        {
+            var currentTotal = progress.TotalFiles ?? Total;
+            var currentProcessed = progress.ProcessedFiles ?? Processed;
+            var currentSucceeded = progress.SucceededFiles ?? OkCount;
+            var currentFailed = progress.FailedFiles ?? ErrorCount;
+
+            Total = currentTotal;
+            Processed = currentProcessed;
+            OkCount = currentSucceeded;
+            ErrorCount = currentFailed;
+            SkipCount = Math.Max(0, currentTotal - currentSucceeded - currentFailed);
+
+            if (progress.TotalFiles.HasValue)
             {
-                if (evt is null)
+                IsIndeterminate = currentTotal <= 0;
+            }
+
+            if (progress.ProgressPercent.HasValue)
+            {
+                ProgressPercent = progress.ProgressPercent;
+            }
+
+            if (!string.IsNullOrWhiteSpace(progress.FilePath))
+            {
+                CurrentFileName = Path.GetFileName(progress.FilePath);
+                CurrentFilePath = progress.FilePath;
+            }
+        });
+    }
+
+    private async Task HandleFileCompletedAsync(ImportProgressEvent progress)
+    {
+        var filePath = progress.FilePath;
+        var size = !string.IsNullOrWhiteSpace(filePath) ? ResolveFileSize(filePath!) : 0;
+
+        await Dispatcher.Enqueue(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(filePath))
+            {
+                CurrentFileName = Path.GetFileName(filePath);
+                CurrentFilePath = filePath;
+
+                if (size > 0)
+                {
+                    var updated = ProcessedBytes + size;
+                    ProcessedBytes = TotalBytes > 0 ? Math.Min(updated, TotalBytes) : updated;
+                }
+            }
+
+            if (progress.ProgressPercent.HasValue)
+            {
+                ProgressPercent = progress.ProgressPercent;
+            }
+        });
+
+        var fileName = string.IsNullOrWhiteSpace(filePath)
+            ? "Soubor"
+            : Path.GetFileName(filePath);
+        var detail = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
+
+        await AddLogAsync("OK", fileName, "success", detail).ConfigureAwait(false);
+    }
+
+    private async Task HandleErrorEventAsync(ImportProgressEvent progress)
+    {
+        if (progress.Error is null)
+        {
+            return;
+        }
+
+        var item = CreateErrorItem(progress.Error);
+
+        await Dispatcher.Enqueue(() =>
+        {
+            Errors.Add(item);
+
+            if (!string.IsNullOrWhiteSpace(progress.FilePath))
+            {
+                CurrentFileName = Path.GetFileName(progress.FilePath);
+                CurrentFilePath = progress.FilePath;
+            }
+
+            if (progress.ProgressPercent.HasValue)
+            {
+                ProgressPercent = progress.ProgressPercent;
+            }
+        });
+
+        var detailBuilder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(progress.Error.FilePath))
+        {
+            detailBuilder.AppendLine($"Soubor: {progress.Error.FilePath}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(progress.Error.Suggestion))
+        {
+            detailBuilder.Append(progress.Error.Suggestion);
+        }
+
+        var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
+        await AddLogAsync("Chyba", progress.Error.Message, "error", detail).ConfigureAwait(false);
+    }
+
+    private async Task HandleBatchCompletedAsync(ImportProgressEvent progress)
+    {
+        await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+
+        var aggregate = progress.Aggregate ?? ImportAggregateResult.EmptySuccess;
+
+        await Dispatcher.Enqueue(() =>
+        {
+            SkipCount = Math.Max(0, aggregate.Total - aggregate.Succeeded - aggregate.Failed);
+            IsIndeterminate = false;
+            ProgressPercent = progress.ProgressPercent ?? 100d;
+            CurrentFileName = null;
+            CurrentFilePath = null;
+            ProcessedBytes = TotalBytes;
+        });
+
+        await EnsureAggregateErrorsAsync(aggregate).ConfigureAwait(false);
+
+        var result = new ImportBatchResult(
+            aggregate.Status,
+            aggregate.Total,
+            aggregate.Succeeded,
+            aggregate.Failed,
+            aggregate.Errors);
+
+        var summary = aggregate.Status switch
+        {
+            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {aggregate.Succeeded} z {aggregate.Total} souborů.",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({aggregate.Succeeded}/{aggregate.Total}). Zkontrolujte prosím chyby.",
+            ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
+            ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
+            _ => "Import dokončen.",
+        };
+
+        var logStatus = aggregate.Status switch
+        {
+            ImportBatchStatus.Success => "success",
+            ImportBatchStatus.PartialSuccess => "warning",
+            ImportBatchStatus.Failure => "error",
+            ImportBatchStatus.FatalError => "error",
+            _ => "info",
+        };
+
+        await AddLogAsync("Výsledek", summary, logStatus, BuildResultDetail(result)).ConfigureAwait(false);
+
+        switch (aggregate.Status)
+        {
+            case ImportBatchStatus.Success:
+                StatusService.Info(summary);
+                break;
+            case ImportBatchStatus.PartialSuccess:
+            case ImportBatchStatus.Failure:
+            case ImportBatchStatus.FatalError:
+                StatusService.Error(summary);
+                break;
+            default:
+                StatusService.Info(summary);
+                break;
+        }
+    }
+
+    private async Task EnsureAggregateErrorsAsync(ImportAggregateResult aggregate)
+    {
+        if (aggregate.Errors.Count == 0)
+        {
+            return;
+        }
+
+        await Dispatcher.Enqueue(() =>
+        {
+            var existing = new HashSet<string>(Errors.Select(static error => error.UniqueKey));
+            foreach (var error in aggregate.Errors)
+            {
+                var item = CreateErrorItem(error);
+                if (!existing.Add(item.UniqueKey))
                 {
                     continue;
                 }
 
-                await HandleStreamingEventAsync(evt).ConfigureAwait(false);
+                Errors.Add(item);
             }
-
-            return true;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
+        });
     }
 
-    private async Task HandleStreamingEventAsync(object evt)
+    private ImportErrorItem CreateErrorItem(ImportError error)
     {
-        var typeName = evt.GetType().Name;
-
-        switch (typeName)
-        {
-            case "ImportStartedEvent":
-            case "ImportStarted":
-                await AddLogAsync("Import", "Import byl spuštěn.", "info").ConfigureAwait(false);
-                break;
-            case "ImportTotalKnownEvent":
-            case "ImportTotalKnown":
-                var totalProperty = evt.GetType().GetProperty("Total") ?? evt.GetType().GetProperty("Count");
-                if (totalProperty?.GetValue(evt) is int totalCount)
-                {
-                    await Dispatcher.Enqueue(() =>
-                    {
-                        Total = totalCount;
-                        IsIndeterminate = false;
-                    });
-                }
-
-                break;
-            case "ImportFileSucceededEvent":
-            case "ImportFileOkEvent":
-            case "ImportFileOk":
-                await HandleFileProgressAsync(evt, status: "success").ConfigureAwait(false);
-                break;
-            case "ImportFileFailedEvent":
-            case "ImportFileFailed":
-                await HandleFileProgressAsync(evt, status: "error").ConfigureAwait(false);
-                break;
-            case "ImportFileSkippedEvent":
-            case "ImportFileSkipped":
-                await HandleFileProgressAsync(evt, status: "skip").ConfigureAwait(false);
-                break;
-            case "ImportCompletedEvent":
-            case "ImportCompleted":
-                var statusProperty = evt.GetType().GetProperty("Status");
-                var statusValue = statusProperty?.GetValue(evt);
-                var detail = await BuildCurrentProgressDetailAsync(statusValue).ConfigureAwait(false);
-                await AddLogAsync("Import", "Import byl dokončen.", "success", detail).ConfigureAwait(false);
-                break;
-            default:
-                await HandleUnknownEventAsync(evt).ConfigureAwait(false);
-                break;
-        }
-    }
-
-    private async Task HandleFileProgressAsync(object evt, string status)
-    {
-        var fileProperty = evt.GetType().GetProperty("FilePath") ?? evt.GetType().GetProperty("Path");
-        var messageProperty = evt.GetType().GetProperty("Message");
-        var errorProperty = evt.GetType().GetProperty("Error");
-        var fileName = fileProperty?.GetValue(evt) as string;
-        var message = messageProperty?.GetValue(evt) as string ?? errorProperty?.GetValue(evt) as string;
-
-        switch (status)
-        {
-            case "success":
-                await Dispatcher.Enqueue(() =>
-                {
-                    OkCount++;
-                    Processed++;
-                });
-                await AddLogAsync(
-                        "OK",
-                        fileName ?? "Soubor",
-                        status,
-                        string.IsNullOrWhiteSpace(fileName) ? null : fileName)
-                    .ConfigureAwait(false);
-                break;
-            case "error":
-                await Dispatcher.Enqueue(() =>
-                {
-                    ErrorCount++;
-                    Processed++;
-                    Errors.Add(new ImportErrorItem(fileName ?? "Soubor", message ?? "Import se nezdařil.", null));
-                });
-                await AddLogAsync(
-                        "Chyba",
-                        message ?? "Import se nezdařil.",
-                        status,
-                        string.IsNullOrWhiteSpace(fileName) ? null : fileName)
-                    .ConfigureAwait(false);
-                break;
-            case "skip":
-                await Dispatcher.Enqueue(() =>
-                {
-                    SkipCount++;
-                    Processed++;
-                });
-                await AddLogAsync(
-                        "Přeskočeno",
-                        fileName ?? "Soubor",
-                        status,
-                        string.IsNullOrWhiteSpace(message) ? fileName : message)
-                    .ConfigureAwait(false);
-                break;
-        }
-    }
-
-    private async Task HandleUnknownEventAsync(object evt)
-    {
-        await AddLogAsync("Událost", evt.ToString() ?? evt.GetType().Name, "info").ConfigureAwait(false);
-    }
-
-    private static object? GetTaskResult(Task task)
-    {
-        var type = task.GetType();
-        if (!type.IsGenericType)
-        {
-            return null;
-        }
-
-        return type.GetProperty("Result")?.GetValue(task);
+        return new ImportErrorItem(error);
     }
 
     private async Task<bool> ProcessBatchImportAsync(ImportFolderRequest request, CancellationToken cancellationToken)
@@ -532,21 +771,38 @@ public partial class ImportPageViewModel : ViewModelBase
             OkCount = result.Succeeded;
             ErrorCount = result.Failed;
             SkipCount = Math.Max(0, result.Total - result.Succeeded - result.Failed);
+            ProgressPercent = 100d;
+            CurrentFileName = null;
+            CurrentFilePath = null;
+            ProcessedBytes = TotalBytes;
         });
 
         if (result.Errors?.Count > 0)
         {
             await Dispatcher.Enqueue(() =>
             {
+                var existing = new HashSet<string>(Errors.Select(static error => error.UniqueKey));
                 foreach (var error in result.Errors)
                 {
-                    Errors.Add(new ImportErrorItem(
-                        Path.GetFileName(error.FilePath),
-                        error.Message,
-                        null));
-                    var detail = string.IsNullOrWhiteSpace(error.FilePath)
-                        ? null
-                        : $"Soubor: {error.FilePath}";
+                    var item = CreateErrorItem(error);
+                    if (!existing.Add(item.UniqueKey))
+                    {
+                        continue;
+                    }
+
+                    Errors.Add(item);
+                    var detailBuilder = new StringBuilder();
+                    if (!string.IsNullOrWhiteSpace(error.FilePath))
+                    {
+                        detailBuilder.AppendLine($"Soubor: {error.FilePath}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(error.Suggestion))
+                    {
+                        detailBuilder.Append(error.Suggestion);
+                    }
+
+                    var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
                     Log.Add(new ImportLogItem(DateTimeOffset.Now, "Chyba", error.Message, "error", detail));
                     TrimLog();
                 }
@@ -578,7 +834,7 @@ public partial class ImportPageViewModel : ViewModelBase
         switch (result.Status)
         {
             case ImportBatchStatus.Success:
-                StatusService.Info("Import dokončen.");
+                StatusService.Info(summary);
                 break;
             case ImportBatchStatus.PartialSuccess:
             case ImportBatchStatus.Failure:
@@ -608,6 +864,7 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private async Task ResetProgressAsync()
     {
+        _fileSizeCache.Clear();
         await Dispatcher.Enqueue(() =>
         {
             Processed = 0;
@@ -615,9 +872,15 @@ public partial class ImportPageViewModel : ViewModelBase
             OkCount = 0;
             ErrorCount = 0;
             SkipCount = 0;
+            ProcessedBytes = 0;
+            TotalBytes = 0;
+            ProgressPercent = null;
+            CurrentFileName = null;
+            CurrentFilePath = null;
             Log.Clear();
             Errors.Clear();
             _clearResultsCommand.NotifyCanExecuteChanged();
+            _exportLogCommand.NotifyCanExecuteChanged();
         });
     }
 
@@ -697,6 +960,7 @@ public partial class ImportPageViewModel : ViewModelBase
             Log.Add(new ImportLogItem(DateTimeOffset.Now, title, message, status, detail));
             TrimLog();
             _clearResultsCommand.NotifyCanExecuteChanged();
+            _exportLogCommand.NotifyCanExecuteChanged();
         });
     }
 
@@ -706,6 +970,33 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             Log.RemoveAt(0);
         }
+    }
+
+    private long ResolveFileSize(string filePath)
+    {
+        if (_fileSizeCache.TryGetValue(filePath, out var size))
+        {
+            return size;
+        }
+
+        try
+        {
+            var info = new FileInfo(filePath);
+            if (info.Exists)
+            {
+                size = info.Length;
+                _fileSizeCache[filePath] = size;
+                return size;
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return 0;
     }
 
     private void RestoreStateFromHotStorage()
@@ -755,11 +1046,13 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasErrors));
         _clearResultsCommand.NotifyCanExecuteChanged();
+        ErrorFilterChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnLogCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         _clearResultsCommand.NotifyCanExecuteChanged();
+        _exportLogCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedFolderChanged(string? value)
@@ -801,21 +1094,22 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             _hotStateService.ImportUseParallel = value;
         }
+
+        HasParallelismError = value && (!MaxDegreeOfParallelism.HasValue || MaxDegreeOfParallelism.Value <= 0);
+        _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnMaxDegreeOfParallelismChanged(int value)
+    partial void OnMaxDegreeOfParallelismChanged(int? value)
     {
-        var normalized = value <= 0 ? Environment.ProcessorCount : value;
-        if (value != normalized)
-        {
-            maxDegreeOfParallelism = normalized;
-            OnPropertyChanged(nameof(MaxDegreeOfParallelism));
-        }
-
         if (_hotStateService is not null)
         {
-            _hotStateService.ImportMaxDegreeOfParallelism = normalized;
+            _hotStateService.ImportMaxDegreeOfParallelism = value.HasValue && value.Value > 0
+                ? value.Value
+                : Environment.ProcessorCount;
         }
+
+        HasParallelismError = UseParallel && (!value.HasValue || value.Value <= 0);
+        _runImportCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnDefaultAuthorChanged(string? value)
@@ -826,19 +1120,38 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    partial void OnMaxFileSizeMegabytesChanged(double value)
+    partial void OnMaxFileSizeMegabytesChanged(double? value)
     {
-        if (double.IsNaN(value) || value < 0)
+        var hasError = false;
+        double? sanitized = value;
+
+        if (value.HasValue)
         {
-            maxFileSizeMegabytes = 0;
+            if (double.IsNaN(value.Value) || double.IsInfinity(value.Value) || value.Value < 0)
+            {
+                sanitized = null;
+                hasError = true;
+            }
+        }
+
+        if (!Nullable.Equals(sanitized, value))
+        {
+            maxFileSizeMegabytes = sanitized;
             OnPropertyChanged(nameof(MaxFileSizeMegabytes));
-            value = 0;
         }
 
         if (_hotStateService is not null)
         {
-            _hotStateService.ImportMaxFileSizeMegabytes = value > 0 ? value : null;
+            _hotStateService.ImportMaxFileSizeMegabytes = sanitized.HasValue && sanitized.Value > 0 ? sanitized : null;
         }
+
+        HasMaxFileSizeError = hasError;
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
+    {
+        ErrorFilterChanged?.Invoke(this, EventArgs.Empty);
     }
 
     partial void OnIsImportingChanged(bool value)

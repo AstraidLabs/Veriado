@@ -7,16 +7,34 @@
     xmlns:models="using:Veriado.WinUI.Models.Import"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
+    xmlns:converters="using:Veriado.WinUI.Converters"
     d:DataContext="{d:DesignInstance Type=import:ImportPageViewModel}"
     AllowDrop="True"
     DragOver="OnPageDragOver"
     Drop="OnPageDrop"
+    DragLeave="OnPageDragLeave"
     mc:Ignorable="d">
     <Page.KeyboardAccelerators>
         <KeyboardAccelerator Key="Enter" Invoked="OnEnterAcceleratorInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAcceleratorInvoked" />
         <KeyboardAccelerator Key="O" Modifiers="Control" Invoked="OnOpenAcceleratorInvoked" />
     </Page.KeyboardAccelerators>
+
+    <Page.Resources>
+        <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
+        <converters:ImportErrorSeverityToStringConverter x:Key="ErrorSeverityToStringConverter" />
+        <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
+        <x:Array x:Key="ErrorFilterOptions" Type="models:ImportErrorSeverity">
+            <models:ImportErrorSeverity>All</models:ImportErrorSeverity>
+            <models:ImportErrorSeverity>Warning</models:ImportErrorSeverity>
+            <models:ImportErrorSeverity>Error</models:ImportErrorSeverity>
+            <models:ImportErrorSeverity>Fatal</models:ImportErrorSeverity>
+        </x:Array>
+        <CollectionViewSource
+            x:Key="ErrorsViewSource"
+            Source="{Binding Errors}"
+            Filter="OnErrorsFilter" />
+    </Page.Resources>
 
     <Grid Padding="24" RowSpacing="24">
         <Grid.RowDefinitions>
@@ -46,17 +64,38 @@
                     <Button
                         Content="Vymazat výsledky"
                         Command="{Binding ClearResultsCommand}" />
+                    <Button
+                        Content="Exportovat protokol"
+                        Command="{Binding ExportLogCommand}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
-                    <ProgressBar
+                    <muxc:ProgressBar
                         Minimum="0"
-                        Maximum="{Binding Total, Mode=OneWay}"
-                        Value="{Binding Processed, Mode=OneWay}"
+                        Maximum="100"
+                        Value="{Binding ProgressPercent, Mode=OneWay, TargetNullValue=0}"
                         IsIndeterminate="{Binding IsIndeterminate}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock
+                            FontWeight="SemiBold"
+                            Text="{Binding ProgressPercent, Mode=OneWay, StringFormat='{}{0:0.##} %', TargetNullValue='0 %'}" />
+                        <TextBlock Text="{Binding ProgressText}" />
+                    </StackPanel>
                     <TextBlock
-                        Margin="0,4,0,0"
-                        Text="{Binding ProgressText}" />
+                        FontWeight="SemiBold"
+                        Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{Binding CurrentFilePath}"
+                        TextTrimming="CharacterEllipsis"
+                        MaxLines="2"
+                        TargetNullValue="" />
+                    <TextBlock>
+                        <Run Text="Zpracováno: " />
+                        <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                        <Run Text=" / " />
+                        <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                    </TextBlock>
                 </StackPanel>
             </Grid>
         </StackPanel>
@@ -97,7 +136,15 @@
                         Minimum="1"
                         SpinButtonPlacementMode="Compact"
                         IsEnabled="{Binding UseParallel}"
-                        Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}" />
+                        ValidationMode="InvalidInputOverwritten"
+                        Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}, TargetNullValue=1}" />
+                    <muxc:InfoBar
+                        Margin="0,4,0,0"
+                        IsOpen="{Binding HasParallelismError}"
+                        Severity="Error"
+                        Title="Neplatný počet vláken"
+                        Message="Zadejte kladné celé číslo větší než nula."
+                        IsClosable="False" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8" Width="200">
                     <TextBox
@@ -108,7 +155,15 @@
                         Header="Max. velikost souboru (MB)"
                         Minimum="0"
                         SpinButtonPlacementMode="Compact"
-                        Value="{Binding MaxFileSizeMegabytes, Mode=TwoWay}" />
+                        ValidationMode="InvalidInputOverwritten"
+                        Value="{Binding MaxFileSizeMegabytes, Mode=TwoWay, TargetNullValue=0}" />
+                    <muxc:InfoBar
+                        Margin="0,4,0,0"
+                        IsOpen="{Binding HasMaxFileSizeError}"
+                        Severity="Warning"
+                        Title="Neplatná velikost souboru"
+                        Message="Zadejte nezápornou hodnotu nebo ponechte 0 pro bez limitu."
+                        IsClosable="False" />
                     <TextBlock
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -160,29 +215,82 @@
                     Header="Chyby"
                     IsExpanded="{Binding HasErrors, Mode=OneWay}"
                     HorizontalAlignment="Stretch">
-                    <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding Errors}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="models:ImportErrorItem">
-                                <Grid Padding="8" ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Orientation="Vertical" Spacing="4">
-                                        <TextBlock FontWeight="SemiBold" Text="{Binding FileName}" />
-                                        <TextBlock TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
-                                    </StackPanel>
-                                    <Button
-                                        Grid.Column="1"
-                                        Content="Detail"
-                                        Command="{Binding ElementName=ErrorsItemsControl, Path=DataContext.OpenErrorDetailCommand}"
-                                        CommandParameter="{Binding}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Text="Filtrovat:" />
+                            <ComboBox
+                                Width="180"
+                                ItemsSource="{StaticResource ErrorFilterOptions}"
+                                SelectedItem="{Binding SelectedErrorFilter, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="models:ImportErrorSeverity">
+                                        <TextBlock Text="{Binding Converter={StaticResource ErrorSeverityToStringConverter}}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding Source={StaticResource ErrorsViewSource}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:ImportErrorItem">
+                                    <Grid Padding="8" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Vertical" Spacing="4">
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{Binding FormattedTimestamp}" />
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding FileName}" />
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{Binding Code}"
+                                                x:Load="{Binding HasCode}" />
+                                            <TextBlock TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{Binding FilePath}"
+                                                x:Load="{Binding HasFilePath}" />
+                                            <TextBlock
+                                                TextWrapping="Wrap"
+                                                Text="{Binding Suggestion}"
+                                                x:Load="{Binding HasSuggestion}" />
+                                        </StackPanel>
+                                        <Button
+                                            Grid.Column="1"
+                                            Content="Detail"
+                                            Command="{Binding ElementName=ErrorsItemsControl, Path=DataContext.OpenErrorDetailCommand}"
+                                            CommandParameter="{Binding Source}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </Expander>
             </Grid>
         </StackPanel>
+
+        <Grid
+            x:Name="DragOverlay"
+            Background="#66000000"
+            Visibility="Collapsed"
+            IsHitTestVisible="False">
+            <Border
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                CornerRadius="12"
+                Padding="24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+                <StackPanel Spacing="8" HorizontalAlignment="Center">
+                    <TextBlock Text="Pusťte složku pro import" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Text="Složku můžete také vybrat pomocí tlačítka." HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Page>
