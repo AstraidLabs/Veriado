@@ -85,7 +85,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedFolder, value))
             {
-                OnSelectedFolderChanged(value);
+                HandleSelectedFolderChanged(value);
             }
         }
     }
@@ -98,7 +98,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _recursive, value))
             {
-                OnRecursiveChanged(value);
+                HandleRecursiveChanged(value);
             }
         }
     }
@@ -111,7 +111,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _keepFsMetadata, value))
             {
-                OnKeepFsMetadataChanged(value);
+                HandleKeepFsMetadataChanged(value);
             }
         }
     }
@@ -124,7 +124,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _setReadOnly, value))
             {
-                OnSetReadOnlyChanged(value);
+                HandleSetReadOnlyChanged(value);
             }
         }
     }
@@ -137,7 +137,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _useParallel, value))
             {
-                OnUseParallelChanged(value);
+                HandleUseParallelChanged(value);
             }
         }
     }
@@ -150,7 +150,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _maxDegreeOfParallelism, value))
             {
-                OnMaxDegreeOfParallelismChanged(value);
+                HandleMaxDegreeOfParallelismChanged(value);
             }
         }
     }
@@ -163,7 +163,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _defaultAuthor, value))
             {
-                OnDefaultAuthorChanged(value);
+                HandleDefaultAuthorChanged(value);
             }
         }
     }
@@ -176,7 +176,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _maxFileSizeMegabytes, value))
             {
-                OnMaxFileSizeMegabytesChanged(value);
+                HandleMaxFileSizeMegabytesChanged(value);
             }
         }
     }
@@ -189,7 +189,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _isImporting, value))
             {
-                OnIsImportingChanged(value);
+                HandleIsImportingChanged(value);
             }
         }
     }
@@ -209,7 +209,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _processed, value))
             {
-                OnProcessedChanged(value);
+                HandleProcessedChanged(value);
             }
         }
     }
@@ -222,7 +222,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _total, value))
             {
-                OnTotalChanged(value);
+                HandleTotalChanged(value);
             }
         }
     }
@@ -249,7 +249,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _progressPercent, value))
             {
-                OnProgressPercentChanged(value);
+                HandleProgressPercentChanged(value);
             }
         }
     }
@@ -290,7 +290,7 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedErrorFilter, value))
             {
-                OnSelectedErrorFilterChanged(value);
+                HandleSelectedErrorFilterChanged(value);
             }
         }
     }
@@ -454,8 +454,9 @@ public partial class ImportPageViewModel : ViewModelBase
 
         return SafeExecuteAsync(async token =>
         {
-            var folder = !string.IsNullOrWhiteSpace(SelectedFolder) && Directory.Exists(SelectedFolder)
-                ? SelectedFolder!
+            var selectedFolder = SelectedFolder;
+            var folder = !string.IsNullOrWhiteSpace(selectedFolder) && Directory.Exists(selectedFolder)
+                ? selectedFolder
                 : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
@@ -571,9 +572,11 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private ImportFolderRequest BuildRequest()
     {
+        var selectedFolder = SelectedFolder?.Trim();
+
         return new ImportFolderRequest
         {
-            FolderPath = SelectedFolder!.Trim(),
+            FolderPath = selectedFolder ?? string.Empty,
             Recursive = Recursive,
             KeepFsMetadata = KeepFsMetadata,
             SetReadOnly = SetReadOnly,
@@ -632,7 +635,7 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         var recursive = Recursive;
 
-        var (cache, totalBytes) = await Task.Run(() =>
+        var result = await Task.Run(() =>
         {
             var dictionary = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             long total = 0;
@@ -661,8 +664,11 @@ public partial class ImportPageViewModel : ViewModelBase
             {
             }
 
-            return (dictionary, total);
+            return (Cache: dictionary, TotalBytes: total);
         }, cancellationToken).ConfigureAwait(false);
+
+        var cache = result.Cache;
+        var totalBytes = result.TotalBytes;
 
         await Dispatcher.Enqueue(() =>
         {
@@ -1223,7 +1229,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _exportLogCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnSelectedFolderChanged(string? value)
+    private void HandleSelectedFolderChanged(string? value)
     {
         if (_hotStateService is not null)
         {
@@ -1232,7 +1238,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnRecursiveChanged(bool value)
+    private void HandleRecursiveChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1240,7 +1246,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void OnKeepFsMetadataChanged(bool value)
+    private void HandleKeepFsMetadataChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1248,7 +1254,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void OnSetReadOnlyChanged(bool value)
+    private void HandleSetReadOnlyChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1256,7 +1262,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void OnUseParallelChanged(bool value)
+    private void HandleUseParallelChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1267,7 +1273,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnMaxDegreeOfParallelismChanged(int? value)
+    private void HandleMaxDegreeOfParallelismChanged(int? value)
     {
         if (_hotStateService is not null)
         {
@@ -1280,7 +1286,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnDefaultAuthorChanged(string? value)
+    private void HandleDefaultAuthorChanged(string? value)
     {
         if (_hotStateService is not null)
         {
@@ -1288,7 +1294,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void OnMaxFileSizeMegabytesChanged(double? value)
+    private void HandleMaxFileSizeMegabytesChanged(double? value)
     {
         var hasError = false;
         double? sanitized = value;
@@ -1317,12 +1323,12 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
+    private void HandleSelectedErrorFilterChanged(ImportErrorSeverity value)
     {
         UpdateFilteredErrors();
     }
 
-    private void OnIsImportingChanged(bool value)
+    private void HandleIsImportingChanged(bool value)
     {
         _runImportCommand.NotifyCanExecuteChanged();
         _stopImportCommand.NotifyCanExecuteChanged();
@@ -1330,19 +1336,19 @@ public partial class ImportPageViewModel : ViewModelBase
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnProcessedChanged(int value)
+    private void HandleProcessedChanged(int value)
     {
         OnPropertyChanged(nameof(ProgressText));
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnTotalChanged(int value)
+    private void HandleTotalChanged(int value)
     {
         OnPropertyChanged(nameof(ProgressText));
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnProgressPercentChanged(double? value)
+    private void HandleProgressPercentChanged(double? value)
     {
         OnPropertyChanged(nameof(ProgressPercentValue));
         OnPropertyChanged(nameof(ProgressPercentDisplay));
