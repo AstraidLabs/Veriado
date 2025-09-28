@@ -1293,6 +1293,18 @@ public partial class ImportPageViewModel : ViewModelBase
 
     partial void OnSelectedFolderChanged(string? value)
     {
+        var normalized = NormalizeFolderPath(value);
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!string.Equals(normalized, value, comparison))
+        {
+            _selectedFolder = normalized;
+            OnPropertyChanged(nameof(SelectedFolder));
+            value = normalized;
+        }
+
         if (_hotStateService is not null)
         {
             _hotStateService.LastFolder = value;
@@ -1494,5 +1506,35 @@ public partial class ImportPageViewModel : ViewModelBase
             ImportErrorSeverity.Fatal => item.Severity == ImportErrorSeverity.Fatal,
             _ => true,
         };
+    }
+
+    private static string? NormalizeFolderPath(string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return null;
+        }
+
+        var trimmed = folder.Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        if (trimmed.Length >= 2 && trimmed.StartsWith('"') && trimmed.EndsWith('"'))
+        {
+            trimmed = trimmed[1..^1];
+        }
+
+        try
+        {
+            trimmed = Path.GetFullPath(trimmed);
+        }
+        catch (Exception)
+        {
+            return trimmed;
+        }
+
+        return Path.TrimEndingDirectorySeparator(trimmed);
     }
 }
