@@ -122,7 +122,7 @@ public sealed class FileReadProfiles : Profile
         CreateMap<FileDetailReadModel, FileDetailDto>()
             .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.SizeBytes))
             // The read model does not surface hashes; expose metadata only.
-            .ForMember(dest => dest.Content, opt => opt.MapFrom(src => new FileContentDto(string.Empty, src.SizeBytes)))
+            .ForMember(dest => dest.Content, opt => opt.MapFrom(src => new FileContentDto(string.Empty, src.SizeBytes, null)))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity));
     }
