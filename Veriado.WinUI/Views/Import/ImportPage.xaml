@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:Veriado.WinUI.Models.Import"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:animations="using:Microsoft.UI.Xaml.Media.Animation"
@@ -25,6 +26,9 @@
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:ImportErrorSeverityToStringConverter x:Key="ErrorSeverityToStringConverter" />
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
+        <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="24">
@@ -227,34 +231,53 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-                    <ItemsRepeater ItemsSource="{Binding Log}">
-                        <ItemsRepeater.Layout>
-                            <muxc:StackLayout Orientation="Vertical" />
-                        </ItemsRepeater.Layout>
-                        <ItemsRepeater.ItemTemplate>
-                            <DataTemplate x:DataType="models:ImportLogItem">
-                                <Border BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" Padding="8">
-                                    <StackPanel Spacing="2">
-                                        <TextBlock
-                                            FontSize="12"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Text="{x:Bind FormattedTimestamp, Mode=OneWay}" />
-                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind Title, Mode=OneWay}" />
-                                        <TextBlock TextWrapping="Wrap" Text="{x:Bind Message, Mode=OneWay}" />
-                                        <TextBlock
-                                            x:Name="DetailTextBlock"
-                                            Margin="0,2,0,0"
-                                            TextWrapping="Wrap"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Text="{x:Bind Detail, Mode=OneWay}"
-                                            x:Load="{x:Bind HasDetail, Mode=OneWay}" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsRepeater.ItemTemplate>
-                    </ItemsRepeater>
-                </ScrollViewer>
+                <toolkit:DataGrid
+                    Grid.Row="0"
+                    ItemsSource="{Binding Log}"
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    HeadersVisibility="Column"
+                    IsReadOnly="True"
+                    SelectionMode="Single"
+                    GridLinesVisibility="All"
+                    RowHeight="Auto">
+                    <toolkit:DataGrid.Columns>
+                        <toolkit:DataGridTextColumn
+                            Header="Čas"
+                            Binding="{Binding FormattedTimestamp}"
+                            Width="Auto" />
+                        <toolkit:DataGridTextColumn
+                            Header="Událost"
+                            Binding="{Binding Title}"
+                            Width="2*">
+                            <toolkit:DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
+                            </toolkit:DataGridTextColumn.ElementStyle>
+                        </toolkit:DataGridTextColumn>
+                        <toolkit:DataGridTextColumn
+                            Header="Zpráva"
+                            Binding="{Binding Message}"
+                            Width="3*">
+                            <toolkit:DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
+                            </toolkit:DataGridTextColumn.ElementStyle>
+                        </toolkit:DataGridTextColumn>
+                        <toolkit:DataGridTextColumn
+                            Header="Stav"
+                            Binding="{Binding Status}"
+                            Width="Auto" />
+                        <toolkit:DataGridTextColumn
+                            Header="Detail"
+                            Binding="{Binding Detail}"
+                            Width="3*">
+                            <toolkit:DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
+                            </toolkit:DataGridTextColumn.ElementStyle>
+                        </toolkit:DataGridTextColumn>
+                    </toolkit:DataGrid.Columns>
+                </toolkit:DataGrid>
 
                 <Expander
                     Grid.Row="1"
