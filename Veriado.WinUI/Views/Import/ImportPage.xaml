@@ -141,6 +141,12 @@
                                             Text="{x:Bind FormattedTimestamp, Mode=OneWay}" />
                                         <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
                                         <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
+                                        <TextBlock
+                                            Margin="0,2,0,0"
+                                            TextWrapping="Wrap"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind Detail, Mode=OneWay}"
+                                            x:Load="{x:Bind HasDetail, Mode=OneWay}" />
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
