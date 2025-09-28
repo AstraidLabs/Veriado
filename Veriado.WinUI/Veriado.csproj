@@ -32,8 +32,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" PrivateAssets="all"/>
-    <PackageReference Include="CommunityToolkit.WinUI.UI.Controls" Version="7.1.2" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" PrivateAssets="all" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.HeaderedControls" Version="8.2.250402" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.250402" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" Version="8.2.250402" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.250402" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.250402" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.TokenizingTextBox" Version="8.2.250402" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.250916003" />
   </ItemGroup>
