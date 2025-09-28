@@ -11,21 +11,15 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>12</LangVersion>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <CompilerGeneratedFilesOutputPath>$(IntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+
+    <!-- Nech to vypnuté: generované .g.cs nejsou nutné a padají na cestách -->
+    <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
+    <!-- Když bys to někdy zapnul, piš do obj\Generated -->
+    <CompilerGeneratedFilesOutputPath Condition="'$(EmitCompilerGeneratedFiles)'=='true'">$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
-  <ItemGroup>
-    <_CompilerGeneratedSubdirectories Include="CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.ObservablePropertyGenerator" />
-    <_CompilerGeneratedSubdirectories Include="CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.RelayCommandGenerator" />
-    <_CompilerGeneratedSubdirectories Include="WinRT.SourceGenerator\Generator.WinRTAotSourceGenerator" />
-  </ItemGroup>
-
-  <Target Name="EnsureCompilerGeneratedDirectories" BeforeTargets="BeforeCompile">
-    <MakeDir Directories="$(CompilerGeneratedFilesOutputPath)" />
-    <MakeDir Directories="@(_CompilerGeneratedSubdirectories-&gt;'$(CompilerGeneratedFilesOutputPath)\%(Identity)')" />
-  </Target>
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
@@ -34,22 +28,11 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Manifest Include="app.manifest" />
   </ItemGroup>
 
   <ItemGroup>
-    <Manifest Include="$(ApplicationManifest)" />
-  </ItemGroup>
-
-  <!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <ProjectCapability Include="Msix" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" PrivateAssets="all"/>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.250916003" />
   </ItemGroup>
@@ -62,20 +45,10 @@
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
   </ItemGroup>
 
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-  </PropertyGroup>
-
-  <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <PublishReadyToRun Condition="'$(Configuration)'=='Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)'!='Debug'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)'=='Debug'">False</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)'!='Debug'">True</PublishTrimmed>
   </PropertyGroup>
 </Project>
