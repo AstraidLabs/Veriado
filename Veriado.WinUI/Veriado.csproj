@@ -13,7 +13,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <CompilerGeneratedFilesOutputPath>$(IntermediateOutputPath)Generated\</CompilerGeneratedFilesOutputPath>
+    <CompilerGeneratedFilesOutputPath>$(IntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
