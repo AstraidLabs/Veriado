@@ -97,6 +97,7 @@
                         Minimum="1"
                         SpinButtonPlacementMode="Compact"
                         IsEnabled="{Binding UseParallel}"
+                        ValidationMode="InvalidInputOverwritten"
                         Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8" Width="200">
@@ -108,6 +109,7 @@
                         Header="Max. velikost souboru (MB)"
                         Minimum="0"
                         SpinButtonPlacementMode="Compact"
+                        ValidationMode="InvalidInputOverwritten"
                         Value="{Binding MaxFileSizeMegabytes, Mode=TwoWay}" />
                     <TextBlock
                         FontSize="12"
@@ -169,8 +171,26 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Orientation="Vertical" Spacing="4">
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{Binding FormattedTimestamp}" />
                                         <TextBlock FontWeight="SemiBold" Text="{Binding FileName}" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{Binding Code}"
+                                            x:Load="{Binding HasCode}" />
                                         <TextBlock TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{Binding FilePath}"
+                                            x:Load="{Binding HasFilePath}" />
+                                        <TextBlock
+                                            TextWrapping="Wrap"
+                                            Text="{Binding Suggestion}"
+                                            x:Load="{Binding HasSuggestion}" />
                                     </StackPanel>
                                     <Button
                                         Grid.Column="1"

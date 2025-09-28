@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Contracts.Common;
@@ -18,6 +19,7 @@ public interface IImportService
     /// <param name="request">The create-file request payload.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An API response containing the created file identifier.</returns>
+    [Obsolete("Use the streaming import APIs.")]
     Task<ApiResponse<Guid>> ImportFileAsync(CreateFileRequest request, CancellationToken cancellationToken);
 
     /// <summary>
@@ -26,5 +28,18 @@ public interface IImportService
     /// <param name="request">The folder import request.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An API response containing the aggregated batch result.</returns>
+    [Obsolete("Use ImportFolderStreamAsync instead.")]
     Task<ApiResponse<ImportBatchResult>> ImportFolderAsync(ImportFolderRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams strongly typed progress events while importing all files in the specified folder.
+    /// </summary>
+    /// <param name="folderPath">The absolute folder path to import.</param>
+    /// <param name="options">Optional import options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An asynchronous stream of import progress events.</returns>
+    IAsyncEnumerable<ImportProgressEvent> ImportFolderStreamAsync(
+        string folderPath,
+        ImportOptions? options,
+        CancellationToken cancellationToken);
 }

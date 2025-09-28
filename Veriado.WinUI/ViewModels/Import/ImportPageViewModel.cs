@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -251,18 +250,24 @@ public partial class ImportPageViewModel : ViewModelBase
                 .ConfigureAwait(false);
 
             var request = BuildRequest();
+            var options = BuildImportOptions();
+            var folderPath = request.FolderPath;
 
-            var handledStreaming = await TryProcessStreamingAsync(request, _importCancellation.Token).ConfigureAwait(false);
             var statusReported = false;
 
-            if (handledStreaming)
+            try
             {
-                statusReported = true;
-                StatusService.Info("Import dokončen.");
+                statusReported = await ProcessStreamingAsync(folderPath, options, _importCancellation.Token).ConfigureAwait(false);
             }
-            else
+            catch (NotSupportedException)
             {
                 statusReported = await ProcessBatchImportAsync(request, _importCancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await AddLogAsync("Import", "Import byl zrušen uživatelem.", "warning").ConfigureAwait(false);
+                StatusService.Info("Import byl zrušen.");
+                return;
             }
 
             await Dispatcher.Enqueue(() => IsIndeterminate = false);
@@ -302,6 +307,23 @@ public partial class ImportPageViewModel : ViewModelBase
         };
     }
 
+    private ImportOptions BuildImportOptions()
+    {
+        var maxParallel = UseParallel
+            ? Math.Max(1, MaxDegreeOfParallelism)
+            : 1;
+
+        return new ImportOptions
+        {
+            Recursive = Recursive,
+            DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
+            KeepFileSystemMetadata = KeepFsMetadata,
+            SetReadOnly = SetReadOnly,
+            MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
+            MaxDegreeOfParallelism = maxParallel,
+        };
+    }
+
     private long? CalculateMaxFileSizeBytes()
     {
         if (MaxFileSizeMegabytes <= 0)
@@ -323,193 +345,221 @@ public partial class ImportPageViewModel : ViewModelBase
         return (long)Math.Round(bytes, MidpointRounding.AwayFromZero);
     }
 
-    private async Task<bool> TryProcessStreamingAsync(ImportFolderRequest request, CancellationToken cancellationToken)
+    private async Task<bool> ProcessStreamingAsync(string folderPath, ImportOptions options, CancellationToken cancellationToken)
     {
-        var method = _importService
-            .GetType()
-            .GetMethod("ImportFolderStreamAsync", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        var statusReported = false;
 
-        if (method is null)
+        await foreach (var progress in _importService.ImportFolderStreamAsync(folderPath, options, cancellationToken).ConfigureAwait(false))
         {
-            return false;
+            await HandleProgressEventAsync(progress).ConfigureAwait(false);
+            if (progress.Kind == ImportProgressKind.BatchCompleted)
+            {
+                statusReported = true;
+            }
         }
 
-        var returnType = method.ReturnType;
-        object? invocationResult = method.Invoke(_importService, new object[] { request, cancellationToken });
-
-        if (invocationResult is Task task)
-        {
-            await task.ConfigureAwait(false);
-            invocationResult = GetTaskResult(task);
-            returnType = invocationResult?.GetType() ?? returnType;
-        }
-        else if (invocationResult is not null)
-        {
-            returnType = invocationResult.GetType();
-        }
-
-        if (invocationResult is null)
-        {
-            return false;
-        }
-
-        var asyncEnumerableInterface = returnType
-            .GetInterfaces()
-            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>));
-
-        if (asyncEnumerableInterface is null)
-        {
-            return false;
-        }
-
-        var eventType = asyncEnumerableInterface.GetGenericArguments()[0];
-        var processMethod = typeof(ImportPageViewModel)
-            .GetMethod(nameof(ProcessStreamingEventsAsync), BindingFlags.Instance | BindingFlags.NonPublic)!
-            .MakeGenericMethod(eventType);
-
-        var taskResult = (Task<bool>)processMethod.Invoke(this, new object[] { invocationResult, cancellationToken })!;
-        return await taskResult.ConfigureAwait(false);
+        return statusReported;
     }
 
-    private async Task<bool> ProcessStreamingEventsAsync<TEvent>(IAsyncEnumerable<TEvent> events, CancellationToken cancellationToken)
-        where TEvent : class
+    private async Task HandleProgressEventAsync(ImportProgressEvent progress)
     {
-        try
+        switch (progress.Kind)
         {
-            await foreach (var evt in events.WithCancellation(cancellationToken).ConfigureAwait(false))
+            case ImportProgressKind.BatchStarted:
+                await HandleBatchStartedAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.Progress:
+            case ImportProgressKind.FileStarted:
+                await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.FileCompleted:
+                await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+                await HandleFileCompletedAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.Error:
+                await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+                await HandleErrorEventAsync(progress).ConfigureAwait(false);
+                break;
+            case ImportProgressKind.BatchCompleted:
+                await HandleBatchCompletedAsync(progress).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    private async Task HandleBatchStartedAsync(ImportProgressEvent progress)
+    {
+        await Dispatcher.Enqueue(() =>
+        {
+            Total = progress.TotalFiles ?? 0;
+            Processed = 0;
+            OkCount = 0;
+            ErrorCount = 0;
+            SkipCount = 0;
+            IsIndeterminate = !progress.TotalFiles.HasValue || progress.TotalFiles.Value <= 0;
+        });
+
+        var message = string.IsNullOrWhiteSpace(progress.Message)
+            ? "Import byl spuštěn."
+            : progress.Message;
+        await AddLogAsync("Import", message, "info").ConfigureAwait(false);
+    }
+
+    private Task HandleProgressSnapshotAsync(ImportProgressEvent progress)
+    {
+        return Dispatcher.Enqueue(() =>
+        {
+            var currentTotal = progress.TotalFiles ?? Total;
+            var currentProcessed = progress.ProcessedFiles ?? Processed;
+            var currentSucceeded = progress.SucceededFiles ?? OkCount;
+            var currentFailed = progress.FailedFiles ?? ErrorCount;
+
+            Total = currentTotal;
+            Processed = currentProcessed;
+            OkCount = currentSucceeded;
+            ErrorCount = currentFailed;
+            SkipCount = Math.Max(0, currentTotal - currentSucceeded - currentFailed);
+
+            if (progress.TotalFiles.HasValue)
             {
-                if (evt is null)
+                IsIndeterminate = currentTotal <= 0;
+            }
+        });
+    }
+
+    private Task HandleFileCompletedAsync(ImportProgressEvent progress)
+    {
+        var fileName = string.IsNullOrWhiteSpace(progress.FilePath)
+            ? "Soubor"
+            : Path.GetFileName(progress.FilePath);
+        var detail = string.IsNullOrWhiteSpace(progress.FilePath) ? null : progress.FilePath;
+
+        return AddLogAsync("OK", fileName, "success", detail);
+    }
+
+    private async Task HandleErrorEventAsync(ImportProgressEvent progress)
+    {
+        if (progress.Error is null)
+        {
+            return;
+        }
+
+        var item = CreateErrorItem(progress.Error);
+
+        await Dispatcher.Enqueue(() =>
+        {
+            Errors.Add(item);
+        });
+
+        var detailBuilder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(progress.Error.FilePath))
+        {
+            detailBuilder.AppendLine($"Soubor: {progress.Error.FilePath}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(progress.Error.Suggestion))
+        {
+            detailBuilder.Append(progress.Error.Suggestion);
+        }
+
+        var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
+        await AddLogAsync("Chyba", progress.Error.Message, "error", detail).ConfigureAwait(false);
+    }
+
+    private async Task HandleBatchCompletedAsync(ImportProgressEvent progress)
+    {
+        await HandleProgressSnapshotAsync(progress).ConfigureAwait(false);
+
+        var aggregate = progress.Aggregate ?? ImportAggregateResult.EmptySuccess;
+
+        await Dispatcher.Enqueue(() =>
+        {
+            SkipCount = Math.Max(0, aggregate.Total - aggregate.Succeeded - aggregate.Failed);
+            IsIndeterminate = false;
+        });
+
+        await EnsureAggregateErrorsAsync(aggregate).ConfigureAwait(false);
+
+        var result = new ImportBatchResult(
+            aggregate.Status,
+            aggregate.Total,
+            aggregate.Succeeded,
+            aggregate.Failed,
+            aggregate.Errors);
+
+        var summary = aggregate.Status switch
+        {
+            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {aggregate.Succeeded} z {aggregate.Total} souborů.",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({aggregate.Succeeded}/{aggregate.Total}). Zkontrolujte prosím chyby.",
+            ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
+            ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
+            _ => "Import dokončen.",
+        };
+
+        var logStatus = aggregate.Status switch
+        {
+            ImportBatchStatus.Success => "success",
+            ImportBatchStatus.PartialSuccess => "warning",
+            ImportBatchStatus.Failure => "error",
+            ImportBatchStatus.FatalError => "error",
+            _ => "info",
+        };
+
+        await AddLogAsync("Výsledek", summary, logStatus, BuildResultDetail(result)).ConfigureAwait(false);
+
+        switch (aggregate.Status)
+        {
+            case ImportBatchStatus.Success:
+                StatusService.Info(summary);
+                break;
+            case ImportBatchStatus.PartialSuccess:
+            case ImportBatchStatus.Failure:
+            case ImportBatchStatus.FatalError:
+                StatusService.Error(summary);
+                break;
+            default:
+                StatusService.Info(summary);
+                break;
+        }
+    }
+
+    private async Task EnsureAggregateErrorsAsync(ImportAggregateResult aggregate)
+    {
+        if (aggregate.Errors.Count == 0)
+        {
+            return;
+        }
+
+        await Dispatcher.Enqueue(() =>
+        {
+            var existing = new HashSet<string>(Errors.Select(static error => error.UniqueKey));
+            foreach (var error in aggregate.Errors)
+            {
+                var item = CreateErrorItem(error);
+                if (!existing.Add(item.UniqueKey))
                 {
                     continue;
                 }
 
-                await HandleStreamingEventAsync(evt).ConfigureAwait(false);
+                Errors.Add(item);
             }
-
-            return true;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
+        });
     }
 
-    private async Task HandleStreamingEventAsync(object evt)
+    private ImportErrorItem CreateErrorItem(ImportError error)
     {
-        var typeName = evt.GetType().Name;
+        var fileName = string.IsNullOrWhiteSpace(error.FilePath)
+            ? "Soubor"
+            : Path.GetFileName(error.FilePath);
 
-        switch (typeName)
-        {
-            case "ImportStartedEvent":
-            case "ImportStarted":
-                await AddLogAsync("Import", "Import byl spuštěn.", "info").ConfigureAwait(false);
-                break;
-            case "ImportTotalKnownEvent":
-            case "ImportTotalKnown":
-                var totalProperty = evt.GetType().GetProperty("Total") ?? evt.GetType().GetProperty("Count");
-                if (totalProperty?.GetValue(evt) is int totalCount)
-                {
-                    await Dispatcher.Enqueue(() =>
-                    {
-                        Total = totalCount;
-                        IsIndeterminate = false;
-                    });
-                }
-
-                break;
-            case "ImportFileSucceededEvent":
-            case "ImportFileOkEvent":
-            case "ImportFileOk":
-                await HandleFileProgressAsync(evt, status: "success").ConfigureAwait(false);
-                break;
-            case "ImportFileFailedEvent":
-            case "ImportFileFailed":
-                await HandleFileProgressAsync(evt, status: "error").ConfigureAwait(false);
-                break;
-            case "ImportFileSkippedEvent":
-            case "ImportFileSkipped":
-                await HandleFileProgressAsync(evt, status: "skip").ConfigureAwait(false);
-                break;
-            case "ImportCompletedEvent":
-            case "ImportCompleted":
-                var statusProperty = evt.GetType().GetProperty("Status");
-                var statusValue = statusProperty?.GetValue(evt);
-                var detail = await BuildCurrentProgressDetailAsync(statusValue).ConfigureAwait(false);
-                await AddLogAsync("Import", "Import byl dokončen.", "success", detail).ConfigureAwait(false);
-                break;
-            default:
-                await HandleUnknownEventAsync(evt).ConfigureAwait(false);
-                break;
-        }
-    }
-
-    private async Task HandleFileProgressAsync(object evt, string status)
-    {
-        var fileProperty = evt.GetType().GetProperty("FilePath") ?? evt.GetType().GetProperty("Path");
-        var messageProperty = evt.GetType().GetProperty("Message");
-        var errorProperty = evt.GetType().GetProperty("Error");
-        var fileName = fileProperty?.GetValue(evt) as string;
-        var message = messageProperty?.GetValue(evt) as string ?? errorProperty?.GetValue(evt) as string;
-
-        switch (status)
-        {
-            case "success":
-                await Dispatcher.Enqueue(() =>
-                {
-                    OkCount++;
-                    Processed++;
-                });
-                await AddLogAsync(
-                        "OK",
-                        fileName ?? "Soubor",
-                        status,
-                        string.IsNullOrWhiteSpace(fileName) ? null : fileName)
-                    .ConfigureAwait(false);
-                break;
-            case "error":
-                await Dispatcher.Enqueue(() =>
-                {
-                    ErrorCount++;
-                    Processed++;
-                    Errors.Add(new ImportErrorItem(fileName ?? "Soubor", message ?? "Import se nezdařil.", null));
-                });
-                await AddLogAsync(
-                        "Chyba",
-                        message ?? "Import se nezdařil.",
-                        status,
-                        string.IsNullOrWhiteSpace(fileName) ? null : fileName)
-                    .ConfigureAwait(false);
-                break;
-            case "skip":
-                await Dispatcher.Enqueue(() =>
-                {
-                    SkipCount++;
-                    Processed++;
-                });
-                await AddLogAsync(
-                        "Přeskočeno",
-                        fileName ?? "Soubor",
-                        status,
-                        string.IsNullOrWhiteSpace(message) ? fileName : message)
-                    .ConfigureAwait(false);
-                break;
-        }
-    }
-
-    private async Task HandleUnknownEventAsync(object evt)
-    {
-        await AddLogAsync("Událost", evt.ToString() ?? evt.GetType().Name, "info").ConfigureAwait(false);
-    }
-
-    private static object? GetTaskResult(Task task)
-    {
-        var type = task.GetType();
-        if (!type.IsGenericType)
-        {
-            return null;
-        }
-
-        return type.GetProperty("Result")?.GetValue(task);
+        return new ImportErrorItem(
+            fileName,
+            error.Message,
+            null,
+            error.Code,
+            error.Suggestion,
+            error.Timestamp,
+            error.FilePath,
+            error.StackTrace);
     }
 
     private async Task<bool> ProcessBatchImportAsync(ImportFolderRequest request, CancellationToken cancellationToken)
@@ -538,15 +588,28 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             await Dispatcher.Enqueue(() =>
             {
+                var existing = new HashSet<string>(Errors.Select(static error => error.UniqueKey));
                 foreach (var error in result.Errors)
                 {
-                    Errors.Add(new ImportErrorItem(
-                        Path.GetFileName(error.FilePath),
-                        error.Message,
-                        null));
-                    var detail = string.IsNullOrWhiteSpace(error.FilePath)
-                        ? null
-                        : $"Soubor: {error.FilePath}";
+                    var item = CreateErrorItem(error);
+                    if (!existing.Add(item.UniqueKey))
+                    {
+                        continue;
+                    }
+
+                    Errors.Add(item);
+                    var detailBuilder = new StringBuilder();
+                    if (!string.IsNullOrWhiteSpace(error.FilePath))
+                    {
+                        detailBuilder.AppendLine($"Soubor: {error.FilePath}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(error.Suggestion))
+                    {
+                        detailBuilder.Append(error.Suggestion);
+                    }
+
+                    var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
                     Log.Add(new ImportLogItem(DateTimeOffset.Now, "Chyba", error.Message, "error", detail));
                     TrimLog();
                 }
@@ -578,7 +641,7 @@ public partial class ImportPageViewModel : ViewModelBase
         switch (result.Status)
         {
             case ImportBatchStatus.Success:
-                StatusService.Info("Import dokončen.");
+                StatusService.Info(summary);
                 break;
             case ImportBatchStatus.PartialSuccess:
             case ImportBatchStatus.Failure:
