@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:Veriado.WinUI.Models.Import"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:datagrid="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
@@ -16,6 +17,7 @@
     Drop="OnPageDrop"
     DragLeave="OnPageDragLeave"
     mc:Ignorable="d">
+
     <Page.KeyboardAccelerators>
         <KeyboardAccelerator Key="Enter" Invoked="OnEnterAcceleratorInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAcceleratorInvoked" />
@@ -26,6 +28,7 @@
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:ImportErrorSeverityToStringConverter x:Key="ErrorSeverityToStringConverter" />
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
@@ -59,19 +62,10 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button
-                        Content="Spustit import"
-                        Command="{Binding RunImportCommand}" />
-                    <Button
-                        Content="Zastavit"
-                        Command="{Binding StopImportCommand}"
-                        IsEnabled="{Binding IsImporting}" />
-                    <Button
-                        Content="Vymazat výsledky"
-                        Command="{Binding ClearResultsCommand}" />
-                    <Button
-                        Content="Exportovat protokol"
-                        Command="{Binding ExportLogCommand}" />
+                    <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
+                    <Button Content="Zastavit" Command="{Binding StopImportCommand}" IsEnabled="{Binding IsImporting}" />
+                    <Button Content="Vymazat výsledky" Command="{Binding ClearResultsCommand}" />
+                    <Button Content="Exportovat protokol" Command="{Binding ExportLogCommand}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
@@ -86,9 +80,7 @@
                         Value="{Binding ProgressPercentValue, Mode=OneWay}"
                         IsIndeterminate="{Binding IsIndeterminate}" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock
-                            FontWeight="SemiBold"
-                            Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
+                        <TextBlock FontWeight="SemiBold" Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
                         <TextBlock Text="{Binding ProgressText}" />
                     </StackPanel>
                     <TextBlock
@@ -107,6 +99,7 @@
                     </TextBlock>
                 </StackPanel>
             </Grid>
+
             <muxc:InfoBar
                 Margin="0,8,0,0"
                 IsClosable="True"
@@ -120,6 +113,7 @@
                     </TransitionCollection>
                 </muxc:InfoBar.Transitions>
             </muxc:InfoBar>
+
             <muxc:InfoBar
                 Margin="0,4,0,0"
                 IsClosable="True"
@@ -148,10 +142,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Button
-                    Grid.Column="0"
-                    Content="Vybrat složku"
-                    Command="{Binding PickFolderCommand}" />
+                <Button Grid.Column="0" Content="Vybrat složku" Command="{Binding PickFolderCommand}" />
                 <TextBox
                     Grid.Column="1"
                     MinWidth="320"
@@ -231,7 +222,8 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <toolkit:DataGrid
+                <!-- Log -->
+                <datagrid:DataGrid
                     Grid.Row="0"
                     ItemsSource="{Binding Log}"
                     AutoGenerateColumns="False"
@@ -241,43 +233,27 @@
                     HeadersVisibility="Column"
                     IsReadOnly="True"
                     SelectionMode="Single"
-                    GridLinesVisibility="All"
-                    RowHeight="Auto">
-                    <toolkit:DataGrid.Columns>
-                        <toolkit:DataGridTextColumn
-                            Header="Čas"
-                            Binding="{Binding FormattedTimestamp}"
-                            Width="Auto" />
-                        <toolkit:DataGridTextColumn
-                            Header="Událost"
-                            Binding="{Binding Title}"
-                            Width="2*">
-                            <toolkit:DataGridTextColumn.ElementStyle>
+                    GridLinesVisibility="All">
+                    <datagrid:DataGrid.Columns>
+                        <datagrid:DataGridTextColumn Header="Čas" Binding="{Binding FormattedTimestamp}" Width="Auto" />
+                        <datagrid:DataGridTextColumn Header="Událost" Binding="{Binding Title}" Width="2*">
+                            <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
-                            </toolkit:DataGridTextColumn.ElementStyle>
-                        </toolkit:DataGridTextColumn>
-                        <toolkit:DataGridTextColumn
-                            Header="Zpráva"
-                            Binding="{Binding Message}"
-                            Width="3*">
-                            <toolkit:DataGridTextColumn.ElementStyle>
+                            </datagrid:DataGridTextColumn.ElementStyle>
+                        </datagrid:DataGridTextColumn>
+                        <datagrid:DataGridTextColumn Header="Zpráva" Binding="{Binding Message}" Width="3*">
+                            <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
-                            </toolkit:DataGridTextColumn.ElementStyle>
-                        </toolkit:DataGridTextColumn>
-                        <toolkit:DataGridTextColumn
-                            Header="Stav"
-                            Binding="{Binding Status}"
-                            Width="Auto" />
-                        <toolkit:DataGridTextColumn
-                            Header="Detail"
-                            Binding="{Binding Detail}"
-                            Width="3*">
-                            <toolkit:DataGridTextColumn.ElementStyle>
+                            </datagrid:DataGridTextColumn.ElementStyle>
+                        </datagrid:DataGridTextColumn>
+                        <datagrid:DataGridTextColumn Header="Stav" Binding="{Binding Status}" Width="Auto" />
+                        <datagrid:DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="3*">
+                            <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
-                            </toolkit:DataGridTextColumn.ElementStyle>
-                        </toolkit:DataGridTextColumn>
-                    </toolkit:DataGrid.Columns>
-                </toolkit:DataGrid>
+                            </datagrid:DataGridTextColumn.ElementStyle>
+                        </datagrid:DataGridTextColumn>
+                    </datagrid:DataGrid.Columns>
+                </datagrid:DataGrid>
 
                 <Grid Grid.Row="1" RowSpacing="8">
                     <Grid.RowDefinitions>
@@ -304,9 +280,7 @@
                     </muxc:InfoBar>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsEnabled="{Binding HasErrors}">
-                        <TextBlock
-                            VerticalAlignment="Center"
-                            Text="Filtrovat:" />
+                        <TextBlock VerticalAlignment="Center" Text="Filtrovat:" />
                         <ComboBox
                             Width="180"
                             ItemsSource="{Binding ErrorFilterOptions}"
@@ -319,7 +293,8 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <toolkit:DataGrid
+                    <!-- ErrorsDataGrid -->
+                    <datagrid:DataGrid
                         x:Name="ErrorsDataGrid"
                         Grid.Row="2"
                         ItemsSource="{Binding FilteredErrors}"
@@ -331,43 +306,28 @@
                         IsReadOnly="True"
                         SelectionMode="Single"
                         GridLinesVisibility="All"
-                        RowHeight="Auto"
                         MinHeight="180"
                         RowDetailsVisibilityMode="VisibleWhenSelected"
                         Visibility="{Binding HasFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <toolkit:DataGrid.Columns>
-                            <toolkit:DataGridTextColumn
-                                Header="Čas"
-                                Binding="{Binding FormattedTimestamp}"
-                                Width="Auto" />
-                            <toolkit:DataGridTextColumn
-                                Header="Soubor"
-                                Binding="{Binding FileName}"
-                                Width="2*">
-                                <toolkit:DataGridTextColumn.ElementStyle>
+                        <datagrid:DataGrid.Columns>
+                            <datagrid:DataGridTextColumn Header="Čas" Binding="{Binding FormattedTimestamp}" Width="Auto" />
+                            <datagrid:DataGridTextColumn Header="Soubor" Binding="{Binding FileName}" Width="2*">
+                                <datagrid:DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}">
                                         <Setter Property="ToolTipService.ToolTip" Value="{Binding FilePath}" />
                                     </Style>
-                                </toolkit:DataGridTextColumn.ElementStyle>
-                            </toolkit:DataGridTextColumn>
-                            <toolkit:DataGridTextColumn
-                                Header="Kód"
-                                Binding="{Binding Code}"
-                                Width="Auto" />
-                            <toolkit:DataGridTextColumn
-                                Header="Závažnost"
-                                Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}"
-                                Width="Auto" />
-                            <toolkit:DataGridTextColumn
-                                Header="Zpráva"
-                                Binding="{Binding ErrorMessage}"
-                                Width="3*">
-                                <toolkit:DataGridTextColumn.ElementStyle>
+                                </datagrid:DataGridTextColumn.ElementStyle>
+                            </datagrid:DataGridTextColumn>
+                            <datagrid:DataGridTextColumn Header="Kód" Binding="{Binding Code}" Width="Auto" />
+                            <datagrid:DataGridTextColumn Header="Závažnost" Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}" Width="Auto" />
+                            <datagrid:DataGridTextColumn Header="Zpráva" Binding="{Binding ErrorMessage}" Width="3*">
+                                <datagrid:DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
-                                </toolkit:DataGridTextColumn.ElementStyle>
-                            </toolkit:DataGridTextColumn>
-                        </toolkit:DataGrid.Columns>
-                        <toolkit:DataGrid.RowDetailsTemplate>
+                                </datagrid:DataGridTextColumn.ElementStyle>
+                            </datagrid:DataGridTextColumn>
+                        </datagrid:DataGrid.Columns>
+
+                        <datagrid:DataGrid.RowDetailsTemplate>
                             <DataTemplate x:DataType="models:ImportErrorItem">
                                 <StackPanel Margin="0,8,0,8" Spacing="4">
                                     <TextBlock
@@ -388,8 +348,8 @@
                                         CommandParameter="{Binding Source}" />
                                 </StackPanel>
                             </DataTemplate>
-                        </toolkit:DataGrid.RowDetailsTemplate>
-                    </toolkit:DataGrid>
+                        </datagrid:DataGrid.RowDetailsTemplate>
+                    </datagrid:DataGrid>
 
                     <TextBlock
                         Grid.Row="3"
@@ -401,6 +361,7 @@
             </Grid>
         </StackPanel>
 
+        <!-- Drag overlay -->
         <Grid
             x:Name="DragOverlay"
             Background="#66000000"
