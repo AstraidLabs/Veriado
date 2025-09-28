@@ -142,6 +142,7 @@
                                         <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
                                         <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
                                         <TextBlock
+                                            x:Name="DetailTextBlock"
                                             Margin="0,2,0,0"
                                             TextWrapping="Wrap"
                                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
