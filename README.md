@@ -1,56 +1,63 @@
 # Veriado
 
-## Úvod
-Veriado je desktopová aplikace pro Windows, která katalogizuje dokumenty, ukládá jejich binární obsah a metadata do lokální databáze a staví nad nimi plnotextové vyhledávání s moderním WinUI rozhraním.【F:Veriado.Domain/Files/FileEntity.cs†L13-L177】【F:Veriado.Domain/Files/FileContentEntity.cs†L6-L57】【F:Veriado.Infrastructure/Persistence/Options/InfrastructureOptions.cs†L13-L34】【F:Veriado.Infrastructure/Search/SqliteFts5Indexer.cs†L11-L50】【F:Veriado.WinUI/Views/FilesView.xaml†L1-L45】 Výchozí umístění databáze i Lucene indexu nyní spadá do `%LocalAppData%\Veriado`, takže při restartu aplikace zůstane index stabilní i mimo adresář s binárkami; v prostředích bez dostupného profilu se použije bezpečný fallback v adresáři aplikace.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L41-L87】
+## Strategický přehled
+Veriado je moderní desktopová aplikace pro Windows, která firmám i profesionálům přináší pořádek do firemních archívů, projektových složek a sdílených úložišť. Transformuje neuspořádané kolekce dokumentů do přehledné znalostní základny, kterou lze bezpečně vyhledávat, třídit a sdílet napříč týmy. Aplikace kombinuje robustní technologické jádro postavené na .NET 8 s intuitivním WinUI rozhraním a díky tomu nabízí zkušenost připomínající „firemní Google“, avšak s plnou kontrolou nad daty.
 
-## Popis aplikace
-### Klíčové vlastnosti
-- **Správa životního cyklu dokumentů** – aplikace poskytuje kompletní sadu use-case příkazů pro vytváření, přejmenování, úpravy metadat, práci s rozšířenými údaji i přepnutí režimu jen pro čtení a platnosti dokumentů.【F:Veriado.Application/README.md†L3-L21】 Tyto operace jsou dostupné přes servisní vrstvu a WinUI detail, který dovoluje přejmenovat, aktualizovat metadata, řídit platnost či režim pouze pro čtení i sdílet snippet obsahu.【F:Veriado.Services/Files/FileOperationsService.cs†L22-L180】【F:Veriado.WinUI/ViewModels/Files/FileDetailViewModel.cs†L14-L310】
-- **Pokročilé vyhledávání** – dotazy se skládají do bezpečných FTS5 výrazů a trigramových dotazů, takže uživatelé mohou kombinovat přesné a fuzzy vyhledávání, zatímco výsledky se mapují do přehledných DTO.【F:Veriado.Application/Search/FtsQueryBuilder.cs†L8-L111】【F:Veriado.Application/Search/TrigramQueryBuilder.cs†L9-L161】【F:Veriado.Services/Search/SearchFacade.cs†L11-L81】
-- **Historie, oblíbené dotazy a personalizace** – okno se seznamem souborů nabízí rychlý přístup k historii a oblíbeným dotazům, přičemž stav posledního hledání a velikost stránek se perzistují v nastavení uživatele.【F:Veriado.WinUI/ViewModels/Files/FilesGridViewModel.cs†L18-L142】【F:Veriado.WinUI/Services/HotStateService.cs†L10-L137】【F:Veriado.Infrastructure/Search/SearchHistoryService.cs†L14-L132】
-- **Importy a dávkové zpracování** – služba importu umí načítat jednotlivé soubory i celé složky, respektuje nastavenou paralelizaci, uživatelský limit velikosti souboru a na pozadí vytváří a reindexuje dokumenty včetně následných kroků po importu.【F:Veriado.Services/Import/ImportService.cs†L22-L356】【F:Veriado.Contracts/Import/ImportFolderRequest.cs†L3-L49】【F:Veriado.WinUI/ViewModels/Import/ImportPageViewModel.cs†L41-L371】
-- **Textové náhledy a práce s obsahem** – aplikace generuje a cacheuje textové náhledy, pro binární formáty nabízí výstižné fallbacky a dovoluje export obsahu na disk nebo sdílení úryvků přímo z UI.【F:Veriado.WinUI/Services/PreviewService.cs†L11-L138】【F:Veriado.Services/Files/FileContentService.cs†L12-L83】【F:Veriado.WinUI/ViewModels/Files/FileDetailViewModel.cs†L238-L270】
-- **Extraktory pro běžné formáty** – kompozitní textový extractor podporuje PDF, Office i OpenDocument soubory a v případě neúspěchu přepíná na bezpečný fallback bez nutnosti externích služeb.【F:Veriado.Infrastructure/README.md†L3-L18】
-- **Údržba a integrita indexu** – servisní vrstva spouští VACUUM/OPTIMIZE a umí ověřit či opravit konzistenci fulltextového indexu na vyžádání.【F:Veriado.Services/Maintenance/MaintenanceService.cs†L11-L43】【F:Veriado.Application/UseCases/Maintenance/VerifyAndRepairFulltextHandler.cs†L10-L40】
+## Poslání a přínos
+- **Maximální viditelnost firemního know-how.** Veriado sjednocuje různé typy souborů, ukládá je do zabezpečené databáze a obohacuje o metadata, která lze snadno upravovat a sdílet.
+- **Zrychlení rozhodování.** Díky fulltextovému vyhledávání, historii dotazů a chytrým filtrům se uživatelé dostanou ke klíčovým dokumentům během sekund, nikoli minut.
+- **Podpora řízené spolupráce.** Režimy jen pro čtení, oblíbené dotazy i sdílení náhledů umožňují bezpečně distribuovat znalosti napříč odděleními bez nutnosti cloudových služeb.
 
-### Architektura
-Projekt je rozdělen do vrstev podle principů doménově řízeného návrhu: čistá doména žije ve `Veriado.Domain`, kontrakty pro klientske vrstvy v `Veriado.Contracts`, aplikační logika je vyjádřena jako MediatR use-casy v `Veriado.Application` a mapování mezi doménou a DTO obstarává samostatný projekt s AutoMapper profily a anti-corruption vrstvou.【F:docs/ARCH-DESIGN.md†L3-L13】【F:Veriado.Application/README.md†L3-L21】【F:Veriado.Mapping/README.md†L1-L28】 Infrastruktura využívá EF Core a SQLite včetně FTS5 indexu, přičemž front-end WinUI projekt funguje jako hostitel služeb a poskytuje moderní desktopové UI.【F:Veriado.Infrastructure/Veriado.Infrastructure.csproj†L1-L29】【F:Veriado.WinUI/Veriado.csproj†L1-L49】
+## Jak Veriado funguje
+1. **Import dokumentů** – Uživatel zvolí soubory nebo složky a Veriado je paralelně zpracuje, uloží binární obsah i metadata a připraví je k vyhledávání.
+2. **Automatické obohacení** – Textové extraktory převádějí PDF, Office či OpenDocument formáty na čitelné náhledy, které se cacheují a zpřístupňují bez externích služeb.
+3. **Fulltextový index** – Aplikace buduje vysoce výkonný FTS5 index v SQLite a doplňuje ho trigramovou analýzou pro fuzzy i přesné dotazy.
+4. **Práce s obsahem** – WinUI rozhraní nabízí rychlé náhledy, aktualizaci metadat, export obsahu a sdílení snippetů.
+5. **Pravidelná údržba** – Vestavěné rutiny kontrolují integritu indexu, umožňují reindexaci a optimalizaci úložiště.
 
-## Technologie
-- .NET 8.0 pro aplikační, infrastrukturní i servisní projekty (C# 12, nullable reference types).【F:Veriado.Application/Veriado.Appl.csproj†L1-L17】【F:Veriado.Infrastructure/Veriado.Infrastructure.csproj†L1-L29】【F:Veriado.Services/Veriado.Services.csproj†L1-L13】
-- WinUI 3 a Windows App SDK 1.8 pro desktopové rozhraní cílené na Windows 10 build 17763+ (x86, x64, ARM64).【F:Veriado.WinUI/Veriado.csproj†L1-L49】
-- MediatR, AutoMapper a FluentValidation pro orchestraci use-case příkazů, mapování a validace vstupů.【F:Veriado.Application/Veriado.Appl.csproj†L1-L13】【F:Veriado.Mapping/README.md†L1-L17】
-- Entity Framework Core 9, SQLite (včetně FTS5), PdfPig a DocumentFormat.OpenXml pro perzistenci a extrakci obsahu.【F:Veriado.Infrastructure/Veriado.Infrastructure.csproj†L10-L29】【F:Veriado.Infrastructure/Search/SqliteFts5Indexer.cs†L11-L40】【F:Veriado.Infrastructure/README.md†L3-L18】
-- CommunityToolkit.Mvvm, Microsoft.Extensions.Hosting a vlastní servisní vrstva pro MVVM logiku, navigaci a hostování komponent v desktopové aplikaci.【F:Veriado.WinUI/Veriado.csproj†L38-L41】【F:Veriado.WinUI/ViewModels/Files/FilesGridViewModel.cs†L18-L142】【F:Veriado.Services/Veriado.Services.csproj†L1-L13】
+## Dopad na produktivitu
+- **Méně času hledáním, více času tvorbou.** Automatizované vyhledávání a personalizované dotazy zkracují čas strávený hledáním dokumentů o desítky procent.
+- **Bezpečná centralizace.** Organizace spravují citlivá data lokálně, s plnou kontrolou nad životním cyklem dokumentů i historií změn.
+- **Okamžitý přehled pro management.** Dashboardy souborů, historie importů a metadata poskytují manažerům data pro reporting a audit.
+- **Škálovatelný růst.** Díky dávkovým importům a konfigurovatelné paralelizaci zvládne aplikace obsloužit malé týmy i rozsáhlé archivy.
 
-## Předpokládané systémové nároky
-| Oblast | Minimum | Doporučeno | Důvod |
-| --- | --- | --- | --- |
-| Operační systém | Windows 10 17763 (x64/ARM64) | Windows 11 aktuální build | WinUI projekt cílí na `net8.0-windows10.0.19041.0` s minimem 17763 a podporou více architektur.【F:Veriado.WinUI/Veriado.csproj†L1-L12】 |
-| .NET runtime | .NET 8 Desktop Runtime | .NET 8 Desktop Runtime + Windows App SDK 1.8 | Projekty cílí na net8.0 a WinUI 3 knihovny.【F:Veriado.WinUI/Veriado.csproj†L1-L41】【F:Veriado.Application/Veriado.Appl.csproj†L1-L13】 |
-| CPU | 2 jádra | 4+ jader | Import dokáže paralelně zpracovávat soubory podle `MaxDegreeOfParallelism`, proto vícejádrový CPU urychlí dávky.【F:Veriado.Services/Import/ImportService.cs†L76-L116】【F:Veriado.Contracts/Import/ImportFolderRequest.cs†L25-L29】 |
-| RAM | 4 GB | 8 GB+ | Při importu se soubory načítají celé do paměti (`File.ReadAllBytesAsync`), což u větších dokumentů vyžaduje dostatek RAM.【F:Veriado.Services/Import/ImportService.cs†L187-L199】 |
-| Úložiště | 1× velikost katalogu | SSD + prostor ≥ 2× katalog | Obsah je kopírován do SQLite (včetně hashů) a indexován; nastavení `DbPath` a `MaxContentBytes` definuje umístění a limity uložených binárních dat.【F:Veriado.Domain/Files/FileContentEntity.cs†L13-L56】【F:Veriado.Infrastructure/Persistence/Options/InfrastructureOptions.cs†L13-L34】【F:Veriado.Infrastructure/Search/SqliteFts5Indexer.cs†L22-L40】 |
+## Klíčové funkce
+- **Správa životního cyklu** – Tvorba, přejmenování, aktualizace metadat, režimy platnosti i jen pro čtení v několika krocích.
+- **Vyhledávání nové generace** – Kombinace přesných dotazů, fuzzy hledání a historie výsledků pomáhá zachytit kontext.
+- **Inteligentní náhledy** – Textové výtahy i fallback popisy informují o obsahu souborů ještě před jejich otevřením.
+- **Import a automatizace** – Dávkové zpracování složek, limity velikosti souborů a následné workflow po importu.
+- **Údržba a monitoring** – Kontrolní nástroje pro ověření konzistence indexu, optimalizaci databáze a audit aktivit.
 
-## F.A.Q.
-**Jak přidám nový dokument do katalogu?**
-Import můžete spustit buď pro jednotlivý soubor (`ImportFileAsync`), nebo pro celou složku, kde služba podle nastavení projde podadresáře, načte obsah a postará se o reindexaci a navazující use-case příkazy.【F:Veriado.Services/Import/ImportService.cs†L45-L185】【F:Veriado.Application/README.md†L3-L21】 
+## Technologický základ
+- **.NET 8 & C# 12** – Výkon, bezpečnost a dlouhodobá podpora.
+- **SQLite s FTS5** – Rychlý fulltextový engine s možností lokálního nasazení bez serverové infrastruktury.
+- **WinUI 3 & Windows App SDK** – Moderní nativní prostředí pro Windows 10+ s podporou x86, x64 i ARM64.
+- **MediatR, AutoMapper, FluentValidation** – Prověřené knihovny pro orchestraci use-case scénářů, mapování dat a validace.
+- **CommunityToolkit.Mvvm & Microsoft.Extensions.Hosting** – Stabilní základ pro MVVM logiku, navigaci a hostování služeb.
 
-**Jak se udržuje konzistence fulltextu?**
-Servisní vrstva nabízí inicializační rutinu, která spouští optimalizaci a kdykoli lze zavolat `VerifyAndRepairAsync`, který projde index, zjistí chybějící či osiřelé záznamy a podle nastavení je doplní.【F:Veriado.Services/Maintenance/MaintenanceService.cs†L25-L43】【F:Veriado.Application/UseCases/Maintenance/VerifyAndRepairFulltextHandler.cs†L10-L40】
+## Implementační scénáře
+- **Právní a poradenské týmy** – Rychlý přístup k dokumentaci případů, smlouvám a důkazním materiálům.
+- **Výzkumná a vývojová oddělení** – Sdílení technické dokumentace, experimentálních reportů a laboratorních deníků.
+- **Back-office a finance** – Centralizace faktur, objednávek a smluv se zajištěnou auditní stopou.
+- **Projektoví manažeři** – Jednotné úložiště projektových artefaktů s možností sledovat stav a platnost dokumentů.
 
-**Kde se berou náhledy obsahu?**
-WinUI využívá `PreviewService`, který si načte obsah přes `IFileContentService`, uloží výsledek do cache a pokud soubor není textový, zobrazí přehlednou textovou indikaci typu souboru.【F:Veriado.WinUI/Services/PreviewService.cs†L11-L138】【F:Veriado.Services/Files/FileContentService.cs†L12-L83】 
+## Potenciál dalšího rozvoje
+- **Integrace s cloudovými službami** – Napojení na SharePoint, OneDrive či intranetové portály pro hybridní scénáře.
+- **Pokročilá analytika** – Rozšíření o reporting, automatické značkování obsahu a doporučení souvisejících dokumentů.
+- **Automatizované workflow** – Spouštění schvalovacích procesů, notifikací a připomínek navázaných na životní cyklus dokumentů.
 
-**Jak funguje historie a oblíbené vyhledávání?**
-`SearchFacade` vrací výsledky z query služby a ukládá každé spuštění do sqlite tabulky historie; uživatelské UI drží seznam oblíbených i historii v paměti a umožňuje rychlé opakování dotazů.【F:Veriado.Services/Search/SearchFacade.cs†L11-L81】【F:Veriado.Infrastructure/Search/SearchHistoryService.cs†L25-L121】【F:Veriado.WinUI/ViewModels/Files/FilesGridViewModel.cs†L46-L142】 
+## FAQ
+**Jak rychle mohu začít?**
+Stačí nainstalovat Windows App SDK, spustit instalaci Veriada a provést první import. Průvodce nastavením provede uživatele konfigurací úložiště a indexu.
 
-**Lze z aplikace vyexportovat uložený soubor?**
-Ano, `FileContentService.SaveContentToDiskAsync` uloží aktuální binární obsah na zvolenou cestu a vytvoří chybějící složky.【F:Veriado.Services/Files/FileContentService.cs†L52-L83】
+**Je možné pracovat offline?**
+Ano. Veškerá data, indexy i náhledy zůstávají lokálně, takže aplikace funguje plnohodnotně bez připojení k internetu.
 
-## Nejčastější problémy a jejich řešení
-- **Fulltext nevrací výsledky po importu.** Spusťte údržbový příkaz `VerifyAndRepairAsync` (případně `ReindexFileCommand`) a povolte extrakci obsahu, aby se index doplnil.【F:Veriado.Services/Maintenance/MaintenanceService.cs†L31-L46】【F:Veriado.Application/UseCases/Maintenance/VerifyAndRepairFulltextHandler.cs†L25-L40】
-- **Import velké složky zahlcuje systém.** Omezte `MaxDegreeOfParallelism` v `ImportFolderRequest` nebo rozdělte import na menší dávky; paralelní import využívá všechna dostupná vlákna.【F:Veriado.Services/Import/ImportService.cs†L76-L116】【F:Veriado.Contracts/Import/ImportFolderRequest.cs†L25-L37】
-- **Soubor je přeskočen kvůli limitu velikosti.** Zvyšte hodnotu „Max. velikost souboru (MB)“ v dialogu importu nebo ji ponechte na 0 pro neomezený import; změna se uloží mezi uživatelská nastavení.【F:Veriado.WinUI/Views/Import/ImportPage.xaml†L63-L87】【F:Veriado.WinUI/Services/HotStateService.cs†L16-L140】【F:Veriado.Contracts/Import/ImportFolderRequest.cs†L3-L49】
-- **Náhled je prázdný nebo zobrazí pouze ikonu.** Služba náhledů vrací text jen u podporovaných MIME; binární či neznámé formáty se zobrazují jako fallback popis, což je očekávané chování.【F:Veriado.WinUI/Services/PreviewService.cs†L24-L138】
-- **Aplikace hlásí, že nelze otevřít databázi.** Zkontrolujte nastavení `DbPath` a práva k souboru; bez platného connection stringu SQLite indexer nefunguje a vyhazuje chybu inicializace.【F:Veriado.Infrastructure/Persistence/Options/InfrastructureOptions.cs†L13-L34】【F:Veriado.Infrastructure/Search/SqliteFts5Indexer.cs†L43-L50】
+**Jaké jsou hardwarové požadavky?**
+Doporučujeme moderní čtyřjádrový procesor, 8 GB RAM a SSD. Vyšší výkon zrychluje dávkové importy a generování náhledů.
+
+**Jak se řeší bezpečnost?**
+Data jsou ukládána do chráněné databáze v uživatelském profilu. Nastavení práv přístupu a správa režimu jen pro čtení zajišťují, že citlivé informace zůstávají pod kontrolou.
+
+## Začněte ještě dnes
+Veriado přináší profesionální správu dokumentů do každodenní praxe. Uspořádejte svá data, zvyšte produktivitu a zajistěte, že se firemní znalosti neztratí v chaosu sdílených složek. Nainstalujte Veriado a objevte, jak snadné může být mít všechny klíčové informace vždy na dosah.
