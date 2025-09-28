@@ -6,7 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:Veriado.WinUI.Models.Import"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
-    xmlns:toolkit="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:animations="using:Microsoft.UI.Xaml.Media.Animation"
