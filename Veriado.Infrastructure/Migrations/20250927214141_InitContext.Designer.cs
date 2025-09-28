@@ -11,8 +11,8 @@ using Veriado.Infrastructure.Persistence;
 namespace Veriado.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250927104926_Init")]
-    partial class Init
+    [Migration("20250927214141_InitContext")]
+    partial class InitContext
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
