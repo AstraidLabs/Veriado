@@ -138,25 +138,25 @@ public partial class ImportPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isActiveStatusVisible;
 
-    [ObservableProperty(Setter = SetterAccessModifier.Private)]
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _activeStatusTitle;
 
-    [ObservableProperty(Setter = SetterAccessModifier.Private)]
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _activeStatusMessage;
 
-    [ObservableProperty(Setter = SetterAccessModifier.Private)]
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private InfoBarSeverity _activeStatusSeverity = InfoBarSeverity.Informational;
 
     [ObservableProperty]
     private bool _isDynamicStatusVisible;
 
-    [ObservableProperty(Setter = SetterAccessModifier.Private)]
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _dynamicStatusTitle;
 
-    [ObservableProperty(Setter = SetterAccessModifier.Private)]
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _dynamicStatusMessage;
 
-    [ObservableProperty(Setter = SetterAccessModifier.Private)]
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private InfoBarSeverity _dynamicStatusSeverity = InfoBarSeverity.Informational;
 
     [ObservableProperty]
