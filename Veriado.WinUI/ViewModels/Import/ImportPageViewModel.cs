@@ -315,10 +315,6 @@ public partial class ImportPageViewModel : ViewModelBase
 
         return new ImportOptions
         {
-            Recursive = Recursive,
-            DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
-            KeepFileSystemMetadata = KeepFsMetadata,
-            SetReadOnly = SetReadOnly,
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
             MaxDegreeOfParallelism = maxParallel,
         };
