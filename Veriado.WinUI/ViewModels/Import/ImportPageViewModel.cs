@@ -57,6 +57,7 @@ public partial class ImportPageViewModel : ViewModelBase
         Errors.CollectionChanged += OnErrorsCollectionChanged;
 
         RestoreStateFromHotStorage();
+        PopulateDefaultAuthorFromCurrentUser();
 
         _pickFolderCommand = new AsyncRelayCommand(ExecutePickFolderAsync, () => !IsImporting);
         _runImportCommand = new AsyncRelayCommand(ExecuteRunImportAsync, CanRunImport);
@@ -628,6 +629,30 @@ public partial class ImportPageViewModel : ViewModelBase
             : Environment.ProcessorCount;
         DefaultAuthor = _hotStateService.ImportDefaultAuthor;
         MaxFileSizeMegabytes = _hotStateService.ImportMaxFileSizeMegabytes ?? 0;
+    }
+
+    private void PopulateDefaultAuthorFromCurrentUser()
+    {
+        if (!string.IsNullOrWhiteSpace(DefaultAuthor))
+        {
+            return;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var userName = Environment.UserName;
+        if (string.IsNullOrWhiteSpace(userName))
+        {
+            return;
+        }
+
+        var domainName = Environment.UserDomainName;
+        DefaultAuthor = string.IsNullOrWhiteSpace(domainName)
+            ? userName
+            : $"{domainName}\\{userName}";
     }
 
     private void OnErrorsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
