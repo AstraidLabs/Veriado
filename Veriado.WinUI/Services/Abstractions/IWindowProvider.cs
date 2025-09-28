@@ -1,6 +1,3 @@
-using System;
-using Microsoft.UI.Xaml;
-
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IWindowProvider

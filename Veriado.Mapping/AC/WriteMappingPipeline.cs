@@ -1,22 +1,14 @@
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
-using Veriado.Contracts.Common;
-using Veriado.Contracts.Files;
-using Veriado.Domain.Metadata;
-using Veriado.Domain.ValueObjects;
 using Veriado.Appl.UseCases.Files.RenameFile;
 using Veriado.Appl.Common;
 using Veriado.Appl.UseCases.Files.ApplySystemMetadata;
-using Veriado.Appl.UseCases.Files.SetFileValidity;
-using Veriado.Appl.UseCases.Files.UpdateFileMetadata;
 using Veriado.Appl.UseCases.Files.CreateFile;
 using Veriado.Appl.UseCases.Files.ReplaceFileContent;
-using Veriado.Appl.UseCases.Files.SetFileReadOnly;
 using Veriado.Appl.UseCases.Files.ClearFileValidity;
 
 namespace Veriado.Mapping.AC;

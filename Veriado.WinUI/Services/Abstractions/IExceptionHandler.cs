@@ -1,5 +1,3 @@
-using System;
-
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IExceptionHandler

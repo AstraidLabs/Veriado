@@ -1,6 +1,3 @@
-using System;
-using Veriado.Contracts.Files;
-
 namespace Veriado.Mapping.AC;
 
 /// <summary>

@@ -1,6 +1,3 @@
-using System;
-using Microsoft.Data.Sqlite;
-
 namespace Veriado.Infrastructure.Search;
 
 internal static class SqliteExceptionExtensions

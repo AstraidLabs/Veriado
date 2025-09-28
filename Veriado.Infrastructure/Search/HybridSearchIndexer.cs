@@ -1,11 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.Search;
-using Veriado.Infrastructure.Persistence.Options;
-
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>

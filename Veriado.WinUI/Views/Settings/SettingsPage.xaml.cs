@@ -1,5 +1,3 @@
-using Microsoft.UI.Xaml.Controls;
-
 namespace Veriado.WinUI.Views.Settings;
 
 public sealed partial class SettingsPage : Page

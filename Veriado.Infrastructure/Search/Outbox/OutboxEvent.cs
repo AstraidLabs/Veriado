@@ -1,4 +1,3 @@
-using System;
 using System.Text.Json;
 
 namespace Veriado.Infrastructure.Search.Outbox;

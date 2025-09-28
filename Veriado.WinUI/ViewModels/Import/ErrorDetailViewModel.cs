@@ -1,4 +1,3 @@
-using System;
 using Veriado.Contracts.Import;
 using Veriado.WinUI.Models.Import;
 

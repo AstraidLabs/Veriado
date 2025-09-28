@@ -1,4 +1,3 @@
-using System;
 using System.Security.Cryptography;
 
 namespace Veriado.Domain.ValueObjects;

@@ -1,10 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using Veriado.Domain.Audit;
-using Veriado.Domain.Files;
-using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Configurations;
-using Veriado.Infrastructure.Persistence.Options;
-using Veriado.Infrastructure.Search.Outbox;
 
 namespace Veriado.Infrastructure.Persistence;
 

@@ -1,8 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using MediatR;
-using Veriado.Appl.Common;
 using Veriado.Appl.UseCases.Diagnostics;
 using Veriado.Contracts.Diagnostics;
 

@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Veriado.Infrastructure.Search.Outbox;
-
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
 internal sealed class OutboxEventConfiguration : IEntityTypeConfiguration<OutboxEvent>

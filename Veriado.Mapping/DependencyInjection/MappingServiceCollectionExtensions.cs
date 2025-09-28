@@ -1,7 +1,5 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,9 +8,6 @@ using Veriado.Appl.UseCases.Files.ClearFileValidity;
 using Veriado.Appl.UseCases.Files.CreateFile;
 using Veriado.Appl.UseCases.Files.RenameFile;
 using Veriado.Appl.UseCases.Files.ReplaceFileContent;
-using Veriado.Appl.UseCases.Files.SetFileReadOnly;
-using Veriado.Appl.UseCases.Files.SetFileValidity;
-using Veriado.Appl.UseCases.Files.UpdateFileMetadata;
 using Veriado.Appl.UseCases.Files.Validation;
 using Veriado.Mapping.AC;
 using Veriado.Mapping.Profiles;

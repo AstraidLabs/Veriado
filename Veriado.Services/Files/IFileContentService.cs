@@ -1,9 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Veriado.Appl.Common;
-using Veriado.Contracts.Files;
-
 namespace Veriado.Services.Files;
 
 /// <summary>

@@ -1,24 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.Files;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
-using Veriado.Domain.ValueObjects;
-using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Search;
-using Veriado.Infrastructure.Search.Outbox;
 
 namespace Veriado.Infrastructure.Concurrency;
 

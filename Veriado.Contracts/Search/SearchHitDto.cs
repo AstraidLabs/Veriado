@@ -1,5 +1,3 @@
-using System;
-
 namespace Veriado.Contracts.Search;
 
 /// <summary>

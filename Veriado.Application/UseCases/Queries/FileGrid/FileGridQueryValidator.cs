@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using FluentValidation;
-using Veriado.Contracts.Files;
-
 namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>

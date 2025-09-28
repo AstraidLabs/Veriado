@@ -1,7 +1,3 @@
-using System;
-using Veriado.Domain.Primitives;
-using Veriado.Domain.ValueObjects;
-
 namespace Veriado.Domain.Search.Events;
 
 /// <summary>

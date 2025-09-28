@@ -1,10 +1,5 @@
-using System;
-using AutoMapper;
 using Veriado.Appl.Abstractions;
-using Veriado.Contracts.Files;
 using Veriado.Domain.Files;
-using Veriado.Domain.Metadata;
-using Veriado.Domain.Search;
 
 namespace Veriado.Mapping.Profiles;
 

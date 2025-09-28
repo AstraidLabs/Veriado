@@ -1,10 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-using AutoMapper;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.Files;
-using Veriado.Domain.ValueObjects;
-
 namespace Veriado.Appl.UseCases.Files.Common;
 
 /// <summary>

@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using MediatR;
-using Veriado.Appl.Common;
-
 namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>

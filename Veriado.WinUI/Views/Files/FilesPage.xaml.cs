@@ -1,6 +1,3 @@
-using System.Threading.Tasks;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.Views.Files;

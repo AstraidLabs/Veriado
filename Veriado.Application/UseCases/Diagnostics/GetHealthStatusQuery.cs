@@ -1,7 +1,3 @@
-using MediatR;
-using Veriado.Appl.Common;
-using Veriado.Contracts.Diagnostics;
-
 namespace Veriado.Appl.UseCases.Diagnostics;
 
 /// <summary>

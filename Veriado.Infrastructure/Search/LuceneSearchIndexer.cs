@@ -1,18 +1,9 @@
-using System;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
-using Microsoft.Extensions.Logging;
-using Veriado.Domain.Search;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Search;
 

@@ -1,9 +1,4 @@
-using System;
 using System.Collections.Generic;
-using Veriado.Contracts.Common;
-using Veriado.Contracts.Files;
-using Veriado.Domain.Metadata;
-using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Mapping.AC;
 

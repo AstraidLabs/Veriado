@@ -1,11 +1,5 @@
-using System;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using AutoMapper;
-using Veriado.Appl.Abstractions;
-using Veriado.Appl.Common;
-using Veriado.Contracts.Files;
 
 namespace Veriado.Services.Files;
 

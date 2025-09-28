@@ -1,8 +1,4 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
-using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 

@@ -1,9 +1,3 @@
-using System;
-using MediatR;
-using Veriado.Appl.Common;
-using Veriado.Contracts.Files;
-using Veriado.Domain.Metadata;
-
 namespace Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 
 /// <summary>

@@ -1,7 +1,4 @@
 #nullable enable
-using System;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Data;
 
 namespace Veriado.WinUI.Converters;
 
@@ -16,7 +13,7 @@ public sealed partial class BooleanToVisibilityConverter : IValueConverter
     /// <summary>Visibility returned when the input resolves to false.</summary>
     public Visibility FalseValue { get; set; } = Visibility.Collapsed;
 
-    /// <summary>Visibility returned when the input cannot be evaluated (null, Unset…).</summary>
+    /// <summary>Visibility returned when the input cannot be evaluated (null, Unsetâ€¦).</summary>
     public Visibility NullValue { get; set; } = Visibility.Collapsed;
 
     public object Convert(object value, Type targetType, object parameter, string language)

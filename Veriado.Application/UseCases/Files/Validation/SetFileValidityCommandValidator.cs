@@ -1,10 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FluentValidation;
-using Veriado.Appl.Common;
 using Veriado.Appl.UseCases.Files.SetFileValidity;
 
 namespace Veriado.Appl.UseCases.Files.Validation;

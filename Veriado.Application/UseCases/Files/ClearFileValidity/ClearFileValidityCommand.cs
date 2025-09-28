@@ -1,8 +1,3 @@
-using System;
-using MediatR;
-using Veriado.Appl.Common;
-using Veriado.Contracts.Files;
-
 namespace Veriado.Appl.UseCases.Files.ClearFileValidity;
 
 /// <summary>

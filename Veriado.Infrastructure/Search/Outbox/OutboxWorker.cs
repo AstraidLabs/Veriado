@@ -1,18 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.Files;
-using Veriado.Domain.ValueObjects;
-using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Search.Outbox;

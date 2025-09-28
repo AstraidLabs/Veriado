@@ -1,11 +1,4 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using AutoMapper;
-using MediatR;
-using Veriado.Appl.Common;
 using Veriado.Appl.Search.Abstractions;
-using Veriado.Contracts.Search;
 
 namespace Veriado.Appl.UseCases.Search;
 

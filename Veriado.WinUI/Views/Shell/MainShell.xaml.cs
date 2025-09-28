@@ -1,10 +1,6 @@
-using System;
 using System.ComponentModel;
 using System.Linq;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.Navigation;
-using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Shell;
 
 namespace Veriado.WinUI.Views.Shell;

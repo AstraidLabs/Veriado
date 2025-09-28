@@ -1,11 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Veriado.Appl.Search.Abstractions;
-using Veriado.Domain.Search;
-
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>

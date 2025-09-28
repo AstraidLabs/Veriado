@@ -1,16 +1,7 @@
-using System;
 using System.Data;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.Extensions.Logging;
 using Veriado.Domain.Audit;
-using Veriado.Domain.Files;
-using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Configurations;
-using Veriado.Infrastructure.Persistence.Options;
-using Veriado.Infrastructure.Search.Outbox;
 
 namespace Veriado.Infrastructure.Persistence;
 

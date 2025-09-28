@@ -1,10 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using MediatR;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.ValueObjects;
-
 namespace Veriado.Appl.UseCases.Files.CheckFileHash;
 
 /// <summary>

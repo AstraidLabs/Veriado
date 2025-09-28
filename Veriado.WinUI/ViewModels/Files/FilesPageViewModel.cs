@@ -1,13 +1,7 @@
-using System;
 using System.Collections.ObjectModel;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
 using Veriado.WinUI.ViewModels.Base;
-using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Files;
 

@@ -1,4 +1,3 @@
-using System;
 using Microsoft.Extensions.DependencyInjection;
 using Veriado.Appl.DependencyInjection;
 using Veriado.Contracts.Search.Abstractions;

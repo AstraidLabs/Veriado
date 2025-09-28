@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Veriado.Infrastructure.Persistence.Migrations;
 

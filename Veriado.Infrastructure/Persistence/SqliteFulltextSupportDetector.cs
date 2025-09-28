@@ -1,7 +1,3 @@
-using System;
-using Microsoft.Data.Sqlite;
-using Veriado.Infrastructure.Persistence.Options;
-
 namespace Veriado.Infrastructure.Persistence;
 
 /// <summary>

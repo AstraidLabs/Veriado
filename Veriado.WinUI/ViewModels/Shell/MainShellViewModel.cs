@@ -1,8 +1,4 @@
-using System;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Veriado.WinUI.Navigation;
-using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Shell;
 
