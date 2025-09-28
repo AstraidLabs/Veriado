@@ -1376,11 +1376,6 @@ public partial class ImportPageViewModel : ViewModelBase
         UpdateFilteredErrors();
     }
 
-    partial void OnErrorSummaryDetailChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasErrorSummaryDetail));
-    }
-
     partial void OnIsImportingChanged(bool value)
     {
         _runImportCommand.NotifyCanExecuteChanged();
@@ -1435,6 +1430,7 @@ public partial class ImportPageViewModel : ViewModelBase
             ErrorSummaryTitle = null;
             ErrorSummaryMessage = null;
             ErrorSummaryDetail = null;
+            OnPropertyChanged(nameof(HasErrorSummaryDetail));
             return;
         }
 
@@ -1474,6 +1470,7 @@ public partial class ImportPageViewModel : ViewModelBase
             : $"Celkem {Errors.Count} problémů.";
 
         ErrorSummaryDetail = "Vyberte řádek v tabulce, chcete-li zobrazit doporučení a další detaily. Chyby můžete filtrovat podle závažnosti.";
+        OnPropertyChanged(nameof(HasErrorSummaryDetail));
     }
 
     private bool MatchesSelectedFilter(ImportErrorItem item)
