@@ -1,3 +1,4 @@
+using System;
 using AutoMapper;
 using Veriado.Appl.Abstractions;
 using Veriado.Contracts.Files;
@@ -35,6 +36,20 @@ public sealed class FileReadProfiles : Profile
             .ForCtorParam(nameof(FileContentDto.Hash), opt => opt.MapFrom(src => src.Hash))
             .ForCtorParam(nameof(FileContentDto.Length), opt => opt.MapFrom(src => src.Length))
             .ForCtorParam(nameof(FileContentDto.Bytes), opt => opt.MapFrom(_ => (byte[]?)null));
+
+        CreateMap<FileEntity, FileContentResponseDto>()
+            .ForCtorParam(nameof(FileContentResponseDto.Id), opt => opt.MapFrom(src => src.Id))
+            .ForCtorParam(nameof(FileContentResponseDto.Name), opt => opt.MapFrom(src => src.Name))
+            .ForCtorParam(nameof(FileContentResponseDto.Extension), opt => opt.MapFrom(src => src.Extension))
+            .ForCtorParam(nameof(FileContentResponseDto.Mime), opt => opt.MapFrom(src => src.Mime))
+            .ForCtorParam(nameof(FileContentResponseDto.Author), opt => opt.MapFrom(src => src.Author))
+            .ForCtorParam(nameof(FileContentResponseDto.SizeBytes), opt => opt.MapFrom(src => src.Size))
+            .ForCtorParam(nameof(FileContentResponseDto.Version), opt => opt.MapFrom(src => src.Version))
+            .ForCtorParam(nameof(FileContentResponseDto.IsReadOnly), opt => opt.MapFrom(src => src.IsReadOnly))
+            .ForCtorParam(nameof(FileContentResponseDto.CreatedUtc), opt => opt.MapFrom(src => src.CreatedUtc))
+            .ForCtorParam(nameof(FileContentResponseDto.LastModifiedUtc), opt => opt.MapFrom(src => src.LastModifiedUtc))
+            .ForCtorParam(nameof(FileContentResponseDto.Validity), opt => opt.MapFrom(src => src.Validity))
+            .ForCtorParam(nameof(FileContentResponseDto.Content), opt => opt.MapFrom(src => CloneBytes(src.Content.Bytes)));
 
         CreateMap<FileDocumentValidityReadModel, FileValidityDto>()
             .ForCtorParam(nameof(FileValidityDto.IssuedAt), opt => opt.MapFrom(src => src.IssuedAtUtc))
@@ -125,5 +140,17 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => new FileContentDto(string.Empty, src.SizeBytes, null)))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(src => src.SystemMetadata))
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(src => src.Validity));
+    }
+
+    private static byte[] CloneBytes(byte[] source)
+    {
+        if (source is null || source.Length == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var clone = new byte[source.Length];
+        Array.Copy(source, clone, source.Length);
+        return clone;
     }
 }
