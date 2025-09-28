@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Import;
 using Veriado.Services.Import;
@@ -282,6 +283,62 @@ public partial class ImportPageViewModel : ViewModelBase
         set => SetProperty(ref _hasParallelismError, value);
     }
 
+    private bool _isActiveStatusVisible;
+    public bool IsActiveStatusVisible
+    {
+        get => _isActiveStatusVisible;
+        set => SetProperty(ref _isActiveStatusVisible, value);
+    }
+
+    private string? _activeStatusTitle;
+    public string? ActiveStatusTitle
+    {
+        get => _activeStatusTitle;
+        private set => SetProperty(ref _activeStatusTitle, value);
+    }
+
+    private string? _activeStatusMessage;
+    public string? ActiveStatusMessage
+    {
+        get => _activeStatusMessage;
+        private set => SetProperty(ref _activeStatusMessage, value);
+    }
+
+    private InfoBarSeverity _activeStatusSeverity = InfoBarSeverity.Informational;
+    public InfoBarSeverity ActiveStatusSeverity
+    {
+        get => _activeStatusSeverity;
+        private set => SetProperty(ref _activeStatusSeverity, value);
+    }
+
+    private bool _isDynamicStatusVisible;
+    public bool IsDynamicStatusVisible
+    {
+        get => _isDynamicStatusVisible;
+        set => SetProperty(ref _isDynamicStatusVisible, value);
+    }
+
+    private string? _dynamicStatusTitle;
+    public string? DynamicStatusTitle
+    {
+        get => _dynamicStatusTitle;
+        private set => SetProperty(ref _dynamicStatusTitle, value);
+    }
+
+    private string? _dynamicStatusMessage;
+    public string? DynamicStatusMessage
+    {
+        get => _dynamicStatusMessage;
+        private set => SetProperty(ref _dynamicStatusMessage, value);
+    }
+
+    private InfoBarSeverity _dynamicStatusSeverity = InfoBarSeverity.Informational;
+    public InfoBarSeverity DynamicStatusSeverity
+    {
+        get => _dynamicStatusSeverity;
+        private set => SetProperty(ref _dynamicStatusSeverity, value);
+    }
+
     private ImportErrorSeverity _selectedErrorFilter = ImportErrorSeverity.All;
     public ImportErrorSeverity SelectedErrorFilter
     {
@@ -404,6 +461,8 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         _importCancellation?.Cancel();
         TryCancelRunning();
+        _ = SetActiveStatusAsync("Import zrušen", "Import byl zastaven uživatelem.", InfoBarSeverity.Warning);
+        _ = ClearDynamicStatusAsync();
     }
 
     private void ExecuteClearResults()
@@ -424,6 +483,8 @@ public partial class ImportPageViewModel : ViewModelBase
         _fileSizeCache.Clear();
         _exportLogCommand.NotifyCanExecuteChanged();
         StatusService.Info("Výsledky importu byly vymazány.");
+        _ = ClearActiveStatusAsync();
+        _ = ClearDynamicStatusAsync();
     }
 
     private Task ExecuteOpenErrorDetailAsync(ImportError? error)
@@ -493,6 +554,14 @@ public partial class ImportPageViewModel : ViewModelBase
             return;
         }
 
+        await ClearDynamicStatusAsync().ConfigureAwait(false);
+        var initialFolder = SelectedFolder;
+        var preparationMessage = string.IsNullOrWhiteSpace(initialFolder)
+            ? "Připravuji import…"
+            : $"Připravuji import ze složky '{initialFolder}'.";
+        await SetActiveStatusAsync("Příprava importu", preparationMessage, InfoBarSeverity.Informational).ConfigureAwait(false);
+        await SetDynamicStatusAsync("Příprava importu", "Analyzuji vybranou složku…", InfoBarSeverity.Informational).ConfigureAwait(false);
+
         _importCancellation?.Dispose();
         _importCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -517,15 +586,21 @@ public partial class ImportPageViewModel : ViewModelBase
             catch (OperationCanceledException)
             {
                 await AddLogAsync("Import", "Příprava byla zrušena.", "warning").ConfigureAwait(false);
+                await SetActiveStatusAsync("Import zrušen", "Příprava byla zrušena.", InfoBarSeverity.Warning).ConfigureAwait(false);
+                await SetDynamicStatusAsync("Import zrušen", "Import byl zrušen před spuštěním.", InfoBarSeverity.Warning).ConfigureAwait(false);
                 throw;
             }
 
+            await SetDynamicStatusAsync("Příprava dokončena", "Příprava importu dokončena. Spouštím zpracování…", InfoBarSeverity.Informational)
+                .ConfigureAwait(false);
             await AddLogAsync(
                     "Import",
                     $"Spouštím import ze složky '{SelectedFolder}'.",
                     "info",
                     string.IsNullOrWhiteSpace(SelectedFolder) ? null : $"Složka: {SelectedFolder}")
                 .ConfigureAwait(false);
+            await SetActiveStatusAsync("Import běží", $"Spouštím import ze složky '{folderPath}'.", InfoBarSeverity.Informational).ConfigureAwait(false);
+            await SetDynamicStatusAsync("Import běží", "Import byl spuštěn.", InfoBarSeverity.Informational).ConfigureAwait(false);
 
             var statusReported = false;
 
@@ -548,6 +623,8 @@ public partial class ImportPageViewModel : ViewModelBase
             {
                 await AddLogAsync("Import", "Import byl zrušen uživatelem.", "warning").ConfigureAwait(false);
                 StatusService.Info("Import byl zrušen.");
+                await SetActiveStatusAsync("Import zrušen", "Import byl zrušen uživatelem.", InfoBarSeverity.Warning).ConfigureAwait(false);
+                await ClearDynamicStatusAsync().ConfigureAwait(false);
                 return;
             }
 
@@ -556,6 +633,8 @@ public partial class ImportPageViewModel : ViewModelBase
             if (!statusReported)
             {
                 StatusService.Info("Import dokončen.");
+                await SetActiveStatusAsync("Import dokončen", "Import dokončen.", InfoBarSeverity.Informational).ConfigureAwait(false);
+                await ClearDynamicStatusAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -728,11 +807,14 @@ public partial class ImportPageViewModel : ViewModelBase
             ? "Import byl spuštěn."
             : progress.Message;
         await AddLogAsync("Import", message, "info").ConfigureAwait(false);
+        await SetActiveStatusAsync("Import běží", message, InfoBarSeverity.Informational).ConfigureAwait(false);
+        var dynamicMessage = BuildDynamicStatusMessage(progress);
+        await SetDynamicStatusAsync("Průběh importu", dynamicMessage, InfoBarSeverity.Informational).ConfigureAwait(false);
     }
 
-    private Task HandleProgressSnapshotAsync(ImportProgressEvent progress)
+    private async Task HandleProgressSnapshotAsync(ImportProgressEvent progress)
     {
-        return Dispatcher.Enqueue(() =>
+        await Dispatcher.Enqueue(() =>
         {
             var currentTotal = progress.TotalFiles ?? Total;
             var currentProcessed = progress.ProcessedFiles ?? Processed;
@@ -761,6 +843,9 @@ public partial class ImportPageViewModel : ViewModelBase
                 CurrentFilePath = progress.FilePath;
             }
         });
+
+        var message = BuildDynamicStatusMessage(progress);
+        await SetDynamicStatusAsync("Průběh importu", message, InfoBarSeverity.Informational).ConfigureAwait(false);
     }
 
     private async Task HandleFileCompletedAsync(ImportProgressEvent progress)
@@ -794,6 +879,10 @@ public partial class ImportPageViewModel : ViewModelBase
         var detail = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
 
         await AddLogAsync("OK", fileName, "success", detail).ConfigureAwait(false);
+        var completionMessage = string.IsNullOrWhiteSpace(fileName)
+            ? "Soubor byl úspěšně importován."
+            : $"Soubor {fileName} byl úspěšně importován.";
+        await SetDynamicStatusAsync("Soubor dokončen", completionMessage, InfoBarSeverity.Success).ConfigureAwait(false);
     }
 
     private async Task HandleErrorEventAsync(ImportProgressEvent progress)
@@ -834,6 +923,10 @@ public partial class ImportPageViewModel : ViewModelBase
 
         var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
         await AddLogAsync("Chyba", progress.Error.Message, "error", detail).ConfigureAwait(false);
+        var errorMessage = string.IsNullOrWhiteSpace(progress.Error.Message)
+            ? "Došlo k chybě při importu."
+            : progress.Error.Message;
+        await SetDynamicStatusAsync("Chyba importu", errorMessage, InfoBarSeverity.Error).ConfigureAwait(false);
     }
 
     private async Task HandleBatchCompletedAsync(ImportProgressEvent progress)
@@ -895,6 +988,10 @@ public partial class ImportPageViewModel : ViewModelBase
                 StatusService.Info(summary);
                 break;
         }
+
+        var severity = MapStatusToSeverity(aggregate.Status);
+        await SetActiveStatusAsync("Stav importu", summary, severity).ConfigureAwait(false);
+        await SetDynamicStatusAsync("Shrnutí importu", summary, severity).ConfigureAwait(false);
     }
 
     private async Task EnsureAggregateErrorsAsync(ImportAggregateResult aggregate)
@@ -933,6 +1030,8 @@ public partial class ImportPageViewModel : ViewModelBase
             var message = ExtractErrorMessage(response);
             await AddLogAsync("Import selhal", message, "error").ConfigureAwait(false);
             StatusService.Error(message);
+            await SetActiveStatusAsync("Import selhal", message, InfoBarSeverity.Error).ConfigureAwait(false);
+            await SetDynamicStatusAsync("Import selhal", message, InfoBarSeverity.Error).ConfigureAwait(false);
             return true;
         }
 
@@ -1020,6 +1119,10 @@ public partial class ImportPageViewModel : ViewModelBase
                 break;
         }
 
+        var severity = MapStatusToSeverity(result.Status);
+        await SetActiveStatusAsync("Stav importu", summary, severity).ConfigureAwait(false);
+        await SetDynamicStatusAsync("Shrnutí importu", summary, severity).ConfigureAwait(false);
+
         return true;
     }
 
@@ -1103,6 +1206,96 @@ public partial class ImportPageViewModel : ViewModelBase
         }
 
         return builder.ToString();
+    }
+
+    private async Task SetActiveStatusAsync(string title, string? message, InfoBarSeverity severity)
+    {
+        await Dispatcher.Enqueue(() =>
+        {
+            ActiveStatusTitle = title;
+            ActiveStatusMessage = message;
+            ActiveStatusSeverity = severity;
+            IsActiveStatusVisible = true;
+        });
+    }
+
+    private async Task ClearActiveStatusAsync()
+    {
+        await Dispatcher.Enqueue(() =>
+        {
+            ActiveStatusTitle = null;
+            ActiveStatusMessage = null;
+            ActiveStatusSeverity = InfoBarSeverity.Informational;
+            IsActiveStatusVisible = false;
+        });
+    }
+
+    private async Task SetDynamicStatusAsync(string title, string? message, InfoBarSeverity severity)
+    {
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(message))
+        {
+            await ClearDynamicStatusAsync();
+            return;
+        }
+
+        await Dispatcher.Enqueue(() =>
+        {
+            DynamicStatusTitle = title;
+            DynamicStatusMessage = message;
+            DynamicStatusSeverity = severity;
+            IsDynamicStatusVisible = true;
+        });
+    }
+
+    private async Task ClearDynamicStatusAsync()
+    {
+        await Dispatcher.Enqueue(() =>
+        {
+            DynamicStatusTitle = null;
+            DynamicStatusMessage = null;
+            DynamicStatusSeverity = InfoBarSeverity.Informational;
+            IsDynamicStatusVisible = false;
+        });
+    }
+
+    private static string BuildDynamicStatusMessage(ImportProgressEvent progress)
+    {
+        if (!string.IsNullOrWhiteSpace(progress.Message))
+        {
+            return progress.Message;
+        }
+
+        if (!string.IsNullOrWhiteSpace(progress.FilePath))
+        {
+            var fileName = Path.GetFileName(progress.FilePath);
+            return string.IsNullOrWhiteSpace(fileName)
+                ? "Zpracovávám soubor…"
+                : $"Zpracovávám soubor {fileName}";
+        }
+
+        if (progress.ProcessedFiles.HasValue && progress.TotalFiles.HasValue)
+        {
+            return $"Zpracováno {progress.ProcessedFiles}/{progress.TotalFiles} souborů.";
+        }
+
+        if (progress.ProcessedFiles.HasValue)
+        {
+            return $"Zpracováno {progress.ProcessedFiles} souborů.";
+        }
+
+        return "Import probíhá…";
+    }
+
+    private static InfoBarSeverity MapStatusToSeverity(ImportBatchStatus status)
+    {
+        return status switch
+        {
+            ImportBatchStatus.Success => InfoBarSeverity.Success,
+            ImportBatchStatus.PartialSuccess => InfoBarSeverity.Warning,
+            ImportBatchStatus.Failure => InfoBarSeverity.Error,
+            ImportBatchStatus.FatalError => InfoBarSeverity.Error,
+            _ => InfoBarSeverity.Informational,
+        };
     }
 
     private static string FormatStatusText(object? status)

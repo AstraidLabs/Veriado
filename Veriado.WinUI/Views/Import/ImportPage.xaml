@@ -8,6 +8,7 @@
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
+    xmlns:animations="using:Microsoft.UI.Xaml.Media.Animation"
     d:DataContext="{d:DesignInstance Type=import:ImportPageViewModel}"
     AllowDrop="True"
     DragOver="OnPageDragOver"
@@ -33,6 +34,11 @@
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="24">
+        <Grid.Transitions>
+            <TransitionCollection>
+                <animations:EntranceThemeTransition />
+            </TransitionCollection>
+        </Grid.Transitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -42,6 +48,11 @@
 
         <!-- Nadpis a akce -->
         <StackPanel Grid.Row="0" Spacing="12">
+            <StackPanel.Transitions>
+                <TransitionCollection>
+                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                </TransitionCollection>
+            </StackPanel.Transitions>
             <TextBlock Text="Import souborů" FontSize="28" FontWeight="SemiBold" />
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
@@ -66,6 +77,11 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
+                    <StackPanel.Transitions>
+                        <TransitionCollection>
+                            <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                        </TransitionCollection>
+                    </StackPanel.Transitions>
                     <muxc:ProgressBar
                         Minimum="0"
                         Maximum="100"
@@ -93,10 +109,41 @@
                     </TextBlock>
                 </StackPanel>
             </Grid>
+            <muxc:InfoBar
+                Margin="0,8,0,0"
+                IsClosable="True"
+                IsOpen="{Binding IsActiveStatusVisible, Mode=TwoWay}"
+                Severity="{Binding ActiveStatusSeverity}"
+                Title="{Binding ActiveStatusTitle}"
+                Message="{Binding ActiveStatusMessage}">
+                <muxc:InfoBar.Transitions>
+                    <TransitionCollection>
+                        <animations:EntranceThemeTransition />
+                    </TransitionCollection>
+                </muxc:InfoBar.Transitions>
+            </muxc:InfoBar>
+            <muxc:InfoBar
+                Margin="0,4,0,0"
+                IsClosable="True"
+                IsOpen="{Binding IsDynamicStatusVisible, Mode=TwoWay}"
+                Severity="{Binding DynamicStatusSeverity}"
+                Title="{Binding DynamicStatusTitle}"
+                Message="{Binding DynamicStatusMessage}">
+                <muxc:InfoBar.Transitions>
+                    <TransitionCollection>
+                        <animations:EntranceThemeTransition />
+                    </TransitionCollection>
+                </muxc:InfoBar.Transitions>
+            </muxc:InfoBar>
         </StackPanel>
 
         <!-- Zdroj -->
         <StackPanel Grid.Row="1" Spacing="12">
+            <StackPanel.Transitions>
+                <TransitionCollection>
+                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                </TransitionCollection>
+            </StackPanel.Transitions>
             <TextBlock Text="Zdroj importu" FontSize="20" FontWeight="SemiBold" />
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
@@ -117,6 +164,11 @@
 
         <!-- Volby -->
         <StackPanel Grid.Row="2" Spacing="12">
+            <StackPanel.Transitions>
+                <TransitionCollection>
+                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                </TransitionCollection>
+            </StackPanel.Transitions>
             <TextBlock Text="Volby importu" FontSize="20" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <StackPanel Orientation="Vertical" Spacing="8">
@@ -169,6 +221,11 @@
 
         <!-- Protokol -->
         <StackPanel Grid.Row="3" Spacing="12">
+            <StackPanel.Transitions>
+                <TransitionCollection>
+                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                </TransitionCollection>
+            </StackPanel.Transitions>
             <TextBlock Text="Protokol importu" FontSize="20" FontWeight="SemiBold" />
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
@@ -211,6 +268,11 @@
                     IsExpanded="{Binding HasErrors, Mode=OneWay}"
                     HorizontalAlignment="Stretch">
                     <StackPanel Spacing="8">
+                        <StackPanel.Transitions>
+                            <TransitionCollection>
+                                <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                            </TransitionCollection>
+                        </StackPanel.Transitions>
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <TextBlock
                                 VerticalAlignment="Center"
@@ -227,6 +289,11 @@
                             </ComboBox>
                         </StackPanel>
                         <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding FilteredErrors}">
+                            <ItemsControl.ItemContainerTransitions>
+                                <TransitionCollection>
+                                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                                </TransitionCollection>
+                            </ItemsControl.ItemContainerTransitions>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="models:ImportErrorItem">
                                     <Grid Padding="8" ColumnSpacing="12">
