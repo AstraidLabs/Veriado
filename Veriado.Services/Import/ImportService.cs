@@ -583,12 +583,14 @@ public sealed class ImportService : IImportService
             ? MimeMap.GetMimeType(normalizedExtension)
             : request.Mime!;
 
+        var normalizedAuthor = request.Author is null ? string.Empty : request.Author.Trim();
+
         return new CreateFileRequest
         {
             Name = request.Name ?? string.Empty,
             Extension = normalizedExtension,
             Mime = mime,
-            Author = request.Author ?? string.Empty,
+            Author = normalizedAuthor,
             Content = request.Content ?? Array.Empty<byte>(),
             MaxContentLength = request.MaxContentLength,
             SystemMetadata = request.SystemMetadata,
