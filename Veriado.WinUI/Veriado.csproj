@@ -15,6 +15,17 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(IntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <_CompilerGeneratedSubdirectories Include="CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.ObservablePropertyGenerator" />
+    <_CompilerGeneratedSubdirectories Include="CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.RelayCommandGenerator" />
+    <_CompilerGeneratedSubdirectories Include="WinRT.SourceGenerator\Generator.WinRTAotSourceGenerator" />
+  </ItemGroup>
+
+  <Target Name="EnsureCompilerGeneratedDirectories" BeforeTargets="BeforeCompile">
+    <MakeDir Directories="$(CompilerGeneratedFilesOutputPath)" />
+    <MakeDir Directories="@(_CompilerGeneratedSubdirectories-&gt;'$(CompilerGeneratedFilesOutputPath)\%(Identity)')" />
+  </Target>
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
