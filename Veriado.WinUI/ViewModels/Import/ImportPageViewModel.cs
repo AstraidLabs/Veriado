@@ -16,6 +16,7 @@ using Veriado.Services.Import;
 using Veriado.WinUI.Models.Import;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.Views.Import;
 
 namespace Veriado.WinUI.ViewModels.Import;
 
@@ -26,16 +27,19 @@ public partial class ImportPageViewModel : ViewModelBase
     private readonly IImportService _importService;
     private readonly IHotStateService? _hotStateService;
     private readonly IPickerService? _pickerService;
+    private readonly IDialogService _dialogService;
     private readonly AsyncRelayCommand _pickFolderCommand;
     private readonly AsyncRelayCommand _runImportCommand;
     private readonly RelayCommand _stopImportCommand;
     private readonly RelayCommand _clearResultsCommand;
-    private readonly RelayCommand<ImportErrorItem> _openErrorDetailCommand;
+    private readonly AsyncRelayCommand<ImportError> _openErrorDetailCommand;
+    private readonly AsyncRelayCommand _exportLogCommand;
     private CancellationTokenSource? _importCancellation;
 
     private int _okCount;
     private int _errorCount;
     private int _skipCount;
+    private readonly Dictionary<string, long> _fileSizeCache = new(StringComparer.OrdinalIgnoreCase);
 
     public ImportPageViewModel(
         IImportService importService,
@@ -43,11 +47,13 @@ public partial class ImportPageViewModel : ViewModelBase
         IStatusService statusService,
         IDispatcherService dispatcher,
         IExceptionHandler exceptionHandler,
+        IDialogService dialogService,
         IHotStateService? hotStateService = null,
         IPickerService? pickerService = null)
         : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _importService = importService ?? throw new ArgumentNullException(nameof(importService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _hotStateService = hotStateService;
         _pickerService = pickerService;
 
@@ -60,7 +66,8 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand = new AsyncRelayCommand(ExecuteRunImportAsync, CanRunImport);
         _stopImportCommand = new RelayCommand(ExecuteStopImport, () => IsImporting);
         _clearResultsCommand = new RelayCommand(ExecuteClearResults, CanClearResults);
-        _openErrorDetailCommand = new RelayCommand<ImportErrorItem>(ExecuteOpenErrorDetail);
+        _openErrorDetailCommand = new AsyncRelayCommand<ImportError>(ExecuteOpenErrorDetailAsync);
+        _exportLogCommand = new AsyncRelayCommand(ExecuteExportLogAsync, () => Log.Count > 0);
 
         RestoreStateFromHotStorage();
         PopulateDefaultAuthorFromCurrentUser();
@@ -82,13 +89,13 @@ public partial class ImportPageViewModel : ViewModelBase
     private bool useParallel = true;
 
     [ObservableProperty]
-    private int maxDegreeOfParallelism = Environment.ProcessorCount;
+    private int? maxDegreeOfParallelism = Environment.ProcessorCount;
 
     [ObservableProperty]
     private string? defaultAuthor;
 
     [ObservableProperty]
-    private double maxFileSizeMegabytes;
+    private double? maxFileSizeMegabytes;
 
     [ObservableProperty]
     private bool isImporting;
@@ -101,6 +108,30 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private int total;
+
+    [ObservableProperty]
+    private long processedBytes;
+
+    [ObservableProperty]
+    private long totalBytes;
+
+    [ObservableProperty]
+    private double? progressPercent;
+
+    [ObservableProperty]
+    private string? currentFileName;
+
+    [ObservableProperty]
+    private string? currentFilePath;
+
+    [ObservableProperty]
+    private bool hasMaxFileSizeError;
+
+    [ObservableProperty]
+    private bool hasParallelismError;
+
+    [ObservableProperty]
+    private ImportErrorSeverity selectedErrorFilter = ImportErrorSeverity.All;
 
     public ObservableCollection<ImportLogItem> Log { get; }
 
@@ -158,9 +189,17 @@ public partial class ImportPageViewModel : ViewModelBase
 
     public IRelayCommand ClearResultsCommand => _clearResultsCommand;
 
-    public IRelayCommand<ImportErrorItem> OpenErrorDetailCommand => _openErrorDetailCommand;
+    public IAsyncRelayCommand<ImportError> OpenErrorDetailCommand => _openErrorDetailCommand;
 
-    private bool CanRunImport() => !IsImporting && !string.IsNullOrWhiteSpace(SelectedFolder);
+    public IAsyncRelayCommand ExportLogCommand => _exportLogCommand;
+
+    public event EventHandler? ErrorFilterChanged;
+
+    private bool CanRunImport() =>
+        !IsImporting
+        && !string.IsNullOrWhiteSpace(SelectedFolder)
+        && !HasParallelismError
+        && !HasMaxFileSizeError;
 
     private bool CanClearResults() => Log.Count > 0 || Errors.Count > 0 || Processed > 0 || Total > 0 || OkCount > 0 || ErrorCount > 0 || SkipCount > 0;
 
@@ -190,7 +229,7 @@ public partial class ImportPageViewModel : ViewModelBase
             return Task.CompletedTask;
         }
 
-        return SafeExecuteAsync(RunImportInternalAsync, "Importuji…");
+        return SafeExecuteAsync(RunImportAsync, "Importuji…");
     }
 
     private void ExecuteStopImport()
@@ -209,20 +248,75 @@ public partial class ImportPageViewModel : ViewModelBase
         ErrorCount = 0;
         SkipCount = 0;
         IsIndeterminate = false;
+        ProcessedBytes = 0;
+        TotalBytes = 0;
+        ProgressPercent = null;
+        CurrentFileName = null;
+        CurrentFilePath = null;
+        _fileSizeCache.Clear();
+        _exportLogCommand.NotifyCanExecuteChanged();
         StatusService.Info("Výsledky importu byly vymazány.");
     }
 
-    private void ExecuteOpenErrorDetail(ImportErrorItem? item)
+    private Task ExecuteOpenErrorDetailAsync(ImportError? error)
     {
-        if (item is null)
+        if (error is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        // TODO: Implement navigation to import error detail page.
+        return Dispatcher.EnqueueAsync(async () =>
+        {
+            var view = new ErrorDetailView
+            {
+                DataContext = new ErrorDetailViewModel(error),
+            };
+
+            await _dialogService.ShowAsync("Detail chyby importu", view, "Zavřít").ConfigureAwait(false);
+        });
     }
 
-    private async Task RunImportInternalAsync(CancellationToken cancellationToken)
+    private Task ExecuteExportLogAsync()
+    {
+        if (Log.Count == 0)
+        {
+            StatusService.Info("Protokol je prázdný, není co exportovat.");
+            return Task.CompletedTask;
+        }
+
+        return SafeExecuteAsync(async token =>
+        {
+            var folder = !string.IsNullOrWhiteSpace(SelectedFolder) && Directory.Exists(SelectedFolder)
+                ? SelectedFolder!
+                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                folder = Path.GetTempPath();
+            }
+
+            var timestamp = DateTimeOffset.Now.ToString("yyyyMMddHHmmss");
+            var fileName = $"import-log-{timestamp}.txt";
+            var targetPath = Path.Combine(folder, fileName);
+
+            var builder = new StringBuilder();
+            foreach (var item in Log)
+            {
+                builder.AppendLine($"[{item.FormattedTimestamp}] {item.Title}: {item.Message}");
+                if (!string.IsNullOrWhiteSpace(item.Detail))
+                {
+                    builder.AppendLine(item.Detail);
+                }
+
+                builder.AppendLine();
+            }
+
+            await File.WriteAllTextAsync(targetPath, builder.ToString(), Encoding.UTF8, token).ConfigureAwait(false);
+            StatusService.Info($"Protokol byl exportován do souboru '{targetPath}'.");
+        }, "Exportuji protokol…");
+    }
+
+    private async Task RunImportAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(SelectedFolder))
         {
@@ -242,6 +336,21 @@ public partial class ImportPageViewModel : ViewModelBase
             });
 
             await ResetProgressAsync().ConfigureAwait(false);
+
+            var request = BuildRequest();
+            var options = BuildImportOptions();
+            var folderPath = request.FolderPath;
+
+            try
+            {
+                await InitializeFileSizeCacheAsync(folderPath, _importCancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await AddLogAsync("Import", "Příprava byla zrušena.", "warning").ConfigureAwait(false);
+                throw;
+            }
+
             await AddLogAsync(
                     "Import",
                     $"Spouštím import ze složky '{SelectedFolder}'.",
@@ -249,15 +358,18 @@ public partial class ImportPageViewModel : ViewModelBase
                     string.IsNullOrWhiteSpace(SelectedFolder) ? null : $"Složka: {SelectedFolder}")
                 .ConfigureAwait(false);
 
-            var request = BuildRequest();
-            var options = BuildImportOptions();
-            var folderPath = request.FolderPath;
-
             var statusReported = false;
 
             try
             {
-                statusReported = await ProcessStreamingAsync(folderPath, options, _importCancellation.Token).ConfigureAwait(false);
+                await foreach (var progress in _importService.ImportFolderStreamAsync(folderPath, options, _importCancellation.Token).ConfigureAwait(false))
+                {
+                    await HandleProgressEventAsync(progress).ConfigureAwait(false);
+                    if (progress.Kind == ImportProgressKind.BatchCompleted)
+                    {
+                        statusReported = true;
+                    }
+                }
             }
             catch (NotSupportedException)
             {
@@ -291,17 +403,13 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private ImportFolderRequest BuildRequest()
     {
-        var maxParallel = UseParallel
-            ? Math.Max(1, MaxDegreeOfParallelism)
-            : 1;
-
         return new ImportFolderRequest
         {
             FolderPath = SelectedFolder!.Trim(),
             Recursive = Recursive,
             KeepFsMetadata = KeepFsMetadata,
             SetReadOnly = SetReadOnly,
-            MaxDegreeOfParallelism = maxParallel,
+            MaxDegreeOfParallelism = ResolveParallelism(),
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
         };
@@ -309,25 +417,36 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private ImportOptions BuildImportOptions()
     {
-        var maxParallel = UseParallel
-            ? Math.Max(1, MaxDegreeOfParallelism)
-            : 1;
-
         return new ImportOptions
         {
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
-            MaxDegreeOfParallelism = maxParallel,
+            MaxDegreeOfParallelism = ResolveParallelism(),
         };
+    }
+
+    private int ResolveParallelism()
+    {
+        if (!UseParallel)
+        {
+            return 1;
+        }
+
+        if (!MaxDegreeOfParallelism.HasValue || MaxDegreeOfParallelism.Value <= 0)
+        {
+            return Environment.ProcessorCount;
+        }
+
+        return MaxDegreeOfParallelism.Value;
     }
 
     private long? CalculateMaxFileSizeBytes()
     {
-        if (MaxFileSizeMegabytes <= 0)
+        if (!MaxFileSizeMegabytes.HasValue || MaxFileSizeMegabytes.Value <= 0)
         {
             return null;
         }
 
-        var bytes = MaxFileSizeMegabytes * 1024d * 1024d;
+        var bytes = MaxFileSizeMegabytes.Value * 1024d * 1024d;
         if (double.IsNaN(bytes) || double.IsInfinity(bytes))
         {
             return null;
@@ -341,20 +460,53 @@ public partial class ImportPageViewModel : ViewModelBase
         return (long)Math.Round(bytes, MidpointRounding.AwayFromZero);
     }
 
-    private async Task<bool> ProcessStreamingAsync(string folderPath, ImportOptions options, CancellationToken cancellationToken)
+    private async Task InitializeFileSizeCacheAsync(string folderPath, CancellationToken cancellationToken)
     {
-        var statusReported = false;
+        var recursive = Recursive;
 
-        await foreach (var progress in _importService.ImportFolderStreamAsync(folderPath, options, cancellationToken).ConfigureAwait(false))
+        var (cache, totalBytes) = await Task.Run(() =>
         {
-            await HandleProgressEventAsync(progress).ConfigureAwait(false);
-            if (progress.Kind == ImportProgressKind.BatchCompleted)
-            {
-                statusReported = true;
-            }
-        }
+            var dictionary = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            long total = 0;
+            var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
-        return statusReported;
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(folderPath, "*", option))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        dictionary[file] = info.Length;
+                        total += info.Length;
+                    }
+                    catch (IOException)
+                    {
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+            {
+            }
+
+            return (dictionary, total);
+        }, cancellationToken).ConfigureAwait(false);
+
+        await Dispatcher.Enqueue(() =>
+        {
+            _fileSizeCache.Clear();
+            foreach (var kvp in cache)
+            {
+                _fileSizeCache[kvp.Key] = kvp.Value;
+            }
+
+            TotalBytes = totalBytes;
+            ProcessedBytes = 0;
+        });
     }
 
     private async Task HandleProgressEventAsync(ImportProgressEvent progress)
@@ -391,6 +543,10 @@ public partial class ImportPageViewModel : ViewModelBase
             OkCount = 0;
             ErrorCount = 0;
             SkipCount = 0;
+            ProcessedBytes = 0;
+            ProgressPercent = progress.ProgressPercent;
+            CurrentFileName = null;
+            CurrentFilePath = null;
             IsIndeterminate = !progress.TotalFiles.HasValue || progress.TotalFiles.Value <= 0;
         });
 
@@ -419,17 +575,51 @@ public partial class ImportPageViewModel : ViewModelBase
             {
                 IsIndeterminate = currentTotal <= 0;
             }
+
+            if (progress.ProgressPercent.HasValue)
+            {
+                ProgressPercent = progress.ProgressPercent;
+            }
+
+            if (!string.IsNullOrWhiteSpace(progress.FilePath))
+            {
+                CurrentFileName = Path.GetFileName(progress.FilePath);
+                CurrentFilePath = progress.FilePath;
+            }
         });
     }
 
-    private Task HandleFileCompletedAsync(ImportProgressEvent progress)
+    private async Task HandleFileCompletedAsync(ImportProgressEvent progress)
     {
-        var fileName = string.IsNullOrWhiteSpace(progress.FilePath)
-            ? "Soubor"
-            : Path.GetFileName(progress.FilePath);
-        var detail = string.IsNullOrWhiteSpace(progress.FilePath) ? null : progress.FilePath;
+        var filePath = progress.FilePath;
+        var size = !string.IsNullOrWhiteSpace(filePath) ? ResolveFileSize(filePath!) : 0;
 
-        return AddLogAsync("OK", fileName, "success", detail);
+        await Dispatcher.Enqueue(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(filePath))
+            {
+                CurrentFileName = Path.GetFileName(filePath);
+                CurrentFilePath = filePath;
+
+                if (size > 0)
+                {
+                    var updated = ProcessedBytes + size;
+                    ProcessedBytes = TotalBytes > 0 ? Math.Min(updated, TotalBytes) : updated;
+                }
+            }
+
+            if (progress.ProgressPercent.HasValue)
+            {
+                ProgressPercent = progress.ProgressPercent;
+            }
+        });
+
+        var fileName = string.IsNullOrWhiteSpace(filePath)
+            ? "Soubor"
+            : Path.GetFileName(filePath);
+        var detail = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
+
+        await AddLogAsync("OK", fileName, "success", detail).ConfigureAwait(false);
     }
 
     private async Task HandleErrorEventAsync(ImportProgressEvent progress)
@@ -444,6 +634,17 @@ public partial class ImportPageViewModel : ViewModelBase
         await Dispatcher.Enqueue(() =>
         {
             Errors.Add(item);
+
+            if (!string.IsNullOrWhiteSpace(progress.FilePath))
+            {
+                CurrentFileName = Path.GetFileName(progress.FilePath);
+                CurrentFilePath = progress.FilePath;
+            }
+
+            if (progress.ProgressPercent.HasValue)
+            {
+                ProgressPercent = progress.ProgressPercent;
+            }
         });
 
         var detailBuilder = new StringBuilder();
@@ -471,6 +672,10 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             SkipCount = Math.Max(0, aggregate.Total - aggregate.Succeeded - aggregate.Failed);
             IsIndeterminate = false;
+            ProgressPercent = progress.ProgressPercent ?? 100d;
+            CurrentFileName = null;
+            CurrentFilePath = null;
+            ProcessedBytes = TotalBytes;
         });
 
         await EnsureAggregateErrorsAsync(aggregate).ConfigureAwait(false);
@@ -543,19 +748,7 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private ImportErrorItem CreateErrorItem(ImportError error)
     {
-        var fileName = string.IsNullOrWhiteSpace(error.FilePath)
-            ? "Soubor"
-            : Path.GetFileName(error.FilePath);
-
-        return new ImportErrorItem(
-            fileName,
-            error.Message,
-            null,
-            error.Code,
-            error.Suggestion,
-            error.Timestamp,
-            error.FilePath,
-            error.StackTrace);
+        return new ImportErrorItem(error);
     }
 
     private async Task<bool> ProcessBatchImportAsync(ImportFolderRequest request, CancellationToken cancellationToken)
@@ -578,6 +771,10 @@ public partial class ImportPageViewModel : ViewModelBase
             OkCount = result.Succeeded;
             ErrorCount = result.Failed;
             SkipCount = Math.Max(0, result.Total - result.Succeeded - result.Failed);
+            ProgressPercent = 100d;
+            CurrentFileName = null;
+            CurrentFilePath = null;
+            ProcessedBytes = TotalBytes;
         });
 
         if (result.Errors?.Count > 0)
@@ -667,6 +864,7 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private async Task ResetProgressAsync()
     {
+        _fileSizeCache.Clear();
         await Dispatcher.Enqueue(() =>
         {
             Processed = 0;
@@ -674,9 +872,15 @@ public partial class ImportPageViewModel : ViewModelBase
             OkCount = 0;
             ErrorCount = 0;
             SkipCount = 0;
+            ProcessedBytes = 0;
+            TotalBytes = 0;
+            ProgressPercent = null;
+            CurrentFileName = null;
+            CurrentFilePath = null;
             Log.Clear();
             Errors.Clear();
             _clearResultsCommand.NotifyCanExecuteChanged();
+            _exportLogCommand.NotifyCanExecuteChanged();
         });
     }
 
@@ -756,6 +960,7 @@ public partial class ImportPageViewModel : ViewModelBase
             Log.Add(new ImportLogItem(DateTimeOffset.Now, title, message, status, detail));
             TrimLog();
             _clearResultsCommand.NotifyCanExecuteChanged();
+            _exportLogCommand.NotifyCanExecuteChanged();
         });
     }
 
@@ -765,6 +970,33 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             Log.RemoveAt(0);
         }
+    }
+
+    private long ResolveFileSize(string filePath)
+    {
+        if (_fileSizeCache.TryGetValue(filePath, out var size))
+        {
+            return size;
+        }
+
+        try
+        {
+            var info = new FileInfo(filePath);
+            if (info.Exists)
+            {
+                size = info.Length;
+                _fileSizeCache[filePath] = size;
+                return size;
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return 0;
     }
 
     private void RestoreStateFromHotStorage()
@@ -814,11 +1046,13 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasErrors));
         _clearResultsCommand.NotifyCanExecuteChanged();
+        ErrorFilterChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnLogCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         _clearResultsCommand.NotifyCanExecuteChanged();
+        _exportLogCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedFolderChanged(string? value)
@@ -860,21 +1094,22 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             _hotStateService.ImportUseParallel = value;
         }
+
+        HasParallelismError = value && (!MaxDegreeOfParallelism.HasValue || MaxDegreeOfParallelism.Value <= 0);
+        _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnMaxDegreeOfParallelismChanged(int value)
+    partial void OnMaxDegreeOfParallelismChanged(int? value)
     {
-        var normalized = value <= 0 ? Environment.ProcessorCount : value;
-        if (value != normalized)
-        {
-            maxDegreeOfParallelism = normalized;
-            OnPropertyChanged(nameof(MaxDegreeOfParallelism));
-        }
-
         if (_hotStateService is not null)
         {
-            _hotStateService.ImportMaxDegreeOfParallelism = normalized;
+            _hotStateService.ImportMaxDegreeOfParallelism = value.HasValue && value.Value > 0
+                ? value.Value
+                : Environment.ProcessorCount;
         }
+
+        HasParallelismError = UseParallel && (!value.HasValue || value.Value <= 0);
+        _runImportCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnDefaultAuthorChanged(string? value)
@@ -885,19 +1120,38 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    partial void OnMaxFileSizeMegabytesChanged(double value)
+    partial void OnMaxFileSizeMegabytesChanged(double? value)
     {
-        if (double.IsNaN(value) || value < 0)
+        var hasError = false;
+        double? sanitized = value;
+
+        if (value.HasValue)
         {
-            maxFileSizeMegabytes = 0;
+            if (double.IsNaN(value.Value) || double.IsInfinity(value.Value) || value.Value < 0)
+            {
+                sanitized = null;
+                hasError = true;
+            }
+        }
+
+        if (!Nullable.Equals(sanitized, value))
+        {
+            maxFileSizeMegabytes = sanitized;
             OnPropertyChanged(nameof(MaxFileSizeMegabytes));
-            value = 0;
         }
 
         if (_hotStateService is not null)
         {
-            _hotStateService.ImportMaxFileSizeMegabytes = value > 0 ? value : null;
+            _hotStateService.ImportMaxFileSizeMegabytes = sanitized.HasValue && sanitized.Value > 0 ? sanitized : null;
         }
+
+        HasMaxFileSizeError = hasError;
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
+    {
+        ErrorFilterChanged?.Invoke(this, EventArgs.Empty);
     }
 
     partial void OnIsImportingChanged(bool value)
