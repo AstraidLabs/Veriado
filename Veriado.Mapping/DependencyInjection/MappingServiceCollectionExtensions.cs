@@ -51,6 +51,9 @@ public static class MappingServiceCollectionExtensions
             return configuration.CreateMapper(provider.GetService);
         });
 
+        services.AddSingleton<IConfigurationProvider>(provider =>
+            provider.GetRequiredService<MapperConfiguration>());
+
         services.AddTransient<IValidator<CreateFileCommand>, CreateFileCommandValidator>();
         services.AddTransient<IValidator<ReplaceFileContentCommand>, ReplaceFileContentCommandValidator>();
         services.AddTransient<IValidator<UpdateFileMetadataCommand>, UpdateFileMetadataCommandValidator>();
