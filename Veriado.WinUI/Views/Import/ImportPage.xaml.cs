@@ -1,13 +1,14 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.ViewModels.Import;
-using Microsoft.UI.Xaml;
-using System;
 
 namespace Veriado.WinUI.Views.Import;
 
@@ -51,12 +52,18 @@ public sealed partial class ImportPage : Page
         else if (e.DataView.Contains(StandardDataFormats.Text))
         {
             var text = await e.DataView.GetTextAsync();
-            path = text;
+            path = ExtractPathFromText(text);
         }
+        else if (e.DataView.Contains(StandardDataFormats.Uri))
+        {
+            var uri = await e.DataView.GetUriAsync();
+            path = uri?.LocalPath;
+        }
+
+        path = NormalizeDroppedPath(path);
 
         if (!string.IsNullOrWhiteSpace(path))
         {
-            path = path.Trim();
             if (Directory.Exists(path))
             {
                 ViewModel.SelectedFolder = path;
@@ -90,7 +97,7 @@ public sealed partial class ImportPage : Page
         DragOverlay.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private static string? ResolvePathFromStorageItems(System.Collections.Generic.IReadOnlyList<IStorageItem> items)
+    private static string? ResolvePathFromStorageItems(IReadOnlyList<IStorageItem> items)
     {
         if (items.Count == 0)
         {
@@ -105,6 +112,58 @@ public sealed partial class ImportPage : Page
 
         var file = items.OfType<StorageFile>().FirstOrDefault();
         return file?.Path;
+    }
+
+    private static string? ExtractPathFromText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        foreach (var candidate in text
+                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                     .Select(static line => line.Trim()))
+        {
+            if (!string.IsNullOrEmpty(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return text.Trim();
+    }
+
+    private static string? NormalizeDroppedPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var sanitized = path.Trim();
+        if (sanitized.Length >= 2 && sanitized.StartsWith('"') && sanitized.EndsWith('"'))
+        {
+            sanitized = sanitized[1..^1];
+        }
+
+        if (Uri.TryCreate(sanitized, UriKind.Absolute, out var uri) && uri.IsFile)
+        {
+            sanitized = uri.LocalPath;
+        }
+
+        try
+        {
+            sanitized = Path.GetFullPath(sanitized);
+        }
+        catch (Exception)
+        {
+            // Ignore invalid paths and fall back to the original sanitized string.
+        }
+
+        sanitized = Path.TrimEndingDirectorySeparator(sanitized);
+
+        return string.IsNullOrWhiteSpace(sanitized) ? null : sanitized;
     }
 
     private async void OnEnterAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
