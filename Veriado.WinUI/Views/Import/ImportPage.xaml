@@ -139,8 +139,8 @@
                                             FontSize="12"
                                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                             Text="{x:Bind FormattedTimestamp, Mode=OneWay}" />
-                                        <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
-                                        <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind Title, Mode=OneWay}" />
+                                        <TextBlock TextWrapping="Wrap" Text="{x:Bind Message, Mode=OneWay}" />
                                         <TextBlock
                                             x:Name="DetailTextBlock"
                                             Margin="0,2,0,0"
