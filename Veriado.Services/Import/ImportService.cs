@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -28,6 +29,18 @@ namespace Veriado.Services.Import;
 /// </summary>
 public sealed class ImportService : IImportService
 {
+    private static readonly char[] InvalidSearchPatternCharacters = Path
+        .GetInvalidFileNameChars()
+        .Where(static c => c is not '*' and not '?')
+        .Distinct()
+        .ToArray();
+
+    private static readonly char[] SearchPatternPathSeparators =
+    {
+        Path.DirectorySeparatorChar,
+        Path.AltDirectorySeparatorChar,
+    };
+
     private readonly IMediator _mediator;
     private readonly WriteMappingPipeline _mappingPipeline;
     private readonly IClock _clock;
@@ -177,8 +190,50 @@ public sealed class ImportService : IImportService
             yield break;
         }
 
+        if (!TryValidateSearchPattern(folderPath, options, out var validationError))
+        {
+            var fatalAggregate = new ImportAggregateResult(
+                ImportBatchStatus.FatalError,
+                0,
+                0,
+                0,
+                new[] { validationError });
+            var startedAt = validationError.Timestamp;
+
+            yield return ImportProgressEvent.BatchStarted(0, startedAt);
+            yield return ImportProgressEvent.ErrorOccurred(validationError, 0, 0, 0, 0);
+            yield return ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow);
+            yield break;
+        }
+
         var searchOption = options.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        var files = Directory.EnumerateFiles(folderPath, options.SearchPattern, searchOption).ToArray();
+        string[] files;
+        try
+        {
+            files = Directory.EnumerateFiles(folderPath, options.SearchPattern, searchOption).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or PathTooLongException)
+        {
+            _logger.LogError(ex, "Failed to enumerate files for {FolderPath} using pattern {SearchPattern}", folderPath, options.SearchPattern);
+
+            var enumerationError = CreateValidationError(
+                folderPath,
+                "enumeration_failed",
+                $"Failed to enumerate files in '{folderPath}' using pattern '{options.SearchPattern}'. {ex.Message}",
+                "Verify that the folder is accessible and that the search pattern is valid.");
+            var fatalAggregate = new ImportAggregateResult(
+                ImportBatchStatus.FatalError,
+                0,
+                0,
+                0,
+                new[] { enumerationError });
+
+            yield return ImportProgressEvent.BatchStarted(0, enumerationError.Timestamp);
+            yield return ImportProgressEvent.ErrorOccurred(enumerationError, 0, 0, 0, 0);
+            yield return ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow);
+            yield break;
+        }
+
         var total = files.Length;
         var batchStart = _clock.UtcNow;
 
@@ -698,6 +753,59 @@ public sealed class ImportService : IImportService
     }
 
 
+    private bool TryValidateSearchPattern(
+        string folderPath,
+        NormalizedImportOptions options,
+        [NotNullWhen(false)] out ImportError? validationError)
+    {
+        var pattern = options.SearchPattern;
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            validationError = CreateValidationError(
+                folderPath,
+                "invalid_search_pattern",
+                "Search pattern cannot be empty.",
+                "Provide a value such as '*' or '*.txt'.");
+            return false;
+        }
+
+        if (pattern.IndexOfAny(SearchPatternPathSeparators) >= 0)
+        {
+            validationError = CreateValidationError(
+                folderPath,
+                "invalid_search_pattern",
+                "Search pattern must not contain directory separators.",
+                "Remove '/' or '\\' characters from the search pattern.");
+            return false;
+        }
+
+        var invalidCharacters = pattern
+            .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
+            .Distinct()
+            .ToArray();
+        if (invalidCharacters.Length > 0)
+        {
+            var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
+            var message = invalidCharacters.Length == 1
+                ? $"Search pattern contains an invalid character: '{joined}'."
+                : $"Search pattern contains invalid characters: '{joined}'.";
+            validationError = CreateValidationError(
+                folderPath,
+                "invalid_search_pattern",
+                message,
+                "Remove the invalid characters or replace them with '*' or '?' wildcards.");
+            return false;
+        }
+
+        validationError = null;
+        return true;
+    }
+
+
+    private ImportError CreateValidationError(string filePath, string code, string message, string? suggestion)
+        => new(filePath, code, message, suggestion, null, _clock.UtcNow);
+
+
     private static NormalizedImportOptions NormalizeOptions(ImportOptions? options)
     {
         var maxFileSize = options?.MaxFileSizeBytes;
@@ -718,7 +826,13 @@ public sealed class ImportService : IImportService
             bufferSize = 4096;
         }
 
-        var searchPattern = string.IsNullOrWhiteSpace(options?.SearchPattern) ? "*" : options!.SearchPattern!;
+        var searchPattern = string.IsNullOrWhiteSpace(options?.SearchPattern)
+            ? "*"
+            : options!.SearchPattern!.Trim();
+        if (string.IsNullOrEmpty(searchPattern))
+        {
+            searchPattern = "*";
+        }
         var recursive = options?.Recursive ?? true;
         var defaultAuthor = (options?.DefaultAuthor ?? string.Empty).Trim();
         var keepMetadata = options?.KeepFileSystemMetadata ?? true;
