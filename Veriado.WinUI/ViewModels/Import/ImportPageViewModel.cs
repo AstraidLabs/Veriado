@@ -76,6 +76,7 @@ public partial class ImportPageViewModel : ViewModelBase
         RestoreStateFromHotStorage();
         PopulateDefaultAuthorFromCurrentUser();
         UpdateFilteredErrors();
+        UpdateErrorSummary();
     }
 
     [ObservableProperty]
@@ -162,6 +163,18 @@ public partial class ImportPageViewModel : ViewModelBase
     [ObservableProperty]
     private ImportErrorSeverity _selectedErrorFilter = ImportErrorSeverity.All;
 
+    [ObservableProperty]
+    private InfoBarSeverity _errorSummarySeverity = InfoBarSeverity.Informational;
+
+    [ObservableProperty]
+    private string? _errorSummaryTitle;
+
+    [ObservableProperty]
+    private string? _errorSummaryMessage;
+
+    [ObservableProperty]
+    private string? _errorSummaryDetail;
+
     public ObservableCollection<ImportLogItem> Log { get; }
 
     public ObservableCollection<ImportErrorItem> Errors { get; }
@@ -219,6 +232,12 @@ public partial class ImportPageViewModel : ViewModelBase
         $"Zpracováno {Processed}/{(Total > 0 ? Total : 0)} • OK {OkCount} • Chyby {ErrorCount} • Skip {SkipCount}";
 
     public bool HasErrors => Errors.Count > 0;
+
+    public bool HasFilteredErrors => _filteredErrors.Count > 0;
+
+    public bool HasNoFilteredErrors => !HasFilteredErrors;
+
+    public bool HasErrorSummaryDetail => !string.IsNullOrWhiteSpace(ErrorSummaryDetail);
 
     public IAsyncRelayCommand PickFolderCommand => _pickFolderCommand;
 
@@ -489,6 +508,11 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
             MaxDegreeOfParallelism = ResolveParallelism(),
+            KeepFileSystemMetadata = KeepFsMetadata,
+            SetReadOnly = SetReadOnly,
+            Recursive = Recursive,
+            DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
+            SearchPattern = "*",
         };
     }
 
@@ -1232,6 +1256,7 @@ public partial class ImportPageViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasErrors));
         _clearResultsCommand.NotifyCanExecuteChanged();
         UpdateFilteredErrors();
+        UpdateErrorSummary();
     }
 
     private void OnLogCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1380,6 +1405,63 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             _filteredErrors.Add(item);
         }
+
+        OnPropertyChanged(nameof(HasFilteredErrors));
+        OnPropertyChanged(nameof(HasNoFilteredErrors));
+    }
+
+    private void UpdateErrorSummary()
+    {
+        if (Errors.Count == 0)
+        {
+            ErrorSummarySeverity = InfoBarSeverity.Informational;
+            ErrorSummaryTitle = null;
+            ErrorSummaryMessage = null;
+            ErrorSummaryDetail = null;
+            return;
+        }
+
+        var fatalCount = Errors.Count(static item => item.Severity == ImportErrorSeverity.Fatal);
+        var errorCount = Errors.Count(static item => item.Severity == ImportErrorSeverity.Error);
+        var warningCount = Errors.Count(static item => item.Severity == ImportErrorSeverity.Warning);
+
+        ErrorSummarySeverity = fatalCount > 0 || errorCount > 0
+            ? InfoBarSeverity.Error
+            : InfoBarSeverity.Warning;
+
+        ErrorSummaryTitle = fatalCount > 0
+            ? "Import obsahuje fatální chyby"
+            : errorCount > 0
+                ? "Import obsahuje chyby"
+                : "Import dokončen s varováními";
+
+        var summaryParts = new List<string>();
+
+        if (fatalCount > 0)
+        {
+            summaryParts.Add($"{fatalCount}× fatální chyba");
+        }
+
+        if (errorCount > 0)
+        {
+            summaryParts.Add($"{errorCount}× chyba");
+        }
+
+        if (warningCount > 0)
+        {
+            summaryParts.Add($"{warningCount}× varování");
+        }
+
+        ErrorSummaryMessage = summaryParts.Count > 0
+            ? $"Celkem {Errors.Count} problémů: {string.Join(", ", summaryParts)}."
+            : $"Celkem {Errors.Count} problémů.";
+
+        ErrorSummaryDetail = "Vyberte řádek v tabulce, chcete-li zobrazit doporučení a další detaily. Chyby můžete filtrovat podle závažnosti.";
+    }
+
+    partial void OnErrorSummaryDetailChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasErrorSummaryDetail));
     }
 
     private bool MatchesSelectedFilter(ImportErrorItem item)
