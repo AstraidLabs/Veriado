@@ -1,7 +1,6 @@
 using AutoMapper;
 using Veriado.Contracts.Files;
 using Veriado.Domain.Metadata;
-using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Mapping.Profiles;
 
@@ -15,13 +14,13 @@ public sealed class FileWriteProfiles : Profile
     /// </summary>
     public FileWriteProfiles()
     {
-        CreateMap<FileSystemMetadataDto, FileSystemMetadata>().ConvertUsing(dto => new FileSystemMetadata(
-            (FileAttributesFlags)dto.Attributes,
-            UtcTimestamp.From(dto.CreatedUtc),
-            UtcTimestamp.From(dto.LastWriteUtc),
-            UtcTimestamp.From(dto.LastAccessUtc),
-            dto.OwnerSid,
-            dto.HardLinkCount,
-            dto.AlternateDataStreamCount));
+        CreateMap<FileSystemMetadataDto, FileSystemMetadata>()
+            .ForCtorParam("attributes", opt => opt.MapFrom(src => src.Attributes))
+            .ForCtorParam("createdUtc", opt => opt.MapFrom(src => src.CreatedUtc))
+            .ForCtorParam("lastWriteUtc", opt => opt.MapFrom(src => src.LastWriteUtc))
+            .ForCtorParam("lastAccessUtc", opt => opt.MapFrom(src => src.LastAccessUtc))
+            .ForCtorParam("ownerSid", opt => opt.MapFrom(src => src.OwnerSid))
+            .ForCtorParam("hardLinkCount", opt => opt.MapFrom(src => src.HardLinkCount))
+            .ForCtorParam("alternateDataStreamCount", opt => opt.MapFrom(src => src.AlternateDataStreamCount));
     }
 }
