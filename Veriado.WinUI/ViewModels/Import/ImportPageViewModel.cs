@@ -489,6 +489,11 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
             MaxDegreeOfParallelism = ResolveParallelism(),
+            KeepFileSystemMetadata = KeepFsMetadata,
+            SetReadOnly = SetReadOnly,
+            Recursive = Recursive,
+            DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
+            SearchPattern = "*",
         };
     }
 
