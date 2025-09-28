@@ -34,13 +34,14 @@ public static class MappingServiceCollectionExtensions
         {
             var configuration = new MapperConfiguration(cfg =>
             {
+                CommonValueConverters.Register(cfg);
                 cfg.AddProfile<FileReadProfiles>();
                 cfg.AddProfile<FileWriteProfiles>();
                 cfg.AddProfile<SearchProfiles>();
             });
-#if DEBUG
+
             configuration.AssertConfigurationIsValid();
-#endif
+            configuration.CompileMappings();
             return configuration;
         });
 
