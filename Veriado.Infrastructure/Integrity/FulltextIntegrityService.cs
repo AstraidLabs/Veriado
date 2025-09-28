@@ -290,9 +290,24 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         var dropStatements = new[]
         {
+            // Drop the virtual tables first so that any healthy shadow tables are removed with
+            // them. When the database is already corrupted SQLite may fail to cascade the drop
+            // and the shadow tables will need to be removed explicitly.
             "DROP TABLE IF EXISTS file_search;",
-            "DROP TABLE IF EXISTS file_search_map;",
             "DROP TABLE IF EXISTS file_trgm;",
+            // Explicitly drop the FTS5 shadow tables to ensure we start from a clean slate even if
+            // the catalog is in an inconsistent state.
+            "DROP TABLE IF EXISTS file_search_data;",
+            "DROP TABLE IF EXISTS file_search_idx;",
+            "DROP TABLE IF EXISTS file_search_content;",
+            "DROP TABLE IF EXISTS file_search_docsize;",
+            "DROP TABLE IF EXISTS file_search_config;",
+            "DROP TABLE IF EXISTS file_trgm_data;",
+            "DROP TABLE IF EXISTS file_trgm_idx;",
+            "DROP TABLE IF EXISTS file_trgm_content;",
+            "DROP TABLE IF EXISTS file_trgm_docsize;",
+            "DROP TABLE IF EXISTS file_trgm_config;",
+            "DROP TABLE IF EXISTS file_search_map;",
             "DROP TABLE IF EXISTS file_trgm_map;"
         };
 
@@ -301,6 +316,15 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             await using var dropCommand = connection.CreateCommand();
             dropCommand.CommandText = statement;
             await dropCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Rebuild the database pages after removing the corrupted tables. This helps clear out any
+        // lingering corrupted pages that would otherwise continue to surface "database disk image is
+        // malformed" errors even after recreating the schema.
+        await using (var vacuum = connection.CreateCommand())
+        {
+            vacuum.CommandText = "VACUUM;";
+            await vacuum.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
         var schemaSql = ReadEmbeddedSql(Fts5SchemaResourceName);
