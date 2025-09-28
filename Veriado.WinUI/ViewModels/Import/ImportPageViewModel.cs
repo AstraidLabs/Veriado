@@ -163,16 +163,16 @@ public partial class ImportPageViewModel : ViewModelBase
     [ObservableProperty]
     private ImportErrorSeverity _selectedErrorFilter = ImportErrorSeverity.All;
 
-    [ObservableProperty(Setter = AccessModifier.Private)]
+    [ObservableProperty]
     private InfoBarSeverity _errorSummarySeverity = InfoBarSeverity.Informational;
 
-    [ObservableProperty(Setter = AccessModifier.Private)]
+    [ObservableProperty]
     private string? _errorSummaryTitle;
 
-    [ObservableProperty(Setter = AccessModifier.Private)]
+    [ObservableProperty]
     private string? _errorSummaryMessage;
 
-    [ObservableProperty(Setter = AccessModifier.Private)]
+    [ObservableProperty]
     private string? _errorSummaryDetail;
 
     public ObservableCollection<ImportLogItem> Log { get; }
