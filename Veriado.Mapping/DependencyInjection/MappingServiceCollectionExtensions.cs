@@ -32,9 +32,7 @@ public static class MappingServiceCollectionExtensions
             // cfg.LicenseKey = "<tvůj_licenční_klíč>";
 
             CommonValueConverters.Register(cfg);
-            cfg.AddProfile<FileReadProfiles>();
-            cfg.AddProfile<FileWriteProfiles>();
-            cfg.AddProfile<SearchProfiles>();
+            // Profily se načítají automaticky ze zadaného assembly, není potřeba je přidávat ručně.
         }, typeof(FileReadProfiles).Assembly);
 
         // (Volitelné) Validace konfigurace po startu
