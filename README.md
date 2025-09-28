@@ -1,7 +1,7 @@
 # Veriado
 
 ## Úvod
-Veriado je desktopová aplikace pro Windows, která katalogizuje dokumenty, ukládá jejich binární obsah a metadata do lokální databáze a staví nad nimi plnotextové vyhledávání s moderním WinUI rozhraním.【F:Veriado.Domain/Files/FileEntity.cs†L13-L177】【F:Veriado.Domain/Files/FileContentEntity.cs†L6-L57】【F:Veriado.Infrastructure/Persistence/Options/InfrastructureOptions.cs†L13-L34】【F:Veriado.Infrastructure/Search/SqliteFts5Indexer.cs†L11-L50】【F:Veriado.WinUI/Views/FilesView.xaml†L1-L45】
+Veriado je desktopová aplikace pro Windows, která katalogizuje dokumenty, ukládá jejich binární obsah a metadata do lokální databáze a staví nad nimi plnotextové vyhledávání s moderním WinUI rozhraním.【F:Veriado.Domain/Files/FileEntity.cs†L13-L177】【F:Veriado.Domain/Files/FileContentEntity.cs†L6-L57】【F:Veriado.Infrastructure/Persistence/Options/InfrastructureOptions.cs†L13-L34】【F:Veriado.Infrastructure/Search/SqliteFts5Indexer.cs†L11-L50】【F:Veriado.WinUI/Views/FilesView.xaml†L1-L45】 Výchozí umístění databáze i Lucene indexu nyní spadá do `%LocalAppData%\Veriado`, takže při restartu aplikace zůstane index stabilní i mimo adresář s binárkami; v prostředích bez dostupného profilu se použije bezpečný fallback v adresáři aplikace.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L41-L87】
 
 ## Popis aplikace
 ### Klíčové vlastnosti
