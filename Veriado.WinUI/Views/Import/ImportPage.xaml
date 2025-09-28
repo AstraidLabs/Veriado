@@ -157,7 +157,7 @@
                 <Expander
                     Grid.Row="1"
                     Header="Chyby"
-                    IsExpanded="{Binding HasErrors}"
+                    IsExpanded="{Binding HasErrors, Mode=OneWay}"
                     HorizontalAlignment="Stretch">
                     <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding Errors}">
                         <ItemsControl.ItemTemplate>
