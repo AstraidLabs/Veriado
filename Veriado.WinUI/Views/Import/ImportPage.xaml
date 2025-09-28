@@ -30,10 +30,6 @@
             <models:ImportErrorSeverity>Error</models:ImportErrorSeverity>
             <models:ImportErrorSeverity>Fatal</models:ImportErrorSeverity>
         </x:Array>
-        <CollectionViewSource
-            x:Key="ErrorsViewSource"
-            Source="{Binding Errors}"
-            Filter="OnErrorsFilter" />
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="24">
@@ -73,12 +69,12 @@
                     <muxc:ProgressBar
                         Minimum="0"
                         Maximum="100"
-                        Value="{Binding ProgressPercent, Mode=OneWay, TargetNullValue=0}"
+                        Value="{Binding ProgressPercentValue, Mode=OneWay}"
                         IsIndeterminate="{Binding IsIndeterminate}" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock
                             FontWeight="SemiBold"
-                            Text="{Binding ProgressPercent, Mode=OneWay, StringFormat='{}{0:0.##} %', TargetNullValue='0 %'}" />
+                            Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
                         <TextBlock Text="{Binding ProgressText}" />
                     </StackPanel>
                     <TextBlock
@@ -86,10 +82,9 @@
                         Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
                     <TextBlock
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="{Binding CurrentFilePath}"
+                        Text="{Binding CurrentFilePath, TargetNullValue=''}"
                         TextTrimming="CharacterEllipsis"
-                        MaxLines="2"
-                        TargetNullValue="" />
+                        MaxLines="2" />
                     <TextBlock>
                         <Run Text="Zpracováno: " />
                         <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
@@ -231,7 +226,7 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </StackPanel>
-                        <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding Source={StaticResource ErrorsViewSource}}">
+                        <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding FilteredErrors}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="models:ImportErrorItem">
                                     <Grid Padding="8" ColumnSpacing="12">

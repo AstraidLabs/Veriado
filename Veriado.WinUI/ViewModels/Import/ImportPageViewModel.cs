@@ -40,6 +40,7 @@ public partial class ImportPageViewModel : ViewModelBase
     private int _errorCount;
     private int _skipCount;
     private readonly Dictionary<string, long> _fileSizeCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ObservableCollection<ImportErrorItem> _filteredErrors;
 
     public ImportPageViewModel(
         IImportService importService,
@@ -59,6 +60,8 @@ public partial class ImportPageViewModel : ViewModelBase
 
         Log = new ObservableCollection<ImportLogItem>();
         Errors = new ObservableCollection<ImportErrorItem>();
+        _filteredErrors = new ObservableCollection<ImportErrorItem>();
+        FilteredErrors = new ReadOnlyObservableCollection<ImportErrorItem>(_filteredErrors);
         Log.CollectionChanged += OnLogCollectionChanged;
         Errors.CollectionChanged += OnErrorsCollectionChanged;
 
@@ -71,6 +74,7 @@ public partial class ImportPageViewModel : ViewModelBase
 
         RestoreStateFromHotStorage();
         PopulateDefaultAuthorFromCurrentUser();
+        UpdateFilteredErrors();
     }
 
     [ObservableProperty]
@@ -137,6 +141,8 @@ public partial class ImportPageViewModel : ViewModelBase
 
     public ObservableCollection<ImportErrorItem> Errors { get; }
 
+    public ReadOnlyObservableCollection<ImportErrorItem> FilteredErrors { get; }
+
     public int OkCount
     {
         get => _okCount;
@@ -193,7 +199,11 @@ public partial class ImportPageViewModel : ViewModelBase
 
     public IAsyncRelayCommand ExportLogCommand => _exportLogCommand;
 
-    public event EventHandler? ErrorFilterChanged;
+    public double ProgressPercentValue => ProgressPercent ?? 0d;
+
+    public string ProgressPercentDisplay => ProgressPercent.HasValue
+        ? $"{ProgressPercent.Value:0.##} %"
+        : "0 %";
 
     private bool CanRunImport() =>
         !IsImporting
@@ -1046,7 +1056,7 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasErrors));
         _clearResultsCommand.NotifyCanExecuteChanged();
-        ErrorFilterChanged?.Invoke(this, EventArgs.Empty);
+        UpdateFilteredErrors();
     }
 
     private void OnLogCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1151,7 +1161,7 @@ public partial class ImportPageViewModel : ViewModelBase
 
     partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
     {
-        ErrorFilterChanged?.Invoke(this, EventArgs.Empty);
+        UpdateFilteredErrors();
     }
 
     partial void OnIsImportingChanged(bool value)
@@ -1172,5 +1182,39 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(ProgressText));
         _clearResultsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnProgressPercentChanged(double? value)
+    {
+        OnPropertyChanged(nameof(ProgressPercentValue));
+        OnPropertyChanged(nameof(ProgressPercentDisplay));
+    }
+
+    private void UpdateFilteredErrors()
+    {
+        var items = Errors.Where(MatchesSelectedFilter).ToList();
+
+        if (_filteredErrors.Count == items.Count && _filteredErrors.SequenceEqual(items))
+        {
+            return;
+        }
+
+        _filteredErrors.Clear();
+
+        foreach (var item in items)
+        {
+            _filteredErrors.Add(item);
+        }
+    }
+
+    private bool MatchesSelectedFilter(ImportErrorItem item)
+    {
+        return SelectedErrorFilter switch
+        {
+            ImportErrorSeverity.Warning => item.Severity == ImportErrorSeverity.Warning,
+            ImportErrorSeverity.Error => item.Severity == ImportErrorSeverity.Error,
+            ImportErrorSeverity.Fatal => item.Severity == ImportErrorSeverity.Fatal,
+            _ => true,
+        };
     }
 }
