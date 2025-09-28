@@ -1,12 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using AutoMapper;
-using MediatR;
-using Veriado.Appl.Abstractions;
-using Veriado.Appl.Common;
-using Veriado.Contracts.Files;
-
 namespace Veriado.Appl.UseCases.Queries;
 
 /// <summary>

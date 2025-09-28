@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Veriado.Domain.Audit;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;

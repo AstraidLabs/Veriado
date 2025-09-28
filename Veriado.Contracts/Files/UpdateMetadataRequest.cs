@@ -1,4 +1,3 @@
-using System;
 namespace Veriado.Contracts.Files;
 
 /// <summary>

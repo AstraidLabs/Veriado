@@ -1,10 +1,4 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
-using Veriado.Domain.Search;
-using Veriado.Infrastructure.Persistence;
 
 namespace Veriado.Infrastructure.Search;
 

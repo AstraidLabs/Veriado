@@ -1,15 +1,10 @@
-using System;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services;
-using Veriado.WinUI.Services.Abstractions;
 using Veriado.Services.DependencyInjection;
 using Veriado.WinUI.Services;
 using Veriado.WinUI.ViewModels.Files;

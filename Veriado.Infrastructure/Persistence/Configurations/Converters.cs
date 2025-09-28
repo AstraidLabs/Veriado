@@ -1,11 +1,7 @@
-using System;
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Veriado.Domain.Metadata;
-using Veriado.Domain.Search;
-using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;
 

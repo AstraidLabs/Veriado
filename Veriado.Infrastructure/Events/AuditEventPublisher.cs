@@ -1,16 +1,8 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
 using Veriado.Domain.Audit;
 using Veriado.Domain.Files.Events;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
-using Veriado.Domain.ValueObjects;
-using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Events;
 

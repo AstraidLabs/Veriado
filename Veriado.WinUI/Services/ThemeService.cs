@@ -1,9 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.UI.Xaml;
-using Veriado.WinUI.Services.Abstractions;
-
 namespace Veriado.WinUI.Services;
 
 public sealed class ThemeService : IThemeService

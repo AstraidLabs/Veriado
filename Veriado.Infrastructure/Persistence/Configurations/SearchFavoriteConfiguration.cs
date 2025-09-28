@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Veriado.Domain.Search;
-
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
 internal sealed class SearchFavoriteConfiguration : IEntityTypeConfiguration<SearchFavoriteEntity>

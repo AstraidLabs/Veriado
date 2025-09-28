@@ -1,10 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Messaging;
-using Veriado.WinUI.Services.Abstractions;
-
 namespace Veriado.WinUI.ViewModels.Base;
 
 /// <summary>

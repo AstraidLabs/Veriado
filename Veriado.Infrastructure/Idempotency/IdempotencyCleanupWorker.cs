@@ -1,12 +1,4 @@
-using System;
-using System.Globalization;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Idempotency;
 

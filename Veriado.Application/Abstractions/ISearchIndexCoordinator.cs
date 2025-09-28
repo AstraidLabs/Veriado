@@ -1,7 +1,4 @@
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
-using Veriado.Domain.Files;
 
 namespace Veriado.Appl.Abstractions;
 

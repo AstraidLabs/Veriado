@@ -1,10 +1,7 @@
-using System;
 using Veriado.Domain.Files.Events;
 using Veriado.Domain.Metadata;
-using Veriado.Domain.Primitives;
 using Veriado.Domain.Search;
 using Veriado.Domain.Search.Events;
-using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Files;
 

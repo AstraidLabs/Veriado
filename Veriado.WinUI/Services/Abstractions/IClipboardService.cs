@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IClipboardService

@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Veriado.Infrastructure.Idempotency.Entities;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;

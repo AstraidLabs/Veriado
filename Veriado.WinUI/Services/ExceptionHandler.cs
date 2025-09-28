@@ -1,6 +1,4 @@
-using System;
 using Microsoft.Extensions.Logging;
-using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 

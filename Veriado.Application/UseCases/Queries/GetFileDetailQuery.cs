@@ -1,7 +1,3 @@
-using System;
-using MediatR;
-using Veriado.Contracts.Files;
-
 namespace Veriado.Appl.UseCases.Queries;
 
 /// <summary>

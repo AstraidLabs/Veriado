@@ -1,6 +1,3 @@
-using System;
-using Veriado.Domain.ValueObjects;
-
 namespace Veriado.Domain.Audit;
 
 /// <summary>

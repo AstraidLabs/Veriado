@@ -1,7 +1,3 @@
-using System;
-using System.Threading;
-using Veriado.Infrastructure.Persistence.Options;
-
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
 /// <summary>

@@ -1,7 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace Veriado.Infrastructure.DependencyInjection;
 
 internal sealed class InfrastructureInitializationState

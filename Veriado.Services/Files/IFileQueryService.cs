@@ -1,11 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Veriado.Contracts.Common;
-using Veriado.Contracts.Files;
-using Veriado.Contracts.Search;
-
 namespace Veriado.Services.Files;
 
 /// <summary>

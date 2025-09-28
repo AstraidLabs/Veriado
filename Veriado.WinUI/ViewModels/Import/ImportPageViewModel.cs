@@ -1,21 +1,12 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Import;
 using Veriado.Services.Import;
 using Veriado.WinUI.Models.Import;
-using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 using Veriado.WinUI.Views.Import;
 

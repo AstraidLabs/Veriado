@@ -1,12 +1,6 @@
-using System;
-using System.IO;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging.Abstractions;
-using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Interceptors;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Persistence.DesignTime;
 

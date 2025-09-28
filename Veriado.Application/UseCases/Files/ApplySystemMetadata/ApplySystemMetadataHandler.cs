@@ -1,16 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using AutoMapper;
-using MediatR;
-using Veriado.Appl.Abstractions;
-using Veriado.Appl.Common;
-using Veriado.Appl.UseCases.Files.Common;
-using Veriado.Contracts.Files;
-using Veriado.Domain.Files;
-using Veriado.Domain.Metadata;
-using Veriado.Domain.ValueObjects;
-
 namespace Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 
 /// <summary>

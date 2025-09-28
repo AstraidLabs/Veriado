@@ -1,5 +1,3 @@
-using System;
-
 namespace Veriado.Appl.Common.Policies;
 
 /// <summary>

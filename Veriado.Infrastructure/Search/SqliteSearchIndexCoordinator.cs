@@ -1,12 +1,4 @@
-using System;
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.Files;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Search;
 

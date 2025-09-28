@@ -1,17 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
-using Veriado.Domain.ValueObjects;
-using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;

@@ -1,7 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Veriado.Infrastructure.Persistence.Configurations;
-using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;
 

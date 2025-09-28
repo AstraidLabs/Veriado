@@ -1,6 +1,4 @@
-using MediatR;
 using Veriado.Contracts.Common;
-using Veriado.Contracts.Files;
 
 namespace Veriado.Appl.UseCases.Queries.FileGrid;
 

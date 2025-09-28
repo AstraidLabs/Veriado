@@ -1,8 +1,3 @@
-using System;
-using AutoMapper;
-using Veriado.Domain.Metadata;
-using Veriado.Domain.ValueObjects;
-
 namespace Veriado.Mapping.Profiles;
 
 /// <summary>

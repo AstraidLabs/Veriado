@@ -1,7 +1,3 @@
-using System;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Data;
-
 namespace Veriado.WinUI.Converters;
 
 public sealed class NullableIntToDoubleConverter : IValueConverter

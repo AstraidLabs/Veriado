@@ -1,9 +1,5 @@
 #nullable enable
-using System;
 using System.Globalization;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Data;
 
 namespace Veriado.WinUI.Converters;
 
@@ -69,7 +65,7 @@ public sealed partial class BoolToSeverityConverter : IValueConverter
             return null;
         }
 
-        // Numeric primitives – anything non-zero is true
+        // Numeric primitives â€“ anything non-zero is true
         if (value is sbyte sb) return sb != 0;
         if (value is byte by) return by != 0;
         if (value is short sh) return sh != 0;

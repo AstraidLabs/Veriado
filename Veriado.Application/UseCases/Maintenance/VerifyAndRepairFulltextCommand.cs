@@ -1,6 +1,3 @@
-using MediatR;
-using Veriado.Appl.Common;
-
 namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>

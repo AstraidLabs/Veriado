@@ -1,6 +1,4 @@
-using AutoMapper;
 using Veriado.Contracts.Search;
-using Veriado.Domain.Search;
 
 namespace Veriado.Mapping.Profiles;
 

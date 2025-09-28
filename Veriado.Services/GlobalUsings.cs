@@ -1,0 +1,12 @@
+global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using MediatR;
+global using Veriado.Appl.Abstractions;
+global using Veriado.Appl.Common;
+global using Veriado.Appl.UseCases.Maintenance;
+global using Veriado.Contracts.Common;
+global using Veriado.Contracts.Files;
+global using Veriado.Contracts.Search;

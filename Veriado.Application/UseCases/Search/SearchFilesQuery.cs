@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using MediatR;
-using Veriado.Contracts.Search;
-
 namespace Veriado.Appl.UseCases.Search;
 
 /// <summary>

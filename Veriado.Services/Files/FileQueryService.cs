@@ -1,13 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using MediatR;
 using Veriado.Appl.UseCases.Queries;
 using Veriado.Appl.UseCases.Queries.FileGrid;
-using Veriado.Contracts.Common;
-using Veriado.Contracts.Files;
-using Veriado.Contracts.Search;
 using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.Services.Files;

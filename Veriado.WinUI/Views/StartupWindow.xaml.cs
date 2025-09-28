@@ -1,5 +1,3 @@
-using System;
-using Microsoft.UI.Xaml;
 using Veriado.WinUI.ViewModels.Startup;
 
 namespace Veriado.WinUI.Views;

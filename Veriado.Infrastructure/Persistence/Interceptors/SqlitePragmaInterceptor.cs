@@ -1,7 +1,4 @@
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Veriado.Infrastructure.Persistence.Interceptors;

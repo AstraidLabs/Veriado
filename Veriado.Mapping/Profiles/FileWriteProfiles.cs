@@ -1,7 +1,3 @@
-using AutoMapper;
-using Veriado.Contracts.Files;
-using Veriado.Domain.Metadata;
-
 namespace Veriado.Mapping.Profiles;
 
 /// <summary>

@@ -1,13 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Veriado.Appl.Abstractions;
-using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Search;
-using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Search;
 

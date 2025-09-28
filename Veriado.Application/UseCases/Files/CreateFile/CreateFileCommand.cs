@@ -1,7 +1,3 @@
-using System;
-using MediatR;
-using Veriado.Appl.Common;
-
 namespace Veriado.Appl.UseCases.Files.CreateFile;
 
 /// <summary>

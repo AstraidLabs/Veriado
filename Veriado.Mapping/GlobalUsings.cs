@@ -1,0 +1,10 @@
+global using System;
+global using AutoMapper;
+global using Veriado.Appl.UseCases.Files.SetFileReadOnly;
+global using Veriado.Appl.UseCases.Files.SetFileValidity;
+global using Veriado.Appl.UseCases.Files.UpdateFileMetadata;
+global using Veriado.Contracts.Common;
+global using Veriado.Contracts.Files;
+global using Veriado.Domain.Metadata;
+global using Veriado.Domain.Search;
+global using Veriado.Domain.ValueObjects;
