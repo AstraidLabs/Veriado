@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -242,7 +243,12 @@ public partial class ImportPageViewModel : ViewModelBase
             });
 
             await ResetProgressAsync().ConfigureAwait(false);
-            await AddLogAsync("Import", $"Spouštím import ze složky '{SelectedFolder}'.", "info").ConfigureAwait(false);
+            await AddLogAsync(
+                    "Import",
+                    $"Spouštím import ze složky '{SelectedFolder}'.",
+                    "info",
+                    string.IsNullOrWhiteSpace(SelectedFolder) ? null : $"Složka: {SelectedFolder}")
+                .ConfigureAwait(false);
 
             var request = BuildRequest();
 
@@ -426,7 +432,10 @@ public partial class ImportPageViewModel : ViewModelBase
                 break;
             case "ImportCompletedEvent":
             case "ImportCompleted":
-                await AddLogAsync("Import", "Import byl dokončen.", "success").ConfigureAwait(false);
+                var statusProperty = evt.GetType().GetProperty("Status");
+                var statusValue = statusProperty?.GetValue(evt);
+                var detail = await BuildCurrentProgressDetailAsync(statusValue).ConfigureAwait(false);
+                await AddLogAsync("Import", "Import byl dokončen.", "success", detail).ConfigureAwait(false);
                 break;
             default:
                 await HandleUnknownEventAsync(evt).ConfigureAwait(false);
@@ -450,7 +459,12 @@ public partial class ImportPageViewModel : ViewModelBase
                     OkCount++;
                     Processed++;
                 });
-                await AddLogAsync("OK", fileName ?? "Soubor", status).ConfigureAwait(false);
+                await AddLogAsync(
+                        "OK",
+                        fileName ?? "Soubor",
+                        status,
+                        string.IsNullOrWhiteSpace(fileName) ? null : fileName)
+                    .ConfigureAwait(false);
                 break;
             case "error":
                 await Dispatcher.Enqueue(() =>
@@ -459,7 +473,12 @@ public partial class ImportPageViewModel : ViewModelBase
                     Processed++;
                     Errors.Add(new ImportErrorItem(fileName ?? "Soubor", message ?? "Import se nezdařil.", null));
                 });
-                await AddLogAsync("Chyba", message ?? "Import se nezdařil.", status).ConfigureAwait(false);
+                await AddLogAsync(
+                        "Chyba",
+                        message ?? "Import se nezdařil.",
+                        status,
+                        string.IsNullOrWhiteSpace(fileName) ? null : fileName)
+                    .ConfigureAwait(false);
                 break;
             case "skip":
                 await Dispatcher.Enqueue(() =>
@@ -467,7 +486,12 @@ public partial class ImportPageViewModel : ViewModelBase
                     SkipCount++;
                     Processed++;
                 });
-                await AddLogAsync("Přeskočeno", fileName ?? "Soubor", status).ConfigureAwait(false);
+                await AddLogAsync(
+                        "Přeskočeno",
+                        fileName ?? "Soubor",
+                        status,
+                        string.IsNullOrWhiteSpace(message) ? fileName : message)
+                    .ConfigureAwait(false);
                 break;
         }
     }
@@ -520,7 +544,10 @@ public partial class ImportPageViewModel : ViewModelBase
                         Path.GetFileName(error.FilePath),
                         error.Message,
                         null));
-                    Log.Add(new ImportLogItem(DateTimeOffset.Now, "Chyba", error.Message, "error"));
+                    var detail = string.IsNullOrWhiteSpace(error.FilePath)
+                        ? null
+                        : $"Soubor: {error.FilePath}";
+                    Log.Add(new ImportLogItem(DateTimeOffset.Now, "Chyba", error.Message, "error", detail));
                     TrimLog();
                 }
 
@@ -546,7 +573,7 @@ public partial class ImportPageViewModel : ViewModelBase
             _ => "info",
         };
 
-        await AddLogAsync("Výsledek", summary, logStatus).ConfigureAwait(false);
+        await AddLogAsync("Výsledek", summary, logStatus, BuildResultDetail(result)).ConfigureAwait(false);
 
         switch (result.Status)
         {
@@ -594,11 +621,80 @@ public partial class ImportPageViewModel : ViewModelBase
         });
     }
 
-    private async Task AddLogAsync(string title, string message, string status)
+    private Task<string> BuildCurrentProgressDetailAsync(object? status = null)
+    {
+        var statusText = FormatStatusText(status);
+
+        return Dispatcher.EnqueueAsync(() =>
+        {
+            var skipped = SkipCount > 0 ? SkipCount : Math.Max(0, Total - OkCount - ErrorCount);
+            var builder = new StringBuilder();
+            builder.AppendLine($"Stav: {statusText}");
+            builder.AppendLine($"Celkem souborů: {Total}");
+            builder.AppendLine($"Úspěšně: {OkCount}");
+            builder.AppendLine($"Chyby: {ErrorCount}");
+            builder.Append($"Přeskočeno: {skipped}");
+
+            if (ErrorCount > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine();
+                builder.Append("Detaily chyb najdete v seznamu níže.");
+            }
+
+            return Task.FromResult(builder.ToString());
+        });
+    }
+
+    private static string BuildResultDetail(ImportBatchResult result)
+    {
+        var skipped = Math.Max(0, result.Total - result.Succeeded - result.Failed);
+        var statusText = GetStatusText(result.Status);
+
+        var builder = new StringBuilder();
+        builder.AppendLine($"Stav: {statusText}");
+        builder.AppendLine($"Celkem souborů: {result.Total}");
+        builder.AppendLine($"Úspěšně: {result.Succeeded}");
+        builder.AppendLine($"Chyby: {result.Failed}");
+        builder.Append($"Přeskočeno: {skipped}");
+
+        if (result.Errors?.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine();
+            builder.Append("Detaily chyb najdete v seznamu níže.");
+        }
+
+        return builder.ToString();
+    }
+
+    private static string FormatStatusText(object? status)
+    {
+        return status switch
+        {
+            ImportBatchStatus typed => GetStatusText(typed),
+            string text when Enum.TryParse(text, true, out ImportBatchStatus parsed) => GetStatusText(parsed),
+            _ => status?.ToString() ?? "Dokončeno",
+        };
+    }
+
+    private static string GetStatusText(ImportBatchStatus status)
+    {
+        return status switch
+        {
+            ImportBatchStatus.Success => "Úspěch",
+            ImportBatchStatus.PartialSuccess => "Částečný úspěch",
+            ImportBatchStatus.Failure => "Selhání",
+            ImportBatchStatus.FatalError => "Fatální chyba",
+            _ => status.ToString(),
+        };
+    }
+
+    private async Task AddLogAsync(string title, string message, string status, string? detail = null)
     {
         await Dispatcher.Enqueue(() =>
         {
-            Log.Add(new ImportLogItem(DateTimeOffset.Now, title, message, status));
+            Log.Add(new ImportLogItem(DateTimeOffset.Now, title, message, status, detail));
             TrimLog();
             _clearResultsCommand.NotifyCanExecuteChanged();
         });

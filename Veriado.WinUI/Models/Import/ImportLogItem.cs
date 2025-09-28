@@ -5,12 +5,13 @@ namespace Veriado.WinUI.Models.Import;
 
 public sealed class ImportLogItem
 {
-    public ImportLogItem(DateTimeOffset timestamp, string title, string message, string status)
+    public ImportLogItem(DateTimeOffset timestamp, string title, string message, string status, string? detail = null)
     {
         Timestamp = timestamp;
         Title = title;
         Message = message;
         Status = status;
+        Detail = detail;
     }
 
     public DateTimeOffset Timestamp { get; }
@@ -21,5 +22,9 @@ public sealed class ImportLogItem
 
     public string Status { get; }
 
+    public string? Detail { get; }
+
     public string FormattedTimestamp => Timestamp.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+    public bool HasDetail => !string.IsNullOrWhiteSpace(Detail);
 }
