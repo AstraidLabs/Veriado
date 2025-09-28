@@ -19,6 +19,7 @@ using Veriado.Services.Import.Internal;
 using Veriado.Contracts.Import;
 using Veriado.Appl.Common;
 using Veriado.Appl.Abstractions;
+using Veriado.Appl.UseCases.Files.CheckFileHash;
 
 namespace Veriado.Services.Import;
 
@@ -225,7 +226,43 @@ public sealed class ImportService : IImportService
                     try
                     {
                         var createRequest = await CreateRequestFromFileAsync(filePath, options, token).ConfigureAwait(false);
-                        var response = await ImportFileInternalAsync(createRequest, filePath, token).ConfigureAwait(false);
+
+                        if (await FileAlreadyExistsAsync(createRequest.ContentHash, token).ConfigureAwait(false))
+                        {
+                            _logger.LogInformation(
+                                "Skipping file {FilePath} because identical content already exists (SHA256 {Hash}).",
+                                filePath,
+                                createRequest.ContentHash);
+
+                            var completedSkip = Interlocked.Increment(ref processed);
+                            var successCount = Volatile.Read(ref succeeded);
+                            var failedCount = Volatile.Read(ref failed);
+                            var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
+
+                            await channel.Writer.WriteAsync(
+                                ImportProgressEvent.FileCompleted(
+                                    filePath,
+                                    completedSkip,
+                                    total,
+                                    successCount,
+                                    skipMessage,
+                                    _clock.UtcNow),
+                                CancellationToken.None).ConfigureAwait(false);
+
+                            await channel.Writer.WriteAsync(
+                                ImportProgressEvent.Progress(
+                                    completedSkip,
+                                    total,
+                                    successCount,
+                                    failedCount,
+                                    skipMessage,
+                                    _clock.UtcNow),
+                                CancellationToken.None).ConfigureAwait(false);
+
+                            return;
+                        }
+
+                        var response = await ImportFileInternalAsync(createRequest.Request, filePath, token).ConfigureAwait(false);
 
                         if (response.IsSuccess)
                         {
@@ -390,7 +427,7 @@ public sealed class ImportService : IImportService
 
         var processedFinal = Volatile.Read(ref processed);
         var succeededFinal = Volatile.Read(ref succeeded);
-        var failedFinal = Math.Max(0, processedFinal - succeededFinal);
+        var failedFinal = Volatile.Read(ref failed);
         var errorArray = errors.ToArray();
         var status = DetermineStatus(processedFinal, succeededFinal, failedFinal, fatalEncountered || cancellationEncountered, errorArray);
         var aggregate = new ImportAggregateResult(status, processedFinal, succeededFinal, failedFinal, errorArray);
@@ -437,7 +474,7 @@ public sealed class ImportService : IImportService
         return ApiResponse<Guid>.Success(fileId);
     }
 
-    private async Task<CreateFileRequest> CreateRequestFromFileAsync(
+    private async Task<CreateFileImport> CreateRequestFromFileAsync(
         string filePath,
         NormalizedImportOptions options,
         CancellationToken cancellationToken)
@@ -486,28 +523,30 @@ public sealed class ImportService : IImportService
             _logger.LogDebug(ex, "Failed to capture file metadata for {FilePath}", filePath);
         }
 
-        var bytes = await ReadFileContentAsync(filePath, options, cancellationToken).ConfigureAwait(false);
-        if (maxFileSizeBytes.HasValue && bytes.LongLength > maxFileSizeBytes.Value)
+        var contentResult = await ReadFileContentAsync(filePath, options, cancellationToken).ConfigureAwait(false);
+        if (maxFileSizeBytes.HasValue && contentResult.Content.LongLength > maxFileSizeBytes.Value)
         {
-            throw new FileTooLargeException(filePath, bytes.LongLength, maxFileSizeBytes.Value);
+            throw new FileTooLargeException(filePath, contentResult.Content.LongLength, maxFileSizeBytes.Value);
         }
 
-        return NormalizeRequest(new CreateFileRequest
+        var request = NormalizeRequest(new CreateFileRequest
         {
             Name = name,
             Extension = extension,
             Mime = MimeMap.GetMimeType(extension),
             Author = author,
-            Content = bytes,
+            Content = contentResult.Content,
             MaxContentLength = maxFileSizeBytes.HasValue && maxFileSizeBytes.Value <= int.MaxValue
                 ? (int?)maxFileSizeBytes.Value
                 : null,
             SystemMetadata = systemMetadata,
             IsReadOnly = isReadOnly,
         });
+
+        return new CreateFileImport(request, contentResult.Hash);
     }
 
-    private async Task<byte[]> ReadFileContentAsync(
+    private async Task<FileContentReadResult> ReadFileContentAsync(
         string filePath,
         NormalizedImportOptions options,
         CancellationToken cancellationToken)
@@ -535,8 +574,9 @@ public sealed class ImportService : IImportService
         {
             using var emptyHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var emptyHashValue = emptyHash.GetHashAndReset();
-            _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", 0, filePath, Convert.ToHexString(emptyHashValue));
-            return Array.Empty<byte>();
+            var emptyHashText = Convert.ToHexString(emptyHashValue);
+            _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", 0, filePath, emptyHashText);
+            return new FileContentReadResult(Array.Empty<byte>(), emptyHashText);
         }
 
         var content = new byte[size];
@@ -571,9 +611,10 @@ public sealed class ImportService : IImportService
         }
 
         var hashValue = hash.GetHashAndReset();
-        _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", offset, filePath, Convert.ToHexString(hashValue));
+        var hashText = Convert.ToHexString(hashValue);
+        _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", offset, filePath, hashText);
 
-        return content;
+        return new FileContentReadResult(content, hashText);
     }
 
     private CreateFileRequest NormalizeRequest(CreateFileRequest request)
@@ -757,6 +798,16 @@ public sealed class ImportService : IImportService
         return AmbientRequestContext.Begin(Guid.NewGuid(), _requestContext.UserId, _requestContext.CorrelationId);
     }
 
+    private async Task<bool> FileAlreadyExistsAsync(string contentHash, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(contentHash))
+        {
+            return false;
+        }
+
+        return await _mediator.Send(new FileHashExistsQuery(contentHash), cancellationToken).ConfigureAwait(false);
+    }
+
     private DateTimeOffset CoerceToUtc(DateTime value)
     {
         if (value == DateTime.MinValue || value == DateTime.MaxValue)
@@ -775,6 +826,10 @@ public sealed class ImportService : IImportService
 
         return new DateTimeOffset(value, TimeSpan.Zero);
     }
+
+    private sealed record CreateFileImport(CreateFileRequest Request, string ContentHash);
+
+    private sealed record FileContentReadResult(byte[] Content, string Hash);
 
     private sealed class FileTooLargeException : Exception
     {
