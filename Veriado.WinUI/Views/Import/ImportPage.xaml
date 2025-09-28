@@ -279,78 +279,125 @@
                     </toolkit:DataGrid.Columns>
                 </toolkit:DataGrid>
 
-                <Expander
-                    Grid.Row="1"
-                    Header="Chyby"
-                    IsExpanded="{Binding HasErrors, Mode=OneWay}"
-                    HorizontalAlignment="Stretch">
-                    <StackPanel Spacing="8">
-                        <StackPanel.Transitions>
-                            <TransitionCollection>
-                                <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
-                            </TransitionCollection>
-                        </StackPanel.Transitions>
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Grid Grid.Row="1" RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <muxc:InfoBar
+                        Grid.Row="0"
+                        IsClosable="False"
+                        IsOpen="{Binding HasErrors}"
+                        Visibility="{Binding HasErrors, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Severity="{Binding ErrorSummarySeverity}"
+                        Title="{Binding ErrorSummaryTitle}"
+                        Message="{Binding ErrorSummaryMessage}">
+                        <muxc:InfoBar.Content>
                             <TextBlock
-                                VerticalAlignment="Center"
-                                Text="Filtrovat:" />
-                            <ComboBox
-                                Width="180"
-                                ItemsSource="{Binding ErrorFilterOptions}"
-                                SelectedItem="{Binding SelectedErrorFilter, Mode=TwoWay}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="models:ImportErrorSeverity">
-                                        <TextBlock Text="{Binding Converter={StaticResource ErrorSeverityToStringConverter}}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
-                        <ItemsControl x:Name="ErrorsItemsControl" ItemsSource="{Binding FilteredErrors}">
-                            <ItemsControl.ItemContainerTransitions>
-                                <TransitionCollection>
-                                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
-                                </TransitionCollection>
-                            </ItemsControl.ItemContainerTransitions>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="models:ImportErrorItem">
-                                    <Grid Padding="8" ColumnSpacing="12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Orientation="Vertical" Spacing="4">
-                                            <TextBlock
-                                                FontSize="12"
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Text="{Binding FormattedTimestamp}" />
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding FileName}" />
-                                            <TextBlock
-                                                FontSize="12"
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Text="{Binding Code}"
-                                                Visibility="{Binding HasCode, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                            <TextBlock TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
-                                            <TextBlock
-                                                FontSize="12"
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Text="{Binding FilePath}"
-                                                Visibility="{Binding HasFilePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                            <TextBlock
-                                                TextWrapping="Wrap"
-                                                Text="{Binding Suggestion}"
-                                                Visibility="{Binding HasSuggestion, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        </StackPanel>
-                                        <Button
-                                            Grid.Column="1"
-                                            Content="Detail"
-                                            Command="{Binding ElementName=ErrorsItemsControl, Path=DataContext.OpenErrorDetailCommand}"
-                                            CommandParameter="{Binding Source}" />
-                                    </Grid>
+                                Text="{Binding ErrorSummaryDetail}"
+                                TextWrapping="Wrap"
+                                Visibility="{Binding HasErrorSummaryDetail, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </muxc:InfoBar.Content>
+                    </muxc:InfoBar>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsEnabled="{Binding HasErrors}">
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Text="Filtrovat:" />
+                        <ComboBox
+                            Width="180"
+                            ItemsSource="{Binding ErrorFilterOptions}"
+                            SelectedItem="{Binding SelectedErrorFilter, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:ImportErrorSeverity">
+                                    <TextBlock Text="{Binding Converter={StaticResource ErrorSeverityToStringConverter}}" />
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
-                </Expander>
+
+                    <toolkit:DataGrid
+                        x:Name="ErrorsDataGrid"
+                        Grid.Row="2"
+                        ItemsSource="{Binding FilteredErrors}"
+                        AutoGenerateColumns="False"
+                        CanUserReorderColumns="False"
+                        CanUserResizeColumns="True"
+                        CanUserSortColumns="False"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        SelectionMode="Single"
+                        GridLinesVisibility="All"
+                        RowHeight="Auto"
+                        MinHeight="180"
+                        RowDetailsVisibilityMode="VisibleWhenSelected"
+                        Visibility="{Binding HasFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <toolkit:DataGrid.Columns>
+                            <toolkit:DataGridTextColumn
+                                Header="Čas"
+                                Binding="{Binding FormattedTimestamp}"
+                                Width="Auto" />
+                            <toolkit:DataGridTextColumn
+                                Header="Soubor"
+                                Binding="{Binding FileName}"
+                                Width="2*">
+                                <toolkit:DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}">
+                                        <Setter Property="ToolTipService.ToolTip" Value="{Binding FilePath}" />
+                                    </Style>
+                                </toolkit:DataGridTextColumn.ElementStyle>
+                            </toolkit:DataGridTextColumn>
+                            <toolkit:DataGridTextColumn
+                                Header="Kód"
+                                Binding="{Binding Code}"
+                                Width="Auto" />
+                            <toolkit:DataGridTextColumn
+                                Header="Závažnost"
+                                Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}"
+                                Width="Auto" />
+                            <toolkit:DataGridTextColumn
+                                Header="Zpráva"
+                                Binding="{Binding ErrorMessage}"
+                                Width="3*">
+                                <toolkit:DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
+                                </toolkit:DataGridTextColumn.ElementStyle>
+                            </toolkit:DataGridTextColumn>
+                        </toolkit:DataGrid.Columns>
+                        <toolkit:DataGrid.RowDetailsTemplate>
+                            <DataTemplate x:DataType="models:ImportErrorItem">
+                                <StackPanel Margin="0,8,0,8" Spacing="4">
+                                    <TextBlock
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{Binding FilePath}"
+                                        TextWrapping="Wrap"
+                                        Visibility="{Binding HasFilePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Text="{Binding Suggestion}"
+                                        TextWrapping="Wrap"
+                                        Visibility="{Binding HasSuggestion, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <Button
+                                        Content="Otevřít detail"
+                                        HorizontalAlignment="Left"
+                                        Command="{Binding ElementName=ErrorsDataGrid, Path=DataContext.OpenErrorDetailCommand}"
+                                        CommandParameter="{Binding Source}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </toolkit:DataGrid.RowDetailsTemplate>
+                    </toolkit:DataGrid>
+
+                    <TextBlock
+                        Grid.Row="3"
+                        Margin="0,8,0,0"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Žádné chyby neodpovídají vybranému filtru."
+                        Visibility="{Binding HasNoFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
             </Grid>
         </StackPanel>
 
