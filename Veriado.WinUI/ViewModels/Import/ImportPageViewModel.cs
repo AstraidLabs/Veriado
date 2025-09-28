@@ -163,43 +163,17 @@ public partial class ImportPageViewModel : ViewModelBase
     [ObservableProperty]
     private ImportErrorSeverity _selectedErrorFilter = ImportErrorSeverity.All;
 
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private InfoBarSeverity _errorSummarySeverity = InfoBarSeverity.Informational;
 
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _errorSummaryTitle;
 
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _errorSummaryMessage;
 
+    [ObservableProperty(Setter = AccessModifier.Private)]
     private string? _errorSummaryDetail;
-
-    public InfoBarSeverity ErrorSummarySeverity
-    {
-        get => _errorSummarySeverity;
-        private set => SetProperty(ref _errorSummarySeverity, value);
-    }
-
-    public string? ErrorSummaryTitle
-    {
-        get => _errorSummaryTitle;
-        private set => SetProperty(ref _errorSummaryTitle, value);
-    }
-
-    public string? ErrorSummaryMessage
-    {
-        get => _errorSummaryMessage;
-        private set => SetProperty(ref _errorSummaryMessage, value);
-    }
-
-    public string? ErrorSummaryDetail
-    {
-        get => _errorSummaryDetail;
-        private set
-        {
-            if (SetProperty(ref _errorSummaryDetail, value))
-            {
-                OnPropertyChanged(nameof(HasErrorSummaryDetail));
-            }
-        }
-    }
 
     public ObservableCollection<ImportLogItem> Log { get; }
 
@@ -1400,6 +1374,11 @@ public partial class ImportPageViewModel : ViewModelBase
     partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
     {
         UpdateFilteredErrors();
+    }
+
+    partial void OnErrorSummaryDetailChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasErrorSummaryDetail));
     }
 
     partial void OnIsImportingChanged(bool value)
