@@ -233,7 +233,9 @@
                     HeadersVisibility="Column"
                     IsReadOnly="True"
                     SelectionMode="Single"
-                    GridLinesVisibility="All">
+                    GridLinesVisibility="All"
+                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <datagrid:DataGrid.Columns>
                         <datagrid:DataGridTextColumn Header="Čas" Binding="{Binding FormattedTimestamp}" Width="Auto" />
                         <datagrid:DataGridTextColumn Header="Událost" Binding="{Binding Title}" Width="2*">
@@ -312,7 +314,9 @@
                         GridLinesVisibility="All"
                         MinHeight="180"
                         RowDetailsVisibilityMode="VisibleWhenSelected"
-                        Visibility="{Binding HasFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        Visibility="{Binding HasFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <datagrid:DataGrid.Columns>
                             <datagrid:DataGridTextColumn Header="Čas" Binding="{Binding FormattedTimestamp}" Width="Auto" />
                             <datagrid:DataGridTextColumn Header="Soubor" Binding="{Binding FileName}" Width="2*">
