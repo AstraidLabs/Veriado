@@ -10,6 +10,7 @@ using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using Microsoft.Extensions.Logging;
 using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -25,11 +26,13 @@ internal sealed class LuceneSearchIndexer
     private readonly InfrastructureOptions _options;
     private readonly Analyzer? _analyzer;
     private readonly FSDirectory? _directory;
+    private readonly ILogger<LuceneSearchIndexer>? _logger;
     private readonly object _syncRoot = new();
 
-    public LuceneSearchIndexer(InfrastructureOptions options)
+    public LuceneSearchIndexer(InfrastructureOptions options, ILogger<LuceneSearchIndexer>? logger = null)
     {
         _options = options;
+        _logger = logger;
         if (!options.EnableLuceneIntegration)
         {
             return;
@@ -46,8 +49,15 @@ internal sealed class LuceneSearchIndexer
             directoryInfo.Create();
         }
 
+        var directory = FSDirectory.Open(directoryInfo);
+        if (!TryClearStaleWriteLock(directory))
+        {
+            directory.Dispose();
+            return;
+        }
+
         _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-        _directory = FSDirectory.Open(directoryInfo);
+        _directory = directory;
 
         // Ensure the index exists so that query services can open it without throwing.
         using var writer = CreateWriter();
@@ -109,6 +119,31 @@ internal sealed class LuceneSearchIndexer
         };
 
         return new IndexWriter(_directory, config);
+    }
+
+    private bool TryClearStaleWriteLock(FSDirectory directory)
+    {
+        try
+        {
+            if (!IndexWriter.IsLocked(directory))
+            {
+                return true;
+            }
+
+            IndexWriter.Unlock(directory);
+            _logger?.LogWarning(
+                "Detected and cleared a stale Lucene write lock at {LuceneIndexPath}.",
+                _options.LuceneIndexPath);
+            return true;
+        }
+        catch (IOException ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Detected a stale Lucene write lock at {LuceneIndexPath} but failed to clear it. Lucene integration will be disabled.",
+                _options.LuceneIndexPath);
+            return false;
+        }
     }
 
     private static Document BuildDocument(SearchDocument document)
