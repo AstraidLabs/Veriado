@@ -34,7 +34,7 @@ internal sealed class FileReadRepository : IFileReadRepository
             {
                 file.Id,
                 Name = file.Name.Value,
-                Title = file.Title,
+                Title = file.Title ?? file.Name.Value,
                 Extension = file.Extension.Value,
                 Mime = file.Mime.Value,
                 file.Author,
