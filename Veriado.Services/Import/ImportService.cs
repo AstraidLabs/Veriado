@@ -657,13 +657,6 @@ public sealed class ImportService : IImportService
 
     private static NormalizedImportOptions NormalizeOptions(ImportOptions? options)
     {
-        var searchPattern = options is null || string.IsNullOrWhiteSpace(options.SearchPattern)
-            ? "*"
-            : options.SearchPattern!;
-        var recursive = options?.Recursive ?? true;
-        var defaultAuthor = (options?.DefaultAuthor ?? string.Empty).Trim();
-        var keepMetadata = options?.KeepFileSystemMetadata ?? true;
-        var setReadOnly = options?.SetReadOnly ?? false;
         var maxFileSize = options?.MaxFileSizeBytes;
         if (maxFileSize.HasValue && maxFileSize.Value <= 0)
         {
@@ -683,11 +676,11 @@ public sealed class ImportService : IImportService
         }
 
         return new NormalizedImportOptions(
-            searchPattern,
-            recursive,
-            defaultAuthor,
-            keepMetadata,
-            setReadOnly,
+            "*",
+            true,
+            string.Empty,
+            true,
+            false,
             maxFileSize,
             maxDegree,
             bufferSize);
@@ -695,18 +688,23 @@ public sealed class ImportService : IImportService
 
     private static NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
     {
-        var options = new ImportOptions
+        var sanitized = NormalizeOptions(new ImportOptions
         {
-            SearchPattern = string.IsNullOrWhiteSpace(request.SearchPattern) ? "*" : request.SearchPattern!,
-            Recursive = request.Recursive,
-            DefaultAuthor = request.DefaultAuthor,
-            KeepFileSystemMetadata = request.KeepFsMetadata,
-            SetReadOnly = request.SetReadOnly,
             MaxFileSizeBytes = request.MaxFileSizeBytes,
             MaxDegreeOfParallelism = request.MaxDegreeOfParallelism,
-        };
+        });
 
-        return NormalizeOptions(options);
+        var searchPattern = string.IsNullOrWhiteSpace(request.SearchPattern) ? "*" : request.SearchPattern!;
+        var defaultAuthor = (request.DefaultAuthor ?? string.Empty).Trim();
+
+        return sanitized with
+        {
+            SearchPattern = searchPattern,
+            Recursive = request.Recursive,
+            DefaultAuthor = defaultAuthor,
+            KeepFileSystemMetadata = request.KeepFsMetadata,
+            SetReadOnly = request.SetReadOnly,
+        };
     }
 
     private void LogApiErrors(string? descriptor, IReadOnlyList<ApiError> errors)
