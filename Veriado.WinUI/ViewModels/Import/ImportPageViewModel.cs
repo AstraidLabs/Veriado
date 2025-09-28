@@ -168,6 +168,14 @@ public partial class ImportPageViewModel : ViewModelBase
 
     public ReadOnlyObservableCollection<ImportErrorItem> FilteredErrors { get; }
 
+    public IReadOnlyList<ImportErrorSeverity> ErrorFilterOptions { get; } = new[]
+    {
+        ImportErrorSeverity.All,
+        ImportErrorSeverity.Warning,
+        ImportErrorSeverity.Error,
+        ImportErrorSeverity.Fatal,
+    };
+
     public int OkCount
     {
         get => _okCount;

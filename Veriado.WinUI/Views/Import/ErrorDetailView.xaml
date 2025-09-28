@@ -21,20 +21,30 @@
                     Text="Čas:" />
                 <TextBlock Text="{Binding FormattedTimestamp}" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4" x:Load="{Binding HasCode}">
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="4"
+                Visibility="{Binding HasCode, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <TextBlock FontWeight="SemiBold" Text="Kód:" />
                 <TextBlock Text="{Binding Code}" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4" x:Load="{Binding HasFilePath}">
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="4"
+                Visibility="{Binding HasFilePath, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <TextBlock FontWeight="SemiBold" Text="Cesta:" />
                 <TextBlock TextWrapping="Wrap" Text="{Binding FilePath}" />
             </StackPanel>
             <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
-            <StackPanel x:Load="{Binding HasSuggestion}" Spacing="4">
+            <StackPanel
+                Spacing="4"
+                Visibility="{Binding HasSuggestion, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <TextBlock FontWeight="SemiBold" Text="Doporučení" />
                 <TextBlock TextWrapping="Wrap" Text="{Binding Suggestion}" />
             </StackPanel>
-            <StackPanel x:Load="{Binding HasStackTrace}" Spacing="4">
+            <StackPanel
+                Spacing="4"
+                Visibility="{Binding HasStackTrace, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <TextBlock FontWeight="SemiBold" Text="Stack trace" />
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8">
                     <TextBlock FontFamily="Consolas" TextWrapping="Wrap" Text="{Binding StackTrace}" />

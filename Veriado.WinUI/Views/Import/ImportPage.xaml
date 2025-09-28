@@ -25,12 +25,6 @@
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:ImportErrorSeverityToStringConverter x:Key="ErrorSeverityToStringConverter" />
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
-        <x:Array x:Key="ErrorFilterOptions" Type="models:ImportErrorSeverity">
-            <models:ImportErrorSeverity>All</models:ImportErrorSeverity>
-            <models:ImportErrorSeverity>Warning</models:ImportErrorSeverity>
-            <models:ImportErrorSeverity>Error</models:ImportErrorSeverity>
-            <models:ImportErrorSeverity>Fatal</models:ImportErrorSeverity>
-        </x:Array>
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="24">
@@ -279,7 +273,7 @@
                                 Text="Filtrovat:" />
                             <ComboBox
                                 Width="180"
-                                ItemsSource="{StaticResource ErrorFilterOptions}"
+                                ItemsSource="{Binding ErrorFilterOptions}"
                                 SelectedItem="{Binding SelectedErrorFilter, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="models:ImportErrorSeverity">
@@ -311,17 +305,17 @@
                                                 FontSize="12"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 Text="{Binding Code}"
-                                                x:Load="{Binding HasCode}" />
+                                                Visibility="{Binding HasCode, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             <TextBlock TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
                                             <TextBlock
                                                 FontSize="12"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 Text="{Binding FilePath}"
-                                                x:Load="{Binding HasFilePath}" />
+                                                Visibility="{Binding HasFilePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             <TextBlock
                                                 TextWrapping="Wrap"
                                                 Text="{Binding Suggestion}"
-                                                x:Load="{Binding HasSuggestion}" />
+                                                Visibility="{Binding HasSuggestion, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         </StackPanel>
                                         <Button
                                             Grid.Column="1"
