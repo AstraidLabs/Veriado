@@ -78,279 +78,89 @@ public partial class ImportPageViewModel : ViewModelBase
         UpdateFilteredErrors();
     }
 
+    [ObservableProperty]
     private string? _selectedFolder;
-    public string? SelectedFolder
-    {
-        get => _selectedFolder;
-        set
-        {
-            if (SetProperty(ref _selectedFolder, value))
-            {
-                HandleSelectedFolderChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private bool _recursive = true;
-    public bool Recursive
-    {
-        get => _recursive;
-        set
-        {
-            if (SetProperty(ref _recursive, value))
-            {
-                HandleRecursiveChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private bool _keepFsMetadata = true;
-    public bool KeepFsMetadata
-    {
-        get => _keepFsMetadata;
-        set
-        {
-            if (SetProperty(ref _keepFsMetadata, value))
-            {
-                HandleKeepFsMetadataChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private bool _setReadOnly;
-    public bool SetReadOnly
-    {
-        get => _setReadOnly;
-        set
-        {
-            if (SetProperty(ref _setReadOnly, value))
-            {
-                HandleSetReadOnlyChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private bool _useParallel = true;
-    public bool UseParallel
-    {
-        get => _useParallel;
-        set
-        {
-            if (SetProperty(ref _useParallel, value))
-            {
-                HandleUseParallelChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private int? _maxDegreeOfParallelism = Environment.ProcessorCount;
-    public int? MaxDegreeOfParallelism
-    {
-        get => _maxDegreeOfParallelism;
-        set
-        {
-            if (SetProperty(ref _maxDegreeOfParallelism, value))
-            {
-                HandleMaxDegreeOfParallelismChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private string? _defaultAuthor;
-    public string? DefaultAuthor
-    {
-        get => _defaultAuthor;
-        set
-        {
-            if (SetProperty(ref _defaultAuthor, value))
-            {
-                HandleDefaultAuthorChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private double? _maxFileSizeMegabytes;
-    public double? MaxFileSizeMegabytes
-    {
-        get => _maxFileSizeMegabytes;
-        set
-        {
-            if (SetProperty(ref _maxFileSizeMegabytes, value))
-            {
-                HandleMaxFileSizeMegabytesChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private bool _isImporting;
-    public bool IsImporting
-    {
-        get => _isImporting;
-        set
-        {
-            if (SetProperty(ref _isImporting, value))
-            {
-                HandleIsImportingChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private bool _isIndeterminate;
-    public bool IsIndeterminate
-    {
-        get => _isIndeterminate;
-        set => SetProperty(ref _isIndeterminate, value);
-    }
 
+    [ObservableProperty]
     private int _processed;
-    public int Processed
-    {
-        get => _processed;
-        set
-        {
-            if (SetProperty(ref _processed, value))
-            {
-                HandleProcessedChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private int _total;
-    public int Total
-    {
-        get => _total;
-        set
-        {
-            if (SetProperty(ref _total, value))
-            {
-                HandleTotalChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private long _processedBytes;
-    public long ProcessedBytes
-    {
-        get => _processedBytes;
-        set => SetProperty(ref _processedBytes, value);
-    }
 
+    [ObservableProperty]
     private long _totalBytes;
-    public long TotalBytes
-    {
-        get => _totalBytes;
-        set => SetProperty(ref _totalBytes, value);
-    }
 
+    [ObservableProperty]
     private double? _progressPercent;
-    public double? ProgressPercent
-    {
-        get => _progressPercent;
-        set
-        {
-            if (SetProperty(ref _progressPercent, value))
-            {
-                HandleProgressPercentChanged(value);
-            }
-        }
-    }
 
+    [ObservableProperty]
     private string? _currentFileName;
-    public string? CurrentFileName
-    {
-        get => _currentFileName;
-        set => SetProperty(ref _currentFileName, value);
-    }
 
+    [ObservableProperty]
     private string? _currentFilePath;
-    public string? CurrentFilePath
-    {
-        get => _currentFilePath;
-        set => SetProperty(ref _currentFilePath, value);
-    }
 
+    [ObservableProperty]
     private bool _hasMaxFileSizeError;
-    public bool HasMaxFileSizeError
-    {
-        get => _hasMaxFileSizeError;
-        set => SetProperty(ref _hasMaxFileSizeError, value);
-    }
 
+    [ObservableProperty]
     private bool _hasParallelismError;
-    public bool HasParallelismError
-    {
-        get => _hasParallelismError;
-        set => SetProperty(ref _hasParallelismError, value);
-    }
 
+    [ObservableProperty]
     private bool _isActiveStatusVisible;
-    public bool IsActiveStatusVisible
-    {
-        get => _isActiveStatusVisible;
-        set => SetProperty(ref _isActiveStatusVisible, value);
-    }
 
+    [ObservableProperty(Setter = SetterAccessModifier.Private)]
     private string? _activeStatusTitle;
-    public string? ActiveStatusTitle
-    {
-        get => _activeStatusTitle;
-        private set => SetProperty(ref _activeStatusTitle, value);
-    }
 
+    [ObservableProperty(Setter = SetterAccessModifier.Private)]
     private string? _activeStatusMessage;
-    public string? ActiveStatusMessage
-    {
-        get => _activeStatusMessage;
-        private set => SetProperty(ref _activeStatusMessage, value);
-    }
 
+    [ObservableProperty(Setter = SetterAccessModifier.Private)]
     private InfoBarSeverity _activeStatusSeverity = InfoBarSeverity.Informational;
-    public InfoBarSeverity ActiveStatusSeverity
-    {
-        get => _activeStatusSeverity;
-        private set => SetProperty(ref _activeStatusSeverity, value);
-    }
 
+    [ObservableProperty]
     private bool _isDynamicStatusVisible;
-    public bool IsDynamicStatusVisible
-    {
-        get => _isDynamicStatusVisible;
-        set => SetProperty(ref _isDynamicStatusVisible, value);
-    }
 
+    [ObservableProperty(Setter = SetterAccessModifier.Private)]
     private string? _dynamicStatusTitle;
-    public string? DynamicStatusTitle
-    {
-        get => _dynamicStatusTitle;
-        private set => SetProperty(ref _dynamicStatusTitle, value);
-    }
 
+    [ObservableProperty(Setter = SetterAccessModifier.Private)]
     private string? _dynamicStatusMessage;
-    public string? DynamicStatusMessage
-    {
-        get => _dynamicStatusMessage;
-        private set => SetProperty(ref _dynamicStatusMessage, value);
-    }
 
+    [ObservableProperty(Setter = SetterAccessModifier.Private)]
     private InfoBarSeverity _dynamicStatusSeverity = InfoBarSeverity.Informational;
-    public InfoBarSeverity DynamicStatusSeverity
-    {
-        get => _dynamicStatusSeverity;
-        private set => SetProperty(ref _dynamicStatusSeverity, value);
-    }
 
+    [ObservableProperty]
     private ImportErrorSeverity _selectedErrorFilter = ImportErrorSeverity.All;
-    public ImportErrorSeverity SelectedErrorFilter
-    {
-        get => _selectedErrorFilter;
-        set
-        {
-            if (SetProperty(ref _selectedErrorFilter, value))
-            {
-                HandleSelectedErrorFilterChanged(value);
-            }
-        }
-    }
 
     public ObservableCollection<ImportLogItem> Log { get; }
 
@@ -1422,7 +1232,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _exportLogCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleSelectedFolderChanged(string? value)
+    partial void OnSelectedFolderChanged(string? value)
     {
         if (_hotStateService is not null)
         {
@@ -1431,7 +1241,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleRecursiveChanged(bool value)
+    partial void OnRecursiveChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1439,7 +1249,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void HandleKeepFsMetadataChanged(bool value)
+    partial void OnKeepFsMetadataChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1447,7 +1257,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void HandleSetReadOnlyChanged(bool value)
+    partial void OnSetReadOnlyChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1455,7 +1265,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void HandleUseParallelChanged(bool value)
+    partial void OnUseParallelChanged(bool value)
     {
         if (_hotStateService is not null)
         {
@@ -1466,7 +1276,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleMaxDegreeOfParallelismChanged(int? value)
+    partial void OnMaxDegreeOfParallelismChanged(int? value)
     {
         if (_hotStateService is not null)
         {
@@ -1479,7 +1289,7 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleDefaultAuthorChanged(string? value)
+    partial void OnDefaultAuthorChanged(string? value)
     {
         if (_hotStateService is not null)
         {
@@ -1487,7 +1297,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
     }
 
-    private void HandleMaxFileSizeMegabytesChanged(double? value)
+    partial void OnMaxFileSizeMegabytesChanged(double? value)
     {
         var hasError = false;
         double? sanitized = value;
@@ -1516,12 +1326,12 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleSelectedErrorFilterChanged(ImportErrorSeverity value)
+    partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
     {
         UpdateFilteredErrors();
     }
 
-    private void HandleIsImportingChanged(bool value)
+    partial void OnIsImportingChanged(bool value)
     {
         _runImportCommand.NotifyCanExecuteChanged();
         _stopImportCommand.NotifyCanExecuteChanged();
@@ -1529,19 +1339,19 @@ public partial class ImportPageViewModel : ViewModelBase
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleProcessedChanged(int value)
+    partial void OnProcessedChanged(int value)
     {
         OnPropertyChanged(nameof(ProgressText));
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleTotalChanged(int value)
+    partial void OnTotalChanged(int value)
     {
         OnPropertyChanged(nameof(ProgressText));
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
-    private void HandleProgressPercentChanged(double? value)
+    partial void OnProgressPercentChanged(double? value)
     {
         OnPropertyChanged(nameof(ProgressPercentValue));
         OnPropertyChanged(nameof(ProgressPercentDisplay));
