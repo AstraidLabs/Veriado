@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,8 +7,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.ViewModels.Import;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Data;
-using Veriado.WinUI.Models.Import;
 
 namespace Veriado.WinUI.Views.Import;
 
@@ -20,8 +16,6 @@ public sealed partial class ImportPage : Page
     {
         InitializeComponent();
         DataContext = App.Services.GetRequiredService<ImportPageViewModel>();
-        Loaded += OnPageLoaded;
-        Unloaded += OnPageUnloaded;
     }
 
     private ImportPageViewModel? ViewModel => DataContext as ImportPageViewModel;
@@ -139,72 +133,4 @@ public sealed partial class ImportPage : Page
         }
     }
 
-    private void OnPageLoaded(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel is null)
-        {
-            return;
-        }
-
-        if (GetErrorsViewSource() is { } viewSource)
-        {
-            viewSource.Source = ViewModel.Errors;
-            RefreshErrorsView();
-        }
-
-        ViewModel.ErrorFilterChanged += OnErrorFilterChanged;
-        ViewModel.Errors.CollectionChanged += OnErrorsCollectionChanged;
-    }
-
-    private void OnPageUnloaded(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel is null)
-        {
-            return;
-        }
-
-        ViewModel.ErrorFilterChanged -= OnErrorFilterChanged;
-        ViewModel.Errors.CollectionChanged -= OnErrorsCollectionChanged;
-    }
-
-    private void OnErrorFilterChanged(object? sender, EventArgs e)
-    {
-        RefreshErrorsView();
-    }
-
-    private void OnErrorsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        RefreshErrorsView();
-    }
-
-    private void RefreshErrorsView()
-    {
-        var view = GetErrorsViewSource()?.View;
-        view?.Refresh();
-    }
-
-    private void OnErrorsFilter(object sender, FilterEventArgs e)
-    {
-        if (ViewModel is null || e.Item is not ImportErrorItem item)
-        {
-            e.Accepted = false;
-            return;
-        }
-
-        e.Accepted = ViewModel.SelectedErrorFilter switch
-        {
-            ImportErrorSeverity.All => true,
-            ImportErrorSeverity.Warning => item.Severity == ImportErrorSeverity.Warning,
-            ImportErrorSeverity.Error => item.Severity == ImportErrorSeverity.Error,
-            ImportErrorSeverity.Fatal => item.Severity == ImportErrorSeverity.Fatal,
-            _ => true,
-        };
-    }
-
-    private CollectionViewSource? GetErrorsViewSource()
-    {
-        return Resources.TryGetValue("ErrorsViewSource", out var resource)
-            ? resource as CollectionViewSource
-            : null;
-    }
 }
