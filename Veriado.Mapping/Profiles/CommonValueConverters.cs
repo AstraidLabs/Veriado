@@ -18,45 +18,45 @@ public static class CommonValueConverters
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        profile.CreateMap<FileName, string>().ConvertUsing(static (FileName source, ResolutionContext _) =>
+        profile.CreateMap<FileName, string>().ConvertUsing(static (FileName source) =>
             source.Value ?? string.Empty);
-        profile.CreateMap<FileName?, string?>().ConvertUsing(static (FileName? source, ResolutionContext _) =>
+        profile.CreateMap<FileName?, string?>().ConvertUsing(static (FileName? source) =>
             source.HasValue ? source.Value.Value : null);
 
-        profile.CreateMap<FileExtension, string>().ConvertUsing(static (FileExtension source, ResolutionContext _) =>
+        profile.CreateMap<FileExtension, string>().ConvertUsing(static (FileExtension source) =>
             source.Value ?? string.Empty);
-        profile.CreateMap<FileExtension?, string?>().ConvertUsing(static (FileExtension? source, ResolutionContext _) =>
+        profile.CreateMap<FileExtension?, string?>().ConvertUsing(static (FileExtension? source) =>
             source.HasValue ? source.Value.Value : null);
 
-        profile.CreateMap<MimeType, string>().ConvertUsing(static (MimeType source, ResolutionContext _) =>
+        profile.CreateMap<MimeType, string>().ConvertUsing(static (MimeType source) =>
             source.Value ?? string.Empty);
-        profile.CreateMap<MimeType?, string?>().ConvertUsing(static (MimeType? source, ResolutionContext _) =>
+        profile.CreateMap<MimeType?, string?>().ConvertUsing(static (MimeType? source) =>
             source.HasValue ? source.Value.Value : null);
 
-        profile.CreateMap<FileHash, string>().ConvertUsing(static (FileHash source, ResolutionContext _) =>
+        profile.CreateMap<FileHash, string>().ConvertUsing(static (FileHash source) =>
             source.Value ?? string.Empty);
-        profile.CreateMap<FileHash?, string?>().ConvertUsing(static (FileHash? source, ResolutionContext _) =>
+        profile.CreateMap<FileHash?, string?>().ConvertUsing(static (FileHash? source) =>
             source.HasValue ? source.Value.Value : null);
 
-        profile.CreateMap<ByteSize, long>().ConvertUsing(static (ByteSize source, ResolutionContext _) => source.Value);
-        profile.CreateMap<ByteSize?, long?>().ConvertUsing(static (ByteSize? source, ResolutionContext _) =>
+        profile.CreateMap<ByteSize, long>().ConvertUsing(static (ByteSize source) => source.Value);
+        profile.CreateMap<ByteSize?, long?>().ConvertUsing(static (ByteSize? source) =>
             source.HasValue ? source.Value.Value : null);
 
-        profile.CreateMap<FileAttributesFlags, int>().ConvertUsing(static (FileAttributesFlags source, ResolutionContext _) =>
+        profile.CreateMap<FileAttributesFlags, int>().ConvertUsing(static (FileAttributesFlags source) =>
             (int)source);
-        profile.CreateMap<int, FileAttributesFlags>().ConvertUsing(static (int source, ResolutionContext _) =>
+        profile.CreateMap<int, FileAttributesFlags>().ConvertUsing(static (int source) =>
             (FileAttributesFlags)source);
 
-        profile.CreateMap<UtcTimestamp, DateTimeOffset>().ConvertUsing(static (UtcTimestamp source, ResolutionContext _) =>
+        profile.CreateMap<UtcTimestamp, DateTimeOffset>().ConvertUsing(static (UtcTimestamp source) =>
             source.Value);
-        profile.CreateMap<UtcTimestamp, DateTimeOffset?>().ConvertUsing(static (UtcTimestamp source, ResolutionContext _) =>
+        profile.CreateMap<UtcTimestamp, DateTimeOffset?>().ConvertUsing(static (UtcTimestamp source) =>
             source.Value);
-        profile.CreateMap<UtcTimestamp?, DateTimeOffset?>().ConvertUsing(static (UtcTimestamp? source, ResolutionContext _) =>
+        profile.CreateMap<UtcTimestamp?, DateTimeOffset?>().ConvertUsing(static (UtcTimestamp? source) =>
             source.HasValue ? source.Value.Value : null);
 
-        profile.CreateMap<DateTimeOffset, UtcTimestamp>().ConvertUsing(static (DateTimeOffset source, ResolutionContext _) =>
+        profile.CreateMap<DateTimeOffset, UtcTimestamp>().ConvertUsing(static (DateTimeOffset source) =>
             UtcTimestamp.From(source));
-        profile.CreateMap<DateTimeOffset?, UtcTimestamp?>().ConvertUsing(static (DateTimeOffset? source, ResolutionContext _) =>
+        profile.CreateMap<DateTimeOffset?, UtcTimestamp?>().ConvertUsing(static (DateTimeOffset? source) =>
             source.HasValue ? UtcTimestamp.From(source.Value) : null);
     }
 }
