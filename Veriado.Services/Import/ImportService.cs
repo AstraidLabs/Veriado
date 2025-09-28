@@ -167,12 +167,12 @@ public sealed class ImportService : IImportService
                 "Verify the folder path and try again.",
                 null,
                 _clock.UtcNow);
-            var aggregate = new ImportAggregateResult(ImportBatchStatus.FatalError, 0, 0, 0, new[] { missingError });
+            var fatalAggregate = new ImportAggregateResult(ImportBatchStatus.FatalError, 0, 0, 0, new[] { missingError });
             var now = _clock.UtcNow;
 
             yield return ImportProgressEvent.BatchStarted(0, now);
             yield return ImportProgressEvent.ErrorOccurred(missingError, 0, 0, 0, 0, now);
-            yield return ImportProgressEvent.BatchCompleted(aggregate, _clock.UtcNow);
+            yield return ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow);
             yield break;
         }
 
@@ -780,9 +780,12 @@ public sealed class ImportService : IImportService
         public FileTooLargeException(string filePath, long actualSizeBytes, long maxAllowedBytes)
             : base($"File '{filePath}' exceeds the configured maximum size.")
         {
+            FilePath = filePath;
             ActualSizeBytes = actualSizeBytes;
             MaxAllowedBytes = maxAllowedBytes;
         }
+
+        public string FilePath { get; }
 
         public long ActualSizeBytes { get; }
 
