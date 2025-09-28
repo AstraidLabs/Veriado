@@ -31,22 +31,7 @@ public sealed class FileContentService : IFileContentService
             return null;
         }
 
-        var summary = _mapper.Map<FileSummaryDto>(file);
-        var content = new byte[file.Content.Bytes.Length];
-        Array.Copy(file.Content.Bytes, content, file.Content.Bytes.Length);
-        return new FileContentResponseDto(
-            summary.Id,
-            summary.Name,
-            summary.Extension,
-            summary.Mime,
-            summary.Author,
-            summary.Size,
-            summary.Version,
-            summary.IsReadOnly,
-            summary.CreatedUtc,
-            summary.LastModifiedUtc,
-            summary.Validity,
-            content);
+        return _mapper.Map<FileContentResponseDto>(file);
     }
 
     public async Task<AppResult<Guid>> SaveContentToDiskAsync(Guid fileId, string targetPath, CancellationToken cancellationToken)
