@@ -202,6 +202,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     processed++;
                 }
             }
+            catch (SearchIndexCorruptedException ex)
+            {
+                _logger.LogError(ex, "Failed to repair search index for file {FileId}", fileId);
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to repair search index for file {FileId}", fileId);
