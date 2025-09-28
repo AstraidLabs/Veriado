@@ -7,6 +7,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.ViewModels.Import;
 using Microsoft.UI.Xaml;
+using System;
 
 namespace Veriado.WinUI.Views.Import;
 
