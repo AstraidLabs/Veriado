@@ -56,14 +56,14 @@ public partial class ImportPageViewModel : ViewModelBase
         Log.CollectionChanged += OnLogCollectionChanged;
         Errors.CollectionChanged += OnErrorsCollectionChanged;
 
-        RestoreStateFromHotStorage();
-        PopulateDefaultAuthorFromCurrentUser();
-
         _pickFolderCommand = new AsyncRelayCommand(ExecutePickFolderAsync, () => !IsImporting);
         _runImportCommand = new AsyncRelayCommand(ExecuteRunImportAsync, CanRunImport);
         _stopImportCommand = new RelayCommand(ExecuteStopImport, () => IsImporting);
         _clearResultsCommand = new RelayCommand(ExecuteClearResults, CanClearResults);
         _openErrorDetailCommand = new RelayCommand<ImportErrorItem>(ExecuteOpenErrorDetail);
+
+        RestoreStateFromHotStorage();
+        PopulateDefaultAuthorFromCurrentUser();
     }
 
     [ObservableProperty]
