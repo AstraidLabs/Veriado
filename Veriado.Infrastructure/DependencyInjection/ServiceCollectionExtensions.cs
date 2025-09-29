@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         {
             using var connection = new SqliteConnection(options.ConnectionString);
             connection.Open();
+            SqlitePragmaHelper.ApplyAsync(connection, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         SqliteFulltextSupportDetector.Detect(options);

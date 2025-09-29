@@ -17,6 +17,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT id, name, query_text, match, position, created_utc, is_fuzzy " +
@@ -46,6 +47,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
 
         long maxPosition;
         await using (var command = connection.CreateCommand())
@@ -74,6 +76,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "UPDATE search_favorites SET name = $name WHERE id = $id;";
         command.Parameters.Add("$name", SqliteType.Text).Value = newName;
@@ -85,6 +88,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
 
         var providedOrder = orderedIds?.ToList() ?? new List<Guid>();
         var known = new HashSet<Guid>(providedOrder);
@@ -124,6 +128,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM search_favorites WHERE id = $id;";
         command.Parameters.Add("$id", SqliteType.Blob).Value = id.ToByteArray();
@@ -135,6 +140,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT id, name, query_text, match, position, created_utc, is_fuzzy " +

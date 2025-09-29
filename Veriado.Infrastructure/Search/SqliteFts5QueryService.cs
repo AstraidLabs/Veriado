@@ -36,6 +36,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT m.file_id, 1.0 / (1.0 + bm25(s)) AS score " +
@@ -85,6 +86,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT m.file_id, bm25(t) AS score " +
@@ -123,6 +125,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM file_search WHERE file_search MATCH $query;";
         command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
@@ -147,6 +150,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT m.file_id, " +

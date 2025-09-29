@@ -21,6 +21,7 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 
         await using var connection = new SqliteConnection(_options.ConnectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
 
         var journalMode = await GetScalarAsync(connection, "PRAGMA journal_mode;", cancellationToken).ConfigureAwait(false);
         var isWal = string.Equals(journalMode, "wal", StringComparison.OrdinalIgnoreCase);
@@ -48,6 +49,7 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 
         await using var connection = new SqliteConnection(_options.ConnectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
 
         var total = await GetScalarAsync(connection, "SELECT COUNT(*) FROM files;", cancellationToken).ConfigureAwait(false);
         var stale = await GetScalarAsync(connection, "SELECT COUNT(*) FROM files WHERE fts_is_stale = 1;", cancellationToken).ConfigureAwait(false);
