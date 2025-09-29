@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Veriado.Infrastructure.Search;
@@ -62,28 +63,38 @@ internal sealed class OutboxWorker : BackgroundService
 
     private async Task<bool> ProcessPendingAsync(CancellationToken cancellationToken)
     {
-        await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var pendingEvents = await writeContext.OutboxEvents
-            .AsTracking()
-            .Where(evt => evt.ProcessedUtc == null)
-            .OrderBy(evt => evt.CreatedUtc)
-            .Take(25)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        var pendingEventIds = await LoadPendingEventIdsAsync(cancellationToken).ConfigureAwait(false);
 
-        if (pendingEvents.Count == 0)
+        if (pendingEventIds.Count == 0)
         {
             return false;
         }
 
-        foreach (var outbox in pendingEvents)
+        foreach (var eventId in pendingEventIds)
         {
             var repairAttempted = false;
             while (true)
             {
                 try
                 {
+                    await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                    var outbox = await writeContext.OutboxEvents
+                        .FirstOrDefaultAsync(evt => evt.Id == eventId, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (outbox is null)
+                    {
+                        _logger.LogWarning("Outbox event {EventId} no longer exists", eventId);
+                        break;
+                    }
+
+                    if (outbox.ProcessedUtc is not null)
+                    {
+                        break;
+                    }
+
                     await ProcessOutboxEventAsync(writeContext, outbox, cancellationToken).ConfigureAwait(false);
+                    await writeContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                     break;
                 }
                 catch (SearchIndexCorruptedException ex)
@@ -98,18 +109,30 @@ internal sealed class OutboxWorker : BackgroundService
                     _logger.LogWarning(ex, "Full-text search index corruption detected while processing outbox event {EventId}. Initiating automatic repair.", outbox.Id);
 
                     await AttemptIntegrityRepairAsync(cancellationToken).ConfigureAwait(false);
-                    _logger.LogInformation("Retrying outbox event {EventId} after repairing the full-text search index.", outbox.Id);
+                    _logger.LogInformation("Retrying outbox event {EventId} after repairing the full-text search index.", eventId);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to process outbox event {EventId}", outbox.Id);
+                    _logger.LogError(ex, "Failed to process outbox event {EventId}", eventId);
                     break;
                 }
             }
         }
 
-        await writeContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
+    }
+
+    private async Task<List<long>> LoadPendingEventIdsAsync(CancellationToken cancellationToken)
+    {
+        await using var context = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        return await context.OutboxEvents
+            .AsNoTracking()
+            .Where(evt => evt.ProcessedUtc == null)
+            .OrderBy(evt => evt.CreatedUtc)
+            .Take(25)
+            .Select(evt => evt.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task ProcessOutboxEventAsync(AppDbContext writeContext, OutboxEvent outbox, CancellationToken cancellationToken)
