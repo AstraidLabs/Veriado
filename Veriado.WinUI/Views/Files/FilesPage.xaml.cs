@@ -12,6 +12,7 @@ public sealed partial class FilesPage : Page
         DataContext = ViewModel;
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     public FilesPageViewModel ViewModel { get; }
@@ -19,7 +20,13 @@ public sealed partial class FilesPage : Page
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+        ViewModel.StartHealthMonitoring();
         await ExecuteInitialRefreshAsync().ConfigureAwait(true);
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        ViewModel.StopHealthMonitoring();
     }
 
     private Task ExecuteInitialRefreshAsync()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading;
@@ -8,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
+using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 
@@ -20,6 +22,11 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private readonly IFileQueryService _fileQueryService;
     private readonly IHotStateService _hotStateService;
+    private readonly IHealthService _healthService;
+    private readonly object _healthMonitorGate = new();
+    private CancellationTokenSource? _healthMonitorSource;
+
+    private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
 
     private int _currentPage;
@@ -29,6 +36,7 @@ public partial class FilesPageViewModel : ViewModelBase
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
+        IHealthService healthService,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -37,6 +45,7 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
+        _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
 
         Items = new ObservableCollection<FileSummaryDto>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
@@ -108,6 +117,51 @@ public partial class FilesPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private string statusText = string.Empty;
+
+    [ObservableProperty]
+    private bool isIndexingPending;
+
+    [ObservableProperty]
+    private string? indexingWarningMessage;
+
+    public void StartHealthMonitoring()
+    {
+        lock (_healthMonitorGate)
+        {
+            if (_healthMonitorSource is not null)
+            {
+                return;
+            }
+
+            var cts = new CancellationTokenSource();
+            _healthMonitorSource = cts;
+            _ = MonitorHealthStatusAsync(cts.Token);
+        }
+    }
+
+    public void StopHealthMonitoring()
+    {
+        CancellationTokenSource? source;
+        lock (_healthMonitorGate)
+        {
+            source = _healthMonitorSource;
+            _healthMonitorSource = null;
+        }
+
+        if (source is null)
+        {
+            return;
+        }
+
+        source.Cancel();
+        source.Dispose();
+
+        _ = Dispatcher.Enqueue(() =>
+        {
+            IsIndexingPending = false;
+            IndexingWarningMessage = null;
+        });
+    }
 
     partial void OnSearchTextChanged(string? value)
     {
@@ -284,5 +338,88 @@ public partial class FilesPageViewModel : ViewModelBase
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+    }
+
+    private async Task MonitorHealthStatusAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
+
+            using var timer = new PeriodicTimer(HealthPollingInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Intentionally ignored.
+        }
+    }
+
+    private async Task UpdateIndexingStatusAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var pendingOutboxEvents = 0;
+            var staleDocuments = 0;
+
+            var healthResult = await _healthService.GetAsync(cancellationToken).ConfigureAwait(false);
+            if (healthResult.TryGetValue(out var healthStatus))
+            {
+                pendingOutboxEvents = Math.Max(healthStatus.PendingOutboxEvents, 0);
+            }
+
+            var indexResult = await _healthService.GetIndexStatisticsAsync(cancellationToken).ConfigureAwait(false);
+            if (indexResult.TryGetValue(out var indexStatistics))
+            {
+                staleDocuments = Math.Max(indexStatistics.StaleDocuments, 0);
+            }
+
+            var hasPendingIndexing = pendingOutboxEvents > 0 || staleDocuments > 0;
+            var message = hasPendingIndexing
+                ? BuildIndexingWarningMessage(pendingOutboxEvents, staleDocuments)
+                : null;
+
+            await Dispatcher.Enqueue(() =>
+            {
+                IsIndexingPending = hasPendingIndexing;
+                IndexingWarningMessage = message;
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            await Dispatcher.Enqueue(() =>
+            {
+                IsIndexingPending = false;
+                IndexingWarningMessage = null;
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private static string BuildIndexingWarningMessage(int pendingOutboxEvents, int staleDocuments)
+    {
+        var details = new List<string>();
+
+        if (pendingOutboxEvents > 0)
+        {
+            details.Add($"{pendingOutboxEvents} čekajících událostí fronty");
+        }
+
+        if (staleDocuments > 0)
+        {
+            details.Add($"{staleDocuments} dokumentů k přeindexování");
+        }
+
+        var suffix = details.Count > 0
+            ? $" ({string.Join(", ", details)})"
+            : string.Empty;
+
+        return $"Probíhá indexace. Nechte aplikaci spuštěnou, dokud se proces nedokončí{suffix}.";
     }
 }
