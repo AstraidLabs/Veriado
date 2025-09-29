@@ -185,7 +185,7 @@
                 Message="Nepodařilo se načíst výsledky." />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Grid.Column="1" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
+        <controls:ScrollView Grid.Row="1" Grid.Column="1" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
             <controls:ItemsRepeaterScrollHost>
                 <controls:ItemsRepeater ItemsSource="{x:Bind ViewModel.Items}">
                     <controls:ItemsRepeater.Layout>
@@ -215,6 +215,6 @@
                     </controls:ItemsRepeater.ItemTemplate>
                 </controls:ItemsRepeater>
             </controls:ItemsRepeaterScrollHost>
-        </ScrollViewer>
+        </controls:ScrollView>
     </Grid>
 </Page>
