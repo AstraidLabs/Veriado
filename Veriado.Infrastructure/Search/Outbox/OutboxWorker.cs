@@ -75,11 +75,12 @@ internal sealed class OutboxWorker : BackgroundService
             var repairAttempted = false;
             while (true)
             {
+                OutboxEvent? outbox = null;
                 try
                 {
                     await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken)
                         .ConfigureAwait(false);
-                    var outbox = await writeContext.OutboxEvents
+                    outbox = await writeContext.OutboxEvents
                         .FirstOrDefaultAsync(evt => evt.Id == eventId, cancellationToken)
                         .ConfigureAwait(false);
                     if (outbox is null)
@@ -99,17 +100,18 @@ internal sealed class OutboxWorker : BackgroundService
                 }
                 catch (SearchIndexCorruptedException ex)
                 {
+                    var outboxId = outbox?.Id ?? eventId;
                     if (repairAttempted)
                     {
-                        _logger.LogCritical(ex, "Full-text search index is corrupted. Please run the integrity repair operation before retrying outbox event {EventId}.", outbox.Id);
+                        _logger.LogCritical(ex, "Full-text search index is corrupted. Please run the integrity repair operation before retrying outbox event {EventId}.", outboxId);
                         throw;
                     }
 
                     repairAttempted = true;
-                    _logger.LogWarning(ex, "Full-text search index corruption detected while processing outbox event {EventId}. Initiating automatic repair.", outbox.Id);
+                    _logger.LogWarning(ex, "Full-text search index corruption detected while processing outbox event {EventId}. Initiating automatic repair.", outboxId);
 
                     await AttemptIntegrityRepairAsync(cancellationToken).ConfigureAwait(false);
-                    _logger.LogInformation("Retrying outbox event {EventId} after repairing the full-text search index.", eventId);
+                    _logger.LogInformation("Retrying outbox event {EventId} after repairing the full-text search index.", outboxId);
                 }
                 catch (Exception ex)
                 {
