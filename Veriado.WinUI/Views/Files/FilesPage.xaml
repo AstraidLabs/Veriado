@@ -186,40 +186,41 @@
         </StackPanel>
 
         <controls:ItemsRepeaterScrollHost Grid.Row="1" Grid.Column="1">
-            <controls:ItemsRepeaterScrollHost.ScrollViewer>
-                <controls:ScrollView
-                    HorizontalScrollMode="Disabled"
-                    HorizontalScrollBarVisibility="Hidden"
-                    VerticalScrollMode="Auto"
-                    VerticalScrollBarVisibility="Auto" />
-            </controls:ItemsRepeaterScrollHost.ScrollViewer>
-            <controls:ItemsRepeater ItemsSource="{x:Bind ViewModel.Items}">
-                <controls:ItemsRepeater.Layout>
-                    <controls:UniformGridLayout
-                        Orientation="Vertical"
-                        MinItemWidth="220"
-                        MinItemHeight="120"
-                        ItemsJustification="Start" />
-                </controls:ItemsRepeater.Layout>
-                <controls:ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="contracts:FileSummaryDto">
-                        <Border
-                            Margin="8"
-                            Padding="12"
-                            CornerRadius="6"
-                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                            BorderThickness="1">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind Mime}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
-                                <TextBlock
-                                    Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
-                                    FontSize="12" />
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </controls:ItemsRepeater.ItemTemplate>
-            </controls:ItemsRepeater>
+            <controls:ScrollViewer
+        x:Name="FilesScrollViewer"
+        HorizontalScrollMode="Disabled"
+        HorizontalScrollBarVisibility="Hidden"
+        VerticalScrollMode="Auto"
+        VerticalScrollBarVisibility="Auto">
+
+                <controls:ItemsRepeater ItemsSource="{x:Bind ViewModel.Items}">
+                    <controls:ItemsRepeater.Layout>
+                        <controls:UniformGridLayout
+                    Orientation="Vertical"
+                    MinItemWidth="220"
+                    MinItemHeight="120"
+                    ItemsJustification="Start" />
+                    </controls:ItemsRepeater.Layout>
+
+                    <controls:ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="contracts:FileSummaryDto">
+                            <Border
+                        Margin="8"
+                        Padding="12"
+                        CornerRadius="6"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind Mime}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}" FontSize="12" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </controls:ItemsRepeater.ItemTemplate>
+                </controls:ItemsRepeater>
+
+            </controls:ScrollViewer>
         </controls:ItemsRepeaterScrollHost>
     </Grid>
 </Page>
