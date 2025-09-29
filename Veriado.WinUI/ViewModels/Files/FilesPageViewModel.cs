@@ -118,11 +118,21 @@ public partial class FilesPageViewModel : ViewModelBase
     [ObservableProperty]
     private string statusText = string.Empty;
 
-    [ObservableProperty]
     private bool isIndexingPending;
 
-    [ObservableProperty]
+    public bool IsIndexingPending
+    {
+        get => isIndexingPending;
+        set => SetProperty(ref isIndexingPending, value);
+    }
+
     private string? indexingWarningMessage;
+
+    public string? IndexingWarningMessage
+    {
+        get => indexingWarningMessage;
+        set => SetProperty(ref indexingWarningMessage, value);
+    }
 
     public void StartHealthMonitoring()
     {
