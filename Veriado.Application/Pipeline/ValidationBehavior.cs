@@ -1,5 +1,7 @@
 using System.Reflection;
 
+using ValidationException = Veriado.Appl.Common.ValidationException;
+
 namespace Veriado.Appl.Pipeline;
 
 /// <summary>
