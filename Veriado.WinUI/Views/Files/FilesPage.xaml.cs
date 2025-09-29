@@ -1,16 +1,20 @@
+using System;
+using Microsoft.UI.Xaml;
 using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.Views.Files;
 
 public sealed partial class FilesPage : Page
 {
-    public FilesPage()
+    public FilesPage(FilesPageViewModel viewModel)
     {
+        ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        DataContext = ViewModel;
         InitializeComponent();
         Loaded += OnLoaded;
     }
 
-    private FilesPageViewModel? ViewModel => DataContext as FilesPageViewModel;
+    public FilesPageViewModel ViewModel { get; }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -20,8 +24,6 @@ public sealed partial class FilesPage : Page
 
     private Task ExecuteInitialRefreshAsync()
     {
-        return ViewModel is not null
-            ? ViewModel.RefreshCommand.ExecuteAsync(null)
-            : Task.CompletedTask;
+        return ViewModel.RefreshCommand.ExecuteAsync(null);
     }
 }

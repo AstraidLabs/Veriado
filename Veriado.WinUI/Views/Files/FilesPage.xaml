@@ -40,13 +40,13 @@
                     x:Uid="FilesPage_SearchBox"
                     Grid.Column="0"
                     PlaceholderText="Hledat soubory"
-                    Text="{x:Bind ViewModel!.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 <ToggleSwitch
                     x:Uid="FilesPage_FuzzyToggle"
                     Grid.Column="1"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center"
-                    IsOn="{x:Bind ViewModel!.Fuzzy, Mode=TwoWay}" />
+                    IsOn="{x:Bind ViewModel.Fuzzy, Mode=TwoWay}" />
             </Grid>
 
             <ScrollViewer
@@ -62,19 +62,19 @@
                             <TextBox
                                 x:Uid="FilesPage_ExtensionTextBox"
                                 PlaceholderText="Přípona"
-                                Text="{x:Bind ViewModel!.ExtensionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{x:Bind ViewModel.ExtensionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_MimeTextBox"
                                 PlaceholderText="MIME"
-                                Text="{x:Bind ViewModel!.MimeFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{x:Bind ViewModel.MimeFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_AuthorTextBox"
                                 PlaceholderText="Autor"
-                                Text="{x:Bind ViewModel!.AuthorFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{x:Bind ViewModel.AuthorFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_VersionTextBox"
                                 PlaceholderText="Verze"
-                                Text="{x:Bind ViewModel!.VersionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{x:Bind ViewModel.VersionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </controls:Expander>
 
@@ -84,29 +84,29 @@
                                 x:Uid="FilesPage_ReadOnlyCheckBox"
                                 Content="Jen pro čtení"
                                 IsThreeState="True"
-                                IsChecked="{x:Bind ViewModel!.ReadOnlyFilter, Mode=TwoWay}" />
+                                IsChecked="{x:Bind ViewModel.ReadOnlyFilter, Mode=TwoWay}" />
                             <CheckBox
                                 x:Uid="FilesPage_IndexStaleCheckBox"
                                 Content="Neaktuální index"
                                 IsThreeState="True"
-                                IsChecked="{x:Bind ViewModel!.IsIndexStaleFilter, Mode=TwoWay}" />
+                                IsChecked="{x:Bind ViewModel.IsIndexStaleFilter, Mode=TwoWay}" />
                             <CheckBox
                                 x:Uid="FilesPage_HasValidityCheckBox"
                                 Content="Má platnost"
                                 IsThreeState="True"
-                                IsChecked="{x:Bind ViewModel!.HasValidityFilter, Mode=TwoWay}" />
+                                IsChecked="{x:Bind ViewModel.HasValidityFilter, Mode=TwoWay}" />
                             <CheckBox
                                 x:Uid="FilesPage_CurrentlyValidCheckBox"
                                 Content="Aktuálně platné"
                                 IsThreeState="True"
-                                IsChecked="{x:Bind ViewModel!.CurrentlyValidFilter, Mode=TwoWay}" />
+                                IsChecked="{x:Bind ViewModel.CurrentlyValidFilter, Mode=TwoWay}" />
                             <controls:NumberBox
                                 x:Uid="FilesPage_ExpiringNumberBox"
                                 Header="Vyprší za (dní)"
                                 Minimum="0"
                                 SmallChange="1"
                                 SpinButtonPlacementMode="Compact"
-                                Value="{x:Bind ViewModel!.ExpiringInDaysFilter, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}}" />
+                                Value="{x:Bind ViewModel.ExpiringInDaysFilter, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}}" />
                         </StackPanel>
                     </controls:Expander>
 
@@ -115,19 +115,19 @@
                             <CalendarDatePicker
                                 x:Uid="FilesPage_CreatedFromPicker"
                                 PlaceholderText="Vytvořeno od"
-                                Date="{x:Bind ViewModel!.CreatedFromFilter, Mode=TwoWay}" />
+                                Date="{x:Bind ViewModel.CreatedFromFilter, Mode=TwoWay}" />
                             <CalendarDatePicker
                                 x:Uid="FilesPage_CreatedToPicker"
                                 PlaceholderText="Vytvořeno do"
-                                Date="{x:Bind ViewModel!.CreatedToFilter, Mode=TwoWay}" />
+                                Date="{x:Bind ViewModel.CreatedToFilter, Mode=TwoWay}" />
                             <CalendarDatePicker
                                 x:Uid="FilesPage_ModifiedFromPicker"
                                 PlaceholderText="Upraveno od"
-                                Date="{x:Bind ViewModel!.ModifiedFromFilter, Mode=TwoWay}" />
+                                Date="{x:Bind ViewModel.ModifiedFromFilter, Mode=TwoWay}" />
                             <CalendarDatePicker
                                 x:Uid="FilesPage_ModifiedToPicker"
                                 PlaceholderText="Upraveno do"
-                                Date="{x:Bind ViewModel!.ModifiedToFilter, Mode=TwoWay}" />
+                                Date="{x:Bind ViewModel.ModifiedToFilter, Mode=TwoWay}" />
                         </StackPanel>
                     </controls:Expander>
 
@@ -138,13 +138,13 @@
                                 Header="Minimální velikost (B)"
                                 Minimum="0"
                                 SpinButtonPlacementMode="Compact"
-                                Value="{x:Bind ViewModel!.SizeMinFilter, Mode=TwoWay, Converter={StaticResource NullableLongToDoubleConverter}}" />
+                                Value="{x:Bind ViewModel.SizeMinFilter, Mode=TwoWay, Converter={StaticResource NullableLongToDoubleConverter}}" />
                             <controls:NumberBox
                                 x:Uid="FilesPage_SizeMaxNumberBox"
                                 Header="Maximální velikost (B)"
                                 Minimum="0"
                                 SpinButtonPlacementMode="Compact"
-                                Value="{x:Bind ViewModel!.SizeMaxFilter, Mode=TwoWay, Converter={StaticResource NullableLongToDoubleConverter}}" />
+                                Value="{x:Bind ViewModel.SizeMaxFilter, Mode=TwoWay, Converter={StaticResource NullableLongToDoubleConverter}}" />
                         </StackPanel>
                     </controls:Expander>
                 </StackPanel>
@@ -159,34 +159,35 @@
                     x:Uid="FilesPage_ApplyButton"
                     Grid.Column="0"
                     Content="Použít"
-                    Command="{x:Bind ViewModel!.RefreshCommand}" />
+                    Command="{x:Bind ViewModel.RefreshCommand}" />
                 <Button
                     x:Uid="FilesPage_ClearButton"
                     Grid.Column="1"
                     Content="Vyčistit"
-                    Command="{x:Bind ViewModel!.ClearFiltersCommand}" />
+                    Command="{x:Bind ViewModel.ClearFiltersCommand}" />
             </Grid>
         </Grid>
 
         <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Vertical" Spacing="8">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel!.IsBusy}" />
+                <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsBusy}" />
                 <TextBlock
                     x:Uid="FilesPage_StatusText"
                     VerticalAlignment="Center"
-                    Text="{x:Bind ViewModel!.StatusText, Mode=OneWay}" />
+                    Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
             </StackPanel>
             <controls:InfoBar
                 x:Uid="FilesPage_ErrorInfoBar"
                 IsClosable="False"
-                IsOpen="{x:Bind ViewModel!.HasError, Mode=OneWay}"
+                IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                 Severity="Error"
                 Title="Chyba načítání"
                 Message="Nepodařilo se načíst výsledky." />
         </StackPanel>
 
-        <controls:ItemsRepeaterScrollHost Grid.Row="1" Grid.Column="1">
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel!.Items}">
+        <ScrollViewer Grid.Row="1" Grid.Column="1" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
+            <controls:ItemsRepeaterScrollHost>
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Items}">
                 <ItemsRepeater.Layout>
                     <controls:UniformGridLayout
                         Orientation="Vertical"
@@ -212,7 +213,8 @@
                         </Border>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
-        </controls:ItemsRepeaterScrollHost>
+                </ItemsRepeater>
+            </controls:ItemsRepeaterScrollHost>
+        </ScrollViewer>
     </Grid>
 </Page>
