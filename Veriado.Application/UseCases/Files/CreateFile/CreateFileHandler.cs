@@ -1,3 +1,6 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+
 namespace Veriado.Appl.UseCases.Files.CreateFile;
 
 /// <summary>
@@ -50,10 +53,37 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
         {
             return AppResult<Guid>.FromException(ex);
         }
+        catch (DbUpdateException ex) when (IsDuplicateContentHashViolation(ex))
+        {
+            return AppResult<Guid>.Conflict("A file with identical content already exists.");
+        }
         catch (Exception ex)
         {
             return AppResult<Guid>.FromException(ex, "Failed to create the file.");
         }
     }
 
+    private static bool IsDuplicateContentHashViolation(DbUpdateException exception)
+    {
+        if (exception.InnerException is not SqliteException sqlite)
+        {
+            return false;
+        }
+
+        const int SqliteConstraint = 19; // SQLITE_CONSTRAINT
+        const int SqliteConstraintUnique = 2067; // SQLITE_CONSTRAINT_UNIQUE
+
+        if (sqlite.SqliteErrorCode != SqliteConstraint)
+        {
+            return false;
+        }
+
+        if (sqlite.SqliteExtendedErrorCode != 0 && sqlite.SqliteExtendedErrorCode != SqliteConstraintUnique)
+        {
+            return false;
+        }
+
+        return sqlite.Message.Contains("files_content.hash", StringComparison.OrdinalIgnoreCase)
+            || sqlite.Message.Contains("ux_files_content_hash", StringComparison.OrdinalIgnoreCase);
+    }
 }

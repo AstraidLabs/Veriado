@@ -324,6 +324,40 @@ public sealed class ImportService : IImportService
                             return;
                         }
 
+                        if (IsDuplicateConflict(response.Errors))
+                        {
+                            _logger.LogInformation(
+                                "Skipping file {FilePath} because identical content already exists (detected after write conflict).",
+                                filePath);
+
+                            var completedSkip = Interlocked.Increment(ref processed);
+                            var successCount = Volatile.Read(ref succeeded);
+                            var failedCount = Volatile.Read(ref failed);
+                            var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
+
+                            await channel.Writer.WriteAsync(
+                                ImportProgressEvent.FileCompleted(
+                                    filePath,
+                                    completedSkip,
+                                    total,
+                                    successCount,
+                                    skipMessage,
+                                    _clock.UtcNow),
+                                CancellationToken.None).ConfigureAwait(false);
+
+                            await channel.Writer.WriteAsync(
+                                ImportProgressEvent.Progress(
+                                    completedSkip,
+                                    total,
+                                    successCount,
+                                    failedCount,
+                                    skipMessage,
+                                    _clock.UtcNow),
+                                CancellationToken.None).ConfigureAwait(false);
+
+                            return;
+                        }
+
                         var importErrors = CreateImportErrors(filePath, response.Errors);
                         foreach (var error in importErrors)
                         {
@@ -681,6 +715,19 @@ public sealed class ImportService : IImportService
             SystemMetadata = request.SystemMetadata,
             IsReadOnly = request.IsReadOnly,
         };
+    }
+
+    private static bool IsDuplicateConflict(IReadOnlyList<ApiError> errors)
+    {
+        if (errors is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        return errors.All(static error =>
+            string.Equals(error.Code, "conflict", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(error.Message)
+            && error.Message.Contains("identical content", StringComparison.OrdinalIgnoreCase));
     }
 
     private IReadOnlyList<ImportError> CreateImportErrors(string filePath, IReadOnlyList<ApiError> errors)
