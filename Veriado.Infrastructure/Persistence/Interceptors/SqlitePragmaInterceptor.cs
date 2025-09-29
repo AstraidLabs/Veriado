@@ -15,15 +15,6 @@ public sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
             return;
         }
 
-        await using var command = sqlite.CreateCommand();
-        command.CommandText = string.Join(";",
-            "PRAGMA journal_mode=WAL",
-            "PRAGMA synchronous=FULL",
-            "PRAGMA foreign_keys=ON",
-            "PRAGMA temp_store=MEMORY",
-            "PRAGMA mmap_size=134217728",
-            "PRAGMA cache_size=-32768",
-            "PRAGMA busy_timeout=5000");
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(sqlite, cancellationToken).ConfigureAwait(false);
     }
 }

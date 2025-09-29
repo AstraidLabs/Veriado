@@ -69,6 +69,7 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 
         await using var connection = new SqliteConnection(_options.ConnectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
 
         await using var existsCommand = connection.CreateCommand();
         existsCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'idempotency_keys' LIMIT 1;";

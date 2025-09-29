@@ -29,6 +29,7 @@ internal static class SqliteFulltextSupportDetector
         {
             using var connection = new SqliteConnection(connectionString);
             connection.Open();
+            SqlitePragmaHelper.ApplyAsync(connection, CancellationToken.None).GetAwaiter().GetResult();
 
             using (var moduleCheck = connection.CreateCommand())
             {

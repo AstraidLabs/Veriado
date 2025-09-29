@@ -20,6 +20,7 @@ internal sealed class SqliteIdempotencyStore : IIdempotencyStore
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "INSERT OR IGNORE INTO idempotency_keys(key, created_utc) VALUES ($key, $createdUtc);";
@@ -34,6 +35,7 @@ internal sealed class SqliteIdempotencyStore : IIdempotencyStore
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "UPDATE idempotency_keys SET created_utc = $createdUtc WHERE key = $key;";
@@ -46,6 +48,7 @@ internal sealed class SqliteIdempotencyStore : IIdempotencyStore
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM idempotency_keys WHERE key = $key;";
         command.Parameters.Add("$key", SqliteType.Text).Value = FormatKey(requestId);
