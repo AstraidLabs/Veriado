@@ -83,26 +83,38 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
 
-        var analyzerOptions = services.AddOptions<AnalyzerOptions>();
+        var searchOptions = services.AddOptions<SearchOptions>();
         if (configuration is not null)
         {
-            analyzerOptions.Bind(configuration.GetSection("Search:Analyzer"));
+            searchOptions.Bind(configuration.GetSection("Search"));
         }
         else
         {
-            analyzerOptions.Configure(_ => { });
+            searchOptions.Configure(_ => { });
         }
 
-        analyzerOptions.PostConfigure(options =>
+        searchOptions.PostConfigure(options =>
         {
-            if (string.IsNullOrWhiteSpace(options.DefaultProfile))
+            options.Analyzer ??= new AnalyzerOptions();
+            if (string.IsNullOrWhiteSpace(options.Analyzer.DefaultProfile))
             {
-                options.DefaultProfile = "cs";
+                options.Analyzer.DefaultProfile = "cs";
             }
         });
 
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<SearchOptions>>().Value);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Analyzer);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Score);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Trigram);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Facets);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Synonyms);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Suggestions);
+        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Spell);
+        services.AddSingleton<IOptions<AnalyzerOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Analyzer));
+        services.AddSingleton<IOptions<SearchScoreOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Score));
+        services.AddSingleton<IOptions<TrigramIndexOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Trigram));
+
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
-        services.AddSingleton(sp => sp.GetRequiredService<IOptions<AnalyzerOptions>>().Value);
 
         services.AddDbContextPool<AppDbContext>(ConfigureDbContext, poolSize: 128);
         services.AddDbContextFactory<AppDbContext>(ConfigureDbContext);

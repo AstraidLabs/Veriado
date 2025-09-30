@@ -55,7 +55,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
     private readonly List<string> _whereClauses = new();
     private readonly List<SqliteParameterDefinition> _parameters = new();
-    private readonly SearchScorePlan _scorePlan = new();
+    private readonly SearchScorePlan _scorePlan;
     private readonly ISynonymProvider _synonymProvider;
     private readonly string _language;
 
@@ -65,7 +65,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class using the default configuration.
     /// </summary>
     public SearchQueryBuilder()
-        : this(null, null)
+        : this(null, null, null)
     {
     }
 
@@ -75,11 +75,42 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
     /// <param name="language">Optional language identifier used when querying synonyms.</param>
     public SearchQueryBuilder(ISynonymProvider? synonymProvider, string? language)
+        : this(null, synonymProvider, language)
     {
+    }
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class with scoring options and custom services.
+    /// </summary>
+    /// <param name="scoreOptions">Optional scoring options applied to the resulting <see cref="SearchScorePlan"/>.</param>
+    /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
+    /// <param name="language">Optional language identifier used when querying synonyms.</param>
+    public SearchQueryBuilder(SearchScoreOptions? scoreOptions, ISynonymProvider? synonymProvider, string? language)
+    {
+        _scorePlan = new SearchScorePlan();
+        ApplyScoreOptions(scoreOptions);
         _synonymProvider = synonymProvider ?? EmptySynonymProvider.Instance;
         _language = string.IsNullOrWhiteSpace(language)
             ? "en"
             : language!.Trim().ToLowerInvariant();
+    }
+
+    private void ApplyScoreOptions(SearchScoreOptions? options)
+    {
+        if (options is null)
+        {
+            return;
+        }
+
+        _scorePlan.TitleWeight = options.TitleWeight;
+        _scorePlan.MimeWeight = options.MimeWeight;
+        _scorePlan.AuthorWeight = options.AuthorWeight;
+        _scorePlan.MetadataTextWeight = options.MetadataTextWeight;
+        _scorePlan.MetadataWeight = options.MetadataWeight;
+        _scorePlan.ScoreMultiplier = options.ScoreMultiplier;
+        _scorePlan.HigherScoreIsBetter = options.HigherScoreIsBetter;
+        _scorePlan.UseTfIdfAlternative = options.UseTfIdfAlternative;
+        _scorePlan.TfIdfDampingFactor = options.TfIdfDampingFactor;
     }
 
     /// <inheritdoc />
