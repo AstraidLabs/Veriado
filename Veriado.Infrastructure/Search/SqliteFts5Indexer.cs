@@ -6,10 +6,12 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5Indexer : ISearchIndexer
 {
     private readonly InfrastructureOptions _options;
+    private readonly SuggestionMaintenanceService? _suggestionMaintenance;
 
-    public SqliteFts5Indexer(InfrastructureOptions options)
+    public SqliteFts5Indexer(InfrastructureOptions options, SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
+        _suggestionMaintenance = suggestionMaintenance;
     }
 
     public Task IndexAsync(SearchDocument document, CancellationToken cancellationToken = default)
@@ -57,6 +59,11 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
+        }
+
+        if (_suggestionMaintenance is not null)
+        {
+            await _suggestionMaintenance.UpsertAsync(document, cancellationToken).ConfigureAwait(false);
         }
     }
 

@@ -10,15 +10,18 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
     private readonly ISearchIndexer _searchIndexer;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<SqliteSearchIndexCoordinator> _logger;
+    private readonly OutboxDrainService _outboxDrainService;
 
     public SqliteSearchIndexCoordinator(
         ISearchIndexer searchIndexer,
         InfrastructureOptions options,
-        ILogger<SqliteSearchIndexCoordinator> logger)
+        ILogger<SqliteSearchIndexCoordinator> logger,
+        OutboxDrainService outboxDrainService)
     {
         _searchIndexer = searchIndexer;
         _options = options;
         _logger = logger;
+        _outboxDrainService = outboxDrainService;
     }
 
     public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken)
@@ -61,5 +64,15 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
 
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
         return true;
+    }
+
+    public async Task SearchIndexRefreshAsync(CancellationToken cancellationToken)
+    {
+        if (_options.FtsIndexingMode != FtsIndexingMode.Outbox)
+        {
+            return;
+        }
+
+        await _outboxDrainService.DrainAsync(cancellationToken).ConfigureAwait(false);
     }
 }

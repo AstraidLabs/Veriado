@@ -47,4 +47,11 @@ internal static class SqliteExceptionExtensions
 
         return false;
     }
+
+    public static bool IndicatesMissingColumn(this SqliteException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception.SqliteErrorCode == 1
+            && exception.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase);
+    }
 }

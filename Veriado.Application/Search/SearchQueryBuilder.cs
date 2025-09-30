@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Veriado.Appl.Search.Abstractions;
 
 /// <summary>
 /// Default implementation of <see cref="ISearchQueryBuilder"/> that targets SQLite FTS5.
@@ -56,9 +57,32 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private readonly List<SqliteParameterDefinition> _parameters = new();
     private readonly SearchScorePlan _scorePlan = new();
     private readonly List<(string Expression, bool RequireAll)> _trigramExpressions = new();
+    private readonly ISynonymProvider _synonymProvider;
+    private readonly string _language;
 
     private bool _requiresTrigramFallback;
     private int _parameterIndex;
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class using the default configuration.
+    /// </summary>
+    public SearchQueryBuilder()
+        : this(null, null)
+    {
+    }
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class with a custom synonym provider.
+    /// </summary>
+    /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
+    /// <param name="language">Optional language identifier used when querying synonyms.</param>
+    public SearchQueryBuilder(ISynonymProvider? synonymProvider, string? language)
+    {
+        _synonymProvider = synonymProvider ?? EmptySynonymProvider.Instance;
+        _language = string.IsNullOrWhiteSpace(language)
+            ? "en"
+            : language!.Trim().ToLowerInvariant();
+    }
 
     /// <inheritdoc />
     public QueryNode? Term(string? field, string term)
@@ -337,7 +361,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         var fieldPrefix = string.IsNullOrWhiteSpace(token.Field) ? string.Empty : token.Field + ':';
         return token.TokenType switch
         {
-            QueryTokenType.Term => fieldPrefix + token.Value,
+            QueryTokenType.Term => FormatTerm(fieldPrefix, token.Value),
             QueryTokenType.Phrase => fieldPrefix + '"' + EscapeQuotes(token.Value) + '"',
             QueryTokenType.Proximity => fieldPrefix + token.Value,
             QueryTokenType.Prefix => fieldPrefix + token.Value,
@@ -371,6 +395,46 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         return "(" + string.Join(op, parts) + ")";
     }
 
+    private string FormatTerm(string fieldPrefix, string tokenValue)
+    {
+        var expansions = ExpandSynonyms(tokenValue);
+        if (expansions.Count == 0)
+        {
+            return fieldPrefix + tokenValue;
+        }
+
+        if (expansions.Count == 1)
+        {
+            var single = expansions[0];
+            return fieldPrefix + (single.Contains(' ', StringComparison.Ordinal)
+                ? '"' + EscapeQuotes(single) + '"'
+                : single);
+        }
+
+        var builder = new StringBuilder();
+        builder.Append(fieldPrefix).Append('(');
+        for (var index = 0; index < expansions.Count; index++)
+        {
+            if (index > 0)
+            {
+                builder.Append(" OR ");
+            }
+
+            var expansion = expansions[index];
+            if (expansion.Contains(' ', StringComparison.Ordinal))
+            {
+                builder.Append('"').Append(EscapeQuotes(expansion)).Append('"');
+            }
+            else
+            {
+                builder.Append(expansion);
+            }
+        }
+
+        builder.Append(')');
+        return builder.ToString();
+    }
+
     private static string? NormalizeField(string? field)
     {
         if (string.IsNullOrWhiteSpace(field))
@@ -396,6 +460,47 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
         var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return tokens.Length == 0 ? null : tokens[0];
+    }
+
+    private IReadOnlyList<string> ExpandSynonyms(string term)
+    {
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return Array.Empty<string>();
+        }
+
+        var expanded = _synonymProvider.Expand(_language, term);
+        if (expanded.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ordered = new List<string>(expanded.Count);
+        foreach (var candidate in expanded)
+        {
+            var normalised = NormalizeText(candidate);
+            if (string.IsNullOrWhiteSpace(normalised))
+            {
+                continue;
+            }
+
+            if (unique.Add(normalised))
+            {
+                ordered.Add(normalised);
+            }
+        }
+
+        if (ordered.Count == 0)
+        {
+            var fallback = NormalizeText(term);
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                ordered.Add(fallback);
+            }
+        }
+
+        return ordered.Count == 0 ? Array.Empty<string>() : ordered;
     }
 
     private static string NormalizeText(string text)
@@ -499,4 +604,30 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     }
 
     private readonly record struct RangeTarget(string Column, SqliteType Type, Func<object, object?> Converter);
+
+    private sealed class EmptySynonymProvider : ISynonymProvider
+    {
+        public static readonly EmptySynonymProvider Instance = new();
+
+        public IReadOnlyList<string> Expand(string language, string term)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return Array.Empty<string>();
+            }
+
+            return new[] { Normalize(term) };
+
+            static string Normalize(string value)
+            {
+                var builder = new StringBuilder(value.Length);
+                foreach (var ch in value)
+                {
+                    builder.Append(char.ToLowerInvariant(ch));
+                }
+
+                return builder.ToString();
+            }
+        }
+    }
 }

@@ -76,6 +76,7 @@ internal sealed class TrigramQueryService
         ApplyPlanParameters(command, plan);
 
         var results = new List<(Guid Id, double Score)>();
+        var stopwatch = Stopwatch.StartNew();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -96,6 +97,9 @@ internal sealed class TrigramQueryService
 
             results.Add((id, score));
         }
+
+        stopwatch.Stop();
+        _telemetry.RecordTrigramQuery(stopwatch.Elapsed);
 
         if (results.Count == 0)
         {
@@ -178,6 +182,7 @@ internal sealed class TrigramQueryService
         ApplyPlanParameters(command, plan);
 
         var hits = new List<SearchHit>(take);
+        var stopwatch = Stopwatch.StartNew();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -221,6 +226,9 @@ internal sealed class TrigramQueryService
             var sortValues = new SearchHitSortValues(modifiedUtc, score, score, score);
             hits.Add(new SearchHit(fileId, score, "TRIGRAM", snippetSource, snippet, highlights, fields, sortValues));
         }
+
+        stopwatch.Stop();
+        _telemetry.RecordTrigramQuery(stopwatch.Elapsed);
 
         if (hits.Count == 0)
         {

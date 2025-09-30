@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -34,10 +35,12 @@ internal sealed class SqliteFts5QueryService
     };
 
     private readonly InfrastructureOptions _options;
+    private readonly ISearchTelemetry _telemetry;
 
-    public SqliteFts5QueryService(InfrastructureOptions options)
+    public SqliteFts5QueryService(InfrastructureOptions options, ISearchTelemetry telemetry)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -80,6 +83,7 @@ internal sealed class SqliteFts5QueryService
         ApplyPlanParameters(command, plan);
 
         var results = new List<(Guid, double)>();
+        var stopwatch = Stopwatch.StartNew();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var hasCustomSimilarity = !string.IsNullOrWhiteSpace(plan.ScorePlan.CustomSimilaritySql);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -113,6 +117,9 @@ internal sealed class SqliteFts5QueryService
             results.Add((id, score));
         }
 
+        stopwatch.Stop();
+        _telemetry.RecordFtsQuery(stopwatch.Elapsed);
+
         return results;
     }
 
@@ -144,7 +151,10 @@ internal sealed class SqliteFts5QueryService
         command.Parameters.Add("$query", SqliteType.Text).Value = plan.MatchExpression;
         ApplyPlanParameters(command, plan);
 
+        var stopwatch = Stopwatch.StartNew();
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        stopwatch.Stop();
+        _telemetry.RecordFtsQuery(stopwatch.Elapsed);
         return result is long value ? (int)value : 0;
     }
 
@@ -182,12 +192,16 @@ internal sealed class SqliteFts5QueryService
         ApplyPlanParameters(command, plan);
 
         var hits = new List<SearchHit>(take);
+        var stopwatch = Stopwatch.StartNew();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var hit = MapHit(reader, plan.ScorePlan, hasCustomSimilarity);
             hits.Add(hit);
         }
+
+        stopwatch.Stop();
+        _telemetry.RecordFtsQuery(stopwatch.Elapsed);
 
         return hits;
     }

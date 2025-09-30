@@ -348,6 +348,111 @@ namespace Veriado.Infrastructure.Migrations
                     b.ToTable("outbox_events", (string)null);
                 });
 
+            modelBuilder.Entity("Veriado.Domain.Search.SynonymEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("lang");
+
+                    b.Property<string>("Term")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("term");
+
+                    b.Property<string>("Variant")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("variant");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Language", "Term")
+                        .HasDatabaseName("idx_synonyms_term");
+
+                    b.ToTable("synonyms", (string)null);
+                });
+
+            modelBuilder.Entity("Veriado.Domain.Search.SuggestionEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("lang")
+                        .HasDefaultValue("en");
+
+                    b.Property<string>("SourceField")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_field");
+
+                    b.Property<string>("Term")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("term");
+
+                    b.Property<double>("Weight")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("REAL")
+                        .HasDefaultValue(1.0)
+                        .HasColumnName("weight");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Language", "Term")
+                        .HasDatabaseName("idx_suggestions_lookup");
+
+                    b.HasIndex("Term", "Language", "SourceField")
+                        .IsUnique()
+                        .HasDatabaseName("ux_suggestions_term");
+
+                    b.ToTable("suggestions", (string)null);
+                });
+
+            modelBuilder.Entity("Veriado.Domain.Search.DocumentLocationEntity", b =>
+                {
+                    b.Property<byte[]>("FileId")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("file_id");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("REAL")
+                        .HasColumnName("lat");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("REAL")
+                        .HasColumnName("lon");
+
+                    b.HasKey("FileId");
+
+                    b.HasIndex("Latitude", "Longitude")
+                        .HasDatabaseName("idx_document_locations_geo");
+
+                    b.ToTable("document_locations", (string)null);
+
+                    b.HasOne("Veriado.Domain.Files.FileEntity", null)
+                        .WithOne()
+                        .HasForeignKey("Veriado.Domain.Search.DocumentLocationEntity", "FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("FK_document_locations_files_file_id");
+                });
+
             modelBuilder.Entity("Veriado.Domain.Files.FileEntity", b =>
                 {
                     b.OwnsOne("Veriado.Domain.Search.SearchIndexState", "SearchIndex", b1 =>
