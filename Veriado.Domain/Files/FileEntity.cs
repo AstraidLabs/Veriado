@@ -366,6 +366,22 @@ public sealed class FileEntity : AggregateRoot
     {
         var title = string.IsNullOrWhiteSpace(Title) ? Name.Value : Title!;
         var authorText = string.IsNullOrWhiteSpace(Author) ? null : Author;
+        var metadata = new SearchDocumentMetadata(
+            Name.Value,
+            Extension.Value,
+            Mime.Value,
+            string.IsNullOrWhiteSpace(Title) ? null : Title,
+            authorText,
+            Size.Value,
+            new SearchDocumentSystemMetadata(
+                SystemMetadata.Attributes,
+                SystemMetadata.OwnerSid,
+                SystemMetadata.HardLinkCount,
+                SystemMetadata.AlternateDataStreamCount,
+                SystemMetadata.CreatedUtc.Value,
+                SystemMetadata.LastWriteUtc.Value,
+                SystemMetadata.LastAccessUtc.Value));
+        var metadataJson = SearchDocument.SerializeMetadata(metadata);
         return new SearchDocument(
             Id,
             title,
@@ -373,7 +389,8 @@ public sealed class FileEntity : AggregateRoot
             authorText,
             Name.Value,
             CreatedUtc.Value,
-            LastModifiedUtc.Value);
+            LastModifiedUtc.Value,
+            metadataJson);
     }
 
     /// <summary>

@@ -47,7 +47,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT m.file_id, bm25(s, 4.0, 2.0, 1.0) AS score " +
+            "SELECT m.file_id, bm25(s, 4.0, 2.0, 0.5, 1.0) AS score " +
             "FROM file_search s " +
             "JOIN file_search_map m ON s.rowid = m.rowid " +
             "WHERE file_search MATCH $query " +
@@ -167,7 +167,13 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             "       COALESCE(s.mime, 'application/octet-stream'), " +
             "       highlight(s, 0, $pre, $post) AS hl_title, " +
             "       snippet(s, 0, $pre, $post, '…', 16) AS snip_title, " +
-            "       bm25(s, 4.0, 2.0, 1.0) AS score, " +
+            "       highlight(s, 1, $pre, $post) AS hl_mime, " +
+            "       snippet(s, 1, $pre, $post, '…', 8) AS snip_mime, " +
+            "       highlight(s, 2, $pre, $post) AS hl_author, " +
+            "       snippet(s, 2, $pre, $post, '…', 8) AS snip_author, " +
+            "       highlight(s, 3, $pre, $post) AS hl_metadata, " +
+            "       snippet(s, 3, $pre, $post, '…', 16) AS snip_metadata, " +
+            "       bm25(s, 4.0, 2.0, 0.5, 1.0) AS score, " +
             "       f.modified_utc " +
             "FROM file_search s " +
             "JOIN file_search_map m ON s.rowid = m.rowid " +
@@ -190,16 +196,39 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             var mime = reader.GetString(2);
             var highlightValue = reader.IsDBNull(3) ? null : reader.GetString(3);
             var highlightedTitle = string.IsNullOrWhiteSpace(highlightValue) ? title : highlightValue;
-            var snippetValue = reader.IsDBNull(4) ? null : reader.GetString(4);
-            var snippet = string.IsNullOrWhiteSpace(snippetValue) ? null : snippetValue;
-            var rawScore = reader.IsDBNull(5) ? double.PositiveInfinity : reader.GetDouble(5);
-            var modified = reader.GetString(6);
+            var snippet = SelectSnippet(reader);
+            var rawScore = reader.IsDBNull(11) ? double.PositiveInfinity : reader.GetDouble(11);
+            var modified = reader.GetString(12);
             var modifiedUtc = DateTimeOffset.Parse(modified, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
             var score = NormalizeScore(rawScore);
             hits.Add(new SearchHit(id, highlightedTitle, mime, snippet, score, modifiedUtc));
         }
 
         return hits;
+    }
+
+    private static string? SelectSnippet(SqliteDataReader reader)
+    {
+        static string? ReadValue(SqliteDataReader source, int ordinal)
+            => source.IsDBNull(ordinal) ? null : source.GetString(ordinal);
+
+        var candidates = new[]
+        {
+            ReadValue(reader, 4) ?? ReadValue(reader, 3),
+            ReadValue(reader, 10) ?? ReadValue(reader, 9),
+            ReadValue(reader, 8) ?? ReadValue(reader, 7),
+            ReadValue(reader, 6) ?? ReadValue(reader, 5),
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private SqliteConnection CreateConnection()

@@ -19,6 +19,8 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
 {
     private const string GuidFormat = "N";
+    private const int CommitThreshold = 32;
+    private static readonly TimeSpan CommitInterval = TimeSpan.FromSeconds(2);
 
     private readonly InfrastructureOptions _options;
     private readonly Analyzer? _analyzer;
@@ -26,6 +28,9 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
     private readonly IndexWriter? _writer;
     private readonly ILogger<LuceneSearchIndexer>? _logger;
     private readonly SemaphoreSlim _writerLock = new(1, 1);
+    private Task? _scheduledCommit;
+    private CancellationTokenSource? _scheduledCommitCts;
+    private int _pendingOperations;
     private bool _disposed;
 
     public LuceneSearchIndexer(InfrastructureOptions options, ILogger<LuceneSearchIndexer>? logger = null)
@@ -78,7 +83,7 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
         {
             var luceneDocument = BuildDocument(document);
             Writer.UpdateDocument(new Term(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture)), luceneDocument);
-            Writer.Commit();
+            CommitOrSchedule();
         }
         finally
         {
@@ -98,7 +103,7 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
         try
         {
             Writer.DeleteDocuments(new Term(LuceneSearchFields.Id, fileId.ToString(GuidFormat, CultureInfo.InvariantCulture)));
-            Writer.Commit();
+            CommitOrSchedule();
         }
         finally
         {
@@ -153,12 +158,132 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
             new StringField(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture), Field.Store.YES),
             new TextField(LuceneSearchFields.Title, document.Title ?? string.Empty, Field.Store.YES),
             new TextField(LuceneSearchFields.Author, document.Author ?? string.Empty, Field.Store.YES),
+            new TextField(LuceneSearchFields.Metadata, document.MetadataJson ?? string.Empty, Field.Store.YES),
             new StringField(LuceneSearchFields.Mime, document.Mime ?? string.Empty, Field.Store.YES),
             new StringField(LuceneSearchFields.Created, document.CreatedUtc.ToString("O", CultureInfo.InvariantCulture), Field.Store.YES),
             new StringField(LuceneSearchFields.Modified, document.ModifiedUtc.ToString("O", CultureInfo.InvariantCulture), Field.Store.YES),
         };
 
         return luceneDocument;
+    }
+
+    private void CommitOrSchedule()
+    {
+        if (_writer is null)
+        {
+            return;
+        }
+
+        _pendingOperations++;
+
+        if (_pendingOperations >= CommitThreshold)
+        {
+            CommitNow();
+            return;
+        }
+
+        ScheduleCommit();
+    }
+
+    private void CommitNow()
+    {
+        CancelScheduledCommit(waitForCompletion: false);
+        Writer.Commit();
+        _pendingOperations = 0;
+    }
+
+    private void ScheduleCommit()
+    {
+        CancelScheduledCommit(waitForCompletion: false);
+
+        if (_writer is null)
+        {
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _scheduledCommitCts = cts;
+        _scheduledCommit = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(CommitInterval, cts.Token).ConfigureAwait(false);
+                var acquired = false;
+                try
+                {
+                    await _writerLock.WaitAsync(cts.Token).ConfigureAwait(false);
+                    acquired = true;
+                    if (_pendingOperations > 0)
+                    {
+                        Writer.Commit();
+                        _pendingOperations = 0;
+                    }
+                }
+                finally
+                {
+                    if (acquired)
+                    {
+                        _writerLock.Release();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancellation is expected when a manual commit occurs or disposal begins.
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Lucene scheduled commit failed.");
+            }
+            finally
+            {
+                cts.Dispose();
+                _scheduledCommitCts = null;
+            }
+        }, CancellationToken.None);
+    }
+
+    private void CancelScheduledCommit(bool waitForCompletion)
+    {
+        var scheduled = _scheduledCommit;
+        var cts = _scheduledCommitCts;
+        if (cts is not null)
+        {
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore, the commit task has already cleaned up.
+            }
+        }
+
+        if (waitForCompletion && scheduled is not null)
+        {
+            try
+            {
+                scheduled.Wait();
+            }
+            catch (AggregateException ex) when (ex.InnerExceptions.TrueForAll(static e => e is OperationCanceledException or TaskCanceledException))
+            {
+                // Swallow cancellations triggered during shutdown.
+            }
+        }
+
+        _scheduledCommitCts = null;
+        _scheduledCommit = null;
+    }
+
+    private void FlushPendingOperations()
+    {
+        if (_pendingOperations <= 0 || _writer is null)
+        {
+            return;
+        }
+
+        Writer.Commit();
+        _pendingOperations = 0;
     }
 
     private IndexWriter Writer => _writer ?? throw new InvalidOperationException("Lucene index writer has not been initialised.");
@@ -185,12 +310,14 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
 
         _disposed = true;
 
+        CancelScheduledCommit(waitForCompletion: true);
+
         if (_writer is not null)
         {
             _writerLock.Wait();
             try
             {
-                _writer.Commit();
+                FlushPendingOperations();
                 _writer.Dispose();
             }
             finally
