@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -20,12 +21,12 @@ internal sealed class TrigramQueryService
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
-        string matchQuery,
+        SearchQueryPlan plan,
         int skip,
         int take,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
+        ArgumentNullException.ThrowIfNull(plan);
         if (take <= 0)
         {
             return Array.Empty<(Guid, double)>();
@@ -41,7 +42,15 @@ internal sealed class TrigramQueryService
             return Array.Empty<(Guid, double)>();
         }
 
-        var queryTokens = ExtractTokens(matchQuery);
+        var trigramQuery = !string.IsNullOrWhiteSpace(plan.TrigramExpression)
+            ? plan.TrigramExpression
+            : plan.MatchExpression;
+        if (string.IsNullOrWhiteSpace(trigramQuery))
+        {
+            return Array.Empty<(Guid, double)>();
+        }
+
+        var queryTokens = ExtractTokens(trigramQuery);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<(Guid, double)>();
@@ -52,15 +61,19 @@ internal sealed class TrigramQueryService
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText =
+        var builder = new StringBuilder();
+        builder.Append(
             "SELECT m.file_id, t.trgm " +
             "FROM file_trgm t " +
             "JOIN file_trgm_map m ON t.rowid = m.rowid " +
-            "WHERE file_trgm MATCH $query " +
-            "ORDER BY bm25(t) ASC, m.rowid ASC " +
-            "LIMIT $limit;";
-        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
+            "JOIN files f ON f.id = m.file_id " +
+            "WHERE file_trgm MATCH $query ");
+        AppendWhereClauses(builder, plan);
+        builder.Append("ORDER BY bm25(t) ASC, m.rowid ASC LIMIT $limit;");
+        command.CommandText = builder.ToString();
+        command.Parameters.Add("$query", SqliteType.Text).Value = trigramQuery;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = fetch;
+        ApplyPlanParameters(command, plan);
 
         var results = new List<(Guid Id, double Score)>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -99,9 +112,12 @@ internal sealed class TrigramQueryService
         return ordered;
     }
 
-    public async Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(
+        SearchQueryPlan plan,
+        int take,
+        CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentNullException.ThrowIfNull(plan);
         if (take <= 0)
         {
             return Array.Empty<SearchHit>();
@@ -112,12 +128,20 @@ internal sealed class TrigramQueryService
             return Array.Empty<SearchHit>();
         }
 
-        if (!TrigramQueryBuilder.TryBuild(query, requireAllTerms: false, out var matchQuery))
+        var trigramQuery = !string.IsNullOrWhiteSpace(plan.TrigramExpression)
+            ? plan.TrigramExpression
+            : plan.MatchExpression;
+        if (string.IsNullOrWhiteSpace(trigramQuery))
         {
             return Array.Empty<SearchHit>();
         }
 
-        var queryTokens = TrigramQueryBuilder.BuildTrigrams(query)
+        if (!TrigramQueryBuilder.TryBuild(trigramQuery, requireAllTerms: false, out var matchQuery))
+        {
+            return Array.Empty<SearchHit>();
+        }
+
+        var queryTokens = TrigramQueryBuilder.BuildTrigrams(trigramQuery)
             .Select(static token => token.ToLowerInvariant())
             .ToHashSet(StringComparer.Ordinal);
         if (queryTokens.Count == 0)
@@ -129,7 +153,8 @@ internal sealed class TrigramQueryService
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText =
+        var builder = new StringBuilder();
+        builder.Append(
             "SELECT tm.file_id, " +
             "       sm.rowid, " +
             "       COALESCE(s.title, '') AS title, " +
@@ -144,11 +169,13 @@ internal sealed class TrigramQueryService
             "JOIN file_search_map sm ON sm.file_id = tm.file_id " +
             "JOIN file_search s ON s.rowid = sm.rowid " +
             "JOIN files f ON f.id = tm.file_id " +
-            "WHERE file_trgm MATCH $query " +
-            "ORDER BY bm25(t) ASC, tm.rowid ASC " +
-            "LIMIT $limit;";
+            "WHERE file_trgm MATCH $query ");
+        AppendWhereClauses(builder, plan);
+        builder.Append("ORDER BY bm25(t) ASC, tm.rowid ASC LIMIT $limit;");
+        command.CommandText = builder.ToString();
         command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = take;
+        ApplyPlanParameters(command, plan);
 
         var hits = new List<SearchHit>(take);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -408,6 +435,33 @@ internal sealed class TrigramQueryService
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendWhereClauses(StringBuilder builder, SearchQueryPlan plan)
+    {
+        foreach (var clause in plan.WhereClauses)
+        {
+            if (!string.IsNullOrWhiteSpace(clause))
+            {
+                builder.Append("AND ").Append(clause).Append(' ');
+            }
+        }
+    }
+
+    private static void ApplyPlanParameters(SqliteCommand command, SearchQueryPlan plan)
+    {
+        foreach (var parameter in plan.Parameters)
+        {
+            if (parameter.Type.HasValue)
+            {
+                var sqliteParameter = command.Parameters.Add(parameter.Name, parameter.Type.Value);
+                sqliteParameter.Value = parameter.Value ?? DBNull.Value;
+            }
+            else
+            {
+                command.Parameters.AddWithValue(parameter.Name, parameter.Value ?? DBNull.Value);
+            }
+        }
     }
 
     private SqliteConnection CreateConnection()

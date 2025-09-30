@@ -1,3 +1,4 @@
+using Veriado.Appl.Search;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -17,31 +18,34 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
     }
 
     public Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
-        string matchQuery,
+        SearchQueryPlan plan,
         int skip,
         int take,
         CancellationToken cancellationToken)
     {
-        return _ftsService.SearchWithScoresAsync(matchQuery, skip, take, cancellationToken);
+        return _ftsService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
     }
 
     public Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
-        string matchQuery,
+        SearchQueryPlan plan,
         int skip,
         int take,
         CancellationToken cancellationToken)
     {
-        return _trigramService.SearchWithScoresAsync(matchQuery, skip, take, cancellationToken);
+        return _trigramService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
     }
 
-    public Task<int> CountAsync(string matchQuery, CancellationToken cancellationToken)
+    public Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)
     {
-        return _ftsService.CountAsync(matchQuery, cancellationToken);
+        return _ftsService.CountAsync(plan, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int? limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(
+        SearchQueryPlan plan,
+        int? limit,
+        CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentNullException.ThrowIfNull(plan);
         var take = limit.GetValueOrDefault(10);
         if (take <= 0)
         {
@@ -49,8 +53,17 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         }
 
         var oversample = Math.Max(take * 3, take);
-        var ftsHits = await _ftsService.SearchAsync(query, oversample, cancellationToken).ConfigureAwait(false);
-        var trigramHits = await _trigramService.SearchAsync(query, oversample, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<SearchHit> ftsHits = Array.Empty<SearchHit>();
+        if (!string.IsNullOrWhiteSpace(plan.MatchExpression))
+        {
+            ftsHits = await _ftsService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
+        }
+
+        IReadOnlyList<SearchHit> trigramHits = Array.Empty<SearchHit>();
+        if (plan.RequiresTrigramFallback)
+        {
+            trigramHits = await _trigramService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
+        }
 
         if (ftsHits.Count == 0 && trigramHits.Count == 0)
         {
@@ -59,13 +72,14 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
 
         var combined = new Dictionary<Guid, CombinedHit>();
         var normalizedScores = new List<double>(ftsHits.Count);
+        var queryText = plan.RawQueryText ?? plan.MatchExpression;
 
         foreach (var hit in ftsHits)
         {
             var normalized = ExtractNormalizedScore(hit.SortValues) ?? NormalizeScore(hit.Score);
             normalizedScores.Add(normalized);
             var lastModified = ExtractLastModified(hit.SortValues);
-            combined[hit.Id] = new CombinedHit(hit, normalized, lastModified, HasExactTitle(hit, query));
+            combined[hit.Id] = new CombinedHit(hit, normalized, lastModified, HasExactTitle(hit, queryText));
         }
 
         var scale = ComputeScale(normalizedScores);
@@ -85,13 +99,13 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
                     Hit = merged with { SortValues = mergedSort },
                     RankingScore = rankingScore,
                     LastModified = mergedSort?.LastModifiedUtc ?? existing.LastModified,
-                    HasExactTitle = existing.HasExactTitle || HasExactTitle(hit, query),
+                    HasExactTitle = existing.HasExactTitle || HasExactTitle(hit, queryText),
                 };
             }
             else
             {
                 var sort = MergeSortValues(null, hit.SortValues, scaled, 0d, hit.Score, lastModified, null);
-                combined[hit.Id] = new CombinedHit(hit with { SortValues = sort }, scaled, sort?.LastModifiedUtc ?? lastModified, HasExactTitle(hit, query));
+                combined[hit.Id] = new CombinedHit(hit with { SortValues = sort }, scaled, sort?.LastModifiedUtc ?? lastModified, HasExactTitle(hit, queryText));
             }
         }
 
