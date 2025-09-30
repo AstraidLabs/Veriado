@@ -1,5 +1,8 @@
 namespace Veriado.Infrastructure.Search;
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Veriado.Appl.Search;
 
 /// <summary>
@@ -11,11 +14,13 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
     private readonly ILogger<SpellSuggestionService> _logger;
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, IReadOnlyList<DictionaryEntry>> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IAnalyzerFactory _analyzerFactory;
 
-    public SpellSuggestionService(InfrastructureOptions options, ILogger<SpellSuggestionService> logger)
+    public SpellSuggestionService(InfrastructureOptions options, ILogger<SpellSuggestionService> logger, IAnalyzerFactory analyzerFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     public async Task<IReadOnlyList<SpellSuggestion>> SuggestAsync(
@@ -59,7 +64,13 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
             return Array.Empty<SpellSuggestion>();
         }
 
-        var queryTrigrams = TrigramQueryBuilder.BuildTrigrams(token)
+        var normalizedToken = NormalizeForTrigram(token);
+        if (string.IsNullOrWhiteSpace(normalizedToken))
+        {
+            return Array.Empty<SpellSuggestion>();
+        }
+
+        var queryTrigrams = TrigramQueryBuilder.BuildTrigrams(normalizedToken)
             .Select(static t => t)
             .ToHashSet(StringComparer.Ordinal);
         if (queryTrigrams.Count == 0)
@@ -111,7 +122,13 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
             {
                 var term = reader.GetString(0);
                 var weight = reader.IsDBNull(1) ? 1d : reader.GetDouble(1);
-                var trigrams = TrigramQueryBuilder.BuildTrigrams(term)
+                var normalizedTerm = NormalizeForTrigram(term);
+                if (string.IsNullOrWhiteSpace(normalizedTerm))
+                {
+                    continue;
+                }
+
+                var trigrams = TrigramQueryBuilder.BuildTrigrams(normalizedTerm)
                     .Select(static t => t)
                     .ToHashSet(StringComparer.Ordinal);
                 if (trigrams.Count == 0)
@@ -133,6 +150,21 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
             _logger.LogDebug(ex, "Spell suggestion dictionary unavailable; ensure migrations have been applied.");
             return Array.Empty<DictionaryEntry>();
         }
+    }
+
+    private string NormalizeForTrigram(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var tokens = TextNormalization
+            .Tokenize(text, _analyzerFactory)
+            .Where(static token => !string.IsNullOrWhiteSpace(token))
+            .ToArray();
+
+        return tokens.Length == 0 ? string.Empty : string.Join(' ', tokens);
     }
 
     private static double ComputeSimilarity(HashSet<string> query, HashSet<string> candidate)

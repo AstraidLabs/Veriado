@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -5,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Infrastructure.Search;
+using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.Concurrency;
 
@@ -22,6 +24,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IFulltextIntegrityService _integrityService;
     private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -32,7 +35,8 @@ internal sealed class WriteWorker : BackgroundService
         ISearchIndexer searchIndexer,
         IFulltextIntegrityService integrityService,
         IEventPublisher eventPublisher,
-        IClock clock)
+        IClock clock,
+        IAnalyzerFactory analyzerFactory)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -43,6 +47,7 @@ internal sealed class WriteWorker : BackgroundService
         _integrityService = integrityService;
         _eventPublisher = eventPublisher;
         _clock = clock;
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -378,7 +383,7 @@ internal sealed class WriteWorker : BackgroundService
             }
 
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional();
+            var helper = new SqliteFts5Transactional(_analyzerFactory);
 
             foreach (var id in filesToDelete)
             {

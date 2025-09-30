@@ -1,7 +1,10 @@
+using System;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
@@ -14,6 +17,7 @@ using Veriado.Infrastructure.Search.Outbox;
 using Veriado.Infrastructure.Time;
 using Veriado.Domain.Primitives;
 using Veriado.Appl.Pipeline.Idempotency;
+using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.DependencyInjection;
 
@@ -23,6 +27,20 @@ namespace Veriado.Infrastructure.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, Action<InfrastructureOptions>? configure = null)
+    {
+        return AddInfrastructureInternal(services, configuration: null, configure);
+    }
+
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration, Action<InfrastructureOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        return AddInfrastructureInternal(services, configuration, configure);
+    }
+
+    private static IServiceCollection AddInfrastructureInternal(
+        IServiceCollection services,
+        IConfiguration? configuration,
+        Action<InfrastructureOptions>? configure)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -63,6 +81,27 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
+
+        var analyzerOptions = services.AddOptions<AnalyzerOptions>();
+        if (configuration is not null)
+        {
+            analyzerOptions.Bind(configuration.GetSection("Search:Analyzer"));
+        }
+        else
+        {
+            analyzerOptions.Configure(_ => { });
+        }
+
+        analyzerOptions.PostConfigure(options =>
+        {
+            if (string.IsNullOrWhiteSpace(options.DefaultProfile))
+            {
+                options.DefaultProfile = "cs";
+            }
+        });
+
+        services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<AnalyzerOptions>>().Value);
 
         services.AddDbContextPool<AppDbContext>(ConfigureDbContext, poolSize: 128);
         services.AddDbContextFactory<AppDbContext>(ConfigureDbContext);
