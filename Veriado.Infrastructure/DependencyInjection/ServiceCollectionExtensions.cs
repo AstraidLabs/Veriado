@@ -5,7 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Options.ConfigurationExtensions;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
