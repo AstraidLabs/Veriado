@@ -1,24 +1,32 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Lucene.Net.Analysis;
-using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using Microsoft.Extensions.Logging;
+using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
 /// Provides Lucene.Net backed indexing for search documents.
 /// </summary>
-internal sealed class LuceneSearchIndexer
+internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
 {
     private const string GuidFormat = "N";
 
     private readonly InfrastructureOptions _options;
     private readonly Analyzer? _analyzer;
     private readonly FSDirectory? _directory;
+    private readonly IndexWriter? _writer;
     private readonly ILogger<LuceneSearchIndexer>? _logger;
-    private readonly object _syncRoot = new();
+    private readonly SemaphoreSlim _writerLock = new(1, 1);
+    private bool _disposed;
 
     public LuceneSearchIndexer(InfrastructureOptions options, ILogger<LuceneSearchIndexer>? logger = null)
     {
@@ -47,54 +55,55 @@ internal sealed class LuceneSearchIndexer
             return;
         }
 
-        _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+        _analyzer = new LuceneMetadataAnalyzer();
         _directory = directory;
-
-        // Ensure the index exists so that query services can open it without throwing.
-        using var writer = CreateWriter();
-        writer.Commit();
+        _writer = CreateWriter();
+        _writer.Commit();
     }
 
-    public bool IsEnabled => _options.EnableLuceneIntegration && _directory is not null && _analyzer is not null;
+    public bool IsEnabled
+        => _options.EnableLuceneIntegration && _directory is not null && _analyzer is not null && _writer is not null;
 
-    public Task IndexAsync(SearchDocument document, CancellationToken cancellationToken)
+    public async Task IndexAsync(SearchDocument document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (!IsEnabled)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_syncRoot)
+        await _writerLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            using var writer = CreateWriter();
             var luceneDocument = BuildDocument(document);
-            writer.UpdateDocument(new Term(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture)), luceneDocument);
-            writer.Commit();
+            Writer.UpdateDocument(new Term(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture)), luceneDocument);
+            Writer.Commit();
         }
-
-        return Task.CompletedTask;
+        finally
+        {
+            _writerLock.Release();
+        }
     }
 
-    public Task DeleteAsync(Guid fileId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(Guid fileId, CancellationToken cancellationToken)
     {
         if (!IsEnabled)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_syncRoot)
+        await _writerLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            using var writer = CreateWriter();
-            writer.DeleteDocuments(new Term(LuceneSearchFields.Id, fileId.ToString(GuidFormat, CultureInfo.InvariantCulture)));
-            writer.Commit();
+            Writer.DeleteDocuments(new Term(LuceneSearchFields.Id, fileId.ToString(GuidFormat, CultureInfo.InvariantCulture)));
+            Writer.Commit();
         }
-
-        return Task.CompletedTask;
+        finally
+        {
+            _writerLock.Release();
+        }
     }
 
     private IndexWriter CreateWriter()
@@ -143,19 +152,55 @@ internal sealed class LuceneSearchIndexer
         {
             new StringField(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture), Field.Store.YES),
             new TextField(LuceneSearchFields.Title, document.Title ?? string.Empty, Field.Store.YES),
-            new StringField(LuceneSearchFields.Mime, document.Mime ?? string.Empty, Field.Store.YES),
             new TextField(LuceneSearchFields.Author, document.Author ?? string.Empty, Field.Store.YES),
+            new StringField(LuceneSearchFields.Mime, document.Mime ?? string.Empty, Field.Store.YES),
             new StringField(LuceneSearchFields.Created, document.CreatedUtc.ToString("O", CultureInfo.InvariantCulture), Field.Store.YES),
             new StringField(LuceneSearchFields.Modified, document.ModifiedUtc.ToString("O", CultureInfo.InvariantCulture), Field.Store.YES),
-            new TextField(LuceneSearchFields.Text, BuildCombinedText(document), Field.Store.NO),
         };
 
         return luceneDocument;
     }
 
-    private static string BuildCombinedText(SearchDocument document)
+    private IndexWriter Writer => _writer ?? throw new InvalidOperationException("Lucene index writer has not been initialised.");
+
+    public void Dispose()
     {
-        var parts = new[] { document.Title, document.Author, document.Mime };
-        return string.Join(' ', parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
+        DisposeCore();
+        GC.SuppressFinalize(this);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        DisposeCore();
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeCore()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        if (_writer is not null)
+        {
+            _writerLock.Wait();
+            try
+            {
+                _writer.Commit();
+                _writer.Dispose();
+            }
+            finally
+            {
+                _writerLock.Release();
+            }
+        }
+
+        _analyzer?.Dispose();
+        _directory?.Dispose();
+        _writerLock.Dispose();
     }
 }

@@ -11,5 +11,4 @@ internal static class LuceneSearchFields
     public const string Author = "author";
     public const string Created = "created";
     public const string Modified = "modified";
-    public const string Text = "text";
 }

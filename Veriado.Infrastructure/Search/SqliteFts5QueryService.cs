@@ -1,3 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using Veriado.Domain.Search;
+
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
@@ -39,11 +47,11 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT m.file_id, 1.0 / (1.0 + bm25(s)) AS score " +
+            "SELECT m.file_id, bm25(s, 4.0, 2.0, 1.0) AS score " +
             "FROM file_search s " +
             "JOIN file_search_map m ON s.rowid = m.rowid " +
             "WHERE file_search MATCH $query " +
-            "ORDER BY score DESC " +
+            "ORDER BY score " +
             "LIMIT $take OFFSET $skip;";
         command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
         command.Parameters.Add("$take", SqliteType.Integer).Value = take;
@@ -55,7 +63,8 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         {
             var idBytes = (byte[])reader[0];
             var id = new Guid(idBytes);
-            var score = reader.IsDBNull(1) ? 0d : reader.GetDouble(1);
+            var rawScore = reader.IsDBNull(1) ? double.PositiveInfinity : reader.GetDouble(1);
+            var score = NormalizeScore(rawScore);
             results.Add((id, score));
         }
 
@@ -156,17 +165,20 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             "SELECT m.file_id, " +
             "       COALESCE(s.title, ''), " +
             "       COALESCE(s.mime, 'application/octet-stream'), " +
-            "       snippet(s, 3, '[', ']', '…', 10) AS snippet, " +
-            "       1.0 / (1.0 + bm25(s)) AS score, " +
+            "       highlight(s, 0, $pre, $post) AS hl_title, " +
+            "       snippet(s, 0, $pre, $post, '…', 16) AS snip_title, " +
+            "       bm25(s, 4.0, 2.0, 1.0) AS score, " +
             "       f.modified_utc " +
             "FROM file_search s " +
             "JOIN file_search_map m ON s.rowid = m.rowid " +
             "JOIN files f ON f.id = m.file_id " +
             "WHERE file_search MATCH $query " +
-            "ORDER BY score DESC " +
+            "ORDER BY score " +
             "LIMIT $limit;";
         command.Parameters.Add("$query", SqliteType.Text).Value = query;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = take;
+        command.Parameters.Add("$pre", SqliteType.Text).Value = "[";
+        command.Parameters.Add("$post", SqliteType.Text).Value = "]";
 
         var hits = new List<SearchHit>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -176,11 +188,15 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             var id = new Guid(idBytes);
             var title = reader.GetString(1);
             var mime = reader.GetString(2);
-            var snippet = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var score = reader.IsDBNull(4) ? 0d : reader.GetDouble(4);
-            var modified = reader.GetString(5);
+            var highlightValue = reader.IsDBNull(3) ? null : reader.GetString(3);
+            var highlightedTitle = string.IsNullOrWhiteSpace(highlightValue) ? title : highlightValue;
+            var snippetValue = reader.IsDBNull(4) ? null : reader.GetString(4);
+            var snippet = string.IsNullOrWhiteSpace(snippetValue) ? null : snippetValue;
+            var rawScore = reader.IsDBNull(5) ? double.PositiveInfinity : reader.GetDouble(5);
+            var modified = reader.GetString(6);
             var modifiedUtc = DateTimeOffset.Parse(modified, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-            hits.Add(new SearchHit(id, title, mime, snippet, score, modifiedUtc));
+            var score = NormalizeScore(rawScore);
+            hits.Add(new SearchHit(id, highlightedTitle, mime, snippet, score, modifiedUtc));
         }
 
         return hits;
@@ -194,5 +210,16 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         }
 
         return new SqliteConnection(_options.ConnectionString);
+    }
+
+    private static double NormalizeScore(double rawScore)
+    {
+        if (double.IsNaN(rawScore) || double.IsInfinity(rawScore))
+        {
+            return 0d;
+        }
+
+        var clamped = Math.Max(0d, rawScore);
+        return 1d / (1d + clamped);
     }
 }
