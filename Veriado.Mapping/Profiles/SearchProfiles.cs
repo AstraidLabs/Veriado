@@ -1,4 +1,5 @@
 using Veriado.Contracts.Search;
+using Veriado.Domain.Search;
 
 namespace Veriado.Mapping.Profiles;
 
@@ -12,7 +13,17 @@ public sealed class SearchProfiles : Profile
     /// </summary>
     public SearchProfiles()
     {
-        CreateMap<SearchHit, SearchHitDto>();
+        CreateMap<HighlightSpan, HighlightSpanDto>();
+
+        CreateMap<SearchHit, SearchHitDto>()
+            .ForCtorParam(nameof(SearchHitDto.Id), opt => opt.MapFrom(static src => src.Id))
+            .ForCtorParam(nameof(SearchHitDto.Score), opt => opt.MapFrom(static src => src.Score))
+            .ForCtorParam(nameof(SearchHitDto.Source), opt => opt.MapFrom(static src => src.Source))
+            .ForCtorParam(nameof(SearchHitDto.PrimaryField), opt => opt.MapFrom(static src => src.PrimaryField))
+            .ForCtorParam(nameof(SearchHitDto.SnippetText), opt => opt.MapFrom(static src => src.SnippetText))
+            .ForCtorParam(nameof(SearchHitDto.Highlights), opt => opt.MapFrom(static src => src.Highlights))
+            .ForCtorParam(nameof(SearchHitDto.Fields), opt => opt.MapFrom(static src => src.Fields))
+            .ForCtorParam(nameof(SearchHitDto.SortValues), opt => opt.MapFrom(static src => src.SortValues));
 
         CreateMap<SearchHistoryEntryEntity, SearchHistoryEntry>()
             .ForCtorParam(nameof(SearchHistoryEntry.Id), opt => opt.MapFrom(static src => src.Id))

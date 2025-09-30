@@ -1,3 +1,4 @@
+using AutoMapper;
 using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.Appl.UseCases.Search;
