@@ -12,6 +12,7 @@ using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using Lucene.Net.Search.Highlight;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -30,12 +31,15 @@ internal sealed class LuceneSearchQueryService
     {
         [LuceneSearchFields.Title] = 4f,
         [LuceneSearchFields.Author] = 2f,
+        [LuceneSearchFields.Metadata] = 1f,
+        [LuceneSearchFields.Mime] = 0.5f,
     };
 
     private static readonly string[] QueryFields =
     {
         LuceneSearchFields.Title,
         LuceneSearchFields.Author,
+        LuceneSearchFields.Metadata,
     };
 
     public LuceneSearchQueryService(InfrastructureOptions options)
@@ -134,7 +138,8 @@ internal sealed class LuceneSearchQueryService
         }
 
         var searcher = new IndexSearcher(reader);
-        var topDocs = searcher.Search(parsedQuery, take);
+        var rewrittenQuery = searcher.Rewrite(parsedQuery);
+        var topDocs = searcher.Search(rewrittenQuery, take);
         if (topDocs.ScoreDocs.Length == 0)
         {
             return Task.FromResult<IReadOnlyList<SearchHit>>(Array.Empty<SearchHit>());
@@ -152,13 +157,73 @@ internal sealed class LuceneSearchQueryService
 
             var title = document.Get(LuceneSearchFields.Title) ?? string.Empty;
             var mime = document.Get(LuceneSearchFields.Mime) ?? "application/octet-stream";
-            var author = document.Get(LuceneSearchFields.Author);
+            var highlightMap = HighlightDocument(searcher, rewrittenQuery, document);
+            highlightMap.TryGetValue(LuceneSearchFields.Title, out var titleHighlight);
+            highlightMap.TryGetValue(LuceneSearchFields.Metadata, out var metadataHighlight);
+            highlightMap.TryGetValue(LuceneSearchFields.Author, out var authorHighlight);
+            highlightMap.TryGetValue(LuceneSearchFields.Mime, out var mimeHighlight);
+            var highlightedTitle = !string.IsNullOrWhiteSpace(titleHighlight) ? titleHighlight! : title;
+            var snippet = ChooseSnippet(metadataHighlight, authorHighlight, mimeHighlight, titleHighlight);
             var modified = TryParseDate(document.Get(LuceneSearchFields.Modified));
             var score = NormalizeScore(scoreDoc.Score, maxScore);
-            hits.Add(new SearchHit(fileId, title, mime, author, score, modified));
+            hits.Add(new SearchHit(fileId, highlightedTitle, mime, snippet, score, modified));
         }
 
         return Task.FromResult<IReadOnlyList<SearchHit>>(hits);
+    }
+
+    private Dictionary<string, string> HighlightDocument(IndexSearcher searcher, Query query, Document document)
+    {
+        if (_analyzer is null)
+        {
+            return new Dictionary<string, string>(0);
+        }
+
+        var highlights = new Dictionary<string, string>(StringComparer.Ordinal);
+        var fields = new[]
+        {
+            LuceneSearchFields.Title,
+            LuceneSearchFields.Metadata,
+            LuceneSearchFields.Author,
+            LuceneSearchFields.Mime,
+        };
+
+        foreach (var field in fields)
+        {
+            var text = document.Get(field);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            var scorer = new QueryScorer(query, searcher.IndexReader, field);
+            var formatter = new SimpleHTMLFormatter("[", "]");
+            var highlighter = new Highlighter(formatter, scorer)
+            {
+                TextFragmenter = new SimpleFragmenter(field == LuceneSearchFields.Metadata ? 200 : 120),
+            };
+
+            var fragment = highlighter.GetBestFragment(_analyzer, field, text);
+            if (!string.IsNullOrWhiteSpace(fragment))
+            {
+                highlights[field] = fragment;
+            }
+        }
+
+        return highlights;
+    }
+
+    private static string? ChooseSnippet(params string?[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresInternalAsync(

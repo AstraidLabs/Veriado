@@ -179,14 +179,14 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
 
         foreach (var hit in ftsHits)
         {
-            var hasHighlight = ContainsHighlight(hit.Title);
+            var hasHighlight = ContainsHighlight(hit.Title, hit.Snippet);
             combined[hit.FileId] = (hit, hit.Score, hasHighlight);
         }
 
         foreach (var hit in luceneHits)
         {
             var weightedScore = hit.Score * LuceneWeight;
-            var hasHighlight = ContainsHighlight(hit.Title);
+            var hasHighlight = ContainsHighlight(hit.Title, hit.Snippet);
             if (combined.TryGetValue(hit.FileId, out var existing))
             {
                 var bestScore = Math.Max(existing.Score, weightedScore);
@@ -325,8 +325,15 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         return Math.Max(target, oversample);
     }
 
-    private static bool ContainsHighlight(string title)
-        => !string.IsNullOrEmpty(title) && title.IndexOf('[', StringComparison.Ordinal) >= 0;
+    private static bool ContainsHighlight(string title, string? snippet)
+    {
+        if (!string.IsNullOrEmpty(title) && title.IndexOf('[', StringComparison.Ordinal) >= 0)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrEmpty(snippet) && snippet.IndexOf('[', StringComparison.Ordinal) >= 0;
+    }
 
     private static int SafeAdd(int left, int right)
     {

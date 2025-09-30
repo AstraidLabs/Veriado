@@ -32,6 +32,16 @@ internal static class StartupIntegrityCheck
         }
 
         logger.LogWarning("Full-text index inconsistencies detected: {Missing} missing, {Orphans} orphans", report.MissingCount, report.OrphanCount);
+        if (report.MissingFileIds.Count > 0)
+        {
+            logger.LogWarning("Missing search index entries for files: {MissingIds}", string.Join(", ", report.MissingFileIds));
+        }
+
+        if (report.OrphanIndexIds.Count > 0)
+        {
+            logger.LogWarning("Orphaned search rows without matching files: {OrphanIds}", string.Join(", ", report.OrphanIndexIds));
+        }
+
         if (options.RepairIntegrityAutomatically)
         {
             var repaired = await integrity.RepairAsync(reindexAll: false, cancellationToken)
