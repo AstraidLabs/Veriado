@@ -1,3 +1,4 @@
+using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Search.Abstractions;
 
@@ -71,7 +72,12 @@ public sealed class SearchFacade : ISearchFacade
     public async Task AddToHistoryAsync(string query, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        var totalCount = await _searchQueryService.CountAsync(query, ct).ConfigureAwait(false);
-        await _historyService.AddAsync(query, query, totalCount, false, ct).ConfigureAwait(false);
+        if (!FtsQueryBuilder.TryBuild(query, prefix: true, allTerms: false, out var matchQuery))
+        {
+            return;
+        }
+
+        var totalCount = await _searchQueryService.CountAsync(matchQuery, ct).ConfigureAwait(false);
+        await _historyService.AddAsync(query, matchQuery, totalCount, false, ct).ConfigureAwait(false);
     }
 }
