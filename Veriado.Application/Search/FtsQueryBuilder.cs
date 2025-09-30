@@ -3,7 +3,7 @@ namespace Veriado.Appl.Search;
 /// <summary>
 /// Provides helpers to construct safe FTS5 match expressions from raw user input.
 /// </summary>
-internal static class FtsQueryBuilder
+public static class FtsQueryBuilder
 {
     /// <summary>
     /// Escapes a single term ensuring that dangerous characters are removed.
