@@ -72,7 +72,7 @@ public sealed class InfrastructureOptions
     /// <summary>
     /// Gets or sets a value indicating whether integrity verification should attempt automatic repairs when inconsistencies are detected.
     /// </summary>
-    public bool RepairIntegrityAutomatically { get; set; } = false;
+    public bool RepairIntegrityAutomatically { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the duration after which stored idempotency keys expire.

@@ -1,11 +1,18 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Lucene.Net.Analysis;
-using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
 
@@ -19,12 +26,16 @@ internal sealed class LuceneSearchQueryService
     private readonly InfrastructureOptions _options;
     private readonly Analyzer? _analyzer;
     private readonly FSDirectory? _directory;
-    private readonly string[] _searchFields =
+    private static readonly IReadOnlyDictionary<string, float> FieldBoosts = new Dictionary<string, float>
+    {
+        [LuceneSearchFields.Title] = 4f,
+        [LuceneSearchFields.Author] = 2f,
+    };
+
+    private static readonly string[] QueryFields =
     {
         LuceneSearchFields.Title,
         LuceneSearchFields.Author,
-        LuceneSearchFields.Mime,
-        LuceneSearchFields.Text,
     };
 
     public LuceneSearchQueryService(InfrastructureOptions options)
@@ -46,7 +57,7 @@ internal sealed class LuceneSearchQueryService
             directoryInfo.Create();
         }
 
-        _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+        _analyzer = new LuceneMetadataAnalyzer();
         _directory = FSDirectory.Open(directoryInfo);
     }
 
@@ -248,10 +259,10 @@ internal sealed class LuceneSearchQueryService
             return null;
         }
 
-        var parser = new MultiFieldQueryParser(LuceneVersion.LUCENE_48, _searchFields, _analyzer)
+        var parser = new MultiFieldQueryParser(LuceneVersion.LUCENE_48, QueryFields, _analyzer, FieldBoosts)
         {
-            DefaultOperator = QueryParser.AND_OPERATOR,
-            AllowLeadingWildcard = true,
+            DefaultOperator = QueryParser.Operator.AND,
+            AllowLeadingWildcard = false,
         };
 
         if (allowFuzzy)
@@ -262,7 +273,8 @@ internal sealed class LuceneSearchQueryService
 
         try
         {
-            return parser.Parse(text);
+            var parsed = parser.Parse(text);
+            return CombineWithMimeQueries(parsed, text);
         }
         catch (ParseException)
         {
@@ -276,6 +288,123 @@ internal sealed class LuceneSearchQueryService
         var identifier = document.Get(LuceneSearchFields.Id);
         return identifier is not null && Guid.TryParseExact(identifier, "N", out fileId);
     }
+
+    private static Query? CombineWithMimeQueries(Query? parsed, string text)
+    {
+        var builder = new BooleanQuery.Builder();
+        if (parsed is not null)
+        {
+            builder.Add(parsed, Occur.SHOULD);
+        }
+
+        foreach (var mimeQuery in BuildMimeQueries(text))
+        {
+            builder.Add(new BoostQuery(mimeQuery, 1f), Occur.SHOULD);
+        }
+
+        var combined = builder.Build();
+        return combined.Clauses.Count == 0 ? null : combined;
+    }
+
+    private static IEnumerable<Query> BuildMimeQueries(string text)
+    {
+        var prefixes = new HashSet<string>(StringComparer.Ordinal);
+        var wildcards = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var token in ExtractMimeTokens(text))
+        {
+            if (token.Contains('/', StringComparison.Ordinal))
+            {
+                if (prefixes.Add(token))
+                {
+                    yield return new PrefixQuery(new Term(LuceneSearchFields.Mime, token));
+                    if (!token.EndsWith('/', StringComparison.Ordinal))
+                    {
+                        yield return new TermQuery(new Term(LuceneSearchFields.Mime, token));
+                    }
+                }
+            }
+            else if (token.Length >= 3 && wildcards.Add(token))
+            {
+                yield return new WildcardQuery(new Term(LuceneSearchFields.Mime, $"*{token}*"));
+            }
+        }
+    }
+
+    private static IEnumerable<string> ExtractMimeTokens(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            yield break;
+        }
+
+        var normalised = NormaliseMime(text);
+        var parts = normalised.Split(MimeSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var part in parts)
+        {
+            if (seen.Add(part))
+            {
+                yield return part;
+            }
+        }
+
+        foreach (var candidate in text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!candidate.Contains('/', StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var normalisedCandidate = NormaliseMime(candidate);
+            if (normalisedCandidate.Length == 0)
+            {
+                continue;
+            }
+
+            if (seen.Add(normalisedCandidate))
+            {
+                yield return normalisedCandidate;
+            }
+        }
+    }
+
+    private static string NormaliseMime(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var decomposed = value.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(decomposed.Length);
+
+        foreach (var ch in decomposed)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(char.ToLowerInvariant(ch));
+            }
+            else if (Array.IndexOf(MimeSeparators, ch) >= 0)
+            {
+                builder.Append(ch);
+            }
+            else if (char.IsWhiteSpace(ch))
+            {
+                builder.Append(' ');
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static readonly char[] MimeSeparators = { '/', '-', '_', '.', ' ' };
 
     private static DateTimeOffset TryParseDate(string? value)
     {

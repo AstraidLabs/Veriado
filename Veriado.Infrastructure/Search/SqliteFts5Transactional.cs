@@ -40,7 +40,9 @@ internal sealed class SqliteFts5Transactional
 
             var trigramText = TrigramQueryBuilder.BuildIndexEntry(
                 document.Title,
-                document.Author);
+                document.Author,
+                document.FileName,
+                document.Mime);
 
             await using (var deleteTrgm = connection.CreateCommand())
             {

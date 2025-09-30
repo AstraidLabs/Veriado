@@ -8,5 +8,6 @@ public sealed record SearchDocument(
     string Title,
     string Mime,
     string? Author,
+    string FileName,
     DateTimeOffset CreatedUtc,
     DateTimeOffset ModifiedUtc);

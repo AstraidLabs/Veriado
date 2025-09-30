@@ -371,6 +371,7 @@ public sealed class FileEntity : AggregateRoot
             title,
             Mime.Value,
             authorText,
+            Name.Value,
             CreatedUtc.Value,
             LastModifiedUtc.Value);
     }
