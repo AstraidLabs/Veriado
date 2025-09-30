@@ -19,7 +19,6 @@ internal sealed class WriteWorker : BackgroundService
     private readonly InfrastructureOptions _options;
     private readonly ISearchIndexCoordinator _searchCoordinator;
     private readonly ISearchIndexer _searchIndexer;
-    private readonly LuceneSearchIndexer _luceneIndexer;
     private readonly IFulltextIntegrityService _integrityService;
     private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
@@ -31,7 +30,6 @@ internal sealed class WriteWorker : BackgroundService
         InfrastructureOptions options,
         ISearchIndexCoordinator searchCoordinator,
         ISearchIndexer searchIndexer,
-        LuceneSearchIndexer luceneIndexer,
         IFulltextIntegrityService integrityService,
         IEventPublisher eventPublisher,
         IClock clock)
@@ -42,7 +40,6 @@ internal sealed class WriteWorker : BackgroundService
         _options = options;
         _searchCoordinator = searchCoordinator;
         _searchIndexer = searchIndexer;
-        _luceneIndexer = luceneIndexer;
         _integrityService = integrityService;
         _eventPublisher = eventPublisher;
         _clock = clock;
@@ -382,19 +379,11 @@ internal sealed class WriteWorker : BackgroundService
 
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
             var helper = new SqliteFts5Transactional();
-            var luceneEnabled = _options.EnableLuceneIntegration && _luceneIndexer.IsEnabled;
 
             foreach (var id in filesToDelete)
             {
-                var fileId = id;
-                Func<CancellationToken, Task>? beforeCommit = null;
-                if (luceneEnabled)
-                {
-                    beforeCommit = ct => _luceneIndexer.DeleteAsync(fileId, ct);
-                }
-
                 await ExecuteWithRetryAsync(
-                    ct => helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit, ct),
+                    ct => helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit: null, ct),
                     $"delete index for {id}",
                     cancellationToken).ConfigureAwait(false);
             }
