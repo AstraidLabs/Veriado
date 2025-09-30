@@ -18,3 +18,30 @@
 - **Zpřesnit enriched metadata.** Současný souhrn zahrnuje velikost, vlastníka, atributy, ADS/Hlink. Do budoucna lze zvážit překlad SID → jméno uživatele nebo doplnění lokalizovaných názvů atributů.【F:Veriado.Domain/Search/MetadataTextFormatter.cs†L12-L104】
 - **Rozšířit zdroje pro `metadata_text`.** Pokud budou přibývat uživatelské tagy nebo klasifikace, vyplatí se přidat další lidsky čitelné části do souhrnu, aby uživatelé viděli kontext bez otevírání detailu.【F:Veriado.Domain/Search/SearchDocument.cs†L11-L58】
 - **Monitorovat dopad vážení.** V případě nových polí nebo změn v doméně je vhodné průběžně sledovat distribuci skóre a případně upravit váhy `bm25`, aby výsledky zachovaly preferenci titulů a autorů.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L23-L229】
+
+## Facety, návrhy a kontrola pravopisu
+
+Nová infrastruktura nad SQLite poskytuje trojici rozhraní pro facety, návrhy a přibližné opravy:
+
+```csharp
+var facets = await facetService.GetFacetsAsync(
+    new FacetRequest(new[]
+    {
+        new FacetField("mime", FacetKind.Term),
+        new FacetField("modified", FacetKind.DateHistogram, interval: "month"),
+        new FacetField("size", FacetKind.NumericRange),
+    }),
+    cancellationToken);
+
+var suggestions = await suggestionService.SuggestAsync("quar", language: "en", limit: 5, cancellationToken);
+var corrections = await spellSuggestionService.SuggestAsync("reciept", "en", limit: 3, threshold: 0.35, cancellationToken);
+```
+
+Synonyma se spravují přes tabulku `synonyms` a `SearchQueryBuilder` je automaticky rozšiřuje během kompilace dotazu:
+
+```sql
+INSERT INTO synonyms(lang, term, variant) VALUES ('en', 'invoice', 'bill');
+INSERT INTO synonyms(lang, term, variant) VALUES ('en', 'analysis', 'analytics');
+```
+
+Tabulka `suggestions` je napájena službou `SuggestionMaintenanceService`, která při indexaci sklízí tokeny z názvů, autora a metadat a zapisuje je s váhami. Stejná data slouží jako slovník pro trigramovou kontrolu pravopisu.

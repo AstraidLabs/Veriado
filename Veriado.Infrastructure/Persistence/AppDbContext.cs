@@ -35,6 +35,12 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<SearchFavoriteEntity> SearchFavorites => Set<SearchFavoriteEntity>();
 
+    public DbSet<SynonymEntry> Synonyms => Set<SynonymEntry>();
+
+    public DbSet<SuggestionEntry> Suggestions => Set<SuggestionEntry>();
+
+    public DbSet<DocumentLocationEntity> DocumentLocations => Set<DocumentLocationEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         using (InfrastructureModel.UseOptions(_options))

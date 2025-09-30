@@ -16,4 +16,10 @@ public interface ISearchIndexCoordinator
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns><see langword="true"/> when the document was indexed immediately; otherwise <see langword="false"/>.</returns>
     Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Forces any deferred indexing work to be processed immediately.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task SearchIndexRefreshAsync(CancellationToken cancellationToken);
 }

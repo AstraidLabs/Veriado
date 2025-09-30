@@ -10,6 +10,7 @@ using Veriado.Infrastructure.Maintenance;
 using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Repositories;
 using Veriado.Infrastructure.Search;
+using Veriado.Infrastructure.Search.Outbox;
 using Veriado.Infrastructure.Time;
 using Veriado.Domain.Primitives;
 using Veriado.Appl.Pipeline.Idempotency;
@@ -59,6 +60,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(options);
         services.AddSingleton<InfrastructureInitializationState>();
+        services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
 
@@ -77,6 +79,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IClock, SystemClock>();
 
         services.AddSingleton<IWriteQueue, WriteQueue>();
+        services.AddSingleton<SuggestionMaintenanceService>();
+        services.AddSingleton<OutboxDrainService>();
         services.AddSingleton<SqliteFts5Indexer>();
         services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
@@ -87,6 +91,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
+        services.AddSingleton<ISynonymProvider, SynonymService>();
+        services.AddSingleton<IFacetService, FacetService>();
+        services.AddSingleton<ISearchSuggestionService, SuggestionService>();
+        services.AddSingleton<ISpellSuggestionService, SpellSuggestionService>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
         services.AddSingleton<IEventPublisher, AuditEventPublisher>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();

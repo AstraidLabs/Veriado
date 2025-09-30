@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Veriado.Appl.Search;
 using Veriado.Domain.Search;
 
@@ -10,11 +11,16 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
 {
     private readonly SqliteFts5QueryService _ftsService;
     private readonly TrigramQueryService _trigramService;
+    private readonly ISearchTelemetry _telemetry;
 
-    public HybridSearchQueryService(SqliteFts5QueryService ftsService, TrigramQueryService trigramService)
+    public HybridSearchQueryService(
+        SqliteFts5QueryService ftsService,
+        TrigramQueryService trigramService,
+        ISearchTelemetry telemetry)
     {
         _ftsService = ftsService ?? throw new ArgumentNullException(nameof(ftsService));
         _trigramService = trigramService ?? throw new ArgumentNullException(nameof(trigramService));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     public Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -46,9 +52,12 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        var stopwatch = Stopwatch.StartNew();
         var take = limit.GetValueOrDefault(10);
         if (take <= 0)
         {
+            stopwatch.Stop();
+            _telemetry.RecordSearchLatency(stopwatch.Elapsed);
             return Array.Empty<SearchHit>();
         }
 
@@ -67,6 +76,8 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
 
         if (ftsHits.Count == 0 && trigramHits.Count == 0)
         {
+            stopwatch.Stop();
+            _telemetry.RecordSearchLatency(stopwatch.Elapsed);
             return Array.Empty<SearchHit>();
         }
 
@@ -117,6 +128,9 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
             .Select(static item => item.Hit)
             .Take(take)
             .ToList();
+
+        stopwatch.Stop();
+        _telemetry.RecordSearchLatency(stopwatch.Elapsed);
 
         return ordered;
     }

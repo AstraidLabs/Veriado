@@ -6,10 +6,12 @@ namespace Veriado.Infrastructure.Repositories;
 internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 {
     private readonly InfrastructureOptions _options;
+    private readonly ISearchTelemetry _telemetry;
 
-    public DiagnosticsRepository(InfrastructureOptions options)
+    public DiagnosticsRepository(InfrastructureOptions options, ISearchTelemetry telemetry)
     {
         _options = options;
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     public async Task<DatabaseHealthSnapshot> GetDatabaseHealthAsync(CancellationToken cancellationToken)
@@ -66,6 +68,13 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 
         var totalCount = int.TryParse(total, out var parsedTotal) ? parsedTotal : 0;
         var staleCount = int.TryParse(stale, out var parsedStale) ? parsedStale : 0;
+        var pageCountRaw = await GetScalarAsync(connection, "PRAGMA page_count;", cancellationToken).ConfigureAwait(false);
+        var pageSizeRaw = await GetScalarAsync(connection, "PRAGMA page_size;", cancellationToken).ConfigureAwait(false);
+        var pageCount = long.TryParse(pageCountRaw, out var pc) ? pc : 0;
+        var pageSize = long.TryParse(pageSizeRaw, out var ps) ? ps : 0;
+        var indexSizeBytes = pageCount * pageSize;
+
+        _telemetry.UpdateIndexMetrics(totalCount, indexSizeBytes);
 
         return new SearchIndexSnapshot(totalCount, staleCount, version);
     }
