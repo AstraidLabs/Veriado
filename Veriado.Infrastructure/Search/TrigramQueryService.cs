@@ -55,21 +55,30 @@ internal sealed class TrigramQueryService
             return Array.Empty<(Guid, double)>();
         }
 
-        var trigramSource = !string.IsNullOrWhiteSpace(plan.TrigramExpression)
-            ? plan.TrigramExpression
-            : plan.MatchExpression;
-        if (string.IsNullOrWhiteSpace(trigramSource))
+        var trigramQuery = plan.TrigramExpression;
+        string? normalizedQuery = null;
+        if (string.IsNullOrWhiteSpace(trigramQuery))
+        {
+            var trigramSource = plan.MatchExpression;
+            if (string.IsNullOrWhiteSpace(trigramSource))
+            {
+                return Array.Empty<(Guid, double)>();
+            }
+
+            normalizedQuery = NormalizeForTrigram(trigramSource);
+            if (!TrigramQueryBuilder.TryBuild(normalizedQuery, requireAllTerms: false, out trigramQuery))
+            {
+                return Array.Empty<(Guid, double)>();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(trigramQuery))
         {
             return Array.Empty<(Guid, double)>();
         }
 
-        var normalizedQuery = NormalizeForTrigram(trigramSource);
-        if (!TrigramQueryBuilder.TryBuild(normalizedQuery, requireAllTerms: false, out var trigramQuery))
-        {
-            return Array.Empty<(Guid, double)>();
-        }
-
-        var queryTokens = BuildTokenSet(plan.RawQueryText ?? normalizedQuery);
+        var queryTokensSource = plan.RawQueryText ?? normalizedQuery ?? trigramQuery;
+        var queryTokens = BuildTokenSet(queryTokensSource);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<(Guid, double)>();
@@ -152,25 +161,36 @@ internal sealed class TrigramQueryService
             return Array.Empty<SearchHit>();
         }
 
-        var trigramQuery = !string.IsNullOrWhiteSpace(plan.TrigramExpression)
-            ? plan.TrigramExpression
-            : plan.MatchExpression;
+        var trigramQuery = plan.TrigramExpression;
+        string? normalizedQuery = null;
+        if (string.IsNullOrWhiteSpace(trigramQuery))
+        {
+            var trigramSource = plan.MatchExpression;
+            if (string.IsNullOrWhiteSpace(trigramSource))
+            {
+                return Array.Empty<SearchHit>();
+            }
+
+            normalizedQuery = NormalizeForTrigram(trigramSource);
+            if (!TrigramQueryBuilder.TryBuild(normalizedQuery, requireAllTerms: false, out trigramQuery))
+            {
+                return Array.Empty<SearchHit>();
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(trigramQuery))
         {
             return Array.Empty<SearchHit>();
         }
 
-        var normalizedQuery = NormalizeForTrigram(trigramQuery);
-        if (!TrigramQueryBuilder.TryBuild(normalizedQuery, requireAllTerms: false, out var matchQuery))
-        {
-            return Array.Empty<SearchHit>();
-        }
-
-        var queryTokens = BuildTokenSet(plan.RawQueryText ?? trigramQuery);
+        var queryTokensSource = plan.RawQueryText ?? normalizedQuery ?? trigramQuery;
+        var queryTokens = BuildTokenSet(queryTokensSource);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<SearchHit>();
         }
+
+        var matchQuery = trigramQuery!;
 
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
