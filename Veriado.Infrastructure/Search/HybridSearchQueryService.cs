@@ -12,15 +12,18 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
     private readonly SqliteFts5QueryService _ftsService;
     private readonly TrigramQueryService _trigramService;
     private readonly ISearchTelemetry _telemetry;
+    private readonly SearchScoreOptions _scoreOptions;
 
     public HybridSearchQueryService(
         SqliteFts5QueryService ftsService,
         TrigramQueryService trigramService,
-        ISearchTelemetry telemetry)
+        ISearchTelemetry telemetry,
+        SearchScoreOptions scoreOptions)
     {
         _ftsService = ftsService ?? throw new ArgumentNullException(nameof(ftsService));
         _trigramService = trigramService ?? throw new ArgumentNullException(nameof(trigramService));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _scoreOptions = scoreOptions ?? throw new ArgumentNullException(nameof(scoreOptions));
     }
 
     public Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -61,7 +64,8 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
             return Array.Empty<SearchHit>();
         }
 
-        var oversample = Math.Max(take * 3, take);
+        var oversampleMultiplier = Math.Max(1, _scoreOptions.OversampleMultiplier);
+        var oversample = Math.Max(take * oversampleMultiplier, take);
         IReadOnlyList<SearchHit> ftsHits = Array.Empty<SearchHit>();
         if (!string.IsNullOrWhiteSpace(plan.MatchExpression))
         {
@@ -98,12 +102,17 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         {
             var normalized = ExtractNormalizedScore(hit.SortValues) ?? Math.Clamp(hit.Score, 0d, 1d);
             var scaled = Math.Clamp(normalized * scale, 0d, 1d);
+            var floor = Math.Clamp(_scoreOptions.TrigramFloor, 0d, 1d);
+            if (scaled < floor)
+            {
+                scaled = floor;
+            }
             var lastModified = ExtractLastModified(hit.SortValues);
 
             if (combined.TryGetValue(hit.Id, out var existing))
             {
                 var merged = MergeHits(existing.Hit, hit);
-                var rankingScore = Math.Max(existing.RankingScore, scaled);
+                var rankingScore = CombineScores(existing.RankingScore, scaled);
                 var mergedSort = MergeSortValues(existing.Hit.SortValues, hit.SortValues, rankingScore, existing.Hit.Score, hit.Score, lastModified, existing.LastModified);
                 combined[hit.Id] = existing with
                 {
@@ -150,18 +159,20 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         };
     }
 
-    private static IReadOnlyList<HighlightSpan> MergeHighlights(
+    private static List<HighlightSpan> MergeHighlights(
         IReadOnlyList<HighlightSpan> primary,
         IReadOnlyList<HighlightSpan> secondary)
     {
         if (primary.Count == 0)
         {
-            return secondary;
+            return secondary.Count == 0
+                ? new List<HighlightSpan>()
+                : new List<HighlightSpan>(secondary);
         }
 
         if (secondary.Count == 0)
         {
-            return primary;
+            return new List<HighlightSpan>(primary);
         }
 
         var set = new HashSet<HighlightSpan>(primary);
@@ -177,7 +188,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         return merged;
     }
 
-    private static IReadOnlyDictionary<string, string?> MergeFields(
+    private static Dictionary<string, string?> MergeFields(
         IReadOnlyDictionary<string, string?> primary,
         IReadOnlyDictionary<string, string?> secondary)
     {
@@ -193,21 +204,31 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         return merged;
     }
 
-    private static double ComputeScale(IReadOnlyList<double> scores)
+    private double ComputeScale(IReadOnlyList<double> scores)
     {
         if (scores.Count == 0)
         {
-            return 1.0d;
+            return Math.Clamp(_scoreOptions.DefaultTrigramScale, 0d, 1d);
         }
 
         var ordered = scores.OrderBy(static value => value).ToArray();
         var midpoint = ordered.Length / 2;
+        double median;
         if (ordered.Length % 2 == 0)
         {
-            return (ordered[midpoint - 1] + ordered[midpoint]) / 2d;
+            median = (ordered[midpoint - 1] + ordered[midpoint]) / 2d;
+        }
+        else
+        {
+            median = ordered[midpoint];
         }
 
-        return ordered[midpoint];
+        if (!double.IsFinite(median) || median <= 0d)
+        {
+            return Math.Clamp(_scoreOptions.DefaultTrigramScale, 0d, 1d);
+        }
+
+        return Math.Clamp(median, 0d, 1d);
     }
 
     private static SearchHitSortValues? MergeSortValues(
@@ -246,6 +267,18 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
 
         var secondaryScore = secondarySort?.NormalizedScore ?? secondaryRaw;
         return new SearchHitSortValues(lastModified ?? DateTimeOffset.MinValue, rankingScore, raw, secondaryScore);
+    }
+
+    private double CombineScores(double primary, double secondary)
+    {
+        if (string.Equals(_scoreOptions.MergeMode, "weighted", StringComparison.OrdinalIgnoreCase))
+        {
+            var weight = Math.Clamp(_scoreOptions.WeightedFts, 0d, 1d);
+            var inverse = 1d - weight;
+            return Math.Clamp((primary * weight) + (secondary * inverse), 0d, 1d);
+        }
+
+        return Math.Max(primary, secondary);
     }
 
     private static double NormalizeScore(double rawScore)

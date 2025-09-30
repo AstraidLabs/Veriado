@@ -11,10 +11,12 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5Transactional
 {
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly TrigramIndexOptions _trigramOptions;
 
-    public SqliteFts5Transactional(IAnalyzerFactory analyzerFactory)
+    public SqliteFts5Transactional(IAnalyzerFactory analyzerFactory, TrigramIndexOptions trigramOptions)
     {
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
     }
 
     public async Task IndexAsync(
@@ -59,11 +61,7 @@ internal sealed class SqliteFts5Transactional
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var trigramSegments = BuildTrigramSegments(
-                document.Title,
-                document.Author,
-                document.FileName,
-                document.MetadataText);
+            var trigramSegments = BuildTrigramSegments(document);
 
             var trigramText = trigramSegments.Count == 0
                 ? string.Empty
@@ -211,18 +209,21 @@ internal sealed class SqliteFts5Transactional
             : TextNormalization.NormalizeText(value, _analyzerFactory);
     }
 
-    private List<string> BuildTrigramSegments(params string?[] values)
+    private List<string> BuildTrigramSegments(SearchDocument document)
     {
         var segments = new List<string>();
-        foreach (var value in values)
+        var maxTokens = Math.Max(1, _trigramOptions.MaxTokens);
+        var totalTokens = 0;
+
+        foreach (var candidate in EnumerateTrigramValues(document))
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(candidate))
             {
                 continue;
             }
 
             var tokens = TextNormalization
-                .Tokenize(value, _analyzerFactory)
+                .Tokenize(candidate, _analyzerFactory)
                 .Where(static token => !string.IsNullOrWhiteSpace(token))
                 .ToArray();
             if (tokens.Length == 0)
@@ -230,9 +231,58 @@ internal sealed class SqliteFts5Transactional
                 continue;
             }
 
+            var remaining = maxTokens - totalTokens;
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            if (tokens.Length > remaining)
+            {
+                tokens = tokens.Take(remaining).ToArray();
+            }
+
             segments.Add(string.Join(' ', tokens));
+            totalTokens += tokens.Length;
+
+            if (totalTokens >= maxTokens)
+            {
+                break;
+            }
         }
 
         return segments;
+    }
+
+    private IEnumerable<string?> EnumerateTrigramValues(SearchDocument document)
+    {
+        if (_trigramOptions.Fields is null || _trigramOptions.Fields.Length == 0)
+        {
+            yield break;
+        }
+
+        foreach (var field in _trigramOptions.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(field))
+            {
+                continue;
+            }
+
+            switch (field.Trim().ToLowerInvariant())
+            {
+                case "title":
+                    yield return document.Title;
+                    break;
+                case "author":
+                    yield return document.Author;
+                    break;
+                case "filename":
+                    yield return document.FileName;
+                    break;
+                case "metadata_text":
+                    yield return document.MetadataText;
+                    break;
+            }
+        }
     }
 }

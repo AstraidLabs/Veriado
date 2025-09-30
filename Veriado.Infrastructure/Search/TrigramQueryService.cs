@@ -380,17 +380,17 @@ internal sealed class TrigramQueryService
         return snippet;
     }
 
-    private static IReadOnlyList<HighlightSpan> BuildHighlights(string field, string snippet, IReadOnlyCollection<string> tokens)
+    private static List<HighlightSpan> BuildHighlights(string field, string snippet, IReadOnlyCollection<string> tokens)
     {
         if (string.IsNullOrEmpty(snippet) || tokens.Count == 0)
         {
-            return Array.Empty<HighlightSpan>();
+            return new List<HighlightSpan>();
         }
 
         var normalized = NormalizeForComparison(snippet, out var map);
         if (normalized.Length == 0 || map.Count == 0)
         {
-            return Array.Empty<HighlightSpan>();
+            return new List<HighlightSpan>();
         }
 
         var spans = new List<HighlightSpan>();

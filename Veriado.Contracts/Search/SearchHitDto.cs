@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Veriado.Contracts.Search;
 
 /// <summary>
@@ -26,6 +28,6 @@ public sealed record SearchHitDto(
     string Source,
     string? PrimaryField,
     string SnippetText,
-    IReadOnlyList<HighlightSpanDto> Highlights,
-    IReadOnlyDictionary<string, string?> Fields,
+    List<HighlightSpanDto> Highlights,
+    Dictionary<string, string?> Fields,
     object? SortValues);

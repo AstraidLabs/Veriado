@@ -25,6 +25,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly TrigramIndexOptions _trigramOptions;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -36,7 +37,8 @@ internal sealed class WriteWorker : BackgroundService
         IFulltextIntegrityService integrityService,
         IEventPublisher eventPublisher,
         IClock clock,
-        IAnalyzerFactory analyzerFactory)
+        IAnalyzerFactory analyzerFactory,
+        TrigramIndexOptions trigramOptions)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -48,6 +50,7 @@ internal sealed class WriteWorker : BackgroundService
         _eventPublisher = eventPublisher;
         _clock = clock;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -383,7 +386,7 @@ internal sealed class WriteWorker : BackgroundService
             }
 
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional(_analyzerFactory);
+            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
 
             foreach (var id in filesToDelete)
             {

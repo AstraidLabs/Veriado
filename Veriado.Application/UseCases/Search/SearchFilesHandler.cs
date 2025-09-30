@@ -16,22 +16,28 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     private readonly ISearchQueryService _searchQueryService;
     private readonly IMapper _mapper;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly SearchOptions _searchOptions;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SearchFilesHandler"/> class.
     /// </summary>
-    public SearchFilesHandler(ISearchQueryService searchQueryService, IMapper mapper, IAnalyzerFactory analyzerFactory)
+    public SearchFilesHandler(
+        ISearchQueryService searchQueryService,
+        IMapper mapper,
+        IAnalyzerFactory analyzerFactory,
+        SearchOptions searchOptions)
     {
         _searchQueryService = searchQueryService;
         _mapper = mapper;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _searchOptions = searchOptions ?? throw new ArgumentNullException(nameof(searchOptions));
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SearchHitDto>> Handle(SearchFilesQuery request, CancellationToken cancellationToken)
     {
         Guard.AgainstNullOrWhiteSpace(request.Text, nameof(request.Text));
-        var builder = new SearchQueryBuilder();
+        var builder = new SearchQueryBuilder(_searchOptions.Score, null, _searchOptions.Analyzer.DefaultProfile);
         var expression = BuildQueryExpression(request.Text, builder);
         if (expression is null)
         {
