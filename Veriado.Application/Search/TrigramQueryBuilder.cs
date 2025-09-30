@@ -19,7 +19,7 @@ public static class TrigramQueryBuilder
     /// <returns>The distinct trigram tokens.</returns>
     public static IEnumerable<string> BuildTrigrams(string text)
     {
-        return CollectUniqueTrigrams(text);
+        return CollectUniqueTrigramTokens(text);
     }
 
     /// <summary>
@@ -73,7 +73,7 @@ public static class TrigramQueryBuilder
                 continue;
             }
 
-            CollectUniqueTrigrams(value!, accumulator, MaxIndexTokens);
+            CollectUniqueTrigramTokens(value!, accumulator, MaxIndexTokens);
             if (accumulator.Count >= MaxIndexTokens)
             {
                 break;
@@ -97,13 +97,36 @@ public static class TrigramQueryBuilder
 
     private static List<string> CollectUniqueTrigrams(string text)
     {
+        var tokens = CollectUniqueTrigramTokens(text);
+        if (tokens.Count == 0)
+        {
+            return tokens;
+        }
+
+        var formatted = new List<string>(tokens.Count);
+        foreach (var token in tokens)
+        {
+            var matchToken = FormatMatchToken(token);
+            if (string.IsNullOrEmpty(matchToken))
+            {
+                continue;
+            }
+
+            formatted.Add(matchToken);
+        }
+
+        return formatted;
+    }
+
+    private static List<string> CollectUniqueTrigramTokens(string text)
+    {
         if (string.IsNullOrWhiteSpace(text))
         {
             return new List<string>();
         }
 
         var set = new HashSet<string>(StringComparer.Ordinal);
-        CollectUniqueTrigrams(text, set, int.MaxValue);
+        CollectUniqueTrigramTokens(text, set, int.MaxValue);
         if (set.Count == 0)
         {
             return new List<string>();
@@ -114,7 +137,37 @@ public static class TrigramQueryBuilder
         return ordered;
     }
 
-    private static void CollectUniqueTrigrams(string text, HashSet<string> sink, int limit)
+    private static string FormatMatchToken(string token)
+    {
+        var escaped = TextNormalization.EscapeMatchToken(token);
+        if (string.IsNullOrEmpty(escaped))
+        {
+            return string.Empty;
+        }
+
+        return RequiresLiteralQuoting(token)
+            ? $"\"{escaped}\""
+            : escaped;
+    }
+
+    private static bool RequiresLiteralQuoting(string token)
+    {
+        if (token.Length == 0)
+        {
+            return true;
+        }
+
+        if (token.Contains(' '))
+        {
+            return true;
+        }
+
+        return string.Equals(token, "and", StringComparison.Ordinal)
+            || string.Equals(token, "or", StringComparison.Ordinal)
+            || string.Equals(token, "not", StringComparison.Ordinal);
+    }
+
+    private static void CollectUniqueTrigramTokens(string text, HashSet<string> sink, int limit)
     {
         if (string.IsNullOrWhiteSpace(text) || sink.Count >= limit)
         {
