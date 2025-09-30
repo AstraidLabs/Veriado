@@ -115,7 +115,7 @@ internal sealed class OutboxDrainService
             .AsNoTracking()
             .Where(evt => evt.ProcessedUtc == null)
             .OrderBy(evt => evt.CreatedUtc)
-            .Take(50)
+            .Take(_options.OutboxBatchSize)
             .Select(evt => evt.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
