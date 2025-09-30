@@ -1,13 +1,9 @@
 using System;
 using System.Globalization;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Lucene.Net.Analysis;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
-using Lucene.Net.Store;
-using Lucene.Net.Util;
 using Microsoft.Extensions.Logging;
 using Veriado.Domain.Search;
 
@@ -18,14 +14,10 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
 {
-    private const string GuidFormat = "N";
     private const int CommitThreshold = 32;
     private static readonly TimeSpan CommitInterval = TimeSpan.FromSeconds(2);
 
-    private readonly InfrastructureOptions _options;
-    private readonly Analyzer? _analyzer;
-    private readonly FSDirectory? _directory;
-    private readonly IndexWriter? _writer;
+    private readonly LuceneIndexInfrastructure _infrastructure;
     private readonly ILogger<LuceneSearchIndexer>? _logger;
     private readonly SemaphoreSlim _writerLock = new(1, 1);
     private Task? _scheduledCommit;
@@ -33,41 +25,21 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
     private int _pendingOperations;
     private bool _disposed;
 
-    public LuceneSearchIndexer(InfrastructureOptions options, ILogger<LuceneSearchIndexer>? logger = null)
+    /// <summary>
+    /// Creates a new instance of the <see cref="LuceneSearchIndexer"/>.
+    /// The indexer is registered as a singleton so that the underlying Lucene <see cref="IndexWriter"/>
+    /// remains open for the application lifetime. This avoids per-operation open/close overhead and
+    /// allows batched commit scheduling through <see cref="CommitOrSchedule"/>.
+    /// </summary>
+    public LuceneSearchIndexer(
+        LuceneIndexInfrastructure infrastructure,
+        ILogger<LuceneSearchIndexer>? logger = null)
     {
-        _options = options;
+        _infrastructure = infrastructure ?? throw new ArgumentNullException(nameof(infrastructure));
         _logger = logger;
-        if (!options.EnableLuceneIntegration)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(options.LuceneIndexPath))
-        {
-            return;
-        }
-
-        var directoryInfo = new DirectoryInfo(options.LuceneIndexPath);
-        if (!directoryInfo.Exists)
-        {
-            directoryInfo.Create();
-        }
-
-        var directory = FSDirectory.Open(directoryInfo);
-        if (!TryClearStaleWriteLock(directory))
-        {
-            directory.Dispose();
-            return;
-        }
-
-        _analyzer = new LuceneMetadataAnalyzer();
-        _directory = directory;
-        _writer = CreateWriter();
-        _writer.Commit();
     }
 
-    public bool IsEnabled
-        => _options.EnableLuceneIntegration && _directory is not null && _analyzer is not null && _writer is not null;
+    public bool IsEnabled => _infrastructure.IsEnabled;
 
     public async Task IndexAsync(SearchDocument document, CancellationToken cancellationToken)
     {
@@ -82,7 +54,7 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
         try
         {
             var luceneDocument = BuildDocument(document);
-            Writer.UpdateDocument(new Term(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture)), luceneDocument);
+            Writer.UpdateDocument(new Term(LuceneSearchFields.Id, document.FileId.ToString("N", CultureInfo.InvariantCulture)), luceneDocument);
             CommitOrSchedule();
         }
         finally
@@ -102,7 +74,7 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
         await _writerLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            Writer.DeleteDocuments(new Term(LuceneSearchFields.Id, fileId.ToString(GuidFormat, CultureInfo.InvariantCulture)));
+            Writer.DeleteDocuments(new Term(LuceneSearchFields.Id, fileId.ToString("N", CultureInfo.InvariantCulture)));
             CommitOrSchedule();
         }
         finally
@@ -111,65 +83,38 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
         }
     }
 
-    private IndexWriter CreateWriter()
-    {
-        if (_directory is null || _analyzer is null)
-        {
-            throw new InvalidOperationException("Lucene index directory has not been initialised.");
-        }
-
-        var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer)
-        {
-            OpenMode = OpenMode.CREATE_OR_APPEND,
-        };
-
-        return new IndexWriter(_directory, config);
-    }
-
-    private bool TryClearStaleWriteLock(FSDirectory directory)
-    {
-        try
-        {
-            if (!IndexWriter.IsLocked(directory))
-            {
-                return true;
-            }
-
-            IndexWriter.Unlock(directory);
-            _logger?.LogWarning(
-                "Detected and cleared a stale Lucene write lock at {LuceneIndexPath}.",
-                _options.LuceneIndexPath);
-            return true;
-        }
-        catch (IOException ex)
-        {
-            _logger?.LogError(
-                ex,
-                "Detected a stale Lucene write lock at {LuceneIndexPath} but failed to clear it. Lucene integration will be disabled.",
-                _options.LuceneIndexPath);
-            return false;
-        }
-    }
-
     private static Document BuildDocument(SearchDocument document)
     {
         var luceneDocument = new Document
         {
-            new StringField(LuceneSearchFields.Id, document.FileId.ToString(GuidFormat, CultureInfo.InvariantCulture), Field.Store.YES),
+            new StringField(LuceneSearchFields.Id, document.FileId.ToString("N", CultureInfo.InvariantCulture), Field.Store.YES),
             new TextField(LuceneSearchFields.Title, document.Title ?? string.Empty, Field.Store.YES),
             new TextField(LuceneSearchFields.Author, document.Author ?? string.Empty, Field.Store.YES),
-            new TextField(LuceneSearchFields.Metadata, document.MetadataJson ?? string.Empty, Field.Store.YES),
             new StringField(LuceneSearchFields.Mime, document.Mime ?? string.Empty, Field.Store.YES),
             new StringField(LuceneSearchFields.Created, document.CreatedUtc.ToString("O", CultureInfo.InvariantCulture), Field.Store.YES),
             new StringField(LuceneSearchFields.Modified, document.ModifiedUtc.ToString("O", CultureInfo.InvariantCulture), Field.Store.YES),
         };
+
+        if (!string.IsNullOrWhiteSpace(document.MetadataText))
+        {
+            luceneDocument.Add(new TextField(LuceneSearchFields.MetadataText, document.MetadataText!, Field.Store.YES));
+        }
+
+        if (!string.IsNullOrWhiteSpace(document.MetadataJson))
+        {
+            luceneDocument.Add(new TextField(LuceneSearchFields.Metadata, document.MetadataJson!, Field.Store.YES));
+        }
+        else
+        {
+            luceneDocument.Add(new StoredField(LuceneSearchFields.Metadata, string.Empty));
+        }
 
         return luceneDocument;
     }
 
     private void CommitOrSchedule()
     {
-        if (_writer is null)
+        if (!IsEnabled)
         {
             return;
         }
@@ -188,15 +133,18 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
     private void CommitNow()
     {
         CancelScheduledCommit(waitForCompletion: false);
-        Writer.Commit();
-        _pendingOperations = 0;
+        if (IsEnabled)
+        {
+            Writer.Commit();
+            _pendingOperations = 0;
+        }
     }
 
     private void ScheduleCommit()
     {
         CancelScheduledCommit(waitForCompletion: false);
 
-        if (_writer is null)
+        if (!IsEnabled)
         {
             return;
         }
@@ -277,7 +225,7 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
 
     private void FlushPendingOperations()
     {
-        if (_pendingOperations <= 0 || _writer is null)
+        if (_pendingOperations <= 0 || !IsEnabled)
         {
             return;
         }
@@ -286,7 +234,7 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
         _pendingOperations = 0;
     }
 
-    private IndexWriter Writer => _writer ?? throw new InvalidOperationException("Lucene index writer has not been initialised.");
+    private IndexWriter Writer => _infrastructure.Writer ?? throw new InvalidOperationException("Lucene index writer has not been initialised.");
 
     public void Dispose()
     {
@@ -312,13 +260,12 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
 
         CancelScheduledCommit(waitForCompletion: true);
 
-        if (_writer is not null)
+        if (IsEnabled)
         {
             _writerLock.Wait();
             try
             {
                 FlushPendingOperations();
-                _writer.Dispose();
             }
             finally
             {
@@ -326,8 +273,6 @@ internal sealed class LuceneSearchIndexer : IDisposable, IAsyncDisposable
             }
         }
 
-        _analyzer?.Dispose();
-        _directory?.Dispose();
         _writerLock.Dispose();
     }
 }

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Lucene.Net.Analysis;
@@ -31,14 +30,16 @@ internal sealed class LuceneSearchQueryService
     {
         [LuceneSearchFields.Title] = 4f,
         [LuceneSearchFields.Author] = 2f,
-        [LuceneSearchFields.Metadata] = 1f,
-        [LuceneSearchFields.Mime] = 0.5f,
+        [LuceneSearchFields.MetadataText] = 0.8f,
+        [LuceneSearchFields.Metadata] = 0.2f,
+        [LuceneSearchFields.Mime] = 0.1f,
     };
 
     private static readonly string[] QueryFields =
     {
         LuceneSearchFields.Title,
         LuceneSearchFields.Author,
+        LuceneSearchFields.MetadataText,
         LuceneSearchFields.Metadata,
     };
 
@@ -157,13 +158,34 @@ internal sealed class LuceneSearchQueryService
 
             var title = document.Get(LuceneSearchFields.Title) ?? string.Empty;
             var mime = document.Get(LuceneSearchFields.Mime) ?? "application/octet-stream";
-            var highlightMap = HighlightDocument(searcher, rewrittenQuery, document);
+            var highlightMap = HighlightDocument(searcher, rewrittenQuery, scoreDoc.Doc, document);
             highlightMap.TryGetValue(LuceneSearchFields.Title, out var titleHighlight);
-            highlightMap.TryGetValue(LuceneSearchFields.Metadata, out var metadataHighlight);
             highlightMap.TryGetValue(LuceneSearchFields.Author, out var authorHighlight);
+            highlightMap.TryGetValue(LuceneSearchFields.MetadataText, out var metadataTextHighlight);
+            highlightMap.TryGetValue(LuceneSearchFields.Metadata, out var metadataJsonHighlight);
             highlightMap.TryGetValue(LuceneSearchFields.Mime, out var mimeHighlight);
+
             var highlightedTitle = !string.IsNullOrWhiteSpace(titleHighlight) ? titleHighlight! : title;
-            var snippet = ChooseSnippet(metadataHighlight, authorHighlight, mimeHighlight, titleHighlight);
+
+            var author = document.Get(LuceneSearchFields.Author);
+            var metadataText = document.Get(LuceneSearchFields.MetadataText);
+            var metadataJson = document.Get(LuceneSearchFields.Metadata);
+            var (rawSnippet, snippetSource) = ChooseSnippet(
+                new SnippetCandidate(SnippetSource.Title, titleHighlight, title),
+                new SnippetCandidate(SnippetSource.Author, authorHighlight, author),
+                new SnippetCandidate(SnippetSource.MetadataText, metadataTextHighlight, metadataText),
+                new SnippetCandidate(SnippetSource.Mime, mimeHighlight, mime),
+                new SnippetCandidate(SnippetSource.MetadataJson, metadataJsonHighlight, metadataJson));
+
+            var snippet = snippetSource switch
+            {
+                SnippetSource.MetadataJson => MetadataSnippetFormatter.Build(rawSnippet, metadataJson)
+                    ?? metadataText
+                    ?? rawSnippet,
+                SnippetSource.MetadataText when string.IsNullOrWhiteSpace(rawSnippet)
+                    => metadataText,
+                _ => rawSnippet,
+            };
             var modified = TryParseDate(document.Get(LuceneSearchFields.Modified));
             var score = NormalizeScore(scoreDoc.Score, maxScore);
             hits.Add(new SearchHit(fileId, highlightedTitle, mime, snippet, score, modified));
@@ -172,21 +194,47 @@ internal sealed class LuceneSearchQueryService
         return Task.FromResult<IReadOnlyList<SearchHit>>(hits);
     }
 
-    private Dictionary<string, string> HighlightDocument(IndexSearcher searcher, Query query, Document document)
+    private Dictionary<string, string> HighlightDocument(IndexSearcher searcher, Query query, int docId, Document document)
     {
         if (_analyzer is null)
         {
-            return new Dictionary<string, string>(0);
+            return new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
-        var highlights = new Dictionary<string, string>(StringComparer.Ordinal);
         var fields = new[]
         {
             LuceneSearchFields.Title,
-            LuceneSearchFields.Metadata,
             LuceneSearchFields.Author,
+            LuceneSearchFields.MetadataText,
             LuceneSearchFields.Mime,
+            LuceneSearchFields.Metadata,
         };
+
+        try
+        {
+            var highlighter = new UnifiedHighlighter(searcher, _analyzer)
+            {
+                DefaultSummaryLength = 180,
+            };
+            highlighter.SetFormatter(new SimpleHTMLFormatter("[", "]"));
+            highlighter.SetMaxLength(4096);
+
+            var fragments = highlighter.HighlightFields(fields, query, new[] { docId });
+            return ExtractHighlights(fields, fragments);
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException)
+        {
+            return HighlightWithFallback(searcher, query, document, fields);
+        }
+    }
+
+    private Dictionary<string, string> HighlightWithFallback(IndexSearcher searcher, Query query, Document document, string[] fields)
+    {
+        var highlights = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (_analyzer is null)
+        {
+            return highlights;
+        }
 
         foreach (var field in fields)
         {
@@ -213,17 +261,65 @@ internal sealed class LuceneSearchQueryService
         return highlights;
     }
 
-    private static string? ChooseSnippet(params string?[] candidates)
+    private static Dictionary<string, string> ExtractHighlights(string[] fields, IDictionary<string, string[]> fragments)
     {
-        foreach (var candidate in candidates)
+        var highlights = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var field in fields)
         {
-            if (!string.IsNullOrWhiteSpace(candidate))
+            if (fragments.TryGetValue(field, out var values) && values is { Length: > 0 })
             {
-                return candidate;
+                var fragment = values[0];
+                if (!string.IsNullOrWhiteSpace(fragment))
+                {
+                    highlights[field] = fragment!;
+                }
             }
         }
 
-        return null;
+        return highlights;
+    }
+
+    private static (string? Text, SnippetSource Source) ChooseSnippet(params SnippetCandidate[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            var snippet = !string.IsNullOrWhiteSpace(candidate.Highlight)
+                ? candidate.Highlight
+                : candidate.Fallback;
+
+            if (!string.IsNullOrWhiteSpace(snippet))
+            {
+                return (snippet, candidate.Source);
+            }
+        }
+
+        return (null, SnippetSource.None);
+    }
+
+    private readonly struct SnippetCandidate
+    {
+        public SnippetCandidate(SnippetSource source, string? highlight, string? fallback)
+        {
+            Source = source;
+            Highlight = highlight;
+            Fallback = fallback;
+        }
+
+        public SnippetSource Source { get; }
+
+        public string? Highlight { get; }
+
+        public string? Fallback { get; }
+    }
+
+    private enum SnippetSource
+    {
+        None,
+        Title,
+        Author,
+        MetadataText,
+        Mime,
+        MetadataJson,
     }
 
     private Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresInternalAsync(

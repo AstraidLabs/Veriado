@@ -10,6 +10,8 @@ internal static class StartupIntegrityCheck
     public static async Task EnsureConsistencyAsync(IServiceProvider provider, CancellationToken cancellationToken = default)
     {
         var options = provider.GetRequiredService<InfrastructureOptions>();
+        options.RunIntegrityCheckOnStartup = true;
+        options.RepairIntegrityAutomatically = true;
         if (!options.RunIntegrityCheckOnStartup)
         {
             return;

@@ -92,6 +92,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IWriteQueue, WriteQueue>();
         services.AddSingleton<SqliteFts5Indexer>();
+        services.AddSingleton<LuceneIndexInfrastructure>();
         services.AddSingleton<LuceneSearchIndexer>();
         services.AddSingleton<ISearchIndexer, HybridSearchIndexer>();
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
