@@ -13,6 +13,10 @@ using Microsoft.Data.Sqlite;
 /// <param name="RequiresTrigramFallback">Indicates whether the query needs trigram evaluation.</param>
 /// <param name="TrigramExpression">The optional trigram query expression.</param>
 /// <param name="RawQueryText">The user supplied raw text for diagnostics.</param>
+/// <param name="RequiresTrigramForWildcard">Indicates whether wildcard terms require trigram evaluation.</param>
+/// <param name="HasPrefix">Indicates whether the query contains prefix tokens.</param>
+/// <param name="HasExplicitFuzzy">Indicates whether the query contains explicit fuzzy tokens.</param>
+/// <param name="HasHeuristicFuzzy">Indicates whether the query contains heuristic fuzzy tokens.</param>
 public sealed record SearchQueryPlan(
     string MatchExpression,
     IReadOnlyList<string> WhereClauses,
@@ -20,7 +24,11 @@ public sealed record SearchQueryPlan(
     SearchScorePlan ScorePlan,
     bool RequiresTrigramFallback,
     string? TrigramExpression,
-    string? RawQueryText = null);
+    string? RawQueryText = null,
+    bool RequiresTrigramForWildcard = false,
+    bool HasPrefix = false,
+    bool HasExplicitFuzzy = false,
+    bool HasHeuristicFuzzy = false);
 
 /// <summary>
 /// Provides factory helpers for creating simple search plans.
@@ -40,7 +48,11 @@ public static class SearchQueryPlanFactory
             new SearchScorePlan(),
             false,
             null,
-            rawQueryText ?? matchExpression);
+            rawQueryText ?? matchExpression,
+            false,
+            false,
+            false,
+            false);
     }
 
     /// <summary>
@@ -56,7 +68,11 @@ public static class SearchQueryPlanFactory
             new SearchScorePlan(),
             true,
             trigramExpression,
-            rawQueryText ?? trigramExpression);
+            rawQueryText ?? trigramExpression,
+            false,
+            false,
+            false,
+            false);
     }
 }
 
