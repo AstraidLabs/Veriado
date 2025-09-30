@@ -222,8 +222,7 @@ internal sealed class FacetService : IFacetService
         var histogram = await query
             .Select(file => new
             {
-                Bucket = SqliteDbFunctionsExtensions.Strftime(
-                    EF.Functions,
+                Bucket = EF.Functions.Strftime(
                     format,
                     EF.Property<string>(file, property)),
             })
