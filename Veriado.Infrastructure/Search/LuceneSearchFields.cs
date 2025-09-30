@@ -9,6 +9,7 @@ internal static class LuceneSearchFields
     public const string Title = "title";
     public const string Mime = "mime";
     public const string Author = "author";
+    public const string MetadataText = "metadata_text";
     public const string Metadata = "metadata";
     public const string Created = "created";
     public const string Modified = "modified";

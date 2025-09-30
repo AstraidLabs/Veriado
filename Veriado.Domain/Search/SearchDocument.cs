@@ -16,7 +16,8 @@ public sealed record SearchDocument(
     string FileName,
     DateTimeOffset CreatedUtc,
     DateTimeOffset ModifiedUtc,
-    string? MetadataJson)
+    string? MetadataJson,
+    string? MetadataText = null)
 {
     /// <summary>
     /// Gets serializer options used when emitting the metadata JSON payload.
@@ -39,6 +40,22 @@ public sealed record SearchDocument(
         ArgumentNullException.ThrowIfNull(metadata);
         return JsonSerializer.Serialize(metadata, MetadataSerializerOptions);
     }
+
+    /// <summary>
+    /// Builds a compact human-readable metadata summary suitable for indexing and display.
+    /// </summary>
+    /// <param name="metadata">The structured metadata model.</param>
+    /// <returns>The condensed metadata text or <see langword="null"/> when unavailable.</returns>
+    public static string? BuildMetadataText(SearchDocumentMetadata metadata)
+        => MetadataTextFormatter.BuildSummary(metadata);
+
+    /// <summary>
+    /// Builds a compact human-readable metadata summary from a JSON payload.
+    /// </summary>
+    /// <param name="metadataJson">The JSON payload previously produced by <see cref="SerializeMetadata"/>.</param>
+    /// <returns>The condensed metadata text or <see langword="null"/> when unavailable.</returns>
+    public static string? BuildMetadataText(string? metadataJson)
+        => MetadataTextFormatter.BuildSummary(metadataJson);
 }
 
 /// <summary>

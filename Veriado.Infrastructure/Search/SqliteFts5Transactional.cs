@@ -30,11 +30,12 @@ internal sealed class SqliteFts5Transactional
             await using (var insert = connection.CreateCommand())
             {
                 insert.Transaction = transaction;
-                insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author, metadata) VALUES ($rowid, $title, $mime, $author, $metadata);";
+                insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author, metadata_text, metadata) VALUES ($rowid, $title, $mime, $author, $metadata_text, $metadata);";
                 insert.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
                 insert.Parameters.AddWithValue("$title", (object?)document.Title ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$mime", document.Mime);
                 insert.Parameters.AddWithValue("$author", (object?)document.Author ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$metadata_text", (object?)document.MetadataText ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$metadata", (object?)document.MetadataJson ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -43,8 +44,7 @@ internal sealed class SqliteFts5Transactional
                 document.Title,
                 document.Author,
                 document.FileName,
-                document.Mime,
-                document.MetadataJson);
+                document.MetadataText);
 
             await using (var deleteTrgm = connection.CreateCommand())
             {

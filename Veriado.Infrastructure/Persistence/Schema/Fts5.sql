@@ -2,6 +2,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS file_search USING fts5(
     title,
     mime,
     author,
+    metadata_text,
     metadata,
     tokenize = 'unicode61 remove_diacritics 2',
     content='',

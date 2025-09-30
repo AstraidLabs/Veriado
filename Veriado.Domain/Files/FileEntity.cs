@@ -382,6 +382,7 @@ public sealed class FileEntity : AggregateRoot
                 SystemMetadata.LastWriteUtc.Value,
                 SystemMetadata.LastAccessUtc.Value));
         var metadataJson = SearchDocument.SerializeMetadata(metadata);
+        var metadataText = SearchDocument.BuildMetadataText(metadata);
         return new SearchDocument(
             Id,
             title,
@@ -390,7 +391,8 @@ public sealed class FileEntity : AggregateRoot
             Name.Value,
             CreatedUtc.Value,
             LastModifiedUtc.Value,
-            metadataJson);
+            metadataJson,
+            metadataText);
     }
 
     /// <summary>
