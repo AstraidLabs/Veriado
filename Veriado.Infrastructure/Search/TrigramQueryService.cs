@@ -92,13 +92,13 @@ internal sealed class TrigramQueryService
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
         builder.Append(
-            "SELECT m.file_id, t.trgm " +
-            "FROM file_trgm t " +
-            "JOIN file_trgm_map m ON t.rowid = m.rowid " +
+            "SELECT m.file_id, fts.trgm " +
+            "FROM file_trgm AS fts " +
+            "JOIN file_trgm_map m ON fts.rowid = m.rowid " +
             "JOIN files f ON f.id = m.file_id " +
-            "WHERE file_trgm MATCH $query ");
+            "WHERE fts MATCH $query ");
         AppendWhereClauses(builder, plan);
-        builder.Append("ORDER BY bm25(t) ASC, m.rowid ASC LIMIT $limit;");
+        builder.Append("ORDER BY bm25(fts) ASC, m.rowid ASC LIMIT $limit;");
         command.CommandText = builder.ToString();
         command.Parameters.Add("$query", SqliteType.Text).Value = trigramQuery;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = fetch;
@@ -206,16 +206,16 @@ internal sealed class TrigramQueryService
             "       COALESCE(s.author, '') AS author, " +
             "       COALESCE(s.metadata_text, '') AS metadata_text, " +
             "       COALESCE(s.metadata, '') AS metadata_json, " +
-            "       t.trgm, " +
+            "       fts.trgm, " +
             "       f.modified_utc " +
-            "FROM file_trgm t " +
-            "JOIN file_trgm_map tm ON t.rowid = tm.rowid " +
+            "FROM file_trgm AS fts " +
+            "JOIN file_trgm_map tm ON fts.rowid = tm.rowid " +
             "JOIN file_search_map sm ON sm.file_id = tm.file_id " +
             "JOIN file_search s ON s.rowid = sm.rowid " +
             "JOIN files f ON f.id = tm.file_id " +
-            "WHERE file_trgm MATCH $query ");
+            "WHERE fts MATCH $query ");
         AppendWhereClauses(builder, plan);
-        builder.Append("ORDER BY bm25(t) ASC, tm.rowid ASC LIMIT $limit;");
+        builder.Append("ORDER BY bm25(fts) ASC, tm.rowid ASC LIMIT $limit;");
         command.CommandText = builder.ToString();
         command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = take;
