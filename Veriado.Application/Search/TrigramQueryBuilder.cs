@@ -6,6 +6,13 @@ namespace Veriado.Appl.Search;
 public static class TrigramQueryBuilder
 {
     /// <summary>
+    /// Defines the maximum number of tokens that will be emitted when building a trigram index entry.
+    /// Keeping the limit reasonably low prevents pathological documents from bloating the FTS index
+    /// while still capturing enough context for fuzzy matching.
+    /// </summary>
+    private const int MaxIndexTokens = 2048;
+
+    /// <summary>
     /// Builds a unique set of trigrams from the supplied text.
     /// </summary>
     /// <param name="text">The source text.</param>
@@ -66,9 +73,10 @@ public static class TrigramQueryBuilder
                 continue;
             }
 
-            foreach (var token in CollectUniqueTrigrams(value!))
+            CollectUniqueTrigrams(value!, accumulator, MaxIndexTokens);
+            if (accumulator.Count >= MaxIndexTokens)
             {
-                accumulator.Add(token);
+                break;
             }
         }
 
@@ -79,6 +87,11 @@ public static class TrigramQueryBuilder
 
         var ordered = accumulator.ToList();
         ordered.Sort(StringComparer.Ordinal);
+        if (ordered.Count > MaxIndexTokens)
+        {
+            ordered = ordered.Take(MaxIndexTokens).ToList();
+        }
+
         return string.Join(' ', ordered);
     }
 
@@ -89,33 +102,8 @@ public static class TrigramQueryBuilder
             return new List<string>();
         }
 
-        var normalised = Normalise(text);
-        if (normalised.Length == 0)
-        {
-            return new List<string>();
-        }
-
-        var tokens = normalised.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (tokens.Length == 0)
-        {
-            return new List<string>();
-        }
-
         var set = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var token in tokens)
-        {
-            if (token.Length <= 3)
-            {
-                set.Add(token);
-                continue;
-            }
-
-            for (var index = 0; index <= token.Length - 3; index++)
-            {
-                set.Add(token.Substring(index, 3));
-            }
-        }
-
+        CollectUniqueTrigrams(text, set, int.MaxValue);
         if (set.Count == 0)
         {
             return new List<string>();
@@ -124,6 +112,50 @@ public static class TrigramQueryBuilder
         var ordered = set.ToList();
         ordered.Sort(StringComparer.Ordinal);
         return ordered;
+    }
+
+    private static void CollectUniqueTrigrams(string text, HashSet<string> sink, int limit)
+    {
+        if (string.IsNullOrWhiteSpace(text) || sink.Count >= limit)
+        {
+            return;
+        }
+
+        var normalised = Normalise(text);
+        if (normalised.Length == 0)
+        {
+            return;
+        }
+
+        var tokens = normalised.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var token in tokens)
+        {
+            if (sink.Count >= limit)
+            {
+                break;
+            }
+
+            if (token.Length <= 3)
+            {
+                sink.Add(token);
+                continue;
+            }
+
+            for (var index = 0; index <= token.Length - 3; index++)
+            {
+                if (sink.Count >= limit)
+                {
+                    return;
+                }
+
+                sink.Add(token.Substring(index, 3));
+            }
+        }
     }
 
     private static string Normalise(string text)

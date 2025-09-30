@@ -104,7 +104,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             "FROM file_trgm t " +
             "JOIN file_trgm_map m ON t.rowid = m.rowid " +
             "WHERE file_trgm MATCH $query " +
-            "ORDER BY bm25(t) ASC " +
+            "ORDER BY bm25(t) ASC, m.rowid ASC " +
             "LIMIT $take OFFSET $skip;";
         command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
         command.Parameters.Add("$take", SqliteType.Integer).Value = take;
