@@ -19,12 +19,18 @@ internal sealed class TrigramQueryService
     private readonly InfrastructureOptions _options;
     private readonly ISearchTelemetry _telemetry;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly ISqliteConnectionFactory _connectionFactory;
 
-    public TrigramQueryService(InfrastructureOptions options, ISearchTelemetry telemetry, IAnalyzerFactory analyzerFactory)
+    public TrigramQueryService(
+        InfrastructureOptions options,
+        ISearchTelemetry telemetry,
+        IAnalyzerFactory analyzerFactory,
+        ISqliteConnectionFactory connectionFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -70,7 +76,8 @@ internal sealed class TrigramQueryService
         }
 
         var fetch = skip + take;
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -165,7 +172,8 @@ internal sealed class TrigramQueryService
             return Array.Empty<SearchHit>();
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -511,16 +519,6 @@ internal sealed class TrigramQueryService
                 command.Parameters.AddWithValue(parameter.Name, parameter.Value ?? DBNull.Value);
             }
         }
-    }
-
-    private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
     }
 
 }

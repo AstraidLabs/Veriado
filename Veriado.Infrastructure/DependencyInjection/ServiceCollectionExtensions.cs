@@ -81,6 +81,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         var sqlitePragmaInterceptor = new SqlitePragmaInterceptor();
         services.AddSingleton<SqlitePragmaInterceptor>(sqlitePragmaInterceptor);
+        services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
 
         var analyzerOptions = services.AddOptions<AnalyzerOptions>();
         if (configuration is not null)
