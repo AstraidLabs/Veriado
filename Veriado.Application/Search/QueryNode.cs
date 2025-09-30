@@ -20,7 +20,9 @@ public sealed record TokenNode(
     string Value,
     QueryTokenType TokenType,
     string? TrigramExpression = null,
-    bool RequiresAllTrigramTerms = false) : QueryNode;
+    bool RequiresAllTrigramTerms = false,
+    int? MaxEditDistance = null,
+    bool IsHeuristicFuzzy = false) : QueryNode;
 
 /// <summary>
 /// Represents a boolean combination of nodes.
@@ -59,6 +61,16 @@ public enum QueryTokenType
     /// A prefix match (trailing wildcard).
     /// </summary>
     Prefix,
+
+    /// <summary>
+    /// A token containing wildcard characters.
+    /// </summary>
+    Wildcard,
+
+    /// <summary>
+    /// A fuzzy token matched using trigram similarity.
+    /// </summary>
+    Fuzzy,
 }
 
 /// <summary>
