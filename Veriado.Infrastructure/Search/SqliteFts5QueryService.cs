@@ -169,7 +169,7 @@ internal sealed class SqliteFts5QueryService
         return result is long value ? (int)value : 0;
     }
 
-    public async Task<IReadOnlyList<SearchHit>> SearchAsync(
+    public async Task<FtsSearchResult> SearchAsync(
         SearchQueryPlan plan,
         int take,
         CancellationToken cancellationToken)
@@ -177,17 +177,17 @@ internal sealed class SqliteFts5QueryService
         ArgumentNullException.ThrowIfNull(plan);
         if (take <= 0)
         {
-            return Array.Empty<SearchHit>();
+            return FtsSearchResult.Empty;
         }
 
         if (!_options.IsFulltextAvailable)
         {
-            return Array.Empty<SearchHit>();
+            return FtsSearchResult.Empty;
         }
 
         if (string.IsNullOrWhiteSpace(plan.MatchExpression))
         {
-            return Array.Empty<SearchHit>();
+            return FtsSearchResult.Empty;
         }
 
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -205,21 +205,29 @@ internal sealed class SqliteFts5QueryService
         ApplyPlanParameters(command, plan);
 
         var hits = new List<SearchHit>(take);
+        double? topNormalizedScore = null;
         var stopwatch = Stopwatch.StartNew();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var hit = MapHit(reader, plan.ScorePlan, hasCustomSimilarity);
+            var hit = MapHit(reader, plan.ScorePlan, hasCustomSimilarity, out var normalizedScore);
+            topNormalizedScore ??= normalizedScore;
             hits.Add(hit);
         }
 
         stopwatch.Stop();
         _telemetry.RecordFtsQuery(stopwatch.Elapsed);
 
-        return hits;
+        return hits.Count == 0
+            ? FtsSearchResult.Empty
+            : new FtsSearchResult(hits, hits.Count, topNormalizedScore);
     }
 
-    private SearchHit MapHit(SqliteDataReader reader, SearchScorePlan scorePlan, bool hasCustomSimilarity)
+    private SearchHit MapHit(
+        SqliteDataReader reader,
+        SearchScorePlan scorePlan,
+        bool hasCustomSimilarity,
+        out double normalizedScore)
     {
         var fileIdBytes = (byte[])reader[1];
         var id = new Guid(fileIdBytes);
@@ -282,7 +290,7 @@ internal sealed class SqliteFts5QueryService
         var highlights = BuildHighlights(selectedColumn, snippetText, columnValues, offsetsByColumn);
         var fields = BuildFields(title, mime, author, metadataText, metadataJson);
         fields["last_modified_utc"] = modifiedUtc.ToString("O", CultureInfo.InvariantCulture);
-        var normalizedScore = ComputeNormalizedScore(rawScore, scorePlan);
+        normalizedScore = ComputeNormalizedScore(rawScore, scorePlan);
         if (scorePlan.CustomSimilarityDelegate is not null)
         {
             var adjusted = scorePlan.CustomSimilarityDelegate(bm25Score, customSimilarity, modifiedUtc);
@@ -781,4 +789,15 @@ internal sealed class SqliteFts5QueryService
 
     private sealed record OffsetInfo(int Column, int TermIndex, int ByteStart, int ByteEnd);
 
+}
+
+/// <summary>
+/// Represents the result of an FTS search operation including diagnostic metadata.
+/// </summary>
+internal sealed record FtsSearchResult(
+    IReadOnlyList<SearchHit> Hits,
+    int HitCount,
+    double? TopNormalizedScore)
+{
+    public static readonly FtsSearchResult Empty = new(Array.Empty<SearchHit>(), 0, null);
 }
