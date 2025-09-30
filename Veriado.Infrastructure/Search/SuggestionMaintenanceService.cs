@@ -1,5 +1,7 @@
 namespace Veriado.Infrastructure.Search;
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Veriado.Domain.Search;
@@ -27,7 +29,7 @@ internal sealed class SuggestionMaintenanceService
         }
 
         var harvested = Harvest(document)
-            .GroupBy(entry => new { entry.Term, entry.Source }, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(entry => (entry.Term, entry.Source), TermSourceComparer.Instance)
             .Select(group => new
             {
                 group.Key.Term,
@@ -126,6 +128,25 @@ internal sealed class SuggestionMaintenanceService
         if (builder.Length > 1)
         {
             yield return builder.ToString();
+        }
+    }
+
+    private sealed class TermSourceComparer : IEqualityComparer<(string Term, string Source)>
+    {
+        public static TermSourceComparer Instance { get; } = new();
+
+        public bool Equals((string Term, string Source) x, (string Term, string Source) y)
+        {
+            return string.Equals(x.Term, y.Term, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Source, y.Source, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int GetHashCode((string Term, string Source) obj)
+        {
+            var hash = new HashCode();
+            hash.Add(obj.Term, StringComparer.OrdinalIgnoreCase);
+            hash.Add(obj.Source, StringComparer.OrdinalIgnoreCase);
+            return hash.ToHashCode();
         }
     }
 }

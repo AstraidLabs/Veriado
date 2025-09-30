@@ -110,11 +110,11 @@ internal static class MetadataSnippetFormatter
             }
 
             return string.Concat(
-                text.AsSpan(0, index),
-                '[',
-                text.AsSpan(index, token.Length),
-                ']',
-                text.AsSpan(index + token.Length));
+                text[..index],
+                "[",
+                text.Substring(index, token.Length),
+                "]",
+                text[(index + token.Length)..]);
         }
 
         return text;
