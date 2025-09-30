@@ -5,7 +5,7 @@ using System.Diagnostics.Metrics;
 /// <summary>
 /// Provides <see cref="ISearchTelemetry"/> implementation backed by <see cref="Meter"/> instruments.
 /// </summary>
-internal sealed class SearchTelemetry : ISearchTelemetry, IDisposable
+internal sealed class SearchTelemetry : ISearchTelemetry
 {
     private static readonly Meter Meter = new("Veriado.Search", "1.0.0");
 
@@ -41,12 +41,6 @@ internal sealed class SearchTelemetry : ISearchTelemetry, IDisposable
     {
         Interlocked.Exchange(ref _documentCount, documentCount);
         Interlocked.Exchange(ref _indexSizeBytes, indexSizeBytes);
-    }
-
-    public void Dispose()
-    {
-        _documentGauge.Dispose();
-        _indexSizeGauge.Dispose();
     }
 
     private IEnumerable<Measurement<long>> ObserveDocuments()
