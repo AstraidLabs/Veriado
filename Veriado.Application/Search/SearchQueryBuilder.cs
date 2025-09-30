@@ -61,6 +61,17 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
     private int _parameterIndex;
 
+    private sealed class PlanBuildContext
+    {
+        public bool RequiresTrigramForWildcard { get; set; }
+
+        public bool HasPrefix { get; set; }
+
+        public bool HasExplicitFuzzy { get; set; }
+
+        public bool HasHeuristicFuzzy { get; set; }
+    }
+
     /// <summary>
     /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class using the default configuration.
     /// </summary>
@@ -195,7 +206,12 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             return token;
         }
 
-        return token with { TrigramExpression = expression, RequiresAllTrigramTerms = requireAllTerms };
+        return token with
+        {
+            TrigramExpression = expression,
+            RequiresAllTrigramTerms = requireAllTerms,
+            IsExplicitFuzzy = true,
+        };
     }
 
     /// <inheritdoc />
@@ -318,13 +334,14 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// <inheritdoc />
     public SearchQueryPlan Build(QueryNode? root, string? rawQuery = null)
     {
+        var context = new PlanBuildContext();
         var match = BuildMatch(root);
-        if (string.IsNullOrWhiteSpace(match))
+        var trigramExpression = BuildTrigramExpression(root, context);
+        if (string.IsNullOrWhiteSpace(match) && string.IsNullOrWhiteSpace(trigramExpression))
         {
             throw new InvalidOperationException("Search query must produce a non-empty MATCH expression.");
         }
 
-        var trigramExpression = BuildTrigramExpression(root);
         var requiresTrigramFallback = !string.IsNullOrWhiteSpace(trigramExpression);
         return new SearchQueryPlan(
             match,
@@ -333,7 +350,11 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             _scorePlan,
             requiresTrigramFallback,
             trigramExpression,
-            rawQuery);
+            rawQuery,
+            context.RequiresTrigramForWildcard,
+            context.HasPrefix,
+            context.HasExplicitFuzzy,
+            context.HasHeuristicFuzzy);
     }
 
     private QueryNode? Combine(BooleanOperator op, params QueryNode?[] nodes)
@@ -577,35 +598,142 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private static string EscapeQuotes(string value)
         => value.Replace("\"", "\"\"");
 
-    private string BuildTrigramExpression(QueryNode? node)
+    private string BuildTrigramExpression(QueryNode? node, PlanBuildContext context)
     {
         if (node is null)
         {
             return string.Empty;
         }
 
-        var expression = BuildTrigramExpressionInternal(node);
+        var expression = BuildTrigramExpressionInternal(node, context);
         return string.IsNullOrWhiteSpace(expression) ? string.Empty : expression!;
     }
 
-    private string? BuildTrigramExpressionInternal(QueryNode node)
+    private string? BuildTrigramExpressionInternal(QueryNode node, PlanBuildContext context)
     {
         return node switch
         {
-            TokenNode { TrigramExpression: { Length: > 0 } expression } => expression,
-            TokenNode => null,
-            BooleanNode boolean => BuildBooleanTrigramExpression(boolean),
-            NotNode notNode => BuildNotTrigramExpression(notNode),
+            TokenNode token => BuildTokenTrigramExpression(token, context),
+            BooleanNode boolean => BuildBooleanTrigramExpression(boolean, context),
+            NotNode notNode => BuildNotTrigramExpression(notNode, context),
             _ => null,
         };
     }
 
-    private string? BuildBooleanTrigramExpression(BooleanNode node)
+    private string? BuildTokenTrigramExpression(TokenNode token, PlanBuildContext context)
+    {
+        if (token.TokenType == QueryTokenType.Prefix)
+        {
+            context.HasPrefix = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(token.TrigramExpression))
+        {
+            if (token.IsExplicitFuzzy)
+            {
+                context.HasExplicitFuzzy = true;
+            }
+            else
+            {
+                context.HasHeuristicFuzzy = true;
+                if (token.TokenType != QueryTokenType.Prefix && ContainsWildcardCharacters(token.Value))
+                {
+                    context.RequiresTrigramForWildcard = true;
+                }
+            }
+
+            return token.TrigramExpression;
+        }
+
+        switch (token.TokenType)
+        {
+            case QueryTokenType.Prefix:
+                return BuildPrefixTrigramExpression(token.Value, context);
+            case QueryTokenType.Proximity:
+                return BuildProximityTrigramExpression(token.Value);
+            default:
+                return null;
+        }
+    }
+
+    private string? BuildPrefixTrigramExpression(string value, PlanBuildContext context)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        if (!trimmed.EndsWith(Wildcard))
+        {
+            return null;
+        }
+
+        var core = trimmed.TrimEnd(Wildcard);
+        if (string.IsNullOrWhiteSpace(core))
+        {
+            return null;
+        }
+
+        var expression = TrigramQueryBuilder.BuildTrigramMatch(core, requireAllTerms: false);
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            return null;
+        }
+
+        context.HasHeuristicFuzzy = true;
+        return expression;
+    }
+
+    private string? BuildProximityTrigramExpression(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var segments = ExtractQuotedSegments(value);
+        if (segments.Count == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<string>(segments.Count);
+        foreach (var segment in segments)
+        {
+            var expression = TrigramQueryBuilder.BuildTrigramMatch(segment, requireAllTerms: false);
+            if (string.IsNullOrWhiteSpace(expression))
+            {
+                continue;
+            }
+
+            parts.Add(WrapTrigram(expression));
+        }
+
+        if (parts.Count == 0)
+        {
+            return null;
+        }
+
+        if (parts.Count == 1)
+        {
+            return parts[0];
+        }
+
+        return "(" + string.Join(" OR ", parts) + ")";
+    }
+
+    private string? BuildBooleanTrigramExpression(BooleanNode node, PlanBuildContext context)
     {
         var parts = new List<string>();
         foreach (var child in node.Children)
         {
-            var expression = BuildTrigramExpressionInternal(child);
+            var expression = BuildTrigramExpressionInternal(child, context);
             if (string.IsNullOrWhiteSpace(expression))
             {
                 continue;
@@ -628,9 +756,9 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         return "(" + string.Join(op, parts) + ")";
     }
 
-    private string? BuildNotTrigramExpression(NotNode node)
+    private string? BuildNotTrigramExpression(NotNode node, PlanBuildContext context)
     {
-        var operand = BuildTrigramExpressionInternal(node.Operand);
+        var operand = BuildTrigramExpressionInternal(node.Operand, context);
         if (string.IsNullOrWhiteSpace(operand))
         {
             return null;
@@ -664,6 +792,83 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         }
 
         return trimmed;
+    }
+
+    private static List<string> ExtractQuotedSegments(string value)
+    {
+        var segments = new List<string>();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return segments;
+        }
+
+        var span = value.AsSpan();
+        var index = 0;
+        var builder = new StringBuilder();
+
+        while (index < span.Length)
+        {
+            if (span[index] != '"')
+            {
+                index++;
+                continue;
+            }
+
+            index++;
+            builder.Clear();
+            var closed = false;
+
+            while (index < span.Length)
+            {
+                var current = span[index];
+                if (current == '"')
+                {
+                    if (index + 1 < span.Length && span[index + 1] == '"')
+                    {
+                        builder.Append('"');
+                        index += 2;
+                        continue;
+                    }
+
+                    closed = true;
+                    index++;
+                    break;
+                }
+
+                builder.Append(current);
+                index++;
+            }
+
+            if (!closed)
+            {
+                break;
+            }
+
+            if (builder.Length > 0)
+            {
+                segments.Add(builder.ToString());
+            }
+        }
+
+        return segments;
+    }
+
+    private static bool ContainsWildcardCharacters(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var ch in value)
+        {
+            if (ch == '*' || ch == '?')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private (string Clause, SqliteParameterDefinition Parameter)? CreateParameter(

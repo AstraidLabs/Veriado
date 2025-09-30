@@ -20,7 +20,8 @@ public sealed record TokenNode(
     string Value,
     QueryTokenType TokenType,
     string? TrigramExpression = null,
-    bool RequiresAllTrigramTerms = false) : QueryNode;
+    bool RequiresAllTrigramTerms = false,
+    bool IsExplicitFuzzy = false) : QueryNode;
 
 /// <summary>
 /// Represents a boolean combination of nodes.
