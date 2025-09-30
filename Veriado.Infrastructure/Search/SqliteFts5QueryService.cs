@@ -37,12 +37,18 @@ internal sealed class SqliteFts5QueryService
     private readonly InfrastructureOptions _options;
     private readonly ISearchTelemetry _telemetry;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly ISqliteConnectionFactory _connectionFactory;
 
-    public SqliteFts5QueryService(InfrastructureOptions options, ISearchTelemetry telemetry, IAnalyzerFactory analyzerFactory)
+    public SqliteFts5QueryService(
+        InfrastructureOptions options,
+        ISearchTelemetry telemetry,
+        IAnalyzerFactory analyzerFactory,
+        ISqliteConnectionFactory connectionFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -72,7 +78,8 @@ internal sealed class SqliteFts5QueryService
             return Array.Empty<(Guid, double)>();
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -139,7 +146,8 @@ internal sealed class SqliteFts5QueryService
             return 0;
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -182,7 +190,8 @@ internal sealed class SqliteFts5QueryService
             return Array.Empty<SearchHit>();
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -747,16 +756,6 @@ internal sealed class SqliteFts5QueryService
         }
 
         return Utf8.GetCharCount(bytes, 0, byteOffset);
-    }
-
-    private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
     }
 
     private static string ReadValue(SqliteDataReader source, int ordinal)

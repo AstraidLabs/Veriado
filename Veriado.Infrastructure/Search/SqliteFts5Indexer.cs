@@ -11,14 +11,17 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     private readonly InfrastructureOptions _options;
     private readonly SuggestionMaintenanceService? _suggestionMaintenance;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly ISqliteConnectionFactory _connectionFactory;
 
     public SqliteFts5Indexer(
         InfrastructureOptions options,
         IAnalyzerFactory analyzerFactory,
+        ISqliteConnectionFactory connectionFactory,
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _suggestionMaintenance = suggestionMaintenance;
     }
 
@@ -51,7 +54,8 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
             return;
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -85,7 +89,8 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
             return;
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -104,13 +109,4 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         }
     }
 
-    private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
-    }
 }
