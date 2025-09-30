@@ -22,6 +22,11 @@ public sealed class SearchOptions
     public TrigramIndexOptions Trigram { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets parser configuration options.
+    /// </summary>
+    public SearchParseOptions Parse { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets facet aggregation options.
     /// </summary>
     public FacetOptions Facets { get; set; } = new();
