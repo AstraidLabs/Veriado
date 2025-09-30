@@ -1,3 +1,4 @@
+using AutoMapper;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Search.Abstractions;
@@ -9,15 +10,18 @@ public sealed class SearchFacade : ISearchFacade
     private readonly ISearchQueryService _searchQueryService;
     private readonly ISearchHistoryService _historyService;
     private readonly ISearchFavoritesService _favoritesService;
+    private readonly IMapper _mapper;
 
     public SearchFacade(
         ISearchQueryService searchQueryService,
         ISearchHistoryService historyService,
-        ISearchFavoritesService favoritesService)
+        ISearchFavoritesService favoritesService,
+        IMapper mapper)
     {
         _searchQueryService = searchQueryService ?? throw new ArgumentNullException(nameof(searchQueryService));
         _historyService = historyService ?? throw new ArgumentNullException(nameof(historyService));
         _favoritesService = favoritesService ?? throw new ArgumentNullException(nameof(favoritesService));
+        _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
     }
 
     public async Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int take, CancellationToken ct)
@@ -34,13 +38,7 @@ public sealed class SearchFacade : ISearchFacade
             return Array.Empty<SearchHitDto>();
         }
 
-        var results = new List<SearchHitDto>(hits.Count);
-        foreach (var hit in hits)
-        {
-            results.Add(new SearchHitDto(hit.FileId, hit.Title, hit.Mime, hit.Snippet, hit.Score, hit.LastModifiedUtc));
-        }
-
-        return results;
+        return _mapper.Map<IReadOnlyList<SearchHitDto>>(hits);
     }
 
     public async Task<IReadOnlyList<SearchHistoryEntry>> GetHistoryAsync(int take, CancellationToken ct)

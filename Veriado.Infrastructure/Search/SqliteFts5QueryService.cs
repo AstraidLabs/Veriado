@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Veriado.Domain.Search;
 
@@ -11,13 +8,34 @@ namespace Veriado.Infrastructure.Search;
 /// <summary>
 /// Provides query access to the SQLite FTS5 virtual table.
 /// </summary>
-internal sealed class SqliteFts5QueryService : ISearchQueryService
+internal sealed class SqliteFts5QueryService
 {
+    private const char Ellipsis = '…';
+    private static readonly Encoding Utf8 = Encoding.UTF8;
+
+    private static readonly int[] SnippetPriority =
+    {
+        0, // title
+        2, // author
+        3, // metadata_text
+        1, // mime
+        4, // metadata
+    };
+
+    private static readonly IReadOnlyDictionary<int, string> ColumnNameMap = new Dictionary<int, string>
+    {
+        [0] = "title",
+        [1] = "mime",
+        [2] = "author",
+        [3] = "metadata_text",
+        [4] = "metadata",
+    };
+
     private readonly InfrastructureOptions _options;
 
     public SqliteFts5QueryService(InfrastructureOptions options)
     {
-        _options = options;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -73,59 +91,6 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         return results;
     }
 
-    public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
-        string matchQuery,
-        int skip,
-        int take,
-        CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
-        if (take <= 0)
-        {
-            return Array.Empty<(Guid, double)>();
-        }
-
-        if (skip < 0)
-        {
-            skip = 0;
-        }
-
-        if (!_options.IsFulltextAvailable)
-        {
-            return Array.Empty<(Guid, double)>();
-        }
-
-        await using var connection = CreateConnection();
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT m.file_id, bm25(t) AS score " +
-            "FROM file_trgm t " +
-            "JOIN file_trgm_map m ON t.rowid = m.rowid " +
-            "WHERE file_trgm MATCH $query " +
-            "ORDER BY bm25(t) ASC, m.rowid ASC " +
-            "LIMIT $take OFFSET $skip;";
-        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
-        command.Parameters.Add("$take", SqliteType.Integer).Value = take;
-        command.Parameters.Add("$skip", SqliteType.Integer).Value = skip;
-
-        var results = new List<(Guid, double)>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            var idBytes = (byte[])reader[0];
-            var id = new Guid(idBytes);
-            var rawScore = reader.IsDBNull(1) ? double.PositiveInfinity : reader.GetDouble(1);
-            var score = double.IsInfinity(rawScore)
-                ? 0d
-                : 1d / (1d + Math.Max(0d, rawScore));
-            results.Add((id, score));
-        }
-
-        return results;
-    }
-
     public async Task<int> CountAsync(string matchQuery, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
@@ -145,13 +110,12 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         return result is long value ? (int)value : 0;
     }
 
-    public async Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int? limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(string matchQuery, int take, CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        var take = limit.GetValueOrDefault(10);
+        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
         if (take <= 0)
         {
-            take = 10;
+            return Array.Empty<SearchHit>();
         }
 
         if (!_options.IsFulltextAvailable)
@@ -164,22 +128,19 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT m.file_id, " +
+            "SELECT s.rowid, " +
+            "       m.file_id, " +
             "       COALESCE(s.title, '') AS title, " +
-            "       COALESCE(s.mime, 'application/octet-stream') AS mime, " +
+            "       COALESCE(s.mime, '') AS mime, " +
             "       COALESCE(s.author, '') AS author, " +
-            "       highlight(s, 0, $pre, $post) AS hl_title, " +
-            "       snippet(s, 0, $pre, $post, '…', 16) AS snip_title, " +
-            "       highlight(s, 2, $pre, $post) AS hl_author, " +
-            "       snippet(s, 2, $pre, $post, '…', 8) AS snip_author, " +
-            "       highlight(s, 3, $pre, $post) AS hl_metadata_text, " +
-            "       snippet(s, 3, $pre, $post, '…', 16) AS snip_metadata_text, " +
-            "       highlight(s, 1, $pre, $post) AS hl_mime, " +
-            "       snippet(s, 1, $pre, $post, '…', 8) AS snip_mime, " +
-            "       highlight(s, 4, $pre, $post) AS hl_metadata_json, " +
-            "       snippet(s, 4, $pre, $post, '…', 16) AS snip_metadata_json, " +
-            "       COALESCE(s.metadata_text, '') AS metadata_text_value, " +
-            "       COALESCE(s.metadata, '') AS metadata_json_value, " +
+            "       COALESCE(s.metadata_text, '') AS metadata_text, " +
+            "       COALESCE(s.metadata, '') AS metadata_json, " +
+            "       snippet(s, 0, '', '', '…', 32) AS snippet_title, " +
+            "       snippet(s, 1, '', '', '…', 24) AS snippet_mime, " +
+            "       snippet(s, 2, '', '', '…', 24) AS snippet_author, " +
+            "       snippet(s, 3, '', '', '…', 32) AS snippet_metadata_text, " +
+            "       snippet(s, 4, '', '', '…', 32) AS snippet_metadata_json, " +
+            "       offsets(s) AS offsets, " +
             "       bm25(s, 4.0, 0.1, 2.0, 0.8, 0.2) AS score, " +
             "       f.modified_utc " +
             "FROM file_search s " +
@@ -187,120 +148,383 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             "JOIN files f ON f.id = m.file_id " +
             "WHERE file_search MATCH $query " +
             "ORDER BY score, f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE " +
-            "LIMIT $limit;";
-        command.Parameters.Add("$query", SqliteType.Text).Value = query;
-        command.Parameters.Add("$limit", SqliteType.Integer).Value = take;
-        command.Parameters.Add("$pre", SqliteType.Text).Value = "[";
-        command.Parameters.Add("$post", SqliteType.Text).Value = "]";
-        command.Parameters.Add("$raw", SqliteType.Text).Value = query;
+            "LIMIT $take;";
+        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
+        command.Parameters.Add("$take", SqliteType.Integer).Value = take;
+        command.Parameters.Add("$raw", SqliteType.Text).Value = matchQuery;
 
-        var hits = new List<SearchHit>();
+        var hits = new List<SearchHit>(take);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var idBytes = (byte[])reader[0];
-            var id = new Guid(idBytes);
-            var title = reader.GetString(1);
-            var mime = reader.GetString(2);
-            var highlightedTitle = ReadValue(reader, 4);
-            highlightedTitle = string.IsNullOrWhiteSpace(highlightedTitle) ? title : highlightedTitle;
-
-            var metadataTextValue = ReadValue(reader, 14);
-            var metadataJsonValue = ReadValue(reader, 15);
-            var rawSnippet = SelectSnippet(reader, out var snippetSource);
-            var snippet = snippetSource switch
-            {
-                SnippetSource.MetadataJson => MetadataSnippetFormatter.Build(rawSnippet, metadataJsonValue)
-                    ?? metadataTextValue
-                    ?? rawSnippet,
-                SnippetSource.MetadataText when string.IsNullOrWhiteSpace(rawSnippet)
-                    => metadataTextValue,
-                _ => rawSnippet,
-            };
-
-            var rawScore = reader.IsDBNull(16) ? double.PositiveInfinity : reader.GetDouble(16);
-            var modified = reader.GetString(17);
-            var modifiedUtc = DateTimeOffset.Parse(modified, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-            var score = NormalizeScore(rawScore);
-            hits.Add(new SearchHit(id, highlightedTitle, mime, snippet, score, modifiedUtc));
+            var hit = MapHit(reader);
+            hits.Add(hit);
         }
 
         return hits;
     }
 
-    private static string? SelectSnippet(SqliteDataReader reader, out SnippetSource source)
+    private SearchHit MapHit(SqliteDataReader reader)
     {
-        var candidates = new[]
+        var fileIdBytes = (byte[])reader[1];
+        var id = new Guid(fileIdBytes);
+        var title = reader.GetString(2);
+        var mime = reader.GetString(3);
+        var author = reader.GetString(4);
+        var metadataText = reader.GetString(5);
+        var metadataJson = reader.GetString(6);
+
+        var snippets = new Dictionary<int, string>(5)
         {
-            new SnippetCandidate(SnippetSource.Title, snippetOrdinal: 5, highlightOrdinal: 4, fallbackOrdinal: 1),
-            new SnippetCandidate(SnippetSource.Author, snippetOrdinal: 7, highlightOrdinal: 6, fallbackOrdinal: 3),
-            new SnippetCandidate(SnippetSource.MetadataText, snippetOrdinal: 9, highlightOrdinal: 8, fallbackOrdinal: 14),
-            new SnippetCandidate(SnippetSource.Mime, snippetOrdinal: 11, highlightOrdinal: 10, fallbackOrdinal: 2),
-            new SnippetCandidate(SnippetSource.MetadataJson, snippetOrdinal: 13, highlightOrdinal: 12, fallbackOrdinal: 15),
+            [0] = ReadValue(reader, 7),
+            [1] = ReadValue(reader, 8),
+            [2] = ReadValue(reader, 9),
+            [3] = ReadValue(reader, 10),
+            [4] = ReadValue(reader, 11),
         };
 
-        foreach (var candidate in candidates)
+        var offsetsRaw = ReadValue(reader, 12);
+        var offsetsByColumn = ParseOffsets(offsetsRaw);
+        var rawScore = reader.IsDBNull(13) ? double.PositiveInfinity : reader.GetDouble(13);
+        var modifiedUtcRaw = reader.GetString(14);
+        var modifiedUtc = DateTimeOffset.Parse(modifiedUtcRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+        var columnValues = new Dictionary<int, string>
         {
-            var snippet = ReadValue(reader, candidate.SnippetOrdinal);
-            if (string.IsNullOrWhiteSpace(snippet))
+            [0] = title,
+            [1] = mime,
+            [2] = author,
+            [3] = metadataText,
+            [4] = metadataJson,
+        };
+
+        var selectedColumn = SelectSnippetColumn(snippets);
+        var primaryField = ColumnNameMap.TryGetValue(selectedColumn, out var fieldName)
+            ? fieldName
+            : ColumnNameMap[3];
+
+        var snippetText = snippets.TryGetValue(selectedColumn, out var rawSnippet)
+            ? NormaliseSnippet(rawSnippet)
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(snippetText))
+        {
+            var fallback = columnValues.TryGetValue(selectedColumn, out var value)
+                ? value
+                : metadataText;
+            snippetText = BuildFallbackSnippet(fallback);
+        }
+
+        var highlights = BuildHighlights(selectedColumn, snippetText, columnValues, offsetsByColumn);
+        var fields = BuildFields(title, mime, author, metadataText, metadataJson);
+        fields["last_modified_utc"] = modifiedUtc.ToString("O", CultureInfo.InvariantCulture);
+        var normalizedScore = NormalizeScore(rawScore);
+        var sort = new SearchHitSortValues(modifiedUtc, normalizedScore, rawScore);
+
+        return new SearchHit(
+            id,
+            rawScore,
+            "FTS",
+            primaryField,
+            snippetText,
+            highlights,
+            fields,
+            sort);
+    }
+
+    private static IReadOnlyList<HighlightSpan> BuildHighlights(
+        int columnIndex,
+        string snippet,
+        IReadOnlyDictionary<int, string> columnValues,
+        IReadOnlyDictionary<int, IReadOnlyList<OffsetInfo>> offsetsByColumn)
+    {
+        if (!offsetsByColumn.TryGetValue(columnIndex, out var offsets) || offsets.Count == 0)
+        {
+            return Array.Empty<HighlightSpan>();
+        }
+
+        if (!columnValues.TryGetValue(columnIndex, out var columnText) || string.IsNullOrEmpty(columnText))
+        {
+            return Array.Empty<HighlightSpan>();
+        }
+
+        if (!ColumnNameMap.TryGetValue(columnIndex, out var field))
+        {
+            field = ColumnNameMap[3];
+        }
+
+        if (string.IsNullOrEmpty(snippet))
+        {
+            snippet = columnText;
+        }
+
+        var map = BuildSnippetIndexMap(columnText, snippet);
+        if (map.Count == 0)
+        {
+            return Array.Empty<HighlightSpan>();
+        }
+
+        var columnBytes = Utf8.GetBytes(columnText);
+        var spans = new List<HighlightSpan>();
+        var seen = new HashSet<(int Start, int Length)>();
+
+        foreach (var offset in offsets)
+        {
+            var charStart = ByteOffsetToCharIndex(columnBytes, offset.ByteStart);
+            var charEnd = ByteOffsetToCharIndex(columnBytes, offset.ByteEnd);
+            if (charEnd < charStart)
             {
-                snippet = ReadValue(reader, candidate.HighlightOrdinal);
+                continue;
             }
 
-            if (string.IsNullOrWhiteSpace(snippet) && candidate.FallbackOrdinal >= 0)
+            var charLength = Math.Max(1, charEnd - charStart);
+            if (charStart >= columnText.Length)
             {
-                snippet = ReadValue(reader, candidate.FallbackOrdinal);
+                continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(snippet))
+            if (charStart + charLength > columnText.Length)
             {
-                source = candidate.Source;
-                return snippet;
+                charLength = columnText.Length - charStart;
+            }
+
+            var snippetPositions = new List<int>(charLength);
+            for (var index = 0; index < charLength; index++)
+            {
+                if (map.TryGetValue(charStart + index, out var snippetIndex))
+                {
+                    snippetPositions.Add(snippetIndex);
+                }
+            }
+
+            if (snippetPositions.Count == 0)
+            {
+                continue;
+            }
+
+            snippetPositions.Sort();
+            var spanStart = snippetPositions[0];
+            var spanEnd = snippetPositions[^1];
+            var length = spanEnd - spanStart + 1;
+            if (length <= 0)
+            {
+                continue;
+            }
+
+            var key = (spanStart, length);
+            if (!seen.Add(key))
+            {
+                continue;
+            }
+
+            var term = SafeSubstring(columnText, charStart, charLength);
+            spans.Add(new HighlightSpan(field, spanStart, length, term));
+        }
+
+        return spans;
+    }
+
+    private static Dictionary<string, string?> BuildFields(
+        string title,
+        string mime,
+        string author,
+        string metadataText,
+        string metadataJson)
+    {
+        return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["title"] = string.IsNullOrWhiteSpace(title) ? null : title,
+            ["mime"] = string.IsNullOrWhiteSpace(mime) ? null : mime,
+            ["author"] = string.IsNullOrWhiteSpace(author) ? null : author,
+            ["metadata_text"] = string.IsNullOrWhiteSpace(metadataText) ? null : metadataText,
+            ["metadata"] = string.IsNullOrWhiteSpace(metadataJson) ? null : metadataJson,
+        };
+    }
+
+    private static Dictionary<int, int> BuildSnippetIndexMap(string columnText, string snippet)
+    {
+        var map = new Dictionary<int, int>();
+        if (string.IsNullOrEmpty(columnText) || string.IsNullOrEmpty(snippet))
+        {
+            return map;
+        }
+
+        var searchStart = 0;
+        var snippetIndex = 0;
+        while (snippetIndex < snippet.Length)
+        {
+            if (snippet[snippetIndex] == Ellipsis)
+            {
+                snippetIndex++;
+                continue;
+            }
+
+            var segmentStart = snippetIndex;
+            while (snippetIndex < snippet.Length && snippet[snippetIndex] != Ellipsis)
+            {
+                snippetIndex++;
+            }
+
+            var segmentLength = snippetIndex - segmentStart;
+            if (segmentLength == 0)
+            {
+                continue;
+            }
+
+            var segment = snippet.Substring(segmentStart, segmentLength);
+            var found = columnText.IndexOf(segment, searchStart, StringComparison.Ordinal);
+            if (found < 0)
+            {
+                found = columnText.IndexOf(segment, StringComparison.Ordinal);
+                if (found < 0)
+                {
+                    continue;
+                }
+            }
+
+            for (var i = 0; i < segmentLength; i++)
+            {
+                map[found + i] = segmentStart + i;
+            }
+
+            searchStart = found + segmentLength;
+        }
+
+        return map;
+    }
+
+    private static IReadOnlyDictionary<int, IReadOnlyList<OffsetInfo>> ParseOffsets(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return new Dictionary<int, IReadOnlyList<OffsetInfo>>();
+        }
+
+        var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 4)
+        {
+            return new Dictionary<int, IReadOnlyList<OffsetInfo>>();
+        }
+
+        var result = new Dictionary<int, IReadOnlyList<OffsetInfo>>();
+        var temp = new Dictionary<int, List<OffsetInfo>>();
+        for (var index = 0; index + 3 < parts.Length; index += 4)
+        {
+            if (!int.TryParse(parts[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var column))
+            {
+                continue;
+            }
+
+            if (!int.TryParse(parts[index + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var termIndex))
+            {
+                continue;
+            }
+
+            if (!int.TryParse(parts[index + 2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var byteStart))
+            {
+                continue;
+            }
+
+            if (!int.TryParse(parts[index + 3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var byteEnd))
+            {
+                continue;
+            }
+
+            if (!temp.TryGetValue(column, out var list))
+            {
+                list = new List<OffsetInfo>();
+                temp[column] = list;
+            }
+
+            list.Add(new OffsetInfo(column, termIndex, byteStart, byteEnd));
+        }
+
+        foreach (var (column, list) in temp)
+        {
+            result[column] = list;
+        }
+
+        return result;
+    }
+
+    private static int SelectSnippetColumn(IReadOnlyDictionary<int, string> snippets)
+    {
+        foreach (var column in SnippetPriority)
+        {
+            if (snippets.TryGetValue(column, out var snippet) && !string.IsNullOrWhiteSpace(snippet))
+            {
+                return column;
             }
         }
 
-        source = SnippetSource.None;
-        return null;
+        return 3; // metadata_text fallback
     }
 
-    private static string? ReadValue(SqliteDataReader source, int ordinal)
+    private static string BuildFallbackSnippet(string? value)
     {
-        if (ordinal < 0 || source.IsDBNull(ordinal))
+        if (string.IsNullOrWhiteSpace(value))
         {
-            return null;
+            return string.Empty;
         }
 
-        var value = source.GetString(ordinal);
-        return string.IsNullOrWhiteSpace(value) ? null : value;
-    }
-
-    private readonly struct SnippetCandidate
-    {
-        public SnippetCandidate(SnippetSource source, int snippetOrdinal, int highlightOrdinal, int fallbackOrdinal)
+        var normalized = value.Trim();
+        if (normalized.Length <= 240)
         {
-            Source = source;
-            SnippetOrdinal = snippetOrdinal;
-            HighlightOrdinal = highlightOrdinal;
-            FallbackOrdinal = fallbackOrdinal;
+            return normalized;
         }
 
-        public SnippetSource Source { get; }
-
-        public int SnippetOrdinal { get; }
-
-        public int HighlightOrdinal { get; }
-
-        public int FallbackOrdinal { get; }
+        return normalized[..240] + Ellipsis;
     }
 
-    private enum SnippetSource
+    private static string NormaliseSnippet(string? snippet)
     {
-        None,
-        Title,
-        Author,
-        MetadataText,
-        Mime,
-        MetadataJson,
+        if (string.IsNullOrWhiteSpace(snippet))
+        {
+            return string.Empty;
+        }
+
+        var normalized = snippet.ReplaceLineEndings(" ");
+        return string.Join(' ', normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string SafeSubstring(string text, int start, int length)
+    {
+        if (start < 0)
+        {
+            start = 0;
+        }
+
+        if (start >= text.Length)
+        {
+            return string.Empty;
+        }
+
+        if (length <= 0)
+        {
+            return string.Empty;
+        }
+
+        if (start + length > text.Length)
+        {
+            length = text.Length - start;
+        }
+
+        return text.Substring(start, length);
+    }
+
+    private static int ByteOffsetToCharIndex(byte[] bytes, int byteOffset)
+    {
+        if (byteOffset <= 0)
+        {
+            return 0;
+        }
+
+        if (byteOffset >= bytes.Length)
+        {
+            return Utf8.GetCharCount(bytes);
+        }
+
+        return Utf8.GetCharCount(bytes, 0, byteOffset);
     }
 
     private SqliteConnection CreateConnection()
@@ -313,6 +537,16 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         return new SqliteConnection(_options.ConnectionString);
     }
 
+    private static string ReadValue(SqliteDataReader source, int ordinal)
+    {
+        if (ordinal < 0 || source.IsDBNull(ordinal))
+        {
+            return string.Empty;
+        }
+
+        return source.GetString(ordinal);
+    }
+
     private static double NormalizeScore(double rawScore)
     {
         if (double.IsNaN(rawScore) || double.IsInfinity(rawScore))
@@ -323,4 +557,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         var clamped = Math.Max(0d, rawScore);
         return 1d / (1d + clamped);
     }
+
+    private sealed record OffsetInfo(int Column, int TermIndex, int ByteStart, int ByteEnd);
+
 }
