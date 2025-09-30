@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -7,6 +10,13 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class SqliteFts5Transactional
 {
+    private readonly IAnalyzerFactory _analyzerFactory;
+
+    public SqliteFts5Transactional(IAnalyzerFactory analyzerFactory)
+    {
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+    }
+
     public async Task IndexAsync(
         SearchDocument document,
         SqliteConnection connection,
@@ -32,24 +42,32 @@ internal sealed class SqliteFts5Transactional
                 await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            var normalizedTitle = NormalizeOptional(document.Title);
+            var normalizedAuthor = NormalizeOptional(document.Author);
+            var normalizedMetadataText = NormalizeOptional(document.MetadataText);
+
             await using (var insert = connection.CreateCommand())
             {
                 insert.Transaction = transaction;
                 insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author, metadata_text, metadata) VALUES ($rowid, $title, $mime, $author, $metadata_text, $metadata);";
                 insert.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
-                insert.Parameters.AddWithValue("$title", (object?)document.Title ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$title", (object?)normalizedTitle ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$mime", document.Mime);
-                insert.Parameters.AddWithValue("$author", (object?)document.Author ?? DBNull.Value);
-                insert.Parameters.AddWithValue("$metadata_text", (object?)document.MetadataText ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$author", (object?)normalizedAuthor ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$metadata_text", (object?)normalizedMetadataText ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$metadata", (object?)document.MetadataJson ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var trigramText = TrigramQueryBuilder.BuildIndexEntry(
+            var trigramSegments = BuildTrigramSegments(
                 document.Title,
                 document.Author,
                 document.FileName,
                 document.MetadataText);
+
+            var trigramText = trigramSegments.Count == 0
+                ? string.Empty
+                : TrigramQueryBuilder.BuildIndexEntry(trigramSegments.ToArray());
 
             await using (var deleteTrgm = connection.CreateCommand())
             {
@@ -184,5 +202,37 @@ internal sealed class SqliteFts5Transactional
         select.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
         var result = await select.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is long value ? value : null;
+    }
+
+    private string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : TextNormalization.NormalizeText(value, _analyzerFactory);
+    }
+
+    private List<string> BuildTrigramSegments(params string?[] values)
+    {
+        var segments = new List<string>();
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            var tokens = TextNormalization
+                .Tokenize(value, _analyzerFactory)
+                .Where(static token => !string.IsNullOrWhiteSpace(token))
+                .ToArray();
+            if (tokens.Length == 0)
+            {
+                continue;
+            }
+
+            segments.Add(string.Join(' ', tokens));
+        }
+
+        return segments;
     }
 }

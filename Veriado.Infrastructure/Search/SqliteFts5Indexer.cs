@@ -1,3 +1,6 @@
+using System;
+using Veriado.Appl.Search;
+
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
@@ -7,10 +10,15 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 {
     private readonly InfrastructureOptions _options;
     private readonly SuggestionMaintenanceService? _suggestionMaintenance;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
-    public SqliteFts5Indexer(InfrastructureOptions options, SuggestionMaintenanceService? suggestionMaintenance = null)
+    public SqliteFts5Indexer(
+        InfrastructureOptions options,
+        IAnalyzerFactory analyzerFactory,
+        SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _suggestionMaintenance = suggestionMaintenance;
     }
 
@@ -48,7 +56,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
-        var helper = new SqliteFts5Transactional();
+        var helper = new SqliteFts5Transactional(_analyzerFactory);
 
         try
         {
@@ -82,7 +90,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
-        var helper = new SqliteFts5Transactional();
+        var helper = new SqliteFts5Transactional(_analyzerFactory);
 
         try
         {

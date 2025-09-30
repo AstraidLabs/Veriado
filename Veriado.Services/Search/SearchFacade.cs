@@ -1,3 +1,4 @@
+using System;
 using AutoMapper;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
@@ -11,17 +12,20 @@ public sealed class SearchFacade : ISearchFacade
     private readonly ISearchHistoryService _historyService;
     private readonly ISearchFavoritesService _favoritesService;
     private readonly IMapper _mapper;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
     public SearchFacade(
         ISearchQueryService searchQueryService,
         ISearchHistoryService historyService,
         ISearchFavoritesService favoritesService,
-        IMapper mapper)
+        IMapper mapper,
+        IAnalyzerFactory analyzerFactory)
     {
         _searchQueryService = searchQueryService ?? throw new ArgumentNullException(nameof(searchQueryService));
         _historyService = historyService ?? throw new ArgumentNullException(nameof(historyService));
         _favoritesService = favoritesService ?? throw new ArgumentNullException(nameof(favoritesService));
         _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     public async Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int take, CancellationToken ct)
@@ -32,7 +36,13 @@ public sealed class SearchFacade : ISearchFacade
             return Array.Empty<SearchHitDto>();
         }
 
-        var plan = SearchQueryPlanFactory.FromMatch(query, query);
+        var match = FtsQueryBuilder.BuildMatch(query, prefix: false, allTerms: false, _analyzerFactory);
+        if (string.IsNullOrWhiteSpace(match))
+        {
+            return Array.Empty<SearchHitDto>();
+        }
+
+        var plan = SearchQueryPlanFactory.FromMatch(match, query);
         var hits = await _searchQueryService.SearchAsync(plan, take, ct).ConfigureAwait(false);
         if (hits.Count == 0)
         {
@@ -74,7 +84,7 @@ public sealed class SearchFacade : ISearchFacade
     public async Task AddToHistoryAsync(string query, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        if (!FtsQueryBuilder.TryBuild(query, prefix: true, allTerms: false, out var matchQuery))
+        if (!FtsQueryBuilder.TryBuild(query, prefix: true, allTerms: false, _analyzerFactory, out var matchQuery))
         {
             return;
         }

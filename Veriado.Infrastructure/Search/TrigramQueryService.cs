@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
@@ -14,10 +17,14 @@ internal sealed class TrigramQueryService
     private const char Ellipsis = '…';
 
     private readonly InfrastructureOptions _options;
+    private readonly ISearchTelemetry _telemetry;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
-    public TrigramQueryService(InfrastructureOptions options)
+    public TrigramQueryService(InfrastructureOptions options, ISearchTelemetry telemetry, IAnalyzerFactory analyzerFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -50,7 +57,7 @@ internal sealed class TrigramQueryService
             return Array.Empty<(Guid, double)>();
         }
 
-        var queryTokens = ExtractTokens(trigramQuery);
+        var queryTokens = BuildTokenSet(plan.RawQueryText ?? trigramQuery);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<(Guid, double)>();
@@ -140,14 +147,13 @@ internal sealed class TrigramQueryService
             return Array.Empty<SearchHit>();
         }
 
-        if (!TrigramQueryBuilder.TryBuild(trigramQuery, requireAllTerms: false, out var matchQuery))
+        var normalizedQuery = NormalizeForTrigram(trigramQuery);
+        if (!TrigramQueryBuilder.TryBuild(normalizedQuery, requireAllTerms: false, out var matchQuery))
         {
             return Array.Empty<SearchHit>();
         }
 
-        var queryTokens = TrigramQueryBuilder.BuildTrigrams(trigramQuery)
-            .Select(static token => token.ToLowerInvariant())
-            .ToHashSet(StringComparer.Ordinal);
+        var queryTokens = BuildTokenSet(plan.RawQueryText ?? trigramQuery);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<SearchHit>();
@@ -261,6 +267,35 @@ internal sealed class TrigramQueryService
         }
 
         return Math.Clamp((double)intersection / union, 0d, 1d);
+    }
+
+    private string NormalizeForTrigram(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var tokens = TextNormalization
+            .Tokenize(text, _analyzerFactory)
+            .Where(static token => !string.IsNullOrWhiteSpace(token))
+            .ToArray();
+
+        return tokens.Length == 0 ? string.Empty : string.Join(' ', tokens);
+    }
+
+    private HashSet<string> BuildTokenSet(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return TextNormalization
+            .Tokenize(text, _analyzerFactory)
+            .Where(static token => !string.IsNullOrWhiteSpace(token))
+            .Select(static token => token)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private static HashSet<string> ExtractTokens(string text)

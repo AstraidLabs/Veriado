@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using AutoMapper.QueryableExtensions;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
@@ -19,6 +21,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
     private readonly IClock _clock;
     private readonly FileGridQueryOptions _options;
     private readonly IMapper _mapper;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileGridQueryHandler"/> class.
@@ -30,7 +33,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         ISearchFavoritesService favoritesService,
         IClock clock,
         FileGridQueryOptions options,
-        IMapper mapper)
+        IMapper mapper,
+        IAnalyzerFactory analyzerFactory)
     {
         _contextFactory = contextFactory;
         _searchQueryService = searchQueryService;
@@ -39,6 +43,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         _clock = clock;
         _options = options;
         _mapper = mapper;
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     /// <inheritdoc />
@@ -72,7 +77,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
         if (dto.Fuzzy && !string.IsNullOrWhiteSpace(dto.Text))
         {
-            if (TrigramQueryBuilder.TryBuild(dto.Text!, dto.TextAllTerms, out var builtFuzzy))
+            var normalizedFuzzy = NormalizeForTrigram(dto.Text!);
+            if (TrigramQueryBuilder.TryBuild(normalizedFuzzy, dto.TextAllTerms, out var builtFuzzy))
             {
                 fuzzyMatchQuery = builtFuzzy;
                 fuzzyRequestedByDto = true;
@@ -84,7 +90,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
         if (!string.IsNullOrWhiteSpace(dto.Text) && string.IsNullOrWhiteSpace(matchQuery) && !(favorite?.IsFuzzy ?? false))
         {
-            if (FtsQueryBuilder.TryBuild(dto.Text!, dto.TextPrefix, dto.TextAllTerms, out var built))
+            if (FtsQueryBuilder.TryBuild(dto.Text!, dto.TextPrefix, dto.TextAllTerms, _analyzerFactory, out var built))
             {
                 matchQuery = built;
             }
@@ -411,6 +417,21 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         });
 
         return summaries;
+    }
+
+    private string NormalizeForTrigram(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var tokens = TextNormalization
+            .Tokenize(text, _analyzerFactory)
+            .Where(static token => !string.IsNullOrWhiteSpace(token))
+            .ToArray();
+
+        return tokens.Length == 0 ? string.Empty : string.Join(' ', tokens);
     }
 
     private static int CompareSummaries(FileSummaryDto left, FileSummaryDto right, string field)

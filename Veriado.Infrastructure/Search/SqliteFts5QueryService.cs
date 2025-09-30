@@ -36,11 +36,13 @@ internal sealed class SqliteFts5QueryService
 
     private readonly InfrastructureOptions _options;
     private readonly ISearchTelemetry _telemetry;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
-    public SqliteFts5QueryService(InfrastructureOptions options, ISearchTelemetry telemetry)
+    public SqliteFts5QueryService(InfrastructureOptions options, ISearchTelemetry telemetry, IAnalyzerFactory analyzerFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -79,7 +81,8 @@ internal sealed class SqliteFts5QueryService
         command.Parameters.Add("$query", SqliteType.Text).Value = plan.MatchExpression;
         command.Parameters.Add("$take", SqliteType.Integer).Value = take;
         command.Parameters.Add("$skip", SqliteType.Integer).Value = skip;
-        command.Parameters.Add("$raw", SqliteType.Text).Value = plan.RawQueryText ?? plan.MatchExpression;
+        var normalizedRaw = NormalizeForMatch(plan.RawQueryText, plan.MatchExpression);
+        command.Parameters.Add("$raw", SqliteType.Text).Value = normalizedRaw;
         ApplyPlanParameters(command, plan);
 
         var results = new List<(Guid, double)>();
@@ -188,7 +191,8 @@ internal sealed class SqliteFts5QueryService
         command.CommandText = BuildHitQuery(plan, bm25Expression, rankExpression, hasCustomSimilarity);
         command.Parameters.Add("$query", SqliteType.Text).Value = plan.MatchExpression;
         command.Parameters.Add("$take", SqliteType.Integer).Value = take;
-        command.Parameters.Add("$raw", SqliteType.Text).Value = plan.RawQueryText ?? plan.MatchExpression;
+        var normalizedRaw = NormalizeForMatch(plan.RawQueryText, plan.MatchExpression);
+        command.Parameters.Add("$raw", SqliteType.Text).Value = normalizedRaw;
         ApplyPlanParameters(command, plan);
 
         var hits = new List<SearchHit>(take);
@@ -362,9 +366,9 @@ internal sealed class SqliteFts5QueryService
         builder.Append(
             "SELECT s.rowid, " +
             "       m.file_id, " +
-            "       COALESCE(s.title, '') AS title, " +
-            "       COALESCE(s.mime, '') AS mime, " +
-            "       COALESCE(s.author, '') AS author, " +
+            "       COALESCE(f.title, s.title, '') AS title, " +
+            "       COALESCE(f.mime, s.mime, '') AS mime, " +
+            "       COALESCE(f.author, s.author, '') AS author, " +
             "       COALESCE(s.metadata_text, '') AS metadata_text, " +
             "       COALESCE(s.metadata, '') AS metadata_json, " +
             "       snippet(s, 0, '', '', '…', 32) AS snippet_title, " +
@@ -403,6 +407,12 @@ internal sealed class SqliteFts5QueryService
         }
 
         return expression.Replace("bm25_score", bm25Expression, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string NormalizeForMatch(string? raw, string fallback)
+    {
+        var source = string.IsNullOrWhiteSpace(raw) ? fallback : raw!;
+        return TextNormalization.NormalizeText(source, _analyzerFactory);
     }
 
     private static void AppendWhereClauses(StringBuilder builder, SearchQueryPlan plan)

@@ -31,7 +31,7 @@ internal sealed class AppHost : IAsyncDisposable
     {
         var host = Host
             .CreateDefaultBuilder()
-            .ConfigureServices((_, services) =>
+            .ConfigureServices((context, services) =>
             {
                 var messenger = WeakReferenceMessenger.Default;
                 services.AddSingleton(messenger);
@@ -64,7 +64,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddWinUiShell();
 
                 services.AddVeriadoMapping();
-                services.AddInfrastructure(options =>
+                services.AddInfrastructure(context.Configuration, options =>
                 {
                     var databasePath = infrastructureConfig.GetDatabasePath();
                     infrastructureConfig.EnsureStorageExists(databasePath);
