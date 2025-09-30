@@ -13,17 +13,20 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
     private readonly TrigramQueryService _trigramService;
     private readonly ISearchTelemetry _telemetry;
     private readonly SearchScoreOptions _scoreOptions;
+    private readonly SearchParseOptions _parseOptions;
 
     public HybridSearchQueryService(
         SqliteFts5QueryService ftsService,
         TrigramQueryService trigramService,
         ISearchTelemetry telemetry,
-        SearchScoreOptions scoreOptions)
+        SearchScoreOptions scoreOptions,
+        SearchParseOptions parseOptions)
     {
         _ftsService = ftsService ?? throw new ArgumentNullException(nameof(ftsService));
         _trigramService = trigramService ?? throw new ArgumentNullException(nameof(trigramService));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _scoreOptions = scoreOptions ?? throw new ArgumentNullException(nameof(scoreOptions));
+        _parseOptions = parseOptions ?? throw new ArgumentNullException(nameof(parseOptions));
     }
 
     public Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -66,14 +69,16 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
 
         var oversampleMultiplier = Math.Max(1, _scoreOptions.OversampleMultiplier);
         var oversample = Math.Max(take * oversampleMultiplier, take);
+        var ftsResult = FtsSearchResult.Empty;
         IReadOnlyList<SearchHit> ftsHits = Array.Empty<SearchHit>();
         if (!string.IsNullOrWhiteSpace(plan.MatchExpression))
         {
-            ftsHits = await _ftsService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
+            ftsResult = await _ftsService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
+            ftsHits = ftsResult.Hits;
         }
 
         IReadOnlyList<SearchHit> trigramHits = Array.Empty<SearchHit>();
-        if (plan.RequiresTrigramFallback)
+        if (ShouldRunTrigram(plan, ftsResult))
         {
             trigramHits = await _trigramService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
         }
@@ -142,6 +147,52 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         _telemetry.RecordSearchLatency(stopwatch.Elapsed);
 
         return ordered;
+    }
+
+    private bool ShouldRunTrigram(SearchQueryPlan plan, FtsSearchResult ftsResult)
+    {
+        if (plan.RequiresTrigramFallback)
+        {
+            return true;
+        }
+
+        if (plan.RequiresTrigramForWildcard)
+        {
+            return true;
+        }
+
+        var hitCount = ftsResult.HitCount;
+        if (hitCount == 0)
+        {
+            return true;
+        }
+
+        if (plan.HasPrefix)
+        {
+            var prefixMin = Math.Max(0, _parseOptions.PrefixMinResults);
+            if (hitCount < prefixMin)
+            {
+                return true;
+            }
+        }
+
+        if (plan.HasExplicitFuzzy || plan.HasHeuristicFuzzy)
+        {
+            var fuzzyMin = Math.Max(0, _parseOptions.FuzzyMinResults);
+            if (hitCount < fuzzyMin)
+            {
+                return true;
+            }
+
+            var threshold = Math.Clamp(_parseOptions.FuzzyScoreThreshold, 0d, 1d);
+            var topScore = ftsResult.TopNormalizedScore ?? 0d;
+            if (topScore < threshold)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static SearchHit MergeHits(SearchHit primary, SearchHit secondary)
