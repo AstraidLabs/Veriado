@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Veriado.Appl.Search;
@@ -30,13 +31,80 @@ public static class FtsQueryBuilder
         }
 
         var combinator = allTerms ? " AND " : " OR ";
-        var matchTokens = tokens
-            .Select(token => prefix ? TextNormalization.BuildMatchPrefix(token) : TextNormalization.EscapeMatchToken(token))
-            .Where(static token => !string.IsNullOrWhiteSpace(token))
-            .ToArray();
+        var matchTokens = new List<string>(tokens.Length);
+        foreach (var token in tokens)
+        {
+            if (IsReservedWord(token))
+            {
+                if (OriginatesFromRawInput(text, token))
+                {
+                    continue;
+                }
 
-        return matchTokens.Length == 0 ? string.Empty : string.Join(combinator, matchTokens);
+                var escapedReserved = TextNormalization.EscapeMatchToken(token);
+                if (!string.IsNullOrWhiteSpace(escapedReserved))
+                {
+                    matchTokens.Add($"\"{escapedReserved}\"");
+                }
+
+                continue;
+            }
+
+            var matchToken = prefix
+                ? TextNormalization.BuildMatchPrefix(token)
+                : TextNormalization.EscapeMatchToken(token);
+
+            if (!string.IsNullOrWhiteSpace(matchToken))
+            {
+                matchTokens.Add(matchToken);
+            }
+        }
+
+        return matchTokens.Count == 0 ? string.Empty : string.Join(combinator, matchTokens);
     }
+
+    private static bool OriginatesFromRawInput(string rawText, string token)
+    {
+        if (string.IsNullOrEmpty(rawText))
+        {
+            return true;
+        }
+
+        var searchIndex = 0;
+        while (true)
+        {
+            searchIndex = rawText.IndexOf(token, searchIndex, StringComparison.OrdinalIgnoreCase);
+            if (searchIndex < 0)
+            {
+                return false;
+            }
+
+            var preceding = searchIndex == 0 || !IsWordCharacter(rawText[searchIndex - 1]);
+            var followingIndex = searchIndex + token.Length;
+            var following = followingIndex >= rawText.Length || !IsWordCharacter(rawText[followingIndex]);
+
+            if (preceding && following)
+            {
+                return true;
+            }
+
+            searchIndex += token.Length;
+        }
+    }
+
+    private static bool IsWordCharacter(char character)
+        => char.IsLetterOrDigit(character) || character == '_';
+
+    private static bool IsReservedWord(string token)
+        => s_reservedWords.Contains(token);
+
+    private static readonly HashSet<string> s_reservedWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and",
+        "or",
+        "not",
+        "near",
+    };
 
     /// <summary>
     /// Attempts to build a match expression from the provided text.
