@@ -13,7 +13,14 @@ public abstract record QueryNode;
 /// <param name="Field">The optional field restriction.</param>
 /// <param name="Value">The processed token value.</param>
 /// <param name="TokenType">The token type.</param>
-public sealed record TokenNode(string? Field, string Value, QueryTokenType TokenType) : QueryNode;
+/// <param name="TrigramExpression">Optional trigram expression associated with the token.</param>
+/// <param name="RequiresAllTrigramTerms">Indicates whether all trigram terms must match.</param>
+public sealed record TokenNode(
+    string? Field,
+    string Value,
+    QueryTokenType TokenType,
+    string? TrigramExpression = null,
+    bool RequiresAllTrigramTerms = false) : QueryNode;
 
 /// <summary>
 /// Represents a boolean combination of nodes.

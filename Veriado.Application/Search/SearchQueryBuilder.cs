@@ -56,11 +56,9 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private readonly List<string> _whereClauses = new();
     private readonly List<SqliteParameterDefinition> _parameters = new();
     private readonly SearchScorePlan _scorePlan = new();
-    private readonly List<(string Expression, bool RequireAll)> _trigramExpressions = new();
     private readonly ISynonymProvider _synonymProvider;
     private readonly string _language;
 
-    private bool _requiresTrigramFallback;
     private int _parameterIndex;
 
     /// <summary>
@@ -155,14 +153,18 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// <inheritdoc />
     public QueryNode? Fuzzy(string? field, string term, bool requireAllTerms = false)
     {
-        var expression = TrigramQueryBuilder.BuildTrigramMatch(term ?? string.Empty, requireAllTerms);
-        if (!string.IsNullOrWhiteSpace(expression))
+        if (Term(field, term) is not TokenNode token)
         {
-            _requiresTrigramFallback = true;
-            _trigramExpressions.Add((expression, requireAllTerms));
+            return null;
         }
 
-        return Term(field, term);
+        var expression = TrigramQueryBuilder.BuildTrigramMatch(term ?? string.Empty, requireAllTerms);
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            return token;
+        }
+
+        return token with { TrigramExpression = expression, RequiresAllTrigramTerms = requireAllTerms };
     }
 
     /// <inheritdoc />
@@ -291,13 +293,14 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             throw new InvalidOperationException("Search query must produce a non-empty MATCH expression.");
         }
 
-        var trigramExpression = BuildTrigramExpression();
+        var trigramExpression = BuildTrigramExpression(root);
+        var requiresTrigramFallback = !string.IsNullOrWhiteSpace(trigramExpression);
         return new SearchQueryPlan(
             match,
             _whereClauses.AsReadOnly(),
             _parameters.AsReadOnly(),
             _scorePlan,
-            _requiresTrigramFallback,
+            requiresTrigramFallback,
             trigramExpression,
             rawQuery);
     }
@@ -543,32 +546,93 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private static string EscapeQuotes(string value)
         => value.Replace("\"", "\"\"");
 
-    private string BuildTrigramExpression()
+    private string BuildTrigramExpression(QueryNode? node)
     {
-        if (_trigramExpressions.Count == 0)
+        if (node is null)
         {
             return string.Empty;
         }
 
-        if (_trigramExpressions.Count == 1)
-        {
-            return _trigramExpressions[0].Expression;
-        }
+        var expression = BuildTrigramExpressionInternal(node);
+        return string.IsNullOrWhiteSpace(expression) ? string.Empty : expression!;
+    }
 
-        var builder = new StringBuilder();
-        for (var index = 0; index < _trigramExpressions.Count; index++)
+    private string? BuildTrigramExpressionInternal(QueryNode node)
+    {
+        return node switch
         {
-            var current = _trigramExpressions[index];
-            if (index > 0)
+            TokenNode { TrigramExpression: { Length: > 0 } expression } => expression,
+            TokenNode => null,
+            BooleanNode boolean => BuildBooleanTrigramExpression(boolean),
+            NotNode notNode => BuildNotTrigramExpression(notNode),
+            _ => null,
+        };
+    }
+
+    private string? BuildBooleanTrigramExpression(BooleanNode node)
+    {
+        var parts = new List<string>();
+        foreach (var child in node.Children)
+        {
+            var expression = BuildTrigramExpressionInternal(child);
+            if (string.IsNullOrWhiteSpace(expression))
             {
-                var op = current.RequireAll ? " AND " : " OR ";
-                builder.Append(op);
+                continue;
             }
 
-            builder.Append('(').Append(current.Expression).Append(')');
+            parts.Add(WrapTrigram(expression));
         }
 
-        return builder.ToString();
+        if (parts.Count == 0)
+        {
+            return null;
+        }
+
+        if (parts.Count == 1)
+        {
+            return parts[0];
+        }
+
+        var op = node.Operator == BooleanOperator.And ? " AND " : " OR ";
+        return "(" + string.Join(op, parts) + ")";
+    }
+
+    private string? BuildNotTrigramExpression(NotNode node)
+    {
+        var operand = BuildTrigramExpressionInternal(node.Operand);
+        if (string.IsNullOrWhiteSpace(operand))
+        {
+            return null;
+        }
+
+        return "NOT " + WrapTrigram(operand);
+    }
+
+    private static string WrapTrigram(string expression)
+    {
+        var trimmed = expression.Trim();
+        if (trimmed.Length == 0)
+        {
+            return trimmed;
+        }
+
+        if (trimmed.StartsWith('(') && trimmed.EndsWith(')'))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.StartsWith("NOT ", StringComparison.OrdinalIgnoreCase))
+        {
+            return "(" + trimmed + ")";
+        }
+
+        if (trimmed.Contains(" AND ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains(" OR ", StringComparison.OrdinalIgnoreCase))
+        {
+            return "(" + trimmed + ")";
+        }
+
+        return trimmed;
     }
 
     private (string Clause, SqliteParameterDefinition Parameter)? CreateParameter(
