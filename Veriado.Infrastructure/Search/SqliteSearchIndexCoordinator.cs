@@ -14,19 +14,22 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
     private readonly ILogger<SqliteSearchIndexCoordinator> _logger;
     private readonly OutboxDrainService _outboxDrainService;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly TrigramIndexOptions _trigramOptions;
 
     public SqliteSearchIndexCoordinator(
         ISearchIndexer searchIndexer,
         InfrastructureOptions options,
         ILogger<SqliteSearchIndexCoordinator> logger,
         OutboxDrainService outboxDrainService,
-        IAnalyzerFactory analyzerFactory)
+        IAnalyzerFactory analyzerFactory,
+        TrigramIndexOptions trigramOptions)
     {
         _searchIndexer = searchIndexer;
         _options = options;
         _logger = logger;
         _outboxDrainService = outboxDrainService;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
     }
 
     public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken)
@@ -56,7 +59,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         if (sqliteTransaction is not null)
         {
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional(_analyzerFactory);
+            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
             await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, beforeCommit: null, cancellationToken)
                 .ConfigureAwait(false);
             return true;

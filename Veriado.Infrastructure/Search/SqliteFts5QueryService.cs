@@ -463,7 +463,7 @@ internal sealed class SqliteFts5QueryService
         return normalized;
     }
 
-    private static IReadOnlyList<HighlightSpan> BuildHighlights(
+    private static List<HighlightSpan> BuildHighlights(
         int columnIndex,
         string snippet,
         IReadOnlyDictionary<int, string> columnValues,
@@ -471,12 +471,12 @@ internal sealed class SqliteFts5QueryService
     {
         if (!offsetsByColumn.TryGetValue(columnIndex, out var offsets) || offsets.Count == 0)
         {
-            return Array.Empty<HighlightSpan>();
+            return new List<HighlightSpan>();
         }
 
         if (!columnValues.TryGetValue(columnIndex, out var columnText) || string.IsNullOrEmpty(columnText))
         {
-            return Array.Empty<HighlightSpan>();
+            return new List<HighlightSpan>();
         }
 
         if (!ColumnNameMap.TryGetValue(columnIndex, out var field))
@@ -492,7 +492,7 @@ internal sealed class SqliteFts5QueryService
         var map = BuildSnippetIndexMap(columnText, snippet);
         if (map.Count == 0)
         {
-            return Array.Empty<HighlightSpan>();
+            return new List<HighlightSpan>();
         }
 
         var columnBytes = Utf8.GetBytes(columnText);

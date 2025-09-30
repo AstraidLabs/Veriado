@@ -12,16 +12,19 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     private readonly SuggestionMaintenanceService? _suggestionMaintenance;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
+    private readonly TrigramIndexOptions _trigramOptions;
 
     public SqliteFts5Indexer(
         InfrastructureOptions options,
         IAnalyzerFactory analyzerFactory,
         ISqliteConnectionFactory connectionFactory,
+        TrigramIndexOptions trigramOptions,
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _suggestionMaintenance = suggestionMaintenance;
     }
 
@@ -60,7 +63,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
-        var helper = new SqliteFts5Transactional(_analyzerFactory);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
 
         try
         {
@@ -95,7 +98,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
-        var helper = new SqliteFts5Transactional(_analyzerFactory);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
 
         try
         {
