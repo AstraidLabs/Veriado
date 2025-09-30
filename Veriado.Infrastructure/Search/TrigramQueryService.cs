@@ -49,15 +49,21 @@ internal sealed class TrigramQueryService
             return Array.Empty<(Guid, double)>();
         }
 
-        var trigramQuery = !string.IsNullOrWhiteSpace(plan.TrigramExpression)
+        var trigramSource = !string.IsNullOrWhiteSpace(plan.TrigramExpression)
             ? plan.TrigramExpression
             : plan.MatchExpression;
-        if (string.IsNullOrWhiteSpace(trigramQuery))
+        if (string.IsNullOrWhiteSpace(trigramSource))
         {
             return Array.Empty<(Guid, double)>();
         }
 
-        var queryTokens = BuildTokenSet(plan.RawQueryText ?? trigramQuery);
+        var normalizedQuery = NormalizeForTrigram(trigramSource);
+        if (!TrigramQueryBuilder.TryBuild(normalizedQuery, requireAllTerms: false, out var trigramQuery))
+        {
+            return Array.Empty<(Guid, double)>();
+        }
+
+        var queryTokens = BuildTokenSet(plan.RawQueryText ?? normalizedQuery);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<(Guid, double)>();
