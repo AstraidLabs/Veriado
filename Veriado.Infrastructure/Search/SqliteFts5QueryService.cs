@@ -1,6 +1,8 @@
+using System;
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Veriado.Appl.Search;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -39,12 +41,12 @@ internal sealed class SqliteFts5QueryService
     }
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
-        string matchQuery,
+        SearchQueryPlan plan,
         int skip,
         int take,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
+        ArgumentNullException.ThrowIfNull(plan);
         if (take <= 0)
         {
             return Array.Empty<(Guid, double)>();
@@ -60,41 +62,69 @@ internal sealed class SqliteFts5QueryService
             return Array.Empty<(Guid, double)>();
         }
 
+        if (string.IsNullOrWhiteSpace(plan.MatchExpression))
+        {
+            return Array.Empty<(Guid, double)>();
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT m.file_id, bm25(s, 4.0, 0.1, 2.0, 0.8, 0.2) AS score " +
-            "FROM file_search s " +
-            "JOIN file_search_map m ON s.rowid = m.rowid " +
-            "JOIN files f ON f.id = m.file_id " +
-            "WHERE file_search MATCH $query " +
-            "ORDER BY score, f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE " +
-            "LIMIT $take OFFSET $skip;";
-        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
+        var (bm25Expression, rankExpression) = BuildRankExpressions(plan.ScorePlan);
+        command.CommandText = BuildScoreQuery(plan, bm25Expression, rankExpression);
+        command.Parameters.Add("$query", SqliteType.Text).Value = plan.MatchExpression;
         command.Parameters.Add("$take", SqliteType.Integer).Value = take;
         command.Parameters.Add("$skip", SqliteType.Integer).Value = skip;
-        command.Parameters.Add("$raw", SqliteType.Text).Value = matchQuery;
+        command.Parameters.Add("$raw", SqliteType.Text).Value = plan.RawQueryText ?? plan.MatchExpression;
+        ApplyPlanParameters(command, plan);
 
         var results = new List<(Guid, double)>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var hasCustomSimilarity = !string.IsNullOrWhiteSpace(plan.ScorePlan.CustomSimilaritySql);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var idBytes = (byte[])reader[0];
             var id = new Guid(idBytes);
-            var rawScore = reader.IsDBNull(1) ? double.PositiveInfinity : reader.GetDouble(1);
-            var score = NormalizeScore(rawScore);
+            var bm25Score = reader.IsDBNull(1) ? double.PositiveInfinity : reader.GetDouble(1);
+            var rawScore = reader.IsDBNull(2) ? bm25Score : reader.GetDouble(2);
+            double? customSimilarity = null;
+            DateTimeOffset? lastModified = null;
+            var offset = 3;
+            if (hasCustomSimilarity)
+            {
+                customSimilarity = reader.IsDBNull(offset) ? null : reader.GetDouble(offset);
+                offset++;
+            }
+
+            if (!reader.IsDBNull(offset))
+            {
+                var modifiedUtcRaw = reader.GetString(offset);
+                lastModified = DateTimeOffset.Parse(modifiedUtcRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            }
+
+            var score = ComputeNormalizedScore(rawScore, plan.ScorePlan);
+            if (plan.ScorePlan.CustomSimilarityDelegate is not null)
+            {
+                var adjusted = plan.ScorePlan.CustomSimilarityDelegate(bm25Score, customSimilarity, lastModified);
+                score = Math.Clamp(adjusted, 0d, 1d);
+            }
+
             results.Add((id, score));
         }
 
         return results;
     }
 
-    public async Task<int> CountAsync(string matchQuery, CancellationToken cancellationToken)
+    public async Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
+        ArgumentNullException.ThrowIfNull(plan);
         if (!_options.IsFulltextAvailable)
+        {
+            return 0;
+        }
+
+        if (string.IsNullOrWhiteSpace(plan.MatchExpression))
         {
             return 0;
         }
@@ -103,16 +133,27 @@ internal sealed class SqliteFts5QueryService
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM file_search WHERE file_search MATCH $query;";
-        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
+        var builder = new StringBuilder();
+        builder.Append("SELECT COUNT(*) FROM file_search s ");
+        builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
+        builder.Append("JOIN files f ON f.id = m.file_id ");
+        builder.Append("WHERE file_search MATCH $query ");
+        AppendWhereClauses(builder, plan);
+        builder.Append(';');
+        command.CommandText = builder.ToString();
+        command.Parameters.Add("$query", SqliteType.Text).Value = plan.MatchExpression;
+        ApplyPlanParameters(command, plan);
 
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is long value ? (int)value : 0;
     }
 
-    public async Task<IReadOnlyList<SearchHit>> SearchAsync(string matchQuery, int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(
+        SearchQueryPlan plan,
+        int take,
+        CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
+        ArgumentNullException.ThrowIfNull(plan);
         if (take <= 0)
         {
             return Array.Empty<SearchHit>();
@@ -123,48 +164,35 @@ internal sealed class SqliteFts5QueryService
             return Array.Empty<SearchHit>();
         }
 
+        if (string.IsNullOrWhiteSpace(plan.MatchExpression))
+        {
+            return Array.Empty<SearchHit>();
+        }
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT s.rowid, " +
-            "       m.file_id, " +
-            "       COALESCE(s.title, '') AS title, " +
-            "       COALESCE(s.mime, '') AS mime, " +
-            "       COALESCE(s.author, '') AS author, " +
-            "       COALESCE(s.metadata_text, '') AS metadata_text, " +
-            "       COALESCE(s.metadata, '') AS metadata_json, " +
-            "       snippet(s, 0, '', '', '…', 32) AS snippet_title, " +
-            "       snippet(s, 1, '', '', '…', 24) AS snippet_mime, " +
-            "       snippet(s, 2, '', '', '…', 24) AS snippet_author, " +
-            "       snippet(s, 3, '', '', '…', 32) AS snippet_metadata_text, " +
-            "       snippet(s, 4, '', '', '…', 32) AS snippet_metadata_json, " +
-            "       offsets(s) AS offsets, " +
-            "       bm25(s, 4.0, 0.1, 2.0, 0.8, 0.2) AS score, " +
-            "       f.modified_utc " +
-            "FROM file_search s " +
-            "JOIN file_search_map m ON s.rowid = m.rowid " +
-            "JOIN files f ON f.id = m.file_id " +
-            "WHERE file_search MATCH $query " +
-            "ORDER BY score, f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE " +
-            "LIMIT $take;";
-        command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
+        var (bm25Expression, rankExpression) = BuildRankExpressions(plan.ScorePlan);
+        var hasCustomSimilarity = !string.IsNullOrWhiteSpace(plan.ScorePlan.CustomSimilaritySql);
+        command.CommandText = BuildHitQuery(plan, bm25Expression, rankExpression, hasCustomSimilarity);
+        command.Parameters.Add("$query", SqliteType.Text).Value = plan.MatchExpression;
         command.Parameters.Add("$take", SqliteType.Integer).Value = take;
-        command.Parameters.Add("$raw", SqliteType.Text).Value = matchQuery;
+        command.Parameters.Add("$raw", SqliteType.Text).Value = plan.RawQueryText ?? plan.MatchExpression;
+        ApplyPlanParameters(command, plan);
 
         var hits = new List<SearchHit>(take);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var hit = MapHit(reader);
+            var hit = MapHit(reader, plan.ScorePlan, hasCustomSimilarity);
             hits.Add(hit);
         }
 
         return hits;
     }
 
-    private SearchHit MapHit(SqliteDataReader reader)
+    private SearchHit MapHit(SqliteDataReader reader, SearchScorePlan scorePlan, bool hasCustomSimilarity)
     {
         var fileIdBytes = (byte[])reader[1];
         var id = new Guid(fileIdBytes);
@@ -185,8 +213,17 @@ internal sealed class SqliteFts5QueryService
 
         var offsetsRaw = ReadValue(reader, 12);
         var offsetsByColumn = ParseOffsets(offsetsRaw);
-        var rawScore = reader.IsDBNull(13) ? double.PositiveInfinity : reader.GetDouble(13);
-        var modifiedUtcRaw = reader.GetString(14);
+        var bm25Score = reader.IsDBNull(13) ? double.PositiveInfinity : reader.GetDouble(13);
+        var rawScore = reader.IsDBNull(14) ? bm25Score : reader.GetDouble(14);
+        double? customSimilarity = null;
+        var modifiedIndex = 15;
+        if (hasCustomSimilarity)
+        {
+            customSimilarity = reader.IsDBNull(modifiedIndex) ? null : reader.GetDouble(modifiedIndex);
+            modifiedIndex++;
+        }
+
+        var modifiedUtcRaw = reader.GetString(modifiedIndex);
         var modifiedUtc = DateTimeOffset.Parse(modifiedUtcRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
         var columnValues = new Dictionary<int, string>
@@ -218,8 +255,14 @@ internal sealed class SqliteFts5QueryService
         var highlights = BuildHighlights(selectedColumn, snippetText, columnValues, offsetsByColumn);
         var fields = BuildFields(title, mime, author, metadataText, metadataJson);
         fields["last_modified_utc"] = modifiedUtc.ToString("O", CultureInfo.InvariantCulture);
-        var normalizedScore = NormalizeScore(rawScore);
-        var sort = new SearchHitSortValues(modifiedUtc, normalizedScore, rawScore);
+        var normalizedScore = ComputeNormalizedScore(rawScore, scorePlan);
+        if (scorePlan.CustomSimilarityDelegate is not null)
+        {
+            var adjusted = scorePlan.CustomSimilarityDelegate(bm25Score, customSimilarity, modifiedUtc);
+            normalizedScore = Math.Clamp(adjusted, 0d, 1d);
+        }
+
+        var sort = new SearchHitSortValues(modifiedUtc, normalizedScore, rawScore, customSimilarity);
 
         return new SearchHit(
             id,
@@ -230,6 +273,161 @@ internal sealed class SqliteFts5QueryService
             highlights,
             fields,
             sort);
+    }
+
+    private static (string Bm25Expression, string RankExpression) BuildRankExpressions(SearchScorePlan scorePlan)
+    {
+        var bm25 = string.Format(
+            CultureInfo.InvariantCulture,
+            "bm25(s, {0}, {1}, {2}, {3}, {4})",
+            scorePlan.TitleWeight,
+            scorePlan.MimeWeight,
+            scorePlan.AuthorWeight,
+            scorePlan.MetadataTextWeight,
+            scorePlan.MetadataWeight);
+
+        string rank;
+        if (!string.IsNullOrWhiteSpace(scorePlan.CustomRankExpression))
+        {
+            rank = ExpandCustomExpression(scorePlan.CustomRankExpression, bm25);
+        }
+        else if (scorePlan.UseTfIdfAlternative)
+        {
+            rank = string.Format(
+                CultureInfo.InvariantCulture,
+                "(1.0 / ({0} + {1}))",
+                scorePlan.TfIdfDampingFactor,
+                bm25);
+        }
+        else
+        {
+            rank = bm25;
+        }
+
+        if (Math.Abs(scorePlan.ScoreMultiplier - 1d) > double.Epsilon)
+        {
+            rank = string.Format(CultureInfo.InvariantCulture, "({0} * {1})", rank, scorePlan.ScoreMultiplier);
+        }
+
+        return (bm25, rank);
+    }
+
+    private string BuildScoreQuery(SearchQueryPlan plan, string bm25Expression, string rankExpression)
+    {
+        var builder = new StringBuilder();
+        builder.Append("SELECT m.file_id, ");
+        builder.Append(bm25Expression).Append(" AS bm25_score, ");
+        builder.Append(rankExpression).Append(" AS score");
+
+        var customSimilarity = ExpandCustomExpression(plan.ScorePlan.CustomSimilaritySql, bm25Expression);
+        if (!string.IsNullOrWhiteSpace(customSimilarity))
+        {
+            builder.Append(", ").Append(customSimilarity).Append(" AS custom_similarity");
+        }
+
+        builder.Append(", f.modified_utc ");
+        builder.Append("FROM file_search s ");
+        builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
+        builder.Append("JOIN files f ON f.id = m.file_id ");
+        builder.Append("WHERE file_search MATCH $query ");
+        AppendWhereClauses(builder, plan);
+        builder.Append("ORDER BY score ");
+        builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
+        builder.Append(", f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE ");
+        builder.Append("LIMIT $take OFFSET $skip;");
+        return builder.ToString();
+    }
+
+    private string BuildHitQuery(
+        SearchQueryPlan plan,
+        string bm25Expression,
+        string rankExpression,
+        bool hasCustomSimilarity)
+    {
+        var builder = new StringBuilder();
+        builder.Append(
+            "SELECT s.rowid, " +
+            "       m.file_id, " +
+            "       COALESCE(s.title, '') AS title, " +
+            "       COALESCE(s.mime, '') AS mime, " +
+            "       COALESCE(s.author, '') AS author, " +
+            "       COALESCE(s.metadata_text, '') AS metadata_text, " +
+            "       COALESCE(s.metadata, '') AS metadata_json, " +
+            "       snippet(s, 0, '', '', '…', 32) AS snippet_title, " +
+            "       snippet(s, 1, '', '', '…', 24) AS snippet_mime, " +
+            "       snippet(s, 2, '', '', '…', 24) AS snippet_author, " +
+            "       snippet(s, 3, '', '', '…', 32) AS snippet_metadata_text, " +
+            "       snippet(s, 4, '', '', '…', 32) AS snippet_metadata_json, " +
+            "       offsets(s) AS offsets, ");
+        builder.Append(bm25Expression).Append(" AS bm25_score, ");
+        builder.Append(rankExpression).Append(" AS score");
+
+        if (hasCustomSimilarity)
+        {
+            var custom = ExpandCustomExpression(plan.ScorePlan.CustomSimilaritySql, bm25Expression);
+            builder.Append(", ").Append(custom).Append(" AS custom_similarity");
+        }
+
+        builder.Append(", f.modified_utc ");
+        builder.Append("FROM file_search s ");
+        builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
+        builder.Append("JOIN files f ON f.id = m.file_id ");
+        builder.Append("WHERE file_search MATCH $query ");
+        AppendWhereClauses(builder, plan);
+        builder.Append("ORDER BY score ");
+        builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
+        builder.Append(", f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE ");
+        builder.Append("LIMIT $take;");
+        return builder.ToString();
+    }
+
+    private static string ExpandCustomExpression(string? expression, string bm25Expression)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            return string.Empty;
+        }
+
+        return expression.Replace("bm25_score", bm25Expression, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AppendWhereClauses(StringBuilder builder, SearchQueryPlan plan)
+    {
+        foreach (var clause in plan.WhereClauses)
+        {
+            if (!string.IsNullOrWhiteSpace(clause))
+            {
+                builder.Append("AND ").Append(clause).Append(' ');
+            }
+        }
+    }
+
+    private static void ApplyPlanParameters(SqliteCommand command, SearchQueryPlan plan)
+    {
+        foreach (var parameter in plan.Parameters)
+        {
+            SqliteParameter sqliteParameter;
+            if (parameter.Type.HasValue)
+            {
+                sqliteParameter = command.Parameters.Add(parameter.Name, parameter.Type.Value);
+                sqliteParameter.Value = parameter.Value ?? DBNull.Value;
+            }
+            else
+            {
+                sqliteParameter = command.Parameters.AddWithValue(parameter.Name, parameter.Value ?? DBNull.Value);
+            }
+        }
+    }
+
+    private static double ComputeNormalizedScore(double rawScore, SearchScorePlan scorePlan)
+    {
+        var normalized = NormalizeScore(rawScore);
+        if (scorePlan.HigherScoreIsBetter)
+        {
+            return 1d - normalized;
+        }
+
+        return normalized;
     }
 
     private static IReadOnlyList<HighlightSpan> BuildHighlights(

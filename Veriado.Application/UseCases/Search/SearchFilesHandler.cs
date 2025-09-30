@@ -1,4 +1,5 @@
 using AutoMapper;
+using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.Appl.UseCases.Search;
@@ -24,7 +25,8 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     public async Task<IReadOnlyList<SearchHitDto>> Handle(SearchFilesQuery request, CancellationToken cancellationToken)
     {
         Guard.AgainstNullOrWhiteSpace(request.Text, nameof(request.Text));
-        var hits = await _searchQueryService.SearchAsync(request.Text, request.Limit, cancellationToken);
+        var plan = SearchQueryPlanFactory.FromMatch(request.Text, request.Text);
+        var hits = await _searchQueryService.SearchAsync(plan, request.Limit, cancellationToken);
         return _mapper.Map<IReadOnlyList<SearchHitDto>>(hits);
     }
 }

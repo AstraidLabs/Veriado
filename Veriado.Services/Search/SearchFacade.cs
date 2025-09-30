@@ -32,7 +32,8 @@ public sealed class SearchFacade : ISearchFacade
             return Array.Empty<SearchHitDto>();
         }
 
-        var hits = await _searchQueryService.SearchAsync(query, take, ct).ConfigureAwait(false);
+        var plan = SearchQueryPlanFactory.FromMatch(query, query);
+        var hits = await _searchQueryService.SearchAsync(plan, take, ct).ConfigureAwait(false);
         if (hits.Count == 0)
         {
             return Array.Empty<SearchHitDto>();
@@ -61,7 +62,10 @@ public sealed class SearchFacade : ISearchFacade
             return;
         }
 
-        var totalCount = await _searchQueryService.CountAsync(favorite.MatchQuery, ct).ConfigureAwait(false);
+        var plan = favorite.IsFuzzy
+            ? SearchQueryPlanFactory.FromTrigram(favorite.MatchQuery, favorite.QueryText)
+            : SearchQueryPlanFactory.FromMatch(favorite.MatchQuery, favorite.QueryText);
+        var totalCount = await _searchQueryService.CountAsync(plan, ct).ConfigureAwait(false);
         await _historyService
             .AddAsync(favorite.QueryText, favorite.MatchQuery, totalCount, favorite.IsFuzzy, ct)
             .ConfigureAwait(false);
@@ -75,7 +79,8 @@ public sealed class SearchFacade : ISearchFacade
             return;
         }
 
-        var totalCount = await _searchQueryService.CountAsync(matchQuery, ct).ConfigureAwait(false);
+        var plan = SearchQueryPlanFactory.FromMatch(matchQuery, query);
+        var totalCount = await _searchQueryService.CountAsync(plan, ct).ConfigureAwait(false);
         await _historyService.AddAsync(query, matchQuery, totalCount, false, ct).ConfigureAwait(false);
     }
 }

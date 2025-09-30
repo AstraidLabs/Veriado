@@ -1,3 +1,4 @@
+using Veriado.Appl.Search;
 using Veriado.Domain.Search;
 
 namespace Veriado.Appl.Search.Abstractions;
@@ -8,15 +9,15 @@ namespace Veriado.Appl.Search.Abstractions;
 public interface ISearchQueryService
 {
     /// <summary>
-    /// Executes an FTS5 match query and returns the matching file identifiers with scores.
+    /// Executes an FTS5 search query and returns the matching file identifiers with scores.
     /// </summary>
-    /// <param name="matchQuery">The FTS5 match query.</param>
+    /// <param name="plan">The structured query plan.</param>
     /// <param name="skip">The number of results to skip.</param>
     /// <param name="take">The maximum number of results to return.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matching identifiers ordered by relevance.</returns>
     Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
-        string matchQuery,
+        SearchQueryPlan plan,
         int skip,
         int take,
         CancellationToken cancellationToken);
@@ -24,33 +25,33 @@ public interface ISearchQueryService
     /// <summary>
     /// Executes a trigram-based fuzzy match query and returns matching identifiers with scores.
     /// </summary>
-    /// <param name="matchQuery">The trigram FTS5 match query.</param>
+    /// <param name="plan">The structured query plan.</param>
     /// <param name="skip">The number of results to skip.</param>
     /// <param name="take">The maximum number of results to return.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matching identifiers ordered by relevance.</returns>
     Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
-        string matchQuery,
+        SearchQueryPlan plan,
         int skip,
         int take,
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Counts the number of hits returned by the specified match query.
+    /// Counts the number of hits returned by the specified search query.
     /// </summary>
-    /// <param name="matchQuery">The FTS5 match query.</param>
+    /// <param name="plan">The structured query plan.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The number of matching rows.</returns>
-    Task<int> CountAsync(string matchQuery, CancellationToken cancellationToken);
+    Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken);
 
     /// <summary>
     /// Executes a search query returning hydrated search hits including snippets.
     /// </summary>
-    /// <param name="query">The search query text.</param>
+    /// <param name="plan">The structured query plan.</param>
     /// <param name="limit">The optional maximum number of results.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matched search hits.</returns>
-    Task<IReadOnlyList<SearchHit>> SearchAsync(string query, int? limit, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SearchHit>> SearchAsync(SearchQueryPlan plan, int? limit, CancellationToken cancellationToken);
 }
 
 /// <summary>

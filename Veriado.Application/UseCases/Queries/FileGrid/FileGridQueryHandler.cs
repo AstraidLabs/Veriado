@@ -103,8 +103,9 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (fuzzyMode)
         {
             var match = fuzzyMatchQuery!;
+            var plan = SearchQueryPlanFactory.FromTrigram(match, queryText);
             var candidates = await _searchQueryService
-                .SearchFuzzyWithScoresAsync(match, 0, _options.MaxCandidateResults, cancellationToken)
+                .SearchFuzzyWithScoresAsync(plan, 0, _options.MaxCandidateResults, cancellationToken)
                 .ConfigureAwait(false);
 
             if (candidates.Count == 0)
@@ -210,8 +211,9 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (!string.IsNullOrWhiteSpace(matchQuery))
         {
             var match = matchQuery!;
+            var plan = SearchQueryPlanFactory.FromMatch(match, queryText);
             var candidates = await _searchQueryService
-                .SearchWithScoresAsync(match, 0, _options.MaxCandidateResults, cancellationToken)
+                .SearchWithScoresAsync(plan, 0, _options.MaxCandidateResults, cancellationToken)
                 .ConfigureAwait(false);
 
             if (candidates.Count == 0)
