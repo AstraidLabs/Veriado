@@ -57,7 +57,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
             switch (token.Type)
             {
                 case LexTokenType.Operator:
-                    syntaxTokens.Add(SyntaxToken.Operator(token.Operator));
+                    syntaxTokens.Add(SyntaxToken.Operator(token.OperatorKind));
                     break;
                 case LexTokenType.Phrase:
                     if (CreatePhraseNode(token.Value) is { } phraseNode)
@@ -239,7 +239,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
             switch (token.Type)
             {
                 case SyntaxTokenType.Node:
-                    var node = token.Node!;
+                    var node = token.NodeValue!;
                     if (pendingNot % 2 != 0)
                     {
                         node = new NotNode(node);
@@ -343,7 +343,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
         Not,
     }
 
-    private readonly record struct LexToken(LexTokenType Type, string Value, SyntaxTokenType Operator)
+    private readonly record struct LexToken(LexTokenType Type, string Value, SyntaxTokenType OperatorKind)
     {
         public static LexToken Word(string value)
             => new(LexTokenType.Word, value, SyntaxTokenType.Node);
@@ -355,7 +355,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
             => new(LexTokenType.Operator, string.Empty, op);
     }
 
-    private readonly record struct SyntaxToken(SyntaxTokenType Type, QueryNode? Node)
+    private readonly record struct SyntaxToken(SyntaxTokenType Type, QueryNode? NodeValue)
     {
         public static SyntaxToken Node(QueryNode node)
             => new(SyntaxTokenType.Node, node);
