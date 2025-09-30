@@ -17,6 +17,12 @@ internal interface ISqliteConnectionFactory
     /// <param name="cancellationToken">The cancellation token for opening the connection.</param>
     /// <returns>A lease that returns the connection to the pool when disposed.</returns>
     ValueTask<SqliteConnectionLease> CreateConnectionAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Clears any pooled connections so subsequent rentals create fresh instances.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token for the reset operation.</param>
+    ValueTask ResetAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -25,12 +31,14 @@ internal interface ISqliteConnectionFactory
 internal sealed class SqliteConnectionLease : IAsyncDisposable
 {
     private readonly PooledSqliteConnectionFactory _factory;
+    private readonly int _generation;
     private SqliteConnection? _connection;
 
-    internal SqliteConnectionLease(PooledSqliteConnectionFactory factory, SqliteConnection connection)
+    internal SqliteConnectionLease(PooledSqliteConnectionFactory factory, SqliteConnection connection, int generation)
     {
         _factory = factory;
         _connection = connection;
+        _generation = generation;
     }
 
     /// <summary>
@@ -48,7 +56,7 @@ internal sealed class SqliteConnectionLease : IAsyncDisposable
             return ValueTask.CompletedTask;
         }
 
-        return _factory.ReturnAsync(connection);
+        return _factory.ReturnAsync(connection, _generation);
     }
 }
 
@@ -57,13 +65,16 @@ internal sealed class SqliteConnectionLease : IAsyncDisposable
 /// </summary>
 internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, IAsyncDisposable
 {
+    private sealed record PooledConnection(SqliteConnection Connection, int Generation);
+
     private const int DefaultMaxPoolSize = 64;
 
     private readonly InfrastructureOptions _options;
-    private readonly ConcurrentBag<SqliteConnection> _pool = new();
+    private readonly ConcurrentBag<PooledConnection> _pool = new();
     private readonly int _maxPoolSize;
 
     private int _poolCount;
+    private int _generation;
     private bool _disposed;
 
     public PooledSqliteConnectionFactory(InfrastructureOptions options)
@@ -96,22 +107,23 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var connection = RentConnection();
-        return new ValueTask<SqliteConnectionLease>(new SqliteConnectionLease(this, connection));
+        var pooled = RentConnection();
+        return new ValueTask<SqliteConnectionLease>(new SqliteConnectionLease(this, pooled.Connection, pooled.Generation));
     }
 
-    private SqliteConnection RentConnection()
+    private PooledConnection RentConnection()
     {
-        if (_pool.TryTake(out var connection))
+        if (_pool.TryTake(out var pooled))
         {
             Interlocked.Decrement(ref _poolCount);
-            return connection;
+            return pooled;
         }
 
-        return new SqliteConnection(_options.ConnectionString);
+        var generation = Volatile.Read(ref _generation);
+        return new PooledConnection(new SqliteConnection(_options.ConnectionString), generation);
     }
 
-    internal async ValueTask ReturnAsync(SqliteConnection connection)
+    internal async ValueTask ReturnAsync(SqliteConnection connection, int generation)
     {
         if (connection is null)
         {
@@ -124,6 +136,12 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
             return;
         }
 
+        if (generation != Volatile.Read(ref _generation))
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            return;
+        }
+
         if (connection.State != System.Data.ConnectionState.Closed)
         {
             connection.Close();
@@ -131,12 +149,31 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
 
         if (Interlocked.Increment(ref _poolCount) <= _maxPoolSize)
         {
-            _pool.Add(connection);
+            _pool.Add(new PooledConnection(connection, generation));
             return;
         }
 
         Interlocked.Decrement(ref _poolCount);
         await connection.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask ResetAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Interlocked.Increment(ref _generation);
+
+        while (_pool.TryTake(out var pooled))
+        {
+            Interlocked.Decrement(ref _poolCount);
+            await pooled.Connection.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <inheritdoc />
@@ -149,9 +186,9 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
 
         _disposed = true;
 
-        while (_pool.TryTake(out var connection))
+        while (_pool.TryTake(out var pooled))
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await pooled.Connection.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

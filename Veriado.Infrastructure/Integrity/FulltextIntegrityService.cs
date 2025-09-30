@@ -13,6 +13,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly IDbContextFactory<AppDbContext> _writeFactory;
     private readonly ISearchIndexer _searchIndexer;
+    private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<FulltextIntegrityService> _logger;
     private readonly IClock _clock;
@@ -21,6 +22,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         IDbContextFactory<ReadOnlyDbContext> readFactory,
         IDbContextFactory<AppDbContext> writeFactory,
         ISearchIndexer searchIndexer,
+        ISqliteConnectionFactory connectionFactory,
         InfrastructureOptions options,
         ILogger<FulltextIntegrityService> logger,
         IClock clock)
@@ -28,6 +30,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         _readFactory = readFactory;
         _writeFactory = writeFactory;
         _searchIndexer = searchIndexer;
+        _connectionFactory = connectionFactory;
         _options = options;
         _logger = logger;
         _clock = clock;
@@ -159,6 +162,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             // Ensure we are working with a clean connection pool before we attempt to
             // rebuild the virtual tables. Otherwise pooled connections may continue to
             // serve corrupted pages and cause the rebuild to fail.
+            await _connectionFactory.ResetAsync(cancellationToken).ConfigureAwait(false);
             SqliteConnection.ClearAllPools();
             await RecreateFulltextSchemaAsync(cancellationToken).ConfigureAwait(false);
         }
