@@ -7,6 +7,7 @@ public sealed class InfrastructureOptions
 {
     private const int DefaultBatchSize = 300;
     private const int DefaultBatchWindowMs = 250;
+    private const int DefaultOutboxBatchSize = 50;
 
     /// <summary>
     /// Gets or sets the absolute path to the SQLite database file.
@@ -74,8 +75,18 @@ public sealed class InfrastructureOptions
     /// </summary>
     public TimeSpan IdempotencyCleanupInterval { get; set; } = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// Gets or sets the maximum number of outbox events fetched in a single drain operation.
+    /// </summary>
+    public int OutboxBatchSize
+    {
+        get => _outboxBatchSize;
+        set => _outboxBatchSize = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
     private int _batchSize = DefaultBatchSize;
     private int _batchWindowMs = DefaultBatchWindowMs;
+    private int _outboxBatchSize = DefaultOutboxBatchSize;
 
     internal string? ConnectionString { get; set; }
         = null;

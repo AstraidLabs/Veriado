@@ -197,7 +197,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
     {
         if (scores.Count == 0)
         {
-            return 0.6d;
+            return 1.0d;
         }
 
         var ordered = scores.OrderBy(static value => value).ToArray();
