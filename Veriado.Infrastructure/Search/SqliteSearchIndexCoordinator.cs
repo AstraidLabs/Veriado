@@ -8,18 +8,15 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
 {
     private readonly ISearchIndexer _searchIndexer;
-    private readonly LuceneSearchIndexer _luceneIndexer;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<SqliteSearchIndexCoordinator> _logger;
 
     public SqliteSearchIndexCoordinator(
         ISearchIndexer searchIndexer,
-        LuceneSearchIndexer luceneIndexer,
         InfrastructureOptions options,
         ILogger<SqliteSearchIndexCoordinator> logger)
     {
         _searchIndexer = searchIndexer;
-        _luceneIndexer = luceneIndexer;
         _options = options;
         _logger = logger;
     }
@@ -52,13 +49,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         {
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
             var helper = new SqliteFts5Transactional();
-            Func<CancellationToken, Task>? beforeCommit = null;
-            if (_options.EnableLuceneIntegration && _luceneIndexer.IsEnabled)
-            {
-                beforeCommit = ct => _luceneIndexer.IndexAsync(document, ct);
-            }
-
-            await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, beforeCommit, cancellationToken)
+            await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, beforeCommit: null, cancellationToken)
                 .ConfigureAwait(false);
             return true;
         }
