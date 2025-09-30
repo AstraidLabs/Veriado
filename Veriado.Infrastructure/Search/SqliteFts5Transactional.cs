@@ -7,7 +7,12 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class SqliteFts5Transactional
 {
-    public async Task IndexAsync(SearchDocument document, SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
+    public async Task IndexAsync(
+        SearchDocument document,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Func<CancellationToken, Task>? beforeCommit,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -62,6 +67,11 @@ internal sealed class SqliteFts5Transactional
                 insertTrgm.Parameters.AddWithValue("$trgm", trigramText);
                 await insertTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            if (beforeCommit is not null)
+            {
+                await beforeCommit(cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
         {
@@ -69,7 +79,12 @@ internal sealed class SqliteFts5Transactional
         }
     }
 
-    public async Task DeleteAsync(Guid fileId, SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
+    public async Task DeleteAsync(
+        Guid fileId,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Func<CancellationToken, Task>? beforeCommit,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -115,6 +130,11 @@ internal sealed class SqliteFts5Transactional
                 deleteTrgmMap.CommandText = "DELETE FROM file_trgm_map WHERE file_id = $fileId;";
                 deleteTrgmMap.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
                 await deleteTrgmMap.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (beforeCommit is not null)
+            {
+                await beforeCommit(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())

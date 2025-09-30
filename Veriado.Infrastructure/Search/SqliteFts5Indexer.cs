@@ -50,12 +50,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
         try
         {
-            await helper.IndexAsync(document, connection, transaction, cancellationToken).ConfigureAwait(false);
-            if (beforeCommit is not null)
-            {
-                await beforeCommit(cancellationToken).ConfigureAwait(false);
-            }
-
+            await helper.IndexAsync(document, connection, transaction, beforeCommit, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -84,12 +79,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
         try
         {
-            await helper.DeleteAsync(fileId, connection, transaction, cancellationToken).ConfigureAwait(false);
-            if (beforeCommit is not null)
-            {
-                await beforeCommit(cancellationToken).ConfigureAwait(false);
-            }
-
+            await helper.DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
