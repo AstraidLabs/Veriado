@@ -26,6 +26,8 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IClock _clock;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly INeedsReindexEvaluator _needsReindexEvaluator;
+    private readonly ISearchIndexSignatureCalculator _signatureCalculator;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -38,7 +40,9 @@ internal sealed class WriteWorker : BackgroundService
         IEventPublisher eventPublisher,
         IClock clock,
         IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions)
+        TrigramIndexOptions trigramOptions,
+        INeedsReindexEvaluator needsReindexEvaluator,
+        ISearchIndexSignatureCalculator signatureCalculator)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -51,6 +55,8 @@ internal sealed class WriteWorker : BackgroundService
         _clock = clock;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _needsReindexEvaluator = needsReindexEvaluator ?? throw new ArgumentNullException(nameof(needsReindexEvaluator));
+        _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -251,6 +257,28 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         var fileEntries = context.ChangeTracker.Entries<FileEntity>().ToList();
+
+        foreach (var entry in fileEntries)
+        {
+            if (entry.State == EntityState.Deleted)
+            {
+                continue;
+            }
+
+            var file = entry.Entity;
+            var searchIndex = file.SearchIndex ?? throw new InvalidOperationException("File is missing search index state.");
+
+            if (!searchIndex.IsStale)
+            {
+                var needsReindex = await _needsReindexEvaluator
+                    .NeedsReindexAsync(file, searchIndex, cancellationToken)
+                    .ConfigureAwait(false);
+                if (needsReindex)
+                {
+                    searchIndex.MarkStale();
+                }
+            }
+        }
         var filesToIndex = new List<(FileEntity File, FilePersistenceOptions Options)>();
         var filesToDelete = new List<Guid>();
         foreach (var entry in fileEntries)
@@ -369,7 +397,13 @@ internal sealed class WriteWorker : BackgroundService
             var timestamp = UtcTimestamp.From(_clock.UtcNow);
             foreach (var (file, _) in filesToIndex)
             {
-                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, timestamp);
+                var signature = _signatureCalculator.Compute(file);
+                file.ConfirmIndexed(
+                    file.SearchIndex.SchemaVersion,
+                    timestamp,
+                    signature.AnalyzerVersion,
+                    signature.TokenHash,
+                    signature.NormalizedTitle);
             }
 
             return true;
@@ -411,7 +445,13 @@ internal sealed class WriteWorker : BackgroundService
                 if (indexed)
                 {
                     var timestamp = UtcTimestamp.From(_clock.UtcNow);
-                    file.ConfirmIndexed(file.SearchIndex.SchemaVersion, timestamp);
+                    var signature = _signatureCalculator.Compute(file);
+                    file.ConfirmIndexed(
+                        file.SearchIndex.SchemaVersion,
+                        timestamp,
+                        signature.AnalyzerVersion,
+                        signature.TokenHash,
+                        signature.NormalizedTitle);
                     handled = true;
                 }
             }
@@ -431,7 +471,13 @@ internal sealed class WriteWorker : BackgroundService
             if (indexed)
             {
                 var timestamp = UtcTimestamp.From(_clock.UtcNow);
-                file.ConfirmIndexed(file.SearchIndex.SchemaVersion, timestamp);
+                var signature = _signatureCalculator.Compute(file);
+                file.ConfirmIndexed(
+                    file.SearchIndex.SchemaVersion,
+                    timestamp,
+                    signature.AnalyzerVersion,
+                    signature.TokenHash,
+                    signature.NormalizedTitle);
                 handled = true;
             }
         }

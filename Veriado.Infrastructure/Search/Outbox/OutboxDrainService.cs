@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Domain.Files;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Search;
 
 /// <summary>
 /// Provides an imperative API to drain deferred indexing events outside of the background worker loop.
@@ -17,6 +18,7 @@ internal sealed class OutboxDrainService
     private readonly IClock _clock;
     private readonly IFulltextIntegrityService _integrityService;
     private readonly ILogger<OutboxDrainService> _logger;
+    private readonly ISearchIndexSignatureCalculator _signatureCalculator;
 
     public OutboxDrainService(
         IDbContextFactory<AppDbContext> writeFactory,
@@ -25,7 +27,8 @@ internal sealed class OutboxDrainService
         InfrastructureOptions options,
         IClock clock,
         IFulltextIntegrityService integrityService,
-        ILogger<OutboxDrainService> logger)
+        ILogger<OutboxDrainService> logger,
+        ISearchIndexSignatureCalculator signatureCalculator)
     {
         _writeFactory = writeFactory;
         _readFactory = readFactory;
@@ -34,6 +37,7 @@ internal sealed class OutboxDrainService
         _clock = clock;
         _integrityService = integrityService;
         _logger = logger;
+        _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
     }
 
     public async Task<int> DrainAsync(CancellationToken cancellationToken)
@@ -136,7 +140,13 @@ internal sealed class OutboxDrainService
             var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
             if (tracked is not null)
             {
-                tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
+                var signature = _signatureCalculator.Compute(tracked);
+                tracked.ConfirmIndexed(
+                    tracked.SearchIndex.SchemaVersion,
+                    UtcTimestamp.From(_clock.UtcNow),
+                    signature.AnalyzerVersion,
+                    signature.TokenHash,
+                    signature.NormalizedTitle);
             }
 
             outbox.ProcessedUtc = _clock.UtcNow;
@@ -184,7 +194,13 @@ internal sealed class OutboxDrainService
             .ConfigureAwait(false);
         if (tracked is not null)
         {
-            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
+            var signature = _signatureCalculator.Compute(tracked);
+            tracked.ConfirmIndexed(
+                tracked.SearchIndex.SchemaVersion,
+                UtcTimestamp.From(_clock.UtcNow),
+                signature.AnalyzerVersion,
+                signature.TokenHash,
+                signature.NormalizedTitle);
         }
     }
 

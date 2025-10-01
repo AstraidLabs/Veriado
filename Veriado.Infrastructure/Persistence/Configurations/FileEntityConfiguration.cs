@@ -107,6 +107,16 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             owned.Property(index => index.IndexedTitle)
                 .HasColumnName("fts_indexed_title")
                 .HasMaxLength(300);
+
+            owned.Property(index => index.AnalyzerVersion)
+                .HasColumnName("fts_analyzer_version")
+                .HasMaxLength(32)
+                .HasDefaultValue(SearchIndexState.DefaultAnalyzerVersion)
+                .IsRequired();
+
+            owned.Property(index => index.TokenHash)
+                .HasColumnName("fts_token_hash")
+                .HasMaxLength(64);
         });
 
         builder.ComplexProperty(file => file.SystemMetadata, complex =>
