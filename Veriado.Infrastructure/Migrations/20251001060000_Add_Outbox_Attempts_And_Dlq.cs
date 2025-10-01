@@ -52,4 +52,5 @@ namespace Veriado.Infrastructure.Migrations
             name: "attempts",
             table: "outbox_events");
     }
+    }
 }
