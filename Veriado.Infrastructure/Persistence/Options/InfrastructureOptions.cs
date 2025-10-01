@@ -8,6 +8,7 @@ public sealed class InfrastructureOptions
     private const int DefaultBatchSize = 300;
     private const int DefaultBatchWindowMs = 250;
     private const int DefaultOutboxBatchSize = 50;
+    private const int DefaultRetryBudget = 5;
 
     /// <summary>
     /// Gets or sets the absolute path to the SQLite database file.
@@ -84,9 +85,19 @@ public sealed class InfrastructureOptions
         set => _outboxBatchSize = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
     }
 
+    /// <summary>
+    /// Gets or sets the maximum number of attempts allowed for a single outbox event before moving it to the dead-letter queue.
+    /// </summary>
+    public int RetryBudget
+    {
+        get => _retryBudget;
+        set => _retryBudget = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
     private int _batchSize = DefaultBatchSize;
     private int _batchWindowMs = DefaultBatchWindowMs;
     private int _outboxBatchSize = DefaultOutboxBatchSize;
+    private int _retryBudget = DefaultRetryBudget;
 
     internal string? ConnectionString { get; set; }
         = null;

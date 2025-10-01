@@ -324,4 +324,15 @@ public interface ISearchTelemetry
     /// <param name="documentCount">The total number of indexed documents.</param>
     /// <param name="indexSizeBytes">The combined size of FTS and trigram indices, when known.</param>
     void UpdateIndexMetrics(long documentCount, long indexSizeBytes);
+
+    /// <summary>
+    /// Records the number of attempts made to process an outbox event.
+    /// </summary>
+    /// <param name="attempts">The total number of attempts so far.</param>
+    void RecordOutboxAttempt(int attempts);
+
+    /// <summary>
+    /// Records that an outbox event was moved to the dead-letter queue.
+    /// </summary>
+    void RecordOutboxDeadLetter();
 }

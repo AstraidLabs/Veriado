@@ -22,6 +22,9 @@ public sealed class OutboxEvent
     public DateTimeOffset? ProcessedUtc { get; set; }
         = null;
 
+    public int Attempts { get; set; }
+        = 0;
+
     public static OutboxEvent From(string type, object payload, DateTimeOffset createdUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
@@ -31,6 +34,7 @@ public sealed class OutboxEvent
             Type = type,
             Payload = json,
             CreatedUtc = createdUtc.ToUniversalTime(),
+            Attempts = 0,
         };
     }
 }

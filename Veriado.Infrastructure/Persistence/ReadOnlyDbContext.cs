@@ -29,6 +29,8 @@ public sealed class ReadOnlyDbContext : DbContext
 
     public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
 
+    public DbSet<OutboxDeadLetterEvent> OutboxDeadLetters => Set<OutboxDeadLetterEvent>();
+
     public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
 
     public DbSet<SearchFavoriteEntity> SearchFavorites => Set<SearchFavoriteEntity>();

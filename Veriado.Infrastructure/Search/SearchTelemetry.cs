@@ -15,6 +15,8 @@ internal sealed class SearchTelemetry : ISearchTelemetry
     private readonly Histogram<double> _overallHistogram = Meter.CreateHistogram<double>("search_latency_ms");
     private readonly ObservableGauge<long> _documentGauge;
     private readonly ObservableGauge<long> _indexSizeGauge;
+    private readonly Histogram<int> _outboxAttemptsHistogram = Meter.CreateHistogram<int>("outbox_attempts_histogram");
+    private readonly Counter<long> _outboxDlqCounter = Meter.CreateCounter<long>("outbox_dlq_total");
 
     private long _documentCount;
     private long _indexSizeBytes;
@@ -42,6 +44,12 @@ internal sealed class SearchTelemetry : ISearchTelemetry
         Interlocked.Exchange(ref _documentCount, documentCount);
         Interlocked.Exchange(ref _indexSizeBytes, indexSizeBytes);
     }
+
+    public void RecordOutboxAttempt(int attempts)
+        => _outboxAttemptsHistogram.Record(attempts);
+
+    public void RecordOutboxDeadLetter()
+        => _outboxDlqCounter.Add(1);
 
     private IEnumerable<Measurement<long>> ObserveDocuments()
     {
