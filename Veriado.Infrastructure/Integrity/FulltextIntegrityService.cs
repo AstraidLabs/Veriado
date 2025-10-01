@@ -17,6 +17,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private readonly InfrastructureOptions _options;
     private readonly ILogger<FulltextIntegrityService> _logger;
     private readonly IClock _clock;
+    private readonly ISearchIndexSignatureCalculator _signatureCalculator;
 
     public FulltextIntegrityService(
         IDbContextFactory<ReadOnlyDbContext> readFactory,
@@ -25,7 +26,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         ISqliteConnectionFactory connectionFactory,
         InfrastructureOptions options,
         ILogger<FulltextIntegrityService> logger,
-        IClock clock)
+        IClock clock,
+        ISearchIndexSignatureCalculator signatureCalculator)
     {
         _readFactory = readFactory;
         _writeFactory = writeFactory;
@@ -34,6 +36,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         _options = options;
         _logger = logger;
         _clock = clock;
+        _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
     }
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
@@ -232,7 +235,13 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
         if (tracked is not null)
         {
-            tracked.ConfirmIndexed(tracked.SearchIndex.SchemaVersion, UtcTimestamp.From(_clock.UtcNow));
+            var signature = _signatureCalculator.Compute(tracked);
+            tracked.ConfirmIndexed(
+                tracked.SearchIndex.SchemaVersion,
+                UtcTimestamp.From(_clock.UtcNow),
+                signature.AnalyzerVersion,
+                signature.TokenHash,
+                signature.NormalizedTitle);
             return true;
         }
 

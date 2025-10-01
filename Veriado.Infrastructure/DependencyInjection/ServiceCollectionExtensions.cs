@@ -150,6 +150,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchSuggestionService, SuggestionService>();
         services.AddSingleton<ISpellSuggestionService, SpellSuggestionService>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
+        services.AddSingleton<ISearchIndexSignatureCalculator, SearchIndexSignatureCalculator>();
+        services.AddSingleton<INeedsReindexEvaluator, NeedsReindexEvaluator>();
         services.AddSingleton<IEventPublisher, AuditEventPublisher>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 

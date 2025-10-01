@@ -408,10 +408,20 @@ public sealed class FileEntity : AggregateRoot
     /// </summary>
     /// <param name="schemaVersion">The applied schema version.</param>
     /// <param name="whenUtc">The time of indexing.</param>
-    public void ConfirmIndexed(int schemaVersion, UtcTimestamp whenUtc)
+    public void ConfirmIndexed(
+        int schemaVersion,
+        UtcTimestamp whenUtc,
+        string analyzerVersion,
+        string? tokenHash,
+        string? indexedTitle = null)
     {
         SearchIndex ??= new SearchIndexState(schemaVersion: 1);
-        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Content.Hash.Value, Title);
+        var resolvedTitle = string.IsNullOrWhiteSpace(indexedTitle)
+            ? string.IsNullOrWhiteSpace(Title)
+                ? Name.Value
+                : Title!
+            : indexedTitle!;
+        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Content.Hash.Value, resolvedTitle, analyzerVersion, tokenHash);
     }
 
     /// <summary>
@@ -433,7 +443,9 @@ public sealed class FileEntity : AggregateRoot
             current.IsStale,
             current.LastIndexedUtc,
             current.IndexedContentHash,
-            current.IndexedTitle);
+            current.IndexedTitle,
+            current.AnalyzerVersion,
+            current.TokenHash);
         MarkSearchDirty(whenUtc, ReindexReason.SchemaUpgrade);
     }
 
