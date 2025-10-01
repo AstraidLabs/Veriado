@@ -392,7 +392,8 @@ public sealed class FileEntity : AggregateRoot
             CreatedUtc.Value,
             LastModifiedUtc.Value,
             metadataJson,
-            metadataText);
+            metadataText,
+            Content.Hash.Value);
     }
 
     /// <summary>

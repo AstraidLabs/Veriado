@@ -153,6 +153,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<TrigramQueryService>();
         services.AddSingleton<HybridSearchQueryService>();
         services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
+        services.AddSingleton<FtsWriteAheadService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
         services.AddSingleton<ISynonymProvider, SynonymService>();

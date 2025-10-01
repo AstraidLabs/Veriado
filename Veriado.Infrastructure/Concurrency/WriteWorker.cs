@@ -28,6 +28,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly TrigramIndexOptions _trigramOptions;
     private readonly INeedsReindexEvaluator _needsReindexEvaluator;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
+    private readonly FtsWriteAheadService _writeAhead;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -42,7 +43,8 @@ internal sealed class WriteWorker : BackgroundService
         IAnalyzerFactory analyzerFactory,
         TrigramIndexOptions trigramOptions,
         INeedsReindexEvaluator needsReindexEvaluator,
-        ISearchIndexSignatureCalculator signatureCalculator)
+        ISearchIndexSignatureCalculator signatureCalculator,
+        FtsWriteAheadService writeAhead)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -57,6 +59,7 @@ internal sealed class WriteWorker : BackgroundService
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _needsReindexEvaluator = needsReindexEvaluator ?? throw new ArgumentNullException(nameof(needsReindexEvaluator));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
+        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -420,12 +423,17 @@ internal sealed class WriteWorker : BackgroundService
             }
 
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
+            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
             foreach (var id in filesToDelete)
             {
                 await ExecuteWithRetryAsync(
-                    ct => helper.DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit: null, ct),
+                    async ct =>
+                    {
+                        await helper
+                            .DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit: null, ct)
+                            .ConfigureAwait(false);
+                    },
                     $"delete index for {id}",
                     cancellationToken).ConfigureAwait(false);
             }

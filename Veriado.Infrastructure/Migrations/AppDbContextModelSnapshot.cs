@@ -505,6 +505,96 @@ namespace Veriado.Infrastructure.Migrations
                     b.ToTable("outbox_dlq", (string)null);
                 });
 
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.WriteAhead.FtsWriteAheadDeadLetterRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_hash");
+
+                    b.Property<string>("DeadLetteredUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dead_lettered_utc");
+
+                    b.Property<string>("EnqueuedUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enqueued_utc");
+
+                    b.Property<string>("Error")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error");
+
+                    b.Property<string>("FileId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("file_id");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("op");
+
+                    b.Property<long>("OriginalId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("original_id");
+
+                    b.Property<string>("TitleHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title_hash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeadLetteredUtc")
+                        .HasDatabaseName("idx_fts_write_ahead_dlq_dead_lettered");
+
+                    b.ToTable("fts_write_ahead_dlq", (string)null);
+                });
+
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.WriteAhead.FtsWriteAheadRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_hash");
+
+                    b.Property<string>("EnqueuedUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enqueued_utc");
+
+                    b.Property<string>("FileId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("file_id");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("op");
+
+                    b.Property<string>("TitleHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title_hash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnqueuedUtc")
+                        .HasDatabaseName("idx_fts_write_ahead_enqueued");
+
+                    b.ToTable("fts_write_ahead", (string)null);
+                });
+
             modelBuilder.Entity("Veriado.Domain.Files.FileEntity", b =>
                 {
                     b.OwnsOne("Veriado.Domain.Search.SearchIndexState", "SearchIndex", b1 =>

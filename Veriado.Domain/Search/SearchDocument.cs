@@ -17,7 +17,8 @@ public sealed record SearchDocument(
     DateTimeOffset CreatedUtc,
     DateTimeOffset ModifiedUtc,
     string? MetadataJson,
-    string? MetadataText = null)
+    string? MetadataText = null,
+    string? ContentHash = null)
 {
     /// <summary>
     /// Gets serializer options used when emitting the metadata JSON payload.

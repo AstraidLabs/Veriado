@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
 
@@ -24,6 +25,9 @@ internal static class StartupIntegrityCheck
             logger.LogWarning("Skipping full-text integrity check because FTS5 support is unavailable: {Reason}", reason);
             return;
         }
+
+        var writeAhead = provider.GetRequiredService<FtsWriteAheadService>();
+        await writeAhead.ReplayPendingAsync(cancellationToken).ConfigureAwait(false);
 
         var integrity = provider.GetRequiredService<IFulltextIntegrityService>();
         var report = await integrity.VerifyAsync(cancellationToken).ConfigureAwait(false);
