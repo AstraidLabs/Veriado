@@ -15,6 +15,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
     private readonly OutboxDrainService _outboxDrainService;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly FtsWriteAheadService _writeAhead;
 
     public SqliteSearchIndexCoordinator(
         ISearchIndexer searchIndexer,
@@ -22,7 +23,8 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         ILogger<SqliteSearchIndexCoordinator> logger,
         OutboxDrainService outboxDrainService,
         IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions)
+        TrigramIndexOptions trigramOptions,
+        FtsWriteAheadService writeAhead)
     {
         _searchIndexer = searchIndexer;
         _options = options;
@@ -30,6 +32,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         _outboxDrainService = outboxDrainService;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
     }
 
     public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken)
@@ -59,7 +62,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         if (sqliteTransaction is not null)
         {
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
+            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
             await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, beforeCommit: null, cancellationToken)
                 .ConfigureAwait(false);
             return true;

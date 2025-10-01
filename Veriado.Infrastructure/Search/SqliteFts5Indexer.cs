@@ -13,18 +13,21 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly FtsWriteAheadService _writeAhead;
 
     public SqliteFts5Indexer(
         InfrastructureOptions options,
         IAnalyzerFactory analyzerFactory,
         ISqliteConnectionFactory connectionFactory,
         TrigramIndexOptions trigramOptions,
+        FtsWriteAheadService writeAhead,
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _suggestionMaintenance = suggestionMaintenance;
     }
 
@@ -63,12 +66,19 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
         {
-            await helper.IndexAsync(document, connection, transaction, beforeCommit, cancellationToken).ConfigureAwait(false);
+            var journalId = await helper
+                .IndexAsync(document, connection, transaction, beforeCommit, cancellationToken, enlistJournal: false)
+                .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (journalId.HasValue)
+            {
+                await _writeAhead.ClearAsync(connection, transaction: null, journalId.Value, cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
         catch
         {
@@ -98,12 +108,19 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
         {
-            await helper.DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken).ConfigureAwait(false);
+            var journalId = await helper
+                .DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken, enlistJournal: false)
+                .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (journalId.HasValue)
+            {
+                await _writeAhead.ClearAsync(connection, transaction: null, journalId.Value, cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
         catch
         {

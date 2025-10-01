@@ -12,19 +12,25 @@ internal sealed class SqliteFts5Transactional
 {
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly FtsWriteAheadService _writeAhead;
 
-    public SqliteFts5Transactional(IAnalyzerFactory analyzerFactory, TrigramIndexOptions trigramOptions)
+    public SqliteFts5Transactional(
+        IAnalyzerFactory analyzerFactory,
+        TrigramIndexOptions trigramOptions,
+        FtsWriteAheadService writeAhead)
     {
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
     }
 
-    public async Task IndexAsync(
+    public async Task<long?> IndexAsync(
         SearchDocument document,
         SqliteConnection connection,
         SqliteTransaction transaction,
         Func<CancellationToken, Task>? beforeCommit,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool enlistJournal = true)
     {
         try
         {
@@ -33,6 +39,21 @@ internal sealed class SqliteFts5Transactional
             {
                 return;
             }
+            var normalizedTitle = NormalizeOptional(document.Title);
+            var normalizedAuthor = NormalizeOptional(document.Author);
+            var normalizedMetadataText = NormalizeOptional(document.MetadataText);
+
+            var journalTransaction = enlistJournal ? transaction : null;
+            var journalId = await _writeAhead
+                .LogAsync(
+                    connection,
+                    journalTransaction,
+                    document.FileId,
+                    FtsWriteAheadService.OperationIndex,
+                    document.ContentHash,
+                    normalizedTitle,
+                    cancellationToken)
+                .ConfigureAwait(false);
             var searchRowId = await EnsureMapRowIdAsync("file_search_map", document.FileId, connection, transaction, cancellationToken).ConfigureAwait(false);
             var trigramRowId = await EnsureMapRowIdAsync("file_trgm_map", document.FileId, connection, transaction, cancellationToken).ConfigureAwait(false);
 
@@ -43,10 +64,6 @@ internal sealed class SqliteFts5Transactional
                 delete.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
                 await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
-
-            var normalizedTitle = NormalizeOptional(document.Title);
-            var normalizedAuthor = NormalizeOptional(document.Author);
-            var normalizedMetadataText = NormalizeOptional(document.MetadataText);
 
             await using (var insert = connection.CreateCommand())
             {
@@ -84,10 +101,18 @@ internal sealed class SqliteFts5Transactional
                 await insertTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            if (enlistJournal && journalId.HasValue)
+            {
+                await _writeAhead.ClearAsync(connection, transaction, journalId.Value, cancellationToken).ConfigureAwait(false);
+                journalId = null;
+            }
+
             if (beforeCommit is not null)
             {
                 await beforeCommit(cancellationToken).ConfigureAwait(false);
             }
+
+            return enlistJournal ? null : journalId;
         }
         catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
         {
@@ -95,12 +120,13 @@ internal sealed class SqliteFts5Transactional
         }
     }
 
-    public async Task DeleteAsync(
+    public async Task<long?> DeleteAsync(
         Guid fileId,
         SqliteConnection connection,
         SqliteTransaction transaction,
         Func<CancellationToken, Task>? beforeCommit,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool enlistJournal = true)
     {
         try
         {
@@ -111,6 +137,17 @@ internal sealed class SqliteFts5Transactional
                 return;
             }
             var fileKey = fileId.ToByteArray();
+            var journalTransaction = enlistJournal ? transaction : null;
+            var journalId = await _writeAhead
+                .LogAsync(
+                    connection,
+                    journalTransaction,
+                    fileId,
+                    FtsWriteAheadService.OperationDelete,
+                    contentHash: null,
+                    normalizedTitle: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             var searchRowId = await TryGetRowIdAsync("file_search_map", fileId, connection, transaction, cancellationToken).ConfigureAwait(false);
             if (searchRowId.HasValue)
@@ -148,10 +185,18 @@ internal sealed class SqliteFts5Transactional
                 await deleteTrgmMap.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            if (enlistJournal && journalId.HasValue)
+            {
+                await _writeAhead.ClearAsync(connection, transaction, journalId.Value, cancellationToken).ConfigureAwait(false);
+                journalId = null;
+            }
+
             if (beforeCommit is not null)
             {
                 await beforeCommit(cancellationToken).ConfigureAwait(false);
             }
+
+            return enlistJournal ? null : journalId;
         }
         catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
         {
