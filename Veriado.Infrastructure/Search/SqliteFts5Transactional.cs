@@ -37,7 +37,7 @@ internal sealed class SqliteFts5Transactional
             ArgumentNullException.ThrowIfNull(document);
             if (!SqliteFulltextSupport.IsAvailable)
             {
-                return;
+                return null;
             }
             var normalizedTitle = NormalizeOptional(document.Title);
             var normalizedAuthor = NormalizeOptional(document.Author);
@@ -134,7 +134,7 @@ internal sealed class SqliteFts5Transactional
             ArgumentNullException.ThrowIfNull(transaction);
             if (!SqliteFulltextSupport.IsAvailable)
             {
-                return;
+                return null;
             }
             var fileKey = fileId.ToByteArray();
             var journalTransaction = enlistJournal ? transaction : null;
