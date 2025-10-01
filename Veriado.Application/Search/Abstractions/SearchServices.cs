@@ -335,4 +335,16 @@ public interface ISearchTelemetry
     /// Records that an outbox event was moved to the dead-letter queue.
     /// </summary>
     void RecordOutboxDeadLetter();
+
+    /// <summary>
+    /// Records the elapsed time of a full-text index verification pass.
+    /// </summary>
+    /// <param name="elapsed">The elapsed duration.</param>
+    void RecordIndexVerificationDuration(TimeSpan elapsed);
+
+    /// <summary>
+    /// Records the number of index entries requiring repair after verification.
+    /// </summary>
+    /// <param name="driftCount">The number of entries detected as missing or drifted.</param>
+    void RecordIndexDrift(int driftCount);
 }
