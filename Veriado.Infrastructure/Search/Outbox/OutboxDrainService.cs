@@ -19,6 +19,7 @@ internal sealed class OutboxDrainService
     private readonly IFulltextIntegrityService _integrityService;
     private readonly ILogger<OutboxDrainService> _logger;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
+    private readonly ISearchTelemetry _telemetry;
 
     public OutboxDrainService(
         IDbContextFactory<AppDbContext> writeFactory,
@@ -28,7 +29,8 @@ internal sealed class OutboxDrainService
         IClock clock,
         IFulltextIntegrityService integrityService,
         ILogger<OutboxDrainService> logger,
-        ISearchIndexSignatureCalculator signatureCalculator)
+        ISearchIndexSignatureCalculator signatureCalculator,
+        ISearchTelemetry telemetry)
     {
         _writeFactory = writeFactory;
         _readFactory = readFactory;
@@ -38,6 +40,7 @@ internal sealed class OutboxDrainService
         _integrityService = integrityService;
         _logger = logger;
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     public async Task<int> DrainAsync(CancellationToken cancellationToken)
@@ -106,7 +109,7 @@ internal sealed class OutboxDrainService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to process outbox event {EventId}", eventId);
+                await HandleProcessingFailureAsync(eventId, ex, cancellationToken).ConfigureAwait(false);
                 return false;
             }
         }
@@ -155,6 +158,7 @@ internal sealed class OutboxDrainService
 
         await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
         outbox.ProcessedUtc = _clock.UtcNow;
+        outbox.Attempts = 0;
     }
 
     private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
@@ -215,6 +219,64 @@ internal sealed class OutboxDrainService
         {
             _logger.LogCritical(ex, "Automatic full-text repair failed during outbox drain.");
             throw;
+        }
+    }
+
+    private async Task HandleProcessingFailureAsync(long eventId, Exception exception, CancellationToken cancellationToken)
+    {
+        await using var context = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var outbox = await context.OutboxEvents
+            .FirstOrDefaultAsync(evt => evt.Id == eventId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (outbox is null)
+        {
+            _logger.LogWarning(exception, "Failed processing outbox event {EventId}, but the record no longer exists.", eventId);
+            return;
+        }
+
+        outbox.Attempts++;
+        var attempts = outbox.Attempts;
+        var exceededBudget = attempts >= _options.RetryBudget;
+
+        if (exceededBudget)
+        {
+            var deadLetter = new OutboxDeadLetterEvent
+            {
+                OutboxId = outbox.Id,
+                Type = outbox.Type,
+                Payload = outbox.Payload,
+                CreatedUtc = outbox.CreatedUtc,
+                DeadLetteredUtc = _clock.UtcNow,
+                Attempts = attempts,
+                Error = exception.ToString(),
+            };
+
+            context.OutboxDeadLetters.Add(deadLetter);
+            context.OutboxEvents.Remove(outbox);
+        }
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        _telemetry.RecordOutboxAttempt(attempts);
+
+        if (exceededBudget)
+        {
+            _telemetry.RecordOutboxDeadLetter();
+            _logger.LogError(
+                exception,
+                "Outbox event {EventId} exhausted retry budget ({Attempts}) and was moved to the dead-letter queue.",
+                eventId,
+                attempts);
+        }
+        else
+        {
+            _logger.LogError(
+                exception,
+                "Failed to process outbox event {EventId} (attempt {Attempt} of {Budget}).",
+                eventId,
+                attempts,
+                _options.RetryBudget);
         }
     }
 }

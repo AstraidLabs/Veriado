@@ -76,6 +76,16 @@ public static class ServiceCollectionExtensions
 
         SqliteFulltextSupportDetector.Detect(options);
 
+        if (configuration is not null)
+        {
+            var indexingSection = configuration.GetSection("Search").GetSection("Indexing");
+            var retryBudget = indexingSection.GetValue<int?>("RetryBudget");
+            if (retryBudget.HasValue)
+            {
+                options.RetryBudget = retryBudget.Value;
+            }
+        }
+
         services.AddSingleton(options);
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
