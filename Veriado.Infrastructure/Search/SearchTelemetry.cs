@@ -13,6 +13,8 @@ internal sealed class SearchTelemetry : ISearchTelemetry
     private readonly Histogram<double> _trigramQueryHistogram = Meter.CreateHistogram<double>("search_trigram_query_ms");
     private readonly Histogram<double> _facetHistogram = Meter.CreateHistogram<double>("search_facet_ms");
     private readonly Histogram<double> _overallHistogram = Meter.CreateHistogram<double>("search_latency_ms");
+    private readonly Histogram<double> _verifyDurationHistogram = Meter.CreateHistogram<double>("fts_verify_duration_ms");
+    private readonly Counter<long> _verifyDriftCounter = Meter.CreateCounter<long>("fts_verify_drift_total");
     private readonly ObservableGauge<long> _documentGauge;
     private readonly ObservableGauge<long> _indexSizeGauge;
     private readonly Histogram<int> _outboxAttemptsHistogram = Meter.CreateHistogram<int>("outbox_attempts_histogram");
@@ -50,6 +52,19 @@ internal sealed class SearchTelemetry : ISearchTelemetry
 
     public void RecordOutboxDeadLetter()
         => _outboxDlqCounter.Add(1);
+
+    public void RecordIndexVerificationDuration(TimeSpan elapsed)
+        => _verifyDurationHistogram.Record(elapsed.TotalMilliseconds);
+
+    public void RecordIndexDrift(int driftCount)
+    {
+        if (driftCount <= 0)
+        {
+            return;
+        }
+
+        _verifyDriftCounter.Add(driftCount);
+    }
 
     private IEnumerable<Measurement<long>> ObserveDocuments()
     {
