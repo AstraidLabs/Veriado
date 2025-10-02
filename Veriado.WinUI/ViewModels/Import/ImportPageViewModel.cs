@@ -42,9 +42,9 @@ public partial class ImportPageViewModel : ViewModelBase
         IDispatcherService dispatcher,
         IExceptionHandler exceptionHandler,
         IDialogService dialogService,
+        ILocalizationService localizationService,
         IHotStateService? hotStateService = null,
-        IPickerService? pickerService = null,
-        ILocalizationService localizationService)
+        IPickerService? pickerService = null)
         : base(messenger, statusService, dispatcher, exceptionHandler, localizationService)
     {
         _importService = importService ?? throw new ArgumentNullException(nameof(importService));
