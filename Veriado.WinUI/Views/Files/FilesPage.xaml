@@ -175,6 +175,37 @@
                     x:Uid="FilesPage_StatusText"
                     VerticalAlignment="Center"
                     Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button
+                        x:Uid="FilesPage_PreviousPageButton"
+                        Content="Předchozí"
+                        Command="{x:Bind ViewModel.PreviousPageCommand}" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <controls:NumberBox
+                            x:Uid="FilesPage_PageNumberBox"
+                            Width="80"
+                            HorizontalAlignment="Left"
+                            Minimum="0"
+                            Maximum="{x:Bind ViewModel.TotalPages > 0 ? (double)ViewModel.TotalPages : 1d, Mode=OneWay}"
+                            SmallChange="1"
+                            Value="{x:Bind ViewModel.TargetPage, Mode=TwoWay}" />
+                        <TextBlock Text="/" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Bind ViewModel.TotalPages, Mode=OneWay}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button
+                        x:Uid="FilesPage_NextPageButton"
+                        Content="Další"
+                        Command="{x:Bind ViewModel.NextPageCommand}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" Text="Na stránce" />
+                    <ComboBox
+                        x:Uid="FilesPage_PageSizeComboBox"
+                        Width="90"
+                        HorizontalAlignment="Left"
+                        ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
+                        SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
+                </StackPanel>
             </StackPanel>
             <controls:InfoBar
                 x:Uid="FilesPage_IndexingInfoBar"

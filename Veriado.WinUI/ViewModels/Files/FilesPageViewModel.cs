@@ -28,10 +28,10 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
-
-    private int _currentPage;
-    private int _totalPages;
-    private int _totalCount;
+    private readonly AsyncRelayCommand _nextPageCommand;
+    private readonly AsyncRelayCommand _previousPageCommand;
+    private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
+    private bool _suppressTargetPageChange;
 
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
@@ -51,6 +51,13 @@ public partial class FilesPageViewModel : ViewModelBase
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
 
+        _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
+        _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
+
+        _suppressTargetPageChange = true;
+        TargetPage = 1;
+        _suppressTargetPageChange = false;
+
         PageSize = Math.Clamp(_hotStateService.PageSize <= 0 ? DefaultPageSize : _hotStateService.PageSize, 1, 200);
         SearchText = _hotStateService.LastQuery;
     }
@@ -60,6 +67,12 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand RefreshCommand { get; }
 
     public IAsyncRelayCommand ClearFiltersCommand { get; }
+
+    public IAsyncRelayCommand NextPageCommand => _nextPageCommand;
+
+    public IAsyncRelayCommand PreviousPageCommand => _previousPageCommand;
+
+    public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
     [ObservableProperty]
     private string? searchText;
@@ -119,6 +132,18 @@ public partial class FilesPageViewModel : ViewModelBase
     private string statusText = string.Empty;
 
     [ObservableProperty]
+    private int currentPage;
+
+    [ObservableProperty]
+    private int totalPages;
+
+    [ObservableProperty]
+    private int totalCount;
+
+    [ObservableProperty]
+    private double targetPage;
+
+    [ObservableProperty]
     private bool isIndexingPending;
 
     [ObservableProperty]
@@ -174,6 +199,43 @@ public partial class FilesPageViewModel : ViewModelBase
         DebounceRefresh();
     }
 
+    partial void OnTargetPageChanged(double value)
+    {
+        if (_suppressTargetPageChange)
+        {
+            return;
+        }
+
+        if (TotalPages <= 0)
+        {
+            return;
+        }
+
+        var rounded = (int)Math.Round(value, MidpointRounding.AwayFromZero);
+        var clamped = Math.Clamp(rounded, 1, TotalPages);
+        if (Math.Abs(value - clamped) > double.Epsilon)
+        {
+            try
+            {
+                _suppressTargetPageChange = true;
+                TargetPage = clamped;
+            }
+            finally
+            {
+                _suppressTargetPageChange = false;
+            }
+
+            return;
+        }
+
+        if (clamped == CurrentPage)
+        {
+            return;
+        }
+
+        _ = RefreshAsync(false, clamped);
+    }
+
     partial void OnPageSizeChanged(int value)
     {
         var clamped = Math.Clamp(value <= 0 ? DefaultPageSize : value, 1, 200);
@@ -184,6 +246,7 @@ public partial class FilesPageViewModel : ViewModelBase
         }
 
         _hotStateService.PageSize = clamped;
+        DebounceRefresh();
     }
 
     private void DebounceRefresh()
@@ -231,16 +294,17 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private Task RefreshAsync() => RefreshAsync(true);
 
-    private async Task RefreshAsync(bool resetPage)
+    private Task RefreshAsync(bool resetPage) => RefreshAsync(resetPage, null);
+
+    private async Task RefreshAsync(bool resetPage, int? explicitPage)
     {
         CancelPendingDebounce();
 
-        if (!resetPage && _totalPages != 0 && _currentPage >= _totalPages)
+        var page = explicitPage ?? (resetPage ? 1 : CurrentPage <= 0 ? 1 : CurrentPage);
+        if (page <= 0)
         {
-            return;
+            page = 1;
         }
-
-        var page = resetPage ? 1 : Math.Max(1, _currentPage + 1);
 
         await SafeExecuteAsync(async cancellationToken =>
         {
@@ -249,23 +313,13 @@ public partial class FilesPageViewModel : ViewModelBase
 
             await Dispatcher.Enqueue(() =>
             {
-                if (resetPage)
-                {
-                    Items.Clear();
-                }
-
+                Items.Clear();
                 foreach (var item in result.Items)
                 {
                     Items.Add(item);
                 }
 
-                _currentPage = result.TotalPages == 0 ? 0 : result.Page;
-                _totalPages = result.TotalPages;
-                _totalCount = result.TotalCount;
-
-                var shown = Items.Count;
-                var pageDisplay = _totalPages == 0 ? 0 : _currentPage;
-                StatusText = $"{shown}/{_totalCount} · {pageDisplay}/{_totalPages}";
+                UpdatePaginationState(result.Page, result.TotalPages, result.TotalCount, result.Items.Count);
             }).ConfigureAwait(false);
         });
     }
@@ -288,9 +342,7 @@ public partial class FilesPageViewModel : ViewModelBase
         ModifiedFromFilter = null;
         ModifiedToFilter = null;
 
-        _currentPage = 0;
-        _totalPages = 0;
-        _totalCount = 0;
+        UpdatePaginationState(0, 0, 0, 0);
 
         await RefreshAsync(true).ConfigureAwait(false);
     }
@@ -400,6 +452,56 @@ public partial class FilesPageViewModel : ViewModelBase
                 IndexingWarningMessage = null;
             }).ConfigureAwait(false);
         }
+    }
+
+    private async Task LoadNextPageAsync()
+    {
+        var target = CurrentPage + 1;
+        await RefreshAsync(false, target).ConfigureAwait(false);
+    }
+
+    private async Task LoadPreviousPageAsync()
+    {
+        var target = CurrentPage - 1;
+        await RefreshAsync(false, target).ConfigureAwait(false);
+    }
+
+    private bool CanLoadNextPage() => TotalPages > 0 && CurrentPage < TotalPages;
+
+    private bool CanLoadPreviousPage() => TotalPages > 0 && CurrentPage > 1;
+
+    private void UpdatePaginationState(int currentPage, int totalPages, int totalCount, int itemsOnPage)
+    {
+        if (totalPages <= 0)
+        {
+            currentPage = 0;
+            totalPages = 0;
+            totalCount = Math.Max(totalCount, 0);
+        }
+        else
+        {
+            currentPage = Math.Clamp(currentPage <= 0 ? 1 : currentPage, 1, totalPages);
+        }
+
+        CurrentPage = currentPage;
+        TotalPages = totalPages;
+        TotalCount = totalCount;
+
+        try
+        {
+            _suppressTargetPageChange = true;
+            TargetPage = totalPages == 0 ? 0 : currentPage;
+        }
+        finally
+        {
+            _suppressTargetPageChange = false;
+        }
+
+        var pageDisplay = totalPages == 0 ? 0 : currentPage;
+        StatusText = $"{itemsOnPage}/{totalCount} · {pageDisplay}/{totalPages}";
+
+        _nextPageCommand.NotifyCanExecuteChanged();
+        _previousPageCommand.NotifyCanExecuteChanged();
     }
 
     private static string BuildIndexingWarningMessage(int pendingOutboxEvents, int staleDocuments)
