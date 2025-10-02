@@ -17,7 +17,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Import;
-using Windows.UI.ViewManagement;
 
 namespace Veriado.WinUI.Views.Import;
 
@@ -25,7 +24,6 @@ public sealed partial class ImportPage : Page
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
     private Compositor? _compositor;
-    private UISettings? _uiSettings;
     private bool _animationsEnabled = true;
     private CancellationTokenSource? _animationCts;
     private Visual? _dropZoneVisual;
@@ -73,11 +71,7 @@ public sealed partial class ImportPage : Page
             DropZoneHost.SizeChanged -= OnDropZoneSizeChanged;
         }
 
-        if (_uiSettings is not null)
-        {
-            _uiSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
-            _uiSettings = null;
-        }
+        AnimationSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -110,23 +104,9 @@ public sealed partial class ImportPage : Page
     {
         _compositor ??= ElementCompositionPreview.GetElementVisual(this).Compositor;
 
-        if (_uiSettings is null)
-        {
-            try
-            {
-                _uiSettings = new UISettings();
-                _animationsEnabled = _uiSettings.AnimationsEnabled;
-                _uiSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
-            }
-            catch
-            {
-                _animationsEnabled = true;
-            }
-        }
-        else
-        {
-            _animationsEnabled = _uiSettings.AnimationsEnabled;
-        }
+        AnimationSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
+        AnimationSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
+        _animationsEnabled = AnimationSettings.AreEnabled;
 
         ResetAnimationToken();
 
@@ -159,9 +139,9 @@ public sealed partial class ImportPage : Page
         _animationCts = new CancellationTokenSource();
     }
 
-    private void OnAnimationsEnabledChanged(UISettings sender, object args)
+    private void OnAnimationsEnabledChanged(object? sender, bool areEnabled)
     {
-        _animationsEnabled = sender.AnimationsEnabled;
+        _animationsEnabled = areEnabled;
     }
 
     private void SubscribeToViewModel()

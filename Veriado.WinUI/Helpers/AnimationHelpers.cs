@@ -1,25 +1,27 @@
 using System;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
-using Windows.UI.ViewManagement;
+using Microsoft.Win32;
 
 namespace Veriado.WinUI.Helpers;
 
 internal static class AnimationSettings
 {
+    private const uint SPI_GETCLIENTAREAANIMATION = 0x1042;
+
     private static bool _areAnimationsEnabled = true;
-    private static UISettings? _uiSettings;
 
     static AnimationSettings()
     {
         try
         {
-            _uiSettings = new UISettings();
-            _areAnimationsEnabled = _uiSettings.AnimationsEnabled;
-            _uiSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
+            _areAnimationsEnabled = GetClientAreaAnimationPreference();
+            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         }
         catch
         {
@@ -29,10 +31,40 @@ internal static class AnimationSettings
 
     public static bool AreEnabled => _areAnimationsEnabled;
 
-    private static void OnAnimationsEnabledChanged(UISettings sender, object args)
+    public static event EventHandler<bool>? AnimationsEnabledChanged;
+
+    private static void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
     {
-        _areAnimationsEnabled = sender.AnimationsEnabled;
+        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle)
+        {
+            UpdateAnimationPreference();
+        }
     }
+
+    private static void OnProcessExit(object? sender, EventArgs e)
+    {
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+    }
+
+    private static void UpdateAnimationPreference()
+    {
+        var enabled = GetClientAreaAnimationPreference();
+
+        if (_areAnimationsEnabled != enabled)
+        {
+            _areAnimationsEnabled = enabled;
+            AnimationsEnabledChanged?.Invoke(null, enabled);
+        }
+    }
+
+    private static bool GetClientAreaAnimationPreference()
+    {
+        return SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, out bool enabled, 0) ? enabled : true;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, out bool pvParam, uint fWinIni);
 }
 
 internal static class AnimationResourceKeys
