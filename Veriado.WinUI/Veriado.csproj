@@ -32,6 +32,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PRIResource Include="Strings\**\*.resw" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0"/>
     <PackageReference Include="CommunityToolkit.WinUI.Controls.HeaderedControls" Version="8.2.250402" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.250402" />

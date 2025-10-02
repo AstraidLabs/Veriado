@@ -1,9 +1,12 @@
 using System.Diagnostics;
+using Veriado.WinUI.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
+using Veriado.WinUI.Services;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI;
 
@@ -31,6 +34,8 @@ public partial class App : Application
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         base.OnLaunched(args);
+
+        await ApplySavedCultureAsync().ConfigureAwait(true);
 
         var startupViewModel = new StartupViewModel();
         var startupWindow = new StartupWindow(startupViewModel);
@@ -61,7 +66,7 @@ public partial class App : Application
 
     private async Task<bool> TryInitializeAsync(StartupViewModel startupViewModel)
     {
-        startupViewModel.ShowProgress("Spouštím služby aplikace...");
+        startupViewModel.ShowProgress(LocalizedStrings.Get("Startup.InitializingServices"));
 
         AppHost? host = null;
 
@@ -81,6 +86,9 @@ public partial class App : Application
             var dispatcherService = services.GetRequiredService<IDispatcherService>();
             dispatcherService.ResetDispatcher(shell.DispatcherQueue);
 
+            var localizationService = services.GetRequiredService<ILocalizationService>();
+            await localizationService.InitializeAsync().ConfigureAwait(true);
+
             var themeService = services.GetRequiredService<IThemeService>();
             await themeService.InitializeAsync().ConfigureAwait(true);
 
@@ -94,7 +102,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             startupViewModel.ShowError(
-                "Nepodařilo se spustit aplikaci.",
+                LocalizedStrings.Get("Startup.StartupFailed"),
                 ex.Message);
 
             LogStartupFailure(host, ex);
@@ -143,6 +151,21 @@ public partial class App : Application
         }
 
         MainWindow = null;
+    }
+
+    private static async Task ApplySavedCultureAsync()
+    {
+        try
+        {
+            var settingsService = new JsonSettingsService();
+            var settings = await settingsService.GetAsync().ConfigureAwait(true);
+            var culture = LocalizationConfiguration.NormalizeCulture(settings.Language);
+            CultureHelper.ApplyCulture(culture);
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogWarning(ex, "Failed to apply saved culture before host startup.");
+        }
     }
 
     private sealed class DebugLoggerProvider : ILoggerProvider

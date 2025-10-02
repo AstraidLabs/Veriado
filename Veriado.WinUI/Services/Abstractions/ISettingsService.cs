@@ -17,6 +17,9 @@ public sealed class AppSettings
 
     public int PageSize { get; set; } = DefaultPageSize;
 
+    public string? Language { get; set; }
+        = null;
+
     public string? LastFolder { get; set; }
         = null;
 
