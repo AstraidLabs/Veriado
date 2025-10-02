@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls">
+  <Style TargetType="Page">
+    <Setter Property="Background" Value="{ThemeResource AppBackgroundBrush}" />
+  </Style>
+
+  <Style TargetType="controls:NavigationViewItem">
+    <Setter Property="Foreground" Value="{ThemeResource AppNavigationForegroundBrush}" />
+  </Style>
+
   <Style TargetType="TextBlock" x:Key="SectionTitleTextBlockStyle" BasedOn="{StaticResource HeaderTextBlockStyle}">
     <Setter Property="Margin" Value="0,24,0,12" />
     <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{ThemeResource AppTextPrimaryBrush}" />
   </Style>
 </ResourceDictionary>
