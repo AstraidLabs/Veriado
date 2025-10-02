@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -188,6 +189,7 @@ public partial class ImportPageViewModel : ViewModelBase
             if (SetProperty(ref _okCount, value))
             {
                 OnPropertyChanged(nameof(ProgressText));
+                OnPropertyChanged(nameof(PendingCount));
                 _clearResultsCommand.NotifyCanExecuteChanged();
             }
         }
@@ -201,6 +203,7 @@ public partial class ImportPageViewModel : ViewModelBase
             if (SetProperty(ref _errorCount, value))
             {
                 OnPropertyChanged(nameof(ProgressText));
+                OnPropertyChanged(nameof(PendingCount));
                 _clearResultsCommand.NotifyCanExecuteChanged();
             }
         }
@@ -214,13 +217,16 @@ public partial class ImportPageViewModel : ViewModelBase
             if (SetProperty(ref _skipCount, value))
             {
                 OnPropertyChanged(nameof(ProgressText));
+                OnPropertyChanged(nameof(PendingCount));
                 _clearResultsCommand.NotifyCanExecuteChanged();
             }
         }
     }
 
     public string ProgressText =>
-        $"Zpracováno {Processed}/{(Total > 0 ? Total : 0)} • OK {OkCount} • Chyby {ErrorCount} • Skip {SkipCount}";
+        $"Zpracováno {Processed}/{(Total > 0 ? Total : 0)} • OK {OkCount} • Chyby {ErrorCount} • Skip {SkipCount} • Čeká {PendingCount}";
+
+    public int PendingCount => CalculatePendingCount(Total, Processed, OkCount, ErrorCount, SkipCount);
 
     public bool HasErrors => Errors.Count > 0;
 
@@ -796,17 +802,25 @@ public partial class ImportPageViewModel : ViewModelBase
             aggregate.Skipped,
             aggregate.Errors);
 
-        var skippedSummary = aggregate.Skipped > 0
-            ? $" (přeskočeno {aggregate.Skipped})"
+        var skipped = Math.Max(0, aggregate.Skipped);
+        var pending = CalculatePendingCount(aggregate.Total, aggregate.Processed, aggregate.Succeeded, aggregate.Failed, skipped);
+        var skippedSummary = skipped > 0
+            ? $" (přeskočeno {skipped})"
+            : string.Empty;
+        var pendingSummary = pending > 0
+            ? $" (čeká {pending})"
+            : string.Empty;
+        var pendingSentence = pending > 0
+            ? $" Zbývá zpracovat {pending} souborů."
             : string.Empty;
 
         var summary = aggregate.Status switch
         {
-            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {aggregate.Succeeded} z {aggregate.Total} souborů{skippedSummary}.",
-            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({aggregate.Succeeded}/{aggregate.Total}{skippedSummary}). Zkontrolujte prosím chyby.",
-            ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
-            ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
-            _ => "Import dokončen.",
+            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {aggregate.Succeeded} z {aggregate.Total} souborů{skippedSummary}{pendingSummary}.",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({aggregate.Succeeded}/{aggregate.Total}{skippedSummary}{pendingSummary}). Zkontrolujte prosím chyby.",
+            ImportBatchStatus.Failure => $"Import se nezdařil.{pendingSentence} Zkontrolujte chyby.",
+            ImportBatchStatus.FatalError => $"Import byl zastaven kvůli fatální chybě.{pendingSentence} Opravte problém a zkuste to znovu.",
+            _ => $"Import dokončen.{pendingSentence}",
         };
 
         var logStatus = aggregate.Status switch
@@ -922,7 +936,8 @@ public partial class ImportPageViewModel : ViewModelBase
                     }
 
                     var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
-                    Log.Add(new ImportLogItem(DateTimeOffset.Now, "Chyba", error.Message, "error", detail));
+                    var statusText = GetLogStatusDisplay("error");
+                    Log.Add(new ImportLogItem(DateTimeOffset.Now, "Chyba", error.Message, statusText, detail));
                     TrimLog();
                 }
 
@@ -930,13 +945,25 @@ public partial class ImportPageViewModel : ViewModelBase
             });
         }
 
+        var skipped = Math.Max(0, result.Skipped);
+        var pending = CalculatePendingCount(result.Total, result.Processed, result.Succeeded, result.Failed, skipped);
+        var skippedSummary = skipped > 0
+            ? $" (přeskočeno {skipped})"
+            : string.Empty;
+        var pendingSummary = pending > 0
+            ? $" (čeká {pending})"
+            : string.Empty;
+        var pendingSentence = pending > 0
+            ? $" Zbývá zpracovat {pending} souborů."
+            : string.Empty;
+
         var summary = result.Status switch
         {
-            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {result.Succeeded} z {result.Total} souborů.",
-            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({result.Succeeded}/{result.Total}). Zkontrolujte prosím chyby.",
-            ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
-            ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
-            _ => "Import dokončen.",
+            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {result.Succeeded} z {result.Total} souborů{skippedSummary}{pendingSummary}.",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({result.Succeeded}/{result.Total}{skippedSummary}{pendingSummary}). Zkontrolujte prosím chyby.",
+            ImportBatchStatus.Failure => $"Import se nezdařil.{pendingSentence} Zkontrolujte chyby.",
+            ImportBatchStatus.FatalError => $"Import byl zastaven kvůli fatální chybě.{pendingSentence} Opravte problém a zkuste to znovu.",
+            _ => $"Import dokončen.{pendingSentence}",
         };
 
         var logStatus = result.Status switch
@@ -1020,7 +1047,8 @@ public partial class ImportPageViewModel : ViewModelBase
             builder.AppendLine($"Zpracováno: {Processed}");
             builder.AppendLine($"Úspěšně: {OkCount}");
             builder.AppendLine($"Chyby: {ErrorCount}");
-            builder.Append($"Přeskočeno: {skipped}");
+            builder.AppendLine($"Přeskočeno: {skipped}");
+            builder.Append($"Čeká: {PendingCount}");
 
             if (ErrorCount > 0)
             {
@@ -1044,7 +1072,9 @@ public partial class ImportPageViewModel : ViewModelBase
         builder.AppendLine($"Zpracováno: {result.Processed}");
         builder.AppendLine($"Úspěšně: {result.Succeeded}");
         builder.AppendLine($"Chyby: {result.Failed}");
-        builder.Append($"Přeskočeno: {skipped}");
+        builder.AppendLine($"Přeskočeno: {skipped}");
+        var pending = CalculatePendingCount(result.Total, result.Processed, result.Succeeded, result.Failed, skipped);
+        builder.Append($"Čeká: {pending}");
 
         if (result.Errors?.Count > 0)
         {
@@ -1054,6 +1084,42 @@ public partial class ImportPageViewModel : ViewModelBase
         }
 
         return builder.ToString();
+    }
+
+    private static int CalculatePendingCount(int total, int processed, int succeeded, int failed, int skipped)
+    {
+        var normalizedProcessed = Math.Max(processed, succeeded + failed + skipped);
+        return Math.Max(0, total - normalizedProcessed);
+    }
+
+    private static string NormalizeLogStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "info";
+        }
+
+        var trimmed = status.Trim();
+        return trimmed.ToLowerInvariant() switch
+        {
+            "success" or "ok" or "completed" => "success",
+            "warning" or "warn" or "caution" => "warning",
+            "error" or "fail" or "failure" or "fatal" => "error",
+            "info" or "information" or "status" => "info",
+            _ => trimmed.ToLowerInvariant(),
+        };
+    }
+
+    private static string GetLogStatusDisplay(string normalizedStatus)
+    {
+        return normalizedStatus switch
+        {
+            "success" => "Úspěch",
+            "warning" => "Varování",
+            "error" => "Chyba",
+            "info" => "Informace",
+            _ => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(normalizedStatus),
+        };
     }
 
     private async Task SetActiveStatusAsync(string title, string? message, InfoBarSeverity severity)
@@ -1123,7 +1189,16 @@ public partial class ImportPageViewModel : ViewModelBase
 
         if (progress.ProcessedFiles.HasValue && progress.TotalFiles.HasValue)
         {
-            return $"Zpracováno {progress.ProcessedFiles}/{progress.TotalFiles} souborů.";
+            var total = progress.TotalFiles.Value;
+            var processed = progress.ProcessedFiles.Value;
+            var succeeded = progress.SucceededFiles ?? processed;
+            var failed = progress.FailedFiles ?? 0;
+            var skipped = progress.SkippedFiles ?? 0;
+            var pending = CalculatePendingCount(total, processed, succeeded, failed, skipped);
+            var baseMessage = $"Zpracováno {processed}/{total} souborů.";
+            return pending > 0
+                ? $"{baseMessage} Čeká {pending}."
+                : baseMessage;
         }
 
         if (progress.ProcessedFiles.HasValue)
@@ -1170,9 +1245,11 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private async Task AddLogAsync(string title, string message, string status, string? detail = null)
     {
+        var normalizedStatus = NormalizeLogStatus(status);
+        var displayStatus = GetLogStatusDisplay(normalizedStatus);
         await Dispatcher.Enqueue(() =>
         {
-            Log.Add(new ImportLogItem(DateTimeOffset.Now, title, message, status, detail));
+            Log.Add(new ImportLogItem(DateTimeOffset.Now, title, message, displayStatus, detail));
             TrimLog();
             _clearResultsCommand.NotifyCanExecuteChanged();
             _exportLogCommand.NotifyCanExecuteChanged();
@@ -1393,12 +1470,14 @@ public partial class ImportPageViewModel : ViewModelBase
     partial void OnProcessedChanged(int value)
     {
         OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(PendingCount));
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnTotalChanged(int value)
     {
         OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(PendingCount));
         _clearResultsCommand.NotifyCanExecuteChanged();
     }
 
