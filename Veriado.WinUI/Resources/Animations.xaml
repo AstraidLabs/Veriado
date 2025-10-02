@@ -4,10 +4,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:helpers="using:Veriado.WinUI.Helpers"
-    xmlns:media="using:Microsoft.UI.Xaml.Media.Animation">
-  <x:TimeSpan x:Key="Anim.Fast">0:0:0.12</x:TimeSpan>
-  <x:TimeSpan x:Key="Anim.Med">0:0:0.18</x:TimeSpan>
-  <x:TimeSpan x:Key="Anim.Panel">0:0:0.15</x:TimeSpan>
+    xmlns:media="using:Microsoft.UI.Xaml.Media.Animation"
+    xmlns:sys="using:System">
+  <sys:TimeSpan x:Key="Anim.Fast">0:0:0.12</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Anim.Med">0:0:0.18</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Anim.Panel">0:0:0.15</sys:TimeSpan>
 
   <media:PowerEase x:Key="Ease.Out" EasingMode="EaseOut" Power="0.3" />
   <media:PowerEase x:Key="Ease.In" EasingMode="EaseIn" Power="0.3" />
