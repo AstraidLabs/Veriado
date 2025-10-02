@@ -217,7 +217,7 @@ public static class ExpanderAnimationHelper
         var token = expander.RegisterPropertyChangedCallback(Expander.IsExpandedProperty, OnExpanderIsExpandedChanged);
         SetPropertyChangedCallbackToken(expander, token);
 
-        if (expander.Content is FrameworkElement content)
+        if (TryGetContent(expander, out var content))
         {
             content.Opacity = expander.IsExpanded ? 1d : 0d;
         }
@@ -238,7 +238,7 @@ public static class ExpanderAnimationHelper
 
     private static void OnExpanderExpanding(Expander sender, ExpanderExpandingEventArgs args)
     {
-        if (sender.Content is not FrameworkElement content)
+        if (!TryGetContent(sender, out var content))
         {
             return;
         }
@@ -285,7 +285,7 @@ public static class ExpanderAnimationHelper
             return;
         }
 
-        if (expander.Content is not FrameworkElement content)
+        if (!TryGetContent(expander, out var content))
         {
             return;
         }
@@ -301,6 +301,18 @@ public static class ExpanderAnimationHelper
         }
 
         HandleCollapse(expander, content);
+    }
+
+    private static bool TryGetContent(Expander expander, out FrameworkElement content)
+    {
+        if (expander.Content is FrameworkElement frameworkElement)
+        {
+            content = frameworkElement;
+            return true;
+        }
+
+        content = null!;
+        return false;
     }
 
     private static void HandleCollapse(Expander expander, FrameworkElement content)
@@ -356,7 +368,7 @@ public static class ExpanderAnimationHelper
             SetIsCollapsingInternally(sender, false);
         }
 
-        if (sender.Content is FrameworkElement content)
+        if (TryGetContent(sender, out var content))
         {
             if (!AnimationSettings.AreEnabled)
             {
