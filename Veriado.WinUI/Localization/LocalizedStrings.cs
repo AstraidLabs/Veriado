@@ -1,14 +1,9 @@
 using System.Globalization;
-using Microsoft.Windows.ApplicationModel.Resources;
 
 namespace Veriado.WinUI.Localization;
 
 internal static class LocalizedStrings
 {
-    private static readonly ResourceManager ResourceManager = new();
-    private static readonly ResourceMap? ResourceMap = ResourceManager.MainResourceMap.TryGetSubtree("Resources");
-    private static readonly ResourceContext ResourceContext = ResourceManager.CreateResourceContext();
-
     public static string Get(string resourceKey, string? defaultValue = null, params object?[] arguments)
     {
         if (string.IsNullOrWhiteSpace(resourceKey))
@@ -16,7 +11,11 @@ internal static class LocalizedStrings
             throw new ArgumentException("Resource key must be provided.", nameof(resourceKey));
         }
 
-        var template = TryGetString(resourceKey) ?? defaultValue ?? resourceKey;
+        var template = CultureHelper.GetString(resourceKey);
+        if (string.Equals(template, resourceKey, StringComparison.Ordinal))
+        {
+            template = defaultValue ?? resourceKey;
+        }
         if (arguments is { Length: > 0 })
         {
             try
@@ -30,24 +29,5 @@ internal static class LocalizedStrings
         }
 
         return template;
-    }
-
-    public static void SetLanguageQualifier(string language)
-    {
-        if (!string.IsNullOrWhiteSpace(language))
-        {
-            ResourceContext.QualifierValues["Language"] = language;
-        }
-    }
-
-    private static string? TryGetString(string resourceKey)
-    {
-        if (ResourceMap is null)
-        {
-            return null;
-        }
-
-        var candidate = ResourceMap.TryGetValue(resourceKey, ResourceContext);
-        return candidate?.ValueAsString;
     }
 }

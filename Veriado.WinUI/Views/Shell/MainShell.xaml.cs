@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Linq;
+using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.Navigation;
 using Veriado.WinUI.ViewModels.Shell;
 
@@ -25,11 +26,7 @@ public sealed partial class MainShell : Window, INavigationHost
         Closed += OnClosed;
     }
 
-    public object? CurrentContent
-    {
-        get => ContentHost.Content;
-        set => ContentHost.Content = value;
-    }
+    public Frame NavigationFrame => ContentFrame;
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {

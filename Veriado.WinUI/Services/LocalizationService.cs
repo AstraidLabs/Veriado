@@ -9,7 +9,7 @@ public sealed class LocalizationService : ILocalizationService
     private readonly ISettingsService _settingsService;
     private readonly ResourceManager _resourceManager = new();
     private readonly ResourceMap? _resourceMap;
-    private readonly ResourceContext _resourceContext;
+    private ResourceContext _resourceContext;
     private readonly IReadOnlyList<CultureInfo> _supportedCultures;
     private CultureInfo _currentCulture;
 
@@ -17,7 +17,7 @@ public sealed class LocalizationService : ILocalizationService
     {
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _resourceMap = _resourceManager.MainResourceMap.TryGetSubtree("Resources");
-        _resourceContext = _resourceManager.CreateResourceContext();
+        _resourceContext = new ResourceContext(_resourceManager);
         _supportedCultures = LocalizationConfiguration.SupportedCultures;
         _currentCulture = LocalizationConfiguration.NormalizeCulture(CultureInfo.CurrentUICulture);
         UpdateCulture(_currentCulture, force: true);
@@ -73,10 +73,6 @@ public sealed class LocalizationService : ILocalizationService
         if (hasChanged || force)
         {
             UpdateCulture(normalized, force);
-            if (hasChanged)
-            {
-                CultureChanged?.Invoke(this, normalized);
-            }
         }
 
         if (persist)
@@ -94,8 +90,9 @@ public sealed class LocalizationService : ILocalizationService
         }
 
         _currentCulture = culture;
-        CultureHelper.ApplyCulture(culture);
+        _resourceContext = new ResourceContext(_resourceManager);
         _resourceContext.QualifierValues["Language"] = culture.Name;
+        CultureHelper.ApplyCulture(culture);
     }
 
     private string? TryGetString(string resourceKey)
@@ -107,5 +104,10 @@ public sealed class LocalizationService : ILocalizationService
 
         var candidate = _resourceMap.TryGetValue(resourceKey, _resourceContext);
         return candidate?.ValueAsString;
+    }
+
+    public void RaiseCultureChanged()
+    {
+        CultureChanged?.Invoke(this, _currentCulture);
     }
 }

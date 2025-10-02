@@ -1,32 +1,37 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Numerics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Files;
+using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.Views.Files;
 
-public sealed partial class FilesPage : Page
+public sealed partial class FilesPage : CultureAwarePage
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
     private readonly Dictionary<InfoBar, long> _infoBarIsOpenCallbacks = new();
-    private ImplicitAnimationCollection? _itemAnimations;
+
+    public FilesPage()
+        : this(App.Services.GetRequiredService<FilesPageViewModel>())
+    {
+    }
 
     public FilesPage(FilesPageViewModel viewModel)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = ViewModel;
         InitializeComponent();
-        FilesRepeater.ElementPrepared += OnFilesRepeaterElementPrepared;
-        FilesRepeater.ElementClearing += OnFilesRepeaterElementClearing;
+        UpdateListAnimations(AnimationSettings.AreEnabled);
         UpdateLoadingState(ViewModel.IsBusy, animate: false);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        AnimationSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
     }
 
     public FilesPageViewModel ViewModel { get; }
@@ -43,6 +48,7 @@ public sealed partial class FilesPage : Page
     {
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         ViewModel.StopHealthMonitoring();
+        AnimationSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
     }
 
     private Task ExecuteInitialRefreshAsync()
@@ -90,6 +96,25 @@ public sealed partial class FilesPage : Page
         AnimateOpacity(compositor, resultsVisual, isBusy ? 0f : 1f, duration, easing, null);
     }
 
+    private void UpdateListAnimations(bool areEnabled)
+    {
+        if (FilesRepeater is null)
+        {
+            return;
+        }
+
+        ImplicitListAnimations.Attach(FilesRepeater, areEnabled);
+    }
+
+    private void OnAnimationsEnabledChanged(object? sender, bool areEnabled)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            UpdateListAnimations(areEnabled);
+            UpdateLoadingState(ViewModel.IsBusy, animate: false);
+        });
+    }
+
     private static void AnimateOpacity(Compositor compositor, Visual visual, float targetOpacity, TimeSpan duration, CompositionEasingFunction easing, Action? completed)
     {
         var animation = compositor.CreateScalarKeyFrameAnimation();
@@ -105,61 +130,6 @@ public sealed partial class FilesPage : Page
             batch.Completed += (_, __) => completed();
         }
         batch.End();
-    }
-
-    private void OnFilesRepeaterElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
-    {
-        if (args.Element is not UIElement element)
-        {
-            return;
-        }
-
-        if (!AnimationSettings.AreEnabled)
-        {
-            element.Opacity = 1d;
-            return;
-        }
-
-        var visual = ElementCompositionPreview.GetElementVisual(element);
-        visual.Opacity = 0f;
-        visual.Offset = new Vector3(0f, 12f, 0f);
-
-        if (_itemAnimations is null)
-        {
-            var compositor = visual.Compositor;
-            var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Medium);
-            var easing = AnimationResourceHelper.CreateEasing(compositor, AnimationResourceKeys.EaseOut);
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.Target = nameof(Visual.Opacity);
-            fadeAnimation.Duration = duration;
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f, easing);
-
-            var translationAnimation = compositor.CreateVector3KeyFrameAnimation();
-            translationAnimation.Target = nameof(Visual.Offset);
-            translationAnimation.Duration = duration;
-            translationAnimation.InsertKeyFrame(0f, new Vector3(0f, 12f, 0f));
-            translationAnimation.InsertKeyFrame(1f, Vector3.Zero, easing);
-
-            _itemAnimations = compositor.CreateImplicitAnimationCollection();
-            _itemAnimations[nameof(Visual.Opacity)] = fadeAnimation;
-            _itemAnimations[nameof(Visual.Offset)] = translationAnimation;
-        }
-
-        visual.ImplicitAnimations = _itemAnimations;
-        visual.Opacity = 1f;
-        visual.Offset = Vector3.Zero;
-    }
-
-    private void OnFilesRepeaterElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
-    {
-        if (args.Element is UIElement element)
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(element);
-            visual.Opacity = 1f;
-            visual.Offset = Vector3.Zero;
-        }
     }
 
     private void OnInfoBarLoaded(object sender, RoutedEventArgs e)

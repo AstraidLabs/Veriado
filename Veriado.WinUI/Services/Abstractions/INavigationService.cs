@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.Navigation;
 
 namespace Veriado.WinUI.Services.Abstractions;
@@ -11,5 +12,5 @@ public interface INavigationService
 
 public interface INavigationHost
 {
-    object? CurrentContent { get; set; }
+    Frame NavigationFrame { get; }
 }
