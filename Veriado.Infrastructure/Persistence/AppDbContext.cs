@@ -61,6 +61,7 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.ContentHash).HasColumnName("content_hash").HasColumnType("TEXT");
             entity.Property(e => e.TitleHash).HasColumnName("title_hash").HasColumnType("TEXT");
             entity.Property(e => e.EnqueuedUtc).HasColumnName("enqueued_utc").HasColumnType("TEXT").IsRequired();
+            entity.HasIndex(e => e.EnqueuedUtc).HasDatabaseName("idx_fts_write_ahead_enqueued");
         });
 
         modelBuilder.Entity<FtsWriteAheadDeadLetterRecord>(entity =>
@@ -76,6 +77,7 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.EnqueuedUtc).HasColumnName("enqueued_utc").HasColumnType("TEXT").IsRequired();
             entity.Property(e => e.DeadLetteredUtc).HasColumnName("dead_lettered_utc").HasColumnType("TEXT").IsRequired();
             entity.Property(e => e.Error).HasColumnName("error").HasColumnType("TEXT").IsRequired();
+            entity.HasIndex(e => e.DeadLetteredUtc).HasDatabaseName("idx_fts_write_ahead_dlq_dead_lettered");
         });
 
         if (_options.FtsIndexingMode != FtsIndexingMode.Outbox)
