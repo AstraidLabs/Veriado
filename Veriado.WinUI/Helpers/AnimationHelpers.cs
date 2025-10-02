@@ -1,0 +1,326 @@
+using System;
+using System.Numerics;
+using Microsoft.UI.Composition;
+using Microsoft.UI.ViewManagement;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
+
+namespace Veriado.WinUI.Helpers;
+
+internal static class AnimationSettings
+{
+    private static bool _areAnimationsEnabled = true;
+    private static UISettings? _uiSettings;
+
+    static AnimationSettings()
+    {
+        try
+        {
+            _uiSettings = new UISettings();
+            _areAnimationsEnabled = _uiSettings.AnimationsEnabled;
+            _uiSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
+        }
+        catch
+        {
+            _areAnimationsEnabled = true;
+        }
+    }
+
+    public static bool AreEnabled => _areAnimationsEnabled;
+
+    private static void OnAnimationsEnabledChanged(UISettings sender, object args)
+    {
+        _areAnimationsEnabled = sender.AnimationsEnabled;
+    }
+}
+
+internal static class AnimationResourceKeys
+{
+    public const string Fast = "Anim.Fast";
+    public const string Medium = "Anim.Med";
+    public const string Panel = "Anim.Panel";
+    public const string EaseOut = "Ease.Out";
+    public const string EaseIn = "Ease.In";
+}
+
+internal static class AnimationResourceHelper
+{
+    public static TimeSpan GetDuration(string key)
+    {
+        if (Application.Current?.Resources.ContainsKey(key) == true && Application.Current.Resources[key] is TimeSpan timeSpan)
+        {
+            return timeSpan;
+        }
+
+        return TimeSpan.FromMilliseconds(150);
+    }
+
+    public static CompositionEasingFunction CreateEasing(Compositor compositor, string key)
+    {
+        return key switch
+        {
+            AnimationResourceKeys.EaseOut => compositor.CreateCubicBezierEasingFunction(new Vector2(0.17f, 0.17f), new Vector2(0f, 1f)),
+            AnimationResourceKeys.EaseIn => compositor.CreateCubicBezierEasingFunction(new Vector2(0.4f, 0f), new Vector2(1f, 1f)),
+            _ => compositor.CreateLinearEasingFunction(),
+        };
+    }
+}
+
+public static class PulseButtonHelper
+{
+    public static readonly DependencyProperty IsEnabledProperty = DependencyProperty.RegisterAttached(
+        "IsEnabled",
+        typeof(bool),
+        typeof(PulseButtonHelper),
+        new PropertyMetadata(false, OnIsEnabledChanged));
+
+    public static bool GetIsEnabled(DependencyObject element) => (bool)element.GetValue(IsEnabledProperty);
+
+    public static void SetIsEnabled(DependencyObject element, bool value) => element.SetValue(IsEnabledProperty, value);
+
+    private static void OnIsEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not Button button)
+        {
+            return;
+        }
+
+        if ((bool)e.NewValue)
+        {
+            button.Click += OnButtonClick;
+            button.Unloaded += OnButtonUnloaded;
+        }
+        else
+        {
+            button.Click -= OnButtonClick;
+            button.Unloaded -= OnButtonUnloaded;
+        }
+    }
+
+    private static void OnButtonUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+        {
+            button.Click -= OnButtonClick;
+            button.Unloaded -= OnButtonUnloaded;
+        }
+    }
+
+    private static void OnButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (!AnimationSettings.AreEnabled || sender is not Button button)
+        {
+            return;
+        }
+
+        if (button.ActualWidth <= 0 || button.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        var visual = ElementCompositionPreview.GetElementVisual(button);
+        var compositor = visual.Compositor;
+        var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Fast);
+        var easing = AnimationResourceHelper.CreateEasing(compositor, AnimationResourceKeys.EaseOut);
+
+        visual.CenterPoint = new Vector3((float)(button.ActualWidth / 2), (float)(button.ActualHeight / 2), 0f);
+
+        var animation = compositor.CreateVector3KeyFrameAnimation();
+        animation.Target = nameof(Visual.Scale);
+        animation.Duration = duration;
+        animation.InsertKeyFrame(0f, new Vector3(1f, 1f, 1f));
+        animation.InsertKeyFrame(0.5f, new Vector3(1.05f, 1.05f, 1f), easing);
+        animation.InsertKeyFrame(1f, new Vector3(1f, 1f, 1f), easing);
+
+        visual.StartAnimation(nameof(Visual.Scale), animation);
+    }
+}
+
+public static class ExpanderAnimationHelper
+{
+    private static readonly DependencyProperty IsCollapsingInternallyProperty = DependencyProperty.RegisterAttached(
+        "IsCollapsingInternally",
+        typeof(bool),
+        typeof(ExpanderAnimationHelper),
+        new PropertyMetadata(false));
+
+    public static readonly DependencyProperty IsEnabledProperty = DependencyProperty.RegisterAttached(
+        "IsEnabled",
+        typeof(bool),
+        typeof(ExpanderAnimationHelper),
+        new PropertyMetadata(false, OnIsEnabledChanged));
+
+    public static bool GetIsEnabled(DependencyObject element) => (bool)element.GetValue(IsEnabledProperty);
+
+    public static void SetIsEnabled(DependencyObject element, bool value) => element.SetValue(IsEnabledProperty, value);
+
+    private static bool GetIsCollapsingInternally(DependencyObject element) => (bool)element.GetValue(IsCollapsingInternallyProperty);
+
+    private static void SetIsCollapsingInternally(DependencyObject element, bool value) => element.SetValue(IsCollapsingInternallyProperty, value);
+
+    private static void OnIsEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not Expander expander)
+        {
+            return;
+        }
+
+        if ((bool)e.NewValue)
+        {
+            expander.Loaded += OnExpanderLoaded;
+            expander.Unloaded += OnExpanderUnloaded;
+            if (expander.IsLoaded)
+            {
+                Attach(expander);
+            }
+        }
+        else
+        {
+            expander.Loaded -= OnExpanderLoaded;
+            expander.Unloaded -= OnExpanderUnloaded;
+            Detach(expander);
+        }
+    }
+
+    private static void OnExpanderLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Expander expander)
+        {
+            Attach(expander);
+        }
+    }
+
+    private static void OnExpanderUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Expander expander)
+        {
+            Detach(expander);
+        }
+    }
+
+    private static void Attach(Expander expander)
+    {
+        expander.Expanding += OnExpanderExpanding;
+        expander.Collapsing += OnExpanderCollapsing;
+        expander.Collapsed += OnExpanderCollapsed;
+
+        if (expander.Content is UIElement content)
+        {
+            content.Opacity = expander.IsExpanded ? 1d : 0d;
+        }
+    }
+
+    private static void Detach(Expander expander)
+    {
+        expander.Expanding -= OnExpanderExpanding;
+        expander.Collapsing -= OnExpanderCollapsing;
+        expander.Collapsed -= OnExpanderCollapsed;
+    }
+
+    private static void OnExpanderExpanding(Expander sender, ExpanderExpandingEventArgs args)
+    {
+        if (sender.Content is not UIElement content)
+        {
+            return;
+        }
+
+        if (!AnimationSettings.AreEnabled)
+        {
+            content.Opacity = 1d;
+            return;
+        }
+
+        var visual = ElementCompositionPreview.GetElementVisual(content);
+        var compositor = visual.Compositor;
+        var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Panel);
+        var easing = AnimationResourceHelper.CreateEasing(compositor, AnimationResourceKeys.EaseOut);
+
+        EnsureCenterPoint(visual, content, sender);
+
+        visual.Opacity = 0f;
+        visual.Scale = new Vector3(1f, 0.92f, 1f);
+
+        var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
+        scaleAnimation.Target = nameof(Visual.Scale);
+        scaleAnimation.Duration = duration;
+        scaleAnimation.InsertKeyFrame(0f, new Vector3(1f, 0.92f, 1f));
+        scaleAnimation.InsertKeyFrame(1f, new Vector3(1f, 1f, 1f), easing);
+
+        var opacityAnimation = compositor.CreateScalarKeyFrameAnimation();
+        opacityAnimation.Target = nameof(Visual.Opacity);
+        opacityAnimation.Duration = duration;
+        opacityAnimation.InsertKeyFrame(0f, 0f);
+        opacityAnimation.InsertKeyFrame(1f, 1f, easing);
+
+        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+        visual.StartAnimation(nameof(Visual.Scale), scaleAnimation);
+        visual.StartAnimation(nameof(Visual.Opacity), opacityAnimation);
+        batch.Completed += (_, __) => content.Opacity = 1d;
+        batch.End();
+    }
+
+    private static void OnExpanderCollapsing(Expander sender, ExpanderCollapsingEventArgs args)
+    {
+        if (sender.Content is not UIElement content)
+        {
+            return;
+        }
+
+        if (GetIsCollapsingInternally(sender) || !AnimationSettings.AreEnabled)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+
+        var visual = ElementCompositionPreview.GetElementVisual(content);
+        var compositor = visual.Compositor;
+        var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Panel);
+        var easing = AnimationResourceHelper.CreateEasing(compositor, AnimationResourceKeys.EaseOut);
+
+        EnsureCenterPoint(visual, content, sender);
+
+        var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
+        scaleAnimation.Target = nameof(Visual.Scale);
+        scaleAnimation.Duration = duration;
+        scaleAnimation.InsertKeyFrame(0f, visual.Scale);
+        scaleAnimation.InsertKeyFrame(1f, new Vector3(1f, 0.92f, 1f), easing);
+
+        var opacityAnimation = compositor.CreateScalarKeyFrameAnimation();
+        opacityAnimation.Target = nameof(Visual.Opacity);
+        opacityAnimation.Duration = duration;
+        opacityAnimation.InsertKeyFrame(0f, visual.Opacity);
+        opacityAnimation.InsertKeyFrame(1f, 0f, easing);
+
+        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+        batch.Completed += (_, __) =>
+        {
+            content.Opacity = 0d;
+            SetIsCollapsingInternally(sender, true);
+            sender.IsExpanded = false;
+        };
+        visual.StartAnimation(nameof(Visual.Scale), scaleAnimation);
+        visual.StartAnimation(nameof(Visual.Opacity), opacityAnimation);
+        batch.End();
+    }
+
+    private static void OnExpanderCollapsed(Expander sender, ExpanderCollapsedEventArgs args)
+    {
+        if (GetIsCollapsingInternally(sender))
+        {
+            SetIsCollapsingInternally(sender, false);
+        }
+
+        if (sender.Content is UIElement content && !AnimationSettings.AreEnabled)
+        {
+            content.Opacity = 0d;
+        }
+    }
+
+    private static void EnsureCenterPoint(Visual visual, UIElement content, FrameworkElement expander)
+    {
+        var width = content.RenderSize.Width > 0 ? content.RenderSize.Width : expander.ActualWidth;
+        visual.CenterPoint = new Vector3((float)(width / 2), 0f, 0f);
+    }
+}
