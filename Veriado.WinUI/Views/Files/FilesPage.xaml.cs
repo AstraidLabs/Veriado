@@ -14,6 +14,7 @@ namespace Veriado.WinUI.Views.Files;
 public sealed partial class FilesPage : Page
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
+    private readonly Dictionary<InfoBar, long> _infoBarIsOpenCallbacks = new();
     private ImplicitAnimationCollection? _itemAnimations;
 
     public FilesPage(FilesPageViewModel viewModel)
@@ -162,13 +163,54 @@ public sealed partial class FilesPage : Page
         }
     }
 
-    private void OnInfoBarOpened(object sender, object e)
+    private void OnInfoBarLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not InfoBar infoBar)
         {
             return;
         }
 
+        infoBar.Unloaded -= OnInfoBarUnloaded;
+        infoBar.Unloaded += OnInfoBarUnloaded;
+
+        if (!_infoBarIsOpenCallbacks.ContainsKey(infoBar))
+        {
+            var token = infoBar.RegisterPropertyChangedCallback(InfoBar.IsOpenProperty, OnInfoBarIsOpenChanged);
+            _infoBarIsOpenCallbacks[infoBar] = token;
+        }
+
+        if (infoBar.IsOpen)
+        {
+            PlayInfoBarOpeningAnimation(infoBar);
+        }
+    }
+
+    private void OnInfoBarUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not InfoBar infoBar)
+        {
+            return;
+        }
+
+        infoBar.Unloaded -= OnInfoBarUnloaded;
+
+        if (_infoBarIsOpenCallbacks.TryGetValue(infoBar, out var token))
+        {
+            infoBar.UnregisterPropertyChangedCallback(InfoBar.IsOpenProperty, token);
+            _infoBarIsOpenCallbacks.Remove(infoBar);
+        }
+    }
+
+    private void OnInfoBarIsOpenChanged(DependencyObject sender, DependencyProperty _)
+    {
+        if (sender is InfoBar infoBar && infoBar.IsOpen)
+        {
+            PlayInfoBarOpeningAnimation(infoBar);
+        }
+    }
+
+    private void PlayInfoBarOpeningAnimation(InfoBar infoBar)
+    {
         if (!AnimationSettings.AreEnabled)
         {
             infoBar.Opacity = 1d;
