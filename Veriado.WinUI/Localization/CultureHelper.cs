@@ -6,8 +6,6 @@ namespace Veriado.WinUI.Localization;
 
 internal static class CultureHelper
 {
-    private static readonly ResourceManager ResourceManager = new();
-
     public static void ApplyCulture(CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(culture);
@@ -17,7 +15,7 @@ internal static class CultureHelper
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
 
-        ResourceManager.DefaultContext.QualifierValues["Language"] = culture.Name;
+        ResourceContext.SetGlobalQualifierValue("Language", culture.Name);
         LocalizedStrings.SetLanguageQualifier(culture.Name);
         if (OperatingSystem.IsWindows())
         {
