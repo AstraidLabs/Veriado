@@ -32,6 +32,14 @@ internal static class LocalizedStrings
         return template;
     }
 
+    public static void SetLanguageQualifier(string language)
+    {
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            ResourceContext.QualifierValues["Language"] = language;
+        }
+    }
+
     private static string? TryGetString(string resourceKey)
     {
         if (ResourceMap is null)
