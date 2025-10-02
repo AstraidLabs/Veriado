@@ -103,24 +103,10 @@
             <muxc:InfoBar
                 Margin="0,8,0,0"
                 IsClosable="True"
-                IsOpen="{Binding IsActiveStatusVisible, Mode=TwoWay}"
-                Severity="{Binding ActiveStatusSeverity}"
-                Title="{Binding ActiveStatusTitle}"
-                Message="{Binding ActiveStatusMessage}">
-                <muxc:InfoBar.Transitions>
-                    <TransitionCollection>
-                        <animations:EntranceThemeTransition />
-                    </TransitionCollection>
-                </muxc:InfoBar.Transitions>
-            </muxc:InfoBar>
-
-            <muxc:InfoBar
-                Margin="0,4,0,0"
-                IsClosable="True"
-                IsOpen="{Binding IsDynamicStatusVisible, Mode=TwoWay}"
-                Severity="{Binding DynamicStatusSeverity}"
-                Title="{Binding DynamicStatusTitle}"
-                Message="{Binding DynamicStatusMessage}">
+                IsOpen="{Binding IsStatusVisible, Mode=TwoWay}"
+                Severity="{Binding StatusSeverity}"
+                Title="{Binding StatusTitle}"
+                Message="{Binding StatusMessage}">
                 <muxc:InfoBar.Transitions>
                     <TransitionCollection>
                         <animations:EntranceThemeTransition />

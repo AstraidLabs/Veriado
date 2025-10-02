@@ -1,8 +1,10 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Microsoft.UI.Xaml.Controls;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Import;
 using Veriado.Services.Import;
@@ -150,6 +152,18 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private InfoBarSeverity _dynamicStatusSeverity = InfoBarSeverity.Informational;
+
+    [ObservableProperty]
+    private bool _isStatusVisible;
+
+    [ObservableProperty]
+    private string? _statusTitle;
+
+    [ObservableProperty]
+    private string? _statusMessage;
+
+    [ObservableProperty]
+    private InfoBarSeverity _statusSeverity = InfoBarSeverity.Informational;
 
     [ObservableProperty]
     private ImportErrorSeverity _selectedErrorFilter = ImportErrorSeverity.All;
@@ -709,13 +723,41 @@ public partial class ImportPageViewModel : ViewModelBase
         var fileName = string.IsNullOrWhiteSpace(filePath)
             ? "Soubor"
             : Path.GetFileName(filePath);
-        var detail = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
 
-        await AddLogAsync("OK", fileName, "success", detail).ConfigureAwait(false);
-        var completionMessage = string.IsNullOrWhiteSpace(fileName)
-            ? "Soubor byl úspěšně importován."
-            : $"Soubor {fileName} byl úspěšně importován.";
-        await SetDynamicStatusAsync("Soubor dokončen", completionMessage, InfoBarSeverity.Success).ConfigureAwait(false);
+        var detailBuilder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(filePath))
+        {
+            detailBuilder.AppendLine($"Soubor: {filePath}");
+        }
+
+        var message = progress.Message;
+        var isSkip = !string.IsNullOrWhiteSpace(message)
+            && message.Contains("Skipped", StringComparison.OrdinalIgnoreCase);
+
+        if (isSkip && !string.IsNullOrWhiteSpace(message))
+        {
+            detailBuilder.AppendLine($"Důvod: {message}");
+        }
+
+        var detail = detailBuilder.Length > 0 ? detailBuilder.ToString() : null;
+        var logTitle = isSkip ? "Přeskočeno" : "OK";
+        var logStatus = isSkip ? "warning" : "success";
+        var logMessage = isSkip
+            ? string.IsNullOrWhiteSpace(fileName)
+                ? "Soubor byl přeskočen."
+                : $"Soubor {fileName} byl přeskočen."
+            : string.IsNullOrWhiteSpace(fileName)
+                ? "Soubor byl úspěšně importován."
+                : $"Soubor {fileName} byl úspěšně importován.";
+
+        await AddLogAsync(logTitle, logMessage, logStatus, detail).ConfigureAwait(false);
+
+        var statusTitle = isSkip ? "Soubor přeskočen" : "Soubor dokončen";
+        var statusMessage = isSkip && !string.IsNullOrWhiteSpace(message)
+            ? message
+            : logMessage;
+        var statusSeverity = isSkip ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
+        await SetDynamicStatusAsync(statusTitle, statusMessage, statusSeverity).ConfigureAwait(false);
     }
 
     private async Task HandleErrorEventAsync(ImportProgressEvent progress)
@@ -749,8 +791,23 @@ public partial class ImportPageViewModel : ViewModelBase
             detailBuilder.AppendLine($"Soubor: {progress.Error.FilePath}");
         }
 
+        if (!string.IsNullOrWhiteSpace(progress.Error.Message))
+        {
+            if (detailBuilder.Length > 0)
+            {
+                detailBuilder.AppendLine();
+            }
+
+            detailBuilder.AppendLine($"Důvod: {progress.Error.Message}");
+        }
+
         if (!string.IsNullOrWhiteSpace(progress.Error.Suggestion))
         {
+            if (detailBuilder.Length > 0)
+            {
+                detailBuilder.AppendLine();
+            }
+
             detailBuilder.Append(progress.Error.Suggestion);
         }
 
@@ -903,8 +960,23 @@ public partial class ImportPageViewModel : ViewModelBase
                         detailBuilder.AppendLine($"Soubor: {error.FilePath}");
                     }
 
+                    if (!string.IsNullOrWhiteSpace(error.Message))
+                    {
+                        if (detailBuilder.Length > 0)
+                        {
+                            detailBuilder.AppendLine();
+                        }
+
+                        detailBuilder.AppendLine($"Důvod: {error.Message}");
+                    }
+
                     if (!string.IsNullOrWhiteSpace(error.Suggestion))
                     {
+                        if (detailBuilder.Length > 0)
+                        {
+                            detailBuilder.AppendLine();
+                        }
+
                         detailBuilder.Append(error.Suggestion);
                     }
 
@@ -1049,6 +1121,7 @@ public partial class ImportPageViewModel : ViewModelBase
             ActiveStatusMessage = message;
             ActiveStatusSeverity = severity;
             IsActiveStatusVisible = true;
+            UpdateVisibleStatus();
         });
     }
 
@@ -1060,6 +1133,7 @@ public partial class ImportPageViewModel : ViewModelBase
             ActiveStatusMessage = null;
             ActiveStatusSeverity = InfoBarSeverity.Informational;
             IsActiveStatusVisible = false;
+            UpdateVisibleStatus();
         });
     }
 
@@ -1077,6 +1151,7 @@ public partial class ImportPageViewModel : ViewModelBase
             DynamicStatusMessage = message;
             DynamicStatusSeverity = severity;
             IsDynamicStatusVisible = true;
+            UpdateVisibleStatus();
         });
     }
 
@@ -1088,7 +1163,55 @@ public partial class ImportPageViewModel : ViewModelBase
             DynamicStatusMessage = null;
             DynamicStatusSeverity = InfoBarSeverity.Informational;
             IsDynamicStatusVisible = false;
+            UpdateVisibleStatus();
         });
+    }
+
+    partial void OnIsStatusVisibleChanged(bool value)
+    {
+        if (!value && (IsDynamicStatusVisible || IsActiveStatusVisible))
+        {
+            _ = Dispatcher.Enqueue(() =>
+            {
+                ActiveStatusTitle = null;
+                ActiveStatusMessage = null;
+                ActiveStatusSeverity = InfoBarSeverity.Informational;
+                IsActiveStatusVisible = false;
+
+                DynamicStatusTitle = null;
+                DynamicStatusMessage = null;
+                DynamicStatusSeverity = InfoBarSeverity.Informational;
+                IsDynamicStatusVisible = false;
+
+                UpdateVisibleStatus();
+            });
+        }
+    }
+
+    private void UpdateVisibleStatus()
+    {
+        if (IsDynamicStatusVisible)
+        {
+            StatusTitle = DynamicStatusTitle;
+            StatusMessage = DynamicStatusMessage;
+            StatusSeverity = DynamicStatusSeverity;
+            IsStatusVisible = true;
+            return;
+        }
+
+        if (IsActiveStatusVisible)
+        {
+            StatusTitle = ActiveStatusTitle;
+            StatusMessage = ActiveStatusMessage;
+            StatusSeverity = ActiveStatusSeverity;
+            IsStatusVisible = true;
+            return;
+        }
+
+        StatusTitle = null;
+        StatusMessage = null;
+        StatusSeverity = InfoBarSeverity.Informational;
+        IsStatusVisible = false;
     }
 
     private static string BuildDynamicStatusMessage(ImportProgressEvent progress)
