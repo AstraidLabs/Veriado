@@ -1,4 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Veriado.WinUI.Helpers;
 using Veriado.WinUI.Navigation;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
@@ -14,6 +17,7 @@ public sealed class NavigationService : INavigationService
     private readonly IServiceProvider _serviceProvider;
     private readonly IReadOnlyDictionary<PageId, NavigationRegistration> _registrations;
     private INavigationHost? _host;
+    private Frame? _frame;
 
     public NavigationService(IServiceProvider serviceProvider)
     {
@@ -29,39 +33,36 @@ public sealed class NavigationService : INavigationService
     public void AttachHost(INavigationHost host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        _frame = _host.NavigationFrame ?? throw new InvalidOperationException("Navigation host frame is not available.");
+
+        NavigationAnimations.Attach(_frame, AnimationSettings.AreEnabled);
+        AnimationSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
+        AnimationSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
     }
 
     public void Navigate(PageId pageId)
     {
-        if (_host is null)
+        if (_frame is null)
         {
             throw new InvalidOperationException("Navigation host has not been attached.");
         }
 
         var registration = ResolveRegistration(pageId);
-        var view = _serviceProvider.GetRequiredService(registration.ViewType);
-        object? viewModel = null;
+        var navigated = _frame.Navigate(registration.ViewType);
 
-        if (registration.ViewModelType is not null)
+        if (!navigated)
         {
-            if (view is FrameworkElement existingElement
-                && existingElement.DataContext is not null
-                && registration.ViewModelType.IsInstanceOfType(existingElement.DataContext))
-            {
-                viewModel = existingElement.DataContext;
-            }
-            else
-            {
-                viewModel = _serviceProvider.GetRequiredService(registration.ViewModelType);
-            }
+            throw new InvalidOperationException($"Failed to navigate to page '{registration.ViewType.FullName}'.");
         }
 
-        if (view is FrameworkElement frameworkElement && viewModel is not null && !ReferenceEquals(frameworkElement.DataContext, viewModel))
+        if (_frame.Content is FrameworkElement element)
         {
-            frameworkElement.DataContext = viewModel;
+            var viewModel = ResolveViewModel(element, registration);
+            if (viewModel is not null && !ReferenceEquals(element.DataContext, viewModel))
+            {
+                element.DataContext = viewModel;
+            }
         }
-
-        _host.CurrentContent = view;
     }
 
     private NavigationRegistration ResolveRegistration(PageId pageId)
@@ -72,6 +73,31 @@ public sealed class NavigationService : INavigationService
         }
 
         throw new ArgumentOutOfRangeException(nameof(pageId), pageId, "Unknown navigation target.");
+    }
+
+    private object? ResolveViewModel(FrameworkElement view, NavigationRegistration registration)
+    {
+        if (registration.ViewModelType is null)
+        {
+            return null;
+        }
+
+        if (view.DataContext is not null && registration.ViewModelType.IsInstanceOfType(view.DataContext))
+        {
+            return view.DataContext;
+        }
+
+        return _serviceProvider.GetRequiredService(registration.ViewModelType);
+    }
+
+    private void OnAnimationsEnabledChanged(object? sender, bool enabled)
+    {
+        if (_frame?.DispatcherQueue is null)
+        {
+            return;
+        }
+
+        _ = _frame.DispatcherQueue.TryEnqueue(() => NavigationAnimations.Attach(_frame, enabled));
     }
 
     private sealed record NavigationRegistration(Type ViewType, Type? ViewModelType);

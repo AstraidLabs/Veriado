@@ -1,4 +1,4 @@
-<Page
+<views:CultureAwarePage
     x:Class="Veriado.WinUI.Views.Import.ImportPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,6 +11,7 @@
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:animations="using:Microsoft.UI.Xaml.Media.Animation"
+    xmlns:views="using:Veriado.WinUI.Views"
     d:DataContext="{d:DesignInstance Type=import:ImportPageViewModel}"
     AllowDrop="True"
     DragOver="OnPageDragOver"
@@ -18,13 +19,13 @@
     DragLeave="OnPageDragLeave"
     mc:Ignorable="d">
 
-    <Page.KeyboardAccelerators>
+    <views:CultureAwarePage.KeyboardAccelerators>
         <KeyboardAccelerator Key="Enter" Invoked="OnEnterAcceleratorInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAcceleratorInvoked" />
         <KeyboardAccelerator Key="O" Modifiers="Control" Invoked="OnOpenAcceleratorInvoked" />
-    </Page.KeyboardAccelerators>
+    </views:CultureAwarePage.KeyboardAccelerators>
 
-    <Page.Resources>
+    <views:CultureAwarePage.Resources>
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:ImportErrorSeverityToStringConverter x:Key="ErrorSeverityToStringConverter" />
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
@@ -32,7 +33,7 @@
         <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
-    </Page.Resources>
+    </views:CultureAwarePage.Resources>
 
 <Grid
         x:Name="DropZoneHost"
@@ -67,7 +68,7 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock Text="Import souborů" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock x:Uid="ImportPage_TitleTextBlock" FontSize="28" FontWeight="SemiBold" />
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -77,12 +78,15 @@
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <Button
                         x:Name="RunImportButton"
-                        Content="Spustit import"
+                        x:Uid="ImportPage_RunImportButton"
                         Command="{Binding RunImportCommand}"
                         Style="{StaticResource PulseButton}" />
-                    <Button Content="Zastavit" Command="{Binding StopImportCommand}" IsEnabled="{Binding IsImporting}" />
-                    <Button Content="Vymazat výsledky" Command="{Binding ClearResultsCommand}" />
-                    <Button Content="Exportovat protokol" Command="{Binding ExportLogCommand}" />
+                    <Button
+                        x:Uid="ImportPage_StopButton"
+                        Command="{Binding StopImportCommand}"
+                        IsEnabled="{Binding IsImporting}" />
+                    <Button x:Uid="ImportPage_ClearResultsButton" Command="{Binding ClearResultsCommand}" />
+                    <Button x:Uid="ImportPage_ExportLogButton" Command="{Binding ExportLogCommand}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
@@ -112,18 +116,20 @@
                                 <TextBlock FontWeight="SemiBold" Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
                                 <TextBlock Text="{Binding ProgressText}" />
                             </StackPanel>
-                            <TextBlock
-                                FontWeight="SemiBold"
-                                Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
+                            <TextBlock x:Uid="ImportPage_CurrentFileNameTextBlock" FontWeight="SemiBold">
+                                <TextBlock.Text>
+                                    <Binding Path="CurrentFileName" />
+                                </TextBlock.Text>
+                            </TextBlock>
                             <TextBlock
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Text="{Binding CurrentFilePath, TargetNullValue=''}"
                                 TextTrimming="CharacterEllipsis"
                                 MaxLines="2" />
                             <TextBlock>
-                                <Run Text="Zpracováno: " />
+                                <Run x:Uid="ImportPage_ProcessedLabelRun" />
                                 <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
-                                <Run Text=" / " />
+                                <Run x:Uid="ImportPage_ProcessedSeparatorRun" />
                                 <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
                             </TextBlock>
                         </StackPanel>
@@ -136,26 +142,26 @@
                             Visibility="Collapsed"
                             IsHitTestVisible="False">
                             <StackPanel Spacing="4">
-                                <TextBlock FontWeight="SemiBold" Text="Shrnutí importu" />
+                                <TextBlock x:Uid="ImportPage_SummaryTitleTextBlock" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="12">
                                     <TextBlock>
-                                        <Run Text="OK: " />
+                                        <Run x:Uid="ImportPage_SummaryOkLabelRun" />
                                         <Run Text="{Binding OkCount}" />
                                     </TextBlock>
                                     <TextBlock>
-                                        <Run Text="Chyby: " />
+                                        <Run x:Uid="ImportPage_SummaryErrorLabelRun" />
                                         <Run Text="{Binding ErrorCount}" />
                                     </TextBlock>
                                     <TextBlock>
-                                        <Run Text="Přeskočeno: " />
+                                        <Run x:Uid="ImportPage_SummarySkippedLabelRun" />
                                         <Run Text="{Binding SkipCount}" />
                                     </TextBlock>
                                 </StackPanel>
                                 <TextBlock
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     TextWrapping="Wrap">
-                                    <Run Text="Zpracováno dat: " />
+                                    <Run x:Uid="ImportPage_SummaryDataLabelRun" />
                                     <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
                                 </TextBlock>
                             </StackPanel>
@@ -208,13 +214,16 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock Text="Zdroj importu" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock x:Uid="ImportPage_SourceTitleTextBlock" FontSize="20" FontWeight="SemiBold" />
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="Vybrat složku" Command="{Binding PickFolderCommand}" />
+                <Button
+                    Grid.Column="0"
+                    x:Uid="ImportPage_PickFolderButton"
+                    Command="{Binding PickFolderCommand}" />
                 <TextBox
                     Grid.Column="1"
                     MinWidth="320"
@@ -230,17 +239,17 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock Text="Volby importu" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock x:Uid="ImportPage_OptionsTitleTextBlock" FontSize="20" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <StackPanel Orientation="Vertical" Spacing="8">
-                    <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
-                    <CheckBox Content="Zachovat FS metadata" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
+                    <CheckBox x:Uid="ImportPage_RecursiveCheckBox" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+                    <CheckBox x:Uid="ImportPage_PreserveMetadataCheckBox" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8">
-                    <CheckBox Content="Nastavit jen pro čtení" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
-                    <CheckBox Content="Paralelně" IsChecked="{Binding UseParallel, Mode=TwoWay}" />
+                    <CheckBox x:Uid="ImportPage_ReadOnlyCheckBox" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
+                    <CheckBox x:Uid="ImportPage_ParallelCheckBox" IsChecked="{Binding UseParallel, Mode=TwoWay}" />
                     <NumberBox
-                        Header="Max. paralelních vláken"
+                        x:Uid="ImportPage_MaxThreadsNumberBox"
                         Minimum="1"
                         SpinButtonPlacementMode="Compact"
                         IsEnabled="{Binding UseParallel}"
@@ -250,17 +259,15 @@
                         Margin="0,4,0,0"
                         IsOpen="{Binding HasParallelismError}"
                         Severity="Error"
-                        Title="Neplatný počet vláken"
-                        Message="Zadejte kladné celé číslo větší než nula."
+                        x:Uid="ImportPage_MaxThreadsInfoBar"
                         IsClosable="False" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8" Width="200">
                     <TextBox
-                        Header="Výchozí autor"
-                        PlaceholderText="(nevyplněno)"
+                        x:Uid="ImportPage_DefaultAuthorTextBox"
                         Text="{Binding DefaultAuthor, Mode=TwoWay}" />
                     <NumberBox
-                        Header="Max. velikost souboru (MB)"
+                        x:Uid="ImportPage_MaxFileSizeNumberBox"
                         Minimum="0"
                         SpinButtonPlacementMode="Compact"
                         ValidationMode="InvalidInputOverwritten"
@@ -269,13 +276,12 @@
                         Margin="0,4,0,0"
                         IsOpen="{Binding HasMaxFileSizeError}"
                         Severity="Warning"
-                        Title="Neplatná velikost souboru"
-                        Message="Zadejte nezápornou hodnotu nebo ponechte 0 pro bez limitu."
+                        x:Uid="ImportPage_MaxFileSizeInfoBar"
                         IsClosable="False" />
                     <TextBlock
+                        x:Uid="ImportPage_MaxFileSizeHintTextBlock"
                         FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="0 = bez limitu" />
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>
@@ -287,15 +293,13 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock Text="Protokol importu" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock x:Uid="ImportPage_LogTitleTextBlock" FontSize="20" FontWeight="SemiBold" />
             <StackPanel x:Name="QueueSection" Spacing="8" Visibility="Collapsed">
-                <TextBlock Text="Fronta importu" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock x:Uid="ImportPage_QueueTitleTextBlock" FontSize="16" FontWeight="SemiBold" />
                 <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
                     <muxc:ItemsRepeater
                         x:Name="ImportQueueRepeater"
-                        ItemsSource="{Binding Log}"
-                        ElementPrepared="OnQueueElementPrepared"
-                        ElementClearing="OnQueueElementClearing">
+                        ItemsSource="{Binding Log}">
                         <muxc:ItemsRepeater.Layout>
                             <muxc:StackLayout Orientation="Vertical" Spacing="6" />
                         </muxc:ItemsRepeater.Layout>
@@ -308,11 +312,6 @@
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
                                     Opacity="0">
-                                    <Border.Transitions>
-                                        <TransitionCollection>
-                                            <EntranceThemeTransition FromVerticalOffset="12" />
-                                        </TransitionCollection>
-                                    </Border.Transitions>
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -387,19 +386,19 @@
                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <datagrid:DataGrid.Columns>
-                        <datagrid:DataGridTextColumn Header="Čas" Binding="{Binding FormattedTimestamp}" Width="Auto" />
-                        <datagrid:DataGridTextColumn Header="Událost" Binding="{Binding Title}" Width="2*">
+                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogTimeColumn" Binding="{Binding FormattedTimestamp}" Width="Auto" />
+                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogEventColumn" Binding="{Binding Title}" Width="2*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
                         </datagrid:DataGridTextColumn>
-                        <datagrid:DataGridTextColumn Header="Zpráva" Binding="{Binding Message}" Width="3*">
+                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogMessageColumn" Binding="{Binding Message}" Width="3*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
                         </datagrid:DataGridTextColumn>
-                        <datagrid:DataGridTextColumn Header="Stav" Binding="{Binding Status}" Width="Auto" />
-                        <datagrid:DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="3*">
+                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogStatusColumn" Binding="{Binding Status}" Width="Auto" />
+                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogDetailColumn" Binding="{Binding Detail}" Width="3*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
@@ -435,7 +434,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock
                                 VerticalAlignment="Center"
-                                Text="Filtrovat:" />
+                                x:Uid="ImportPage_FilterLabelTextBlock" />
                             <ComboBox
                                 Width="180"
                                 ItemsSource="{Binding ErrorFilterOptions}"
@@ -468,17 +467,17 @@
                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <datagrid:DataGrid.Columns>
-                            <datagrid:DataGridTextColumn Header="Čas" Binding="{Binding FormattedTimestamp}" Width="Auto" />
-                            <datagrid:DataGridTextColumn Header="Soubor" Binding="{Binding FileName}" Width="2*">
+                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorTimeColumn" Binding="{Binding FormattedTimestamp}" Width="Auto" />
+                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorFileColumn" Binding="{Binding FileName}" Width="2*">
                                 <datagrid:DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}">
                                         <Setter Property="ToolTipService.ToolTip" Value="{Binding FilePath}" />
                                     </Style>
                                 </datagrid:DataGridTextColumn.ElementStyle>
                             </datagrid:DataGridTextColumn>
-                            <datagrid:DataGridTextColumn Header="Kód" Binding="{Binding Code}" Width="Auto" />
-                            <datagrid:DataGridTextColumn Header="Závažnost" Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}" Width="Auto" />
-                            <datagrid:DataGridTextColumn Header="Zpráva" Binding="{Binding ErrorMessage}" Width="3*">
+                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorCodeColumn" Binding="{Binding Code}" Width="Auto" />
+                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorSeverityColumn" Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}" Width="Auto" />
+                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorMessageColumn" Binding="{Binding ErrorMessage}" Width="3*">
                                 <datagrid:DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                                 </datagrid:DataGridTextColumn.ElementStyle>
@@ -500,7 +499,7 @@
                                         TextWrapping="Wrap"
                                         Visibility="{Binding HasSuggestion, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     <Button
-                                        Content="Otevřít detail"
+                                        x:Uid="ImportPage_OpenDetailButton"
                                         HorizontalAlignment="Left"
                                         Command="{Binding ElementName=ErrorsDataGrid, Path=DataContext.OpenErrorDetailCommand}"
                                         CommandParameter="{Binding Source}" />
@@ -513,7 +512,7 @@
                         Grid.Row="3"
                         Margin="0,8,0,0"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="Žádné chyby neodpovídají vybranému filtru."
+                        x:Uid="ImportPage_NoErrorsTextBlock"
                         Visibility="{Binding HasNoFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 </Grid>
             </Grid>
@@ -532,10 +531,10 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
                 <StackPanel Spacing="8" HorizontalAlignment="Center">
-                    <TextBlock Text="Pusťte složku pro import" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                    <TextBlock Text="Složku můžete také vybrat pomocí tlačítka." HorizontalAlignment="Center" />
+                    <TextBlock x:Uid="ImportPage_DropPromptTextBlock" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock x:Uid="ImportPage_DropHintTextBlock" HorizontalAlignment="Center" />
                 </StackPanel>
             </Border>
         </Grid>
     </Grid>
-</Page>
+</views:CultureAwarePage>

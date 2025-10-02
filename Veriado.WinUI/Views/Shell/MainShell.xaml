@@ -47,9 +47,10 @@
         </controls:NavigationView.MenuItems>
         <controls:NavigationView.Content>
             <Grid Background="{ThemeResource AppBackgroundBrush}">
-                <ContentPresenter
-                    x:Name="ContentHost"
-                    Content="{x:Bind CurrentContent, Mode=OneWay}" />
+                <Frame
+                    x:Name="ContentFrame"
+                    NavigationCacheMode="Disabled"
+                    IsNavigationStackEnabled="False" />
             </Grid>
         </controls:NavigationView.Content>
     </controls:NavigationView>
