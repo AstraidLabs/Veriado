@@ -3,13 +3,14 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
-    xmlns:helpers="using:Veriado.WinUI.Helpers">
+    xmlns:helpers="using:Veriado.WinUI.Helpers"
+    xmlns:media="using:Microsoft.UI.Xaml.Media.Animation">
   <x:TimeSpan x:Key="Anim.Fast">0:0:0.12</x:TimeSpan>
   <x:TimeSpan x:Key="Anim.Med">0:0:0.18</x:TimeSpan>
   <x:TimeSpan x:Key="Anim.Panel">0:0:0.15</x:TimeSpan>
 
-  <CubicBezierEasingFunction x:Key="Ease.Out" ControlPoint1="0.17,0.17" ControlPoint2="0,1" />
-  <CubicBezierEasingFunction x:Key="Ease.In" ControlPoint1="0.4,0" ControlPoint2="1,1" />
+  <media:CubicBezierEasingFunction x:Key="Ease.Out" ControlPoint1="0.17,0.17" ControlPoint2="0,1" />
+  <media:CubicBezierEasingFunction x:Key="Ease.In" ControlPoint1="0.4,0" ControlPoint2="1,1" />
 
   <Style x:Key="AnimatedExpander" TargetType="controls:Expander">
     <Setter Property="helpers:ExpanderAnimationHelper.IsEnabled" Value="True" />
