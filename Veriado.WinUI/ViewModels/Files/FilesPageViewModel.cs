@@ -149,7 +149,18 @@ public partial class FilesPageViewModel : ViewModelBase
     [ObservableProperty]
     private string? indexingWarningMessage;
 
-    public double TargetPageMaximum => TotalPages > 0 ? TotalPages : 1d;
+    public double TargetPageMaximum
+    {
+        get
+        {
+            if (TotalPages > 0)
+            {
+                return TotalPages;
+            }
+
+            return 1;
+        }
+    }
 
     partial void OnTotalPagesChanged(int value)
     {
