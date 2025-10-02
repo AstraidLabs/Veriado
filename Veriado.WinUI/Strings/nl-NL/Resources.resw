@@ -63,4 +63,187 @@
   <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
     <value>Probeer opnieuw</value>
   </data>
+  <data name="ImportPage_TitleTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_RunImportButton.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_StopButton.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ClearResultsButton.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ExportLogButton.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_CurrentFileNameTextBlock.[using:Microsoft.UI.Xaml.Data.Binding].TargetNullValue" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ProcessedLabelRun.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ProcessedSeparatorRun.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_SummaryTitleTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_SummaryOkLabelRun.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_SummaryErrorLabelRun.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_SummarySkippedLabelRun.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_SummaryDataLabelRun.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_SourceTitleTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_PickFolderButton.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_OptionsTitleTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_RecursiveCheckBox.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_PreserveMetadataCheckBox.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ReadOnlyCheckBox.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ParallelCheckBox.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxThreadsNumberBox.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxThreadsInfoBar.Title" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxThreadsInfoBar.Message" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_DefaultAuthorTextBox.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_DefaultAuthorTextBox.PlaceholderText" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxFileSizeNumberBox.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxFileSizeInfoBar.Title" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxFileSizeInfoBar.Message" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_MaxFileSizeHintTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_LogTitleTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_QueueTitleTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_LogTimeColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_LogEventColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_LogMessageColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_LogStatusColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_LogDetailColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_FilterLabelTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ErrorTimeColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ErrorFileColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ErrorCodeColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ErrorSeverityColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_ErrorMessageColumn.Header" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_OpenDetailButton.Content" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_NoErrorsTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_DropPromptTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
+
+  <data name="ImportPage_DropHintTextBlock.Text" xml:space="preserve">
+    <value></value>
+  </data>
 </root>

@@ -17,15 +17,14 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Import;
-using Windows.UI.ViewManagement;
+using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.Views.Import;
 
-public sealed partial class ImportPage : Page
+public sealed partial class ImportPage : CultureAwarePage
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
     private Compositor? _compositor;
-    private UISettings? _uiSettings;
     private bool _animationsEnabled = true;
     private CancellationTokenSource? _animationCts;
     private Visual? _dropZoneVisual;
@@ -73,11 +72,7 @@ public sealed partial class ImportPage : Page
             DropZoneHost.SizeChanged -= OnDropZoneSizeChanged;
         }
 
-        if (_uiSettings is not null)
-        {
-            _uiSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
-            _uiSettings = null;
-        }
+        AnimationSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -110,23 +105,9 @@ public sealed partial class ImportPage : Page
     {
         _compositor ??= ElementCompositionPreview.GetElementVisual(this).Compositor;
 
-        if (_uiSettings is null)
-        {
-            try
-            {
-                _uiSettings = new UISettings();
-                _animationsEnabled = _uiSettings.AnimationsEnabled;
-                _uiSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
-            }
-            catch
-            {
-                _animationsEnabled = true;
-            }
-        }
-        else
-        {
-            _animationsEnabled = _uiSettings.AnimationsEnabled;
-        }
+        AnimationSettings.AnimationsEnabledChanged -= OnAnimationsEnabledChanged;
+        AnimationSettings.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
+        _animationsEnabled = AnimationSettings.AreEnabled;
 
         ResetAnimationToken();
 
@@ -150,6 +131,8 @@ public sealed partial class ImportPage : Page
             var overlayVisual = ElementCompositionPreview.GetElementVisual(DragOverlay);
             overlayVisual.Opacity = 0f;
         }
+
+        UpdateQueueAnimations();
     }
 
     private void ResetAnimationToken()
@@ -159,9 +142,10 @@ public sealed partial class ImportPage : Page
         _animationCts = new CancellationTokenSource();
     }
 
-    private void OnAnimationsEnabledChanged(UISettings sender, object args)
+    private void OnAnimationsEnabledChanged(object? sender, bool areEnabled)
     {
-        _animationsEnabled = sender.AnimationsEnabled;
+        _animationsEnabled = areEnabled;
+        UpdateQueueAnimations();
     }
 
     private void SubscribeToViewModel()
@@ -830,85 +814,14 @@ public sealed partial class ImportPage : Page
         }
     }
 
-    private void OnQueueElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+    private void UpdateQueueAnimations()
     {
-        if (!_animationsEnabled || _compositor is null)
-        {
-            if (args.Element is FrameworkElement element)
-            {
-                element.Opacity = 1;
-            }
-
-            return;
-        }
-
-        var token = AnimationToken;
-        if (token.IsCancellationRequested)
+        if (ImportQueueRepeater is null)
         {
             return;
         }
 
-        var visual = ElementCompositionPreview.GetElementVisual(args.Element);
-        visual.Opacity = 0f;
-        visual.Offset = new Vector3(0f, 10f, 0f);
-
-        var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Medium);
-        var easing = AnimationResourceHelper.CreateEasing(_compositor, AnimationResourceKeys.EaseOut);
-
-        var fade = _compositor.CreateScalarKeyFrameAnimation();
-        fade.Duration = duration;
-        fade.InsertKeyFrame(1f, 1f, easing);
-
-        var offset = _compositor.CreateVector3KeyFrameAnimation();
-        offset.Duration = duration;
-        offset.InsertKeyFrame(1f, Vector3.Zero, easing);
-
-        var batch = _compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-        visual.StartAnimation(nameof(Visual.Opacity), fade);
-        visual.StartAnimation(nameof(Visual.Offset), offset);
-
-        batch.Completed += (s, e) =>
-        {
-            if (args.Element is FrameworkElement element)
-            {
-                element.Opacity = 1;
-            }
-        };
-        batch.End();
-    }
-
-    private void OnQueueElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
-    {
-        if (!_animationsEnabled || _compositor is null)
-        {
-            return;
-        }
-
-        var token = AnimationToken;
-        if (token.IsCancellationRequested)
-        {
-            return;
-        }
-
-        var visual = ElementCompositionPreview.GetElementVisual(args.Element);
-        var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Fast);
-        var easing = AnimationResourceHelper.CreateEasing(_compositor, AnimationResourceKeys.EaseIn);
-
-        var fade = _compositor.CreateScalarKeyFrameAnimation();
-        fade.Duration = duration;
-        fade.InsertKeyFrame(1f, 0f, easing);
-
-        var batch = _compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-        visual.StartAnimation(nameof(Visual.Opacity), fade);
-
-        batch.Completed += (s, e) =>
-        {
-            if (args.Element is FrameworkElement element)
-            {
-                element.Opacity = 0;
-            }
-        };
-        batch.End();
+        ImplicitListAnimations.Attach(ImportQueueRepeater, _animationsEnabled);
     }
 
     private void OnInfoBarClosing(InfoBar sender, InfoBarClosingEventArgs args)
