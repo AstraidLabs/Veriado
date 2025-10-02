@@ -34,7 +34,10 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="24" RowSpacing="24">
+<Grid
+        x:Name="DropZoneHost"
+        Padding="24"
+        RowSpacing="24">
         <Grid.Transitions>
             <TransitionCollection>
                 <animations:EntranceThemeTransition />
@@ -46,6 +49,16 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+
+        <Border
+            x:Name="DropZoneHighlight"
+            Grid.RowSpan="4"
+            CornerRadius="16"
+            BorderThickness="2"
+            Background="{ThemeResource AccentAcrylicBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource AccentStrokeColorDefaultBrush}"
+            Opacity="0"
+            IsHitTestVisible="False" />
 
         <!-- Nadpis a akce -->
         <StackPanel Grid.Row="0" Spacing="12">
@@ -62,7 +75,11 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
+                    <Button
+                        x:Name="RunImportButton"
+                        Content="Spustit import"
+                        Command="{Binding RunImportCommand}"
+                        Style="{StaticResource PulseButton}" />
                     <Button Content="Zastavit" Command="{Binding StopImportCommand}" IsEnabled="{Binding IsImporting}" />
                     <Button Content="Vymazat výsledky" Command="{Binding ClearResultsCommand}" />
                     <Button Content="Exportovat protokol" Command="{Binding ExportLogCommand}" />
@@ -74,56 +91,99 @@
                             <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                         </TransitionCollection>
                     </StackPanel.Transitions>
-                    <muxc:ProgressBar
-                        Minimum="0"
-                        Maximum="100"
-                        Value="{Binding ProgressPercentValue, Mode=OneWay}"
-                        IsIndeterminate="{Binding IsIndeterminate}" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock FontWeight="SemiBold" Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
-                        <TextBlock Text="{Binding ProgressText}" />
-                    </StackPanel>
-                    <TextBlock
-                        FontWeight="SemiBold"
-                        Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
-                    <TextBlock
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="{Binding CurrentFilePath, TargetNullValue=''}"
-                        TextTrimming="CharacterEllipsis"
-                        MaxLines="2" />
-                    <TextBlock>
-                        <Run Text="Zpracováno: " />
-                        <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
-                        <Run Text=" / " />
-                        <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
-                    </TextBlock>
+                    <Grid x:Name="ProgressPanelsHost">
+                        <StackPanel x:Name="TotalProgressPanel" Spacing="8">
+                            <Grid x:Name="ProgressVisualHost" Height="32">
+                                <muxc:ProgressRing
+                                    x:Name="PreparationProgressRing"
+                                    Width="32"
+                                    Height="32"
+                                    IsActive="{Binding IsIndeterminate}"
+                                    Opacity="0"
+                                    Visibility="Collapsed" />
+                                <muxc:ProgressBar
+                                    x:Name="ExecutionProgressBar"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    Value="{Binding ProgressPercentValue, Mode=OneWay}"
+                                    IsIndeterminate="{Binding IsIndeterminate}" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock FontWeight="SemiBold" Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
+                                <TextBlock Text="{Binding ProgressText}" />
+                            </StackPanel>
+                            <TextBlock
+                                FontWeight="SemiBold"
+                                Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{Binding CurrentFilePath, TargetNullValue=''}"
+                                TextTrimming="CharacterEllipsis"
+                                MaxLines="2" />
+                            <TextBlock>
+                                <Run Text="Zpracováno: " />
+                                <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                                <Run Text=" / " />
+                                <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                            </TextBlock>
+                        </StackPanel>
+                        <Border
+                            x:Name="SummaryPanel"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            CornerRadius="8"
+                            Padding="12"
+                            Opacity="0"
+                            Visibility="Collapsed"
+                            IsHitTestVisible="False">
+                            <StackPanel Spacing="4">
+                                <TextBlock FontWeight="SemiBold" Text="Shrnutí importu" />
+                                <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="{Binding OkCount, StringFormat='OK: {0}'}" />
+                                    <TextBlock Text="{Binding ErrorCount, StringFormat='Chyby: {0}'}" />
+                                    <TextBlock Text="{Binding SkipCount, StringFormat='Přeskočeno: {0}'}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}, StringFormat='Zpracováno dat: {0}'}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </StackPanel>
             </Grid>
 
             <muxc:InfoBar
+                x:Name="ActiveStatusInfoBar"
                 Margin="0,8,0,0"
                 IsClosable="True"
                 IsOpen="{Binding IsActiveStatusVisible, Mode=TwoWay}"
                 Severity="{Binding ActiveStatusSeverity}"
                 Title="{Binding ActiveStatusTitle}"
-                Message="{Binding ActiveStatusMessage}">
+                Message="{Binding ActiveStatusMessage}"
+                Opacity="0"
+                Visibility="Collapsed"
+                Closing="OnInfoBarClosing">
                 <muxc:InfoBar.Transitions>
                     <TransitionCollection>
-                        <animations:EntranceThemeTransition />
+                        <ContentThemeTransition />
                     </TransitionCollection>
                 </muxc:InfoBar.Transitions>
             </muxc:InfoBar>
 
             <muxc:InfoBar
+                x:Name="DynamicStatusInfoBar"
                 Margin="0,4,0,0"
                 IsClosable="True"
                 IsOpen="{Binding IsDynamicStatusVisible, Mode=TwoWay}"
                 Severity="{Binding DynamicStatusSeverity}"
                 Title="{Binding DynamicStatusTitle}"
-                Message="{Binding DynamicStatusMessage}">
+                Message="{Binding DynamicStatusMessage}"
+                Opacity="0"
+                Visibility="Collapsed"
+                Closing="OnInfoBarClosing">
                 <muxc:InfoBar.Transitions>
                     <TransitionCollection>
-                        <animations:EntranceThemeTransition />
+                        <ContentThemeTransition />
                     </TransitionCollection>
                 </muxc:InfoBar.Transitions>
             </muxc:InfoBar>
@@ -216,6 +276,84 @@
                 </TransitionCollection>
             </StackPanel.Transitions>
             <TextBlock Text="Protokol importu" FontSize="20" FontWeight="SemiBold" />
+            <StackPanel x:Name="QueueSection" Spacing="8" Visibility="Collapsed">
+                <TextBlock Text="Fronta importu" FontSize="16" FontWeight="SemiBold" />
+                <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                    <muxc:ItemsRepeater
+                        x:Name="ImportQueueRepeater"
+                        ItemsSource="{Binding Log}"
+                        ElementPrepared="OnQueueElementPrepared"
+                        ElementClearing="OnQueueElementClearing">
+                        <muxc:ItemsRepeater.Layout>
+                            <muxc:StackLayout Orientation="Vertical" Spacing="6" />
+                        </muxc:ItemsRepeater.Layout>
+                        <muxc:ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="models:ImportLogItem">
+                                <Border
+                                    Padding="12"
+                                    CornerRadius="8"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    Opacity="0">
+                                    <Border.Transitions>
+                                        <TransitionCollection>
+                                            <EntranceThemeTransition FromVerticalOffset="12" />
+                                        </TransitionCollection>
+                                    </Border.Transitions>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Vertical" Spacing="2">
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{x:Bind FormattedTimestamp, Mode=OneWay}" />
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Text="{x:Bind Title, Mode=OneWay}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon
+                                                    x:Name="StatusIcon"
+                                                    Glyph="&#xE73E;"
+                                                    FontSize="16"
+                                                    VerticalAlignment="Center">
+                                                    <FontIcon.Transitions>
+                                                        <TransitionCollection>
+                                                            <CrossFadeThemeTransition />
+                                                        </TransitionCollection>
+                                                    </FontIcon.Transitions>
+                                                </FontIcon>
+                                                <TextBlock
+                                                    x:Name="StatusText"
+                                                    FontWeight="SemiBold"
+                                                    Text="{x:Bind Status, Mode=OneWay}"
+                                                    TextTrimming="CharacterEllipsis">
+                                                    <TextBlock.Transitions>
+                                                        <TransitionCollection>
+                                                            <CrossFadeThemeTransition />
+                                                        </TransitionCollection>
+                                                    </TextBlock.Transitions>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock Text="{x:Bind Message, Mode=OneWay}" TextWrapping="Wrap" />
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{x:Bind Detail, Mode=OneWay}"
+                                                Visibility="{x:Bind HasDetail, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                TextWrapping="WrapWholeWords" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </muxc:ItemsRepeater.ItemTemplate>
+                    </muxc:ItemsRepeater>
+                </ScrollViewer>
+            </StackPanel>
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
