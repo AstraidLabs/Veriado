@@ -9,8 +9,8 @@
   <x:TimeSpan x:Key="Anim.Med">0:0:0.18</x:TimeSpan>
   <x:TimeSpan x:Key="Anim.Panel">0:0:0.15</x:TimeSpan>
 
-  <media:CubicBezierEasingFunction x:Key="Ease.Out" ControlPoint1="0.17,0.17" ControlPoint2="0,1" />
-  <media:CubicBezierEasingFunction x:Key="Ease.In" ControlPoint1="0.4,0" ControlPoint2="1,1" />
+  <media:PowerEase x:Key="Ease.Out" EasingMode="EaseOut" Power="0.3" />
+  <media:PowerEase x:Key="Ease.In" EasingMode="EaseIn" Power="0.3" />
 
   <Style x:Key="AnimatedExpander" TargetType="controls:Expander">
     <Setter Property="helpers:ExpanderAnimationHelper.IsEnabled" Value="True" />
