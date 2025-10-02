@@ -185,8 +185,8 @@
                             x:Uid="FilesPage_PageNumberBox"
                             Width="80"
                             HorizontalAlignment="Left"
-                            Minimum="0"
-                            Maximum="{x:Bind ViewModel.TotalPages > 0 ? (double)ViewModel.TotalPages : 1d, Mode=OneWay}"
+                            Minimum="1"
+                            Maximum="{x:Bind ViewModel.TargetPageMaximum, Mode=OneWay}"
                             SmallChange="1"
                             Value="{x:Bind ViewModel.TargetPage, Mode=TwoWay}" />
                         <TextBlock Text="/" VerticalAlignment="Center" />

@@ -149,6 +149,13 @@ public partial class FilesPageViewModel : ViewModelBase
     [ObservableProperty]
     private string? indexingWarningMessage;
 
+    public double TargetPageMaximum => TotalPages > 0 ? TotalPages : 1d;
+
+    partial void OnTotalPagesChanged(int value)
+    {
+        OnPropertyChanged(nameof(TargetPageMaximum));
+    }
+
     public void StartHealthMonitoring()
     {
         lock (_healthMonitorGate)
