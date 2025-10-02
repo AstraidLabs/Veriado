@@ -305,6 +305,7 @@ public sealed class ImportService : IImportService
 
                     int successCountSnapshot;
                     int failedCountSnapshot;
+                    int skippedSnapshot;
 
                     try
                     {
@@ -318,7 +319,7 @@ public sealed class ImportService : IImportService
                                 createRequest.ContentHash);
 
                             var completedSkip = Interlocked.Increment(ref processed);
-                            var skippedSnapshot = Interlocked.Increment(ref skipped);
+                            skippedSnapshot = Interlocked.Increment(ref skipped);
                             successCountSnapshot = Volatile.Read(ref succeeded);
                             failedCountSnapshot = Volatile.Read(ref failed);
                             var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
@@ -354,7 +355,7 @@ public sealed class ImportService : IImportService
                         {
                             var completed = Interlocked.Increment(ref processed);
                             var success = Interlocked.Increment(ref succeeded);
-                            var skippedSnapshot = Volatile.Read(ref skipped);
+                            skippedSnapshot = Volatile.Read(ref skipped);
 
                             await channel.Writer.WriteAsync(
                                 ImportProgressEvent.FileCompleted(
@@ -386,7 +387,7 @@ public sealed class ImportService : IImportService
                                 filePath);
 
                             var completedSkip = Interlocked.Increment(ref processed);
-                            var skippedSnapshot = Interlocked.Increment(ref skipped);
+                            skippedSnapshot = Interlocked.Increment(ref skipped);
                             successCountSnapshot = Volatile.Read(ref succeeded);
                             failedCountSnapshot = Volatile.Read(ref failed);
                             var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
@@ -431,7 +432,7 @@ public sealed class ImportService : IImportService
                         var completedFailure = Interlocked.Increment(ref processed);
                         successCountSnapshot = Volatile.Read(ref succeeded);
                         failedCountSnapshot = Interlocked.Increment(ref failed);
-                        var skippedSnapshot = Volatile.Read(ref skipped);
+                        skippedSnapshot = Volatile.Read(ref skipped);
 
                         await channel.Writer.WriteAsync(
                             ImportProgressEvent.ErrorOccurred(
@@ -474,7 +475,7 @@ public sealed class ImportService : IImportService
                         var completedFailure = Interlocked.Increment(ref processed);
                         successCountSnapshot = Volatile.Read(ref succeeded);
                         failedCountSnapshot = Interlocked.Increment(ref failed);
-                        var skippedSnapshot = Volatile.Read(ref skipped);
+                        skippedSnapshot = Volatile.Read(ref skipped);
 
                         await channel.Writer.WriteAsync(
                             ImportProgressEvent.ErrorOccurred(
@@ -517,7 +518,7 @@ public sealed class ImportService : IImportService
                         var completedFailure = Interlocked.Increment(ref processed);
                         successCountSnapshot = Volatile.Read(ref succeeded);
                         failedCountSnapshot = Interlocked.Increment(ref failed);
-                        var skippedSnapshot = Volatile.Read(ref skipped);
+                        skippedSnapshot = Volatile.Read(ref skipped);
 
                         await channel.Writer.WriteAsync(
                             ImportProgressEvent.ErrorOccurred(
