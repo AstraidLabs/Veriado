@@ -43,6 +43,7 @@ internal sealed class AppHost : IAsyncDisposable
 
                 services.AddSingleton<IWindowProvider, WindowProvider>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
+                services.AddSingleton<ILocalizationService, LocalizationService>();
                 services.AddSingleton<IDispatcherService, DispatcherService>();
                 services.AddSingleton<IThemeService, ThemeService>();
                 services.AddSingleton<IExceptionHandler, ExceptionHandler>();
