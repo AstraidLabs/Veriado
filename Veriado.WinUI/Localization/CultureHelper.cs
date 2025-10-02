@@ -15,7 +15,7 @@ internal static class CultureHelper
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
 
-        ResourceContext.SetGlobalQualifierValue("Language", culture.Name);
+        ResourceManager.Current.DefaultContext.QualifierValues["Language"] = culture.Name;
         if (OperatingSystem.IsWindows())
         {
             ApplicationLanguages.PrimaryLanguageOverride = culture.Name;
