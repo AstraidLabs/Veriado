@@ -120,10 +120,9 @@ public sealed partial class FilesPage : Page
             return;
         }
 
-        ElementCompositionPreview.SetIsTranslationEnabled(element, true);
         var visual = ElementCompositionPreview.GetElementVisual(element);
         visual.Opacity = 0f;
-        visual.Translation = new Vector3(0f, 12f, 0f);
+        visual.Offset = new Vector3(0f, 12f, 0f);
 
         if (_itemAnimations is null)
         {
@@ -138,19 +137,19 @@ public sealed partial class FilesPage : Page
             fadeAnimation.InsertKeyFrame(1f, 1f, easing);
 
             var translationAnimation = compositor.CreateVector3KeyFrameAnimation();
-            translationAnimation.Target = nameof(Visual.Translation);
+            translationAnimation.Target = nameof(Visual.Offset);
             translationAnimation.Duration = duration;
             translationAnimation.InsertKeyFrame(0f, new Vector3(0f, 12f, 0f));
             translationAnimation.InsertKeyFrame(1f, Vector3.Zero, easing);
 
             _itemAnimations = compositor.CreateImplicitAnimationCollection();
             _itemAnimations[nameof(Visual.Opacity)] = fadeAnimation;
-            _itemAnimations[nameof(Visual.Translation)] = translationAnimation;
+            _itemAnimations[nameof(Visual.Offset)] = translationAnimation;
         }
 
         visual.ImplicitAnimations = _itemAnimations;
         visual.Opacity = 1f;
-        visual.Translation = Vector3.Zero;
+        visual.Offset = Vector3.Zero;
     }
 
     private void OnFilesRepeaterElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
@@ -159,7 +158,7 @@ public sealed partial class FilesPage : Page
         {
             var visual = ElementCompositionPreview.GetElementVisual(element);
             visual.Opacity = 1f;
-            visual.Translation = Vector3.Zero;
+            visual.Offset = Vector3.Zero;
         }
     }
 
