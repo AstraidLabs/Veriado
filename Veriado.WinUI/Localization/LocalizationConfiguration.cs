@@ -9,7 +9,30 @@ internal static class LocalizationConfiguration
     private static readonly CultureInfo[] SupportedCultureDefinitions =
     {
         CultureInfo.GetCultureInfo("en-US"),
+        CultureInfo.GetCultureInfo("bg-BG"),
         CultureInfo.GetCultureInfo("cs-CZ"),
+        CultureInfo.GetCultureInfo("da-DK"),
+        CultureInfo.GetCultureInfo("de-DE"),
+        CultureInfo.GetCultureInfo("el-GR"),
+        CultureInfo.GetCultureInfo("en-IE"),
+        CultureInfo.GetCultureInfo("es-ES"),
+        CultureInfo.GetCultureInfo("et-EE"),
+        CultureInfo.GetCultureInfo("fi-FI"),
+        CultureInfo.GetCultureInfo("fr-FR"),
+        CultureInfo.GetCultureInfo("ga-IE"),
+        CultureInfo.GetCultureInfo("hr-HR"),
+        CultureInfo.GetCultureInfo("hu-HU"),
+        CultureInfo.GetCultureInfo("it-IT"),
+        CultureInfo.GetCultureInfo("lt-LT"),
+        CultureInfo.GetCultureInfo("lv-LV"),
+        CultureInfo.GetCultureInfo("mt-MT"),
+        CultureInfo.GetCultureInfo("nl-NL"),
+        CultureInfo.GetCultureInfo("pl-PL"),
+        CultureInfo.GetCultureInfo("pt-PT"),
+        CultureInfo.GetCultureInfo("ro-RO"),
+        CultureInfo.GetCultureInfo("sk-SK"),
+        CultureInfo.GetCultureInfo("sl-SI"),
+        CultureInfo.GetCultureInfo("sv-SE"),
     };
 
     public static IReadOnlyList<CultureInfo> SupportedCultures { get; } =
