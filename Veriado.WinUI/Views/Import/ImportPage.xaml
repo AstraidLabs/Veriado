@@ -248,7 +248,7 @@
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
                         </datagrid:DataGridTextColumn>
-                        <datagrid:DataGridTextColumn Header="Stav" Binding="{Binding Status}" Width="Auto" />
+                        <datagrid:DataGridTextColumn Header="Stav" Binding="{Binding StatusDisplay}" Width="Auto" />
                         <datagrid:DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="3*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />

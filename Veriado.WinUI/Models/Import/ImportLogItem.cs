@@ -25,5 +25,21 @@ public sealed class ImportLogItem
 
     public string FormattedTimestamp => Timestamp.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
 
+    public string StatusDisplay
+    {
+        get
+        {
+            var status = string.IsNullOrWhiteSpace(Status) ? "info" : Status;
+            return status.ToLowerInvariant() switch
+            {
+                "success" => "Úspěch",
+                "warning" => "Varování",
+                "error" => "Chyba",
+                "info" => "Informace",
+                _ => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(status),
+            };
+        }
+    }
+
     public bool HasDetail => !string.IsNullOrWhiteSpace(Detail);
 }
