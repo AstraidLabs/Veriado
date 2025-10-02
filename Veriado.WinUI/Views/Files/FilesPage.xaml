@@ -59,7 +59,11 @@
                 VerticalScrollMode="Auto"
                 VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="12">
-                    <controls:Expander x:Uid="FilesPage_AttributesExpander" Header="Atributy" IsExpanded="True">
+                    <controls:Expander
+                        x:Uid="FilesPage_AttributesExpander"
+                        Header="Atributy"
+                        IsExpanded="True"
+                        Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <TextBox
                                 x:Uid="FilesPage_ExtensionTextBox"
@@ -80,7 +84,11 @@
                         </StackPanel>
                     </controls:Expander>
 
-                    <controls:Expander x:Uid="FilesPage_ValidityExpander" Header="Platnost" IsExpanded="True">
+                    <controls:Expander
+                        x:Uid="FilesPage_ValidityExpander"
+                        Header="Platnost"
+                        IsExpanded="True"
+                        Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <CheckBox
                                 x:Uid="FilesPage_ReadOnlyCheckBox"
@@ -112,7 +120,11 @@
                         </StackPanel>
                     </controls:Expander>
 
-                    <controls:Expander x:Uid="FilesPage_DatesExpander" Header="Data" IsExpanded="False">
+                    <controls:Expander
+                        x:Uid="FilesPage_DatesExpander"
+                        Header="Data"
+                        IsExpanded="False"
+                        Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <CalendarDatePicker
                                 x:Uid="FilesPage_CreatedFromPicker"
@@ -133,7 +145,11 @@
                         </StackPanel>
                     </controls:Expander>
 
-                    <controls:Expander x:Uid="FilesPage_SizeExpander" Header="Velikost" IsExpanded="False">
+                    <controls:Expander
+                        x:Uid="FilesPage_SizeExpander"
+                        Header="Velikost"
+                        IsExpanded="False"
+                        Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <controls:NumberBox
                                 x:Uid="FilesPage_SizeMinNumberBox"
@@ -161,18 +177,25 @@
                     x:Uid="FilesPage_ApplyButton"
                     Grid.Column="0"
                     Content="Použít"
-                    Command="{x:Bind ViewModel.RefreshCommand}" />
+                    Command="{x:Bind ViewModel.RefreshCommand}"
+                    Style="{StaticResource PulseButton}" />
                 <Button
                     x:Uid="FilesPage_ClearButton"
                     Grid.Column="1"
                     Content="Vyčistit"
-                    Command="{x:Bind ViewModel.ClearFiltersCommand}" />
+                    Command="{x:Bind ViewModel.ClearFiltersCommand}"
+                    Style="{StaticResource PulseButton}" />
             </Grid>
         </Grid>
 
         <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Vertical" Spacing="8">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsBusy}" />
+                <ProgressRing
+                    x:Name="LoadingRing"
+                    Width="20"
+                    Height="20"
+                    IsActive="{x:Bind ViewModel.IsBusy}"
+                    Opacity="0" />
                 <TextBlock
                     x:Uid="FilesPage_StatusText"
                     VerticalAlignment="Center"
@@ -215,17 +238,33 @@
                 IsOpen="{x:Bind ViewModel.IsIndexingPending, Mode=OneWay}"
                 Severity="Warning"
                 Title="Probíhá indexace"
-                Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay}" />
+                Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay}"
+                Opened="OnInfoBarOpened"
+                Closing="OnInfoBarClosing">
+                <controls:InfoBar.Transitions>
+                    <TransitionCollection>
+                        <ContentThemeTransition />
+                    </TransitionCollection>
+                </controls:InfoBar.Transitions>
+            </controls:InfoBar>
             <controls:InfoBar
                 x:Uid="FilesPage_ErrorInfoBar"
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                 Severity="Error"
                 Title="Chyba načítání"
-                Message="Nepodařilo se načíst výsledky." />
+                Message="Nepodařilo se načíst výsledky."
+                Opened="OnInfoBarOpened"
+                Closing="OnInfoBarClosing">
+                <controls:InfoBar.Transitions>
+                    <TransitionCollection>
+                        <ContentThemeTransition />
+                    </TransitionCollection>
+                </controls:InfoBar.Transitions>
+            </controls:InfoBar>
         </StackPanel>
 
-        <controls:ItemsRepeaterScrollHost Grid.Row="1" Grid.Column="1">
+        <controls:ItemsRepeaterScrollHost x:Name="ResultsHost" Grid.Row="1" Grid.Column="1" Opacity="1">
             <controls:ScrollViewer
         x:Name="FilesScrollViewer"
         HorizontalScrollMode="Disabled"
@@ -234,6 +273,7 @@
         VerticalScrollBarVisibility="Auto">
 
                 <controls:ItemsRepeater
+                    x:Name="FilesRepeater"
                     ItemsSource="{x:Bind ViewModel.Items}"
                     HorizontalAlignment="Stretch">
                     <controls:ItemsRepeater.Layout>
@@ -249,6 +289,11 @@
                                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 HorizontalAlignment="Stretch">
+                                <Border.Transitions>
+                                    <TransitionCollection>
+                                        <EntranceThemeTransition IsStaggeringEnabled="False" FromVerticalOffset="16" />
+                                    </TransitionCollection>
+                                </Border.Transitions>
                                 <StackPanel Spacing="4">
                                     <TextBlock
                                         Text="{x:Bind Name}"
