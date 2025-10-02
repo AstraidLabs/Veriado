@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common.OperationCancelled" xml:space="preserve">
+    <value>Cealaíodh an oibríocht.</value>
+  </data>
+  <data name="Settings.ThemeApplied" xml:space="preserve">
+    <value>Cuireadh an téama i bhfeidhm.</value>
+  </data>
+  <data name="Settings.PageSizeInvalid" xml:space="preserve">
+    <value>Iontráil méid leathanaigh dearfach.</value>
+  </data>
+  <data name="Settings.PageSizeUpdated" xml:space="preserve">
+    <value>Socraíodh méid na leathanaigh go {0} mír.</value>
+  </data>
+  <data name="Settings.LanguageApplied" xml:space="preserve">
+    <value>Athraíodh an teanga go {0}.</value>
+  </data>
+  <data name="SettingsPage_Title.Text" xml:space="preserve">
+    <value>Socruithe</value>
+  </data>
+  <data name="SettingsPage_ThemeCombo.Header" xml:space="preserve">
+    <value>Téama an fheidhmchláir</value>
+  </data>
+  <data name="SettingsPage_LanguageCombo.Header" xml:space="preserve">
+    <value>Teanga an fheidhmchláir</value>
+  </data>
+  <data name="SettingsPage_PageSizeBox.Header" xml:space="preserve">
+    <value>Méid leathanaigh</value>
+  </data>
+  <data name="SettingsPage_FolderBox.Header" xml:space="preserve">
+    <value>An fillteán is déanaí</value>
+  </data>
+  <data name="SettingsPage_FolderBox.PlaceholderText" xml:space="preserve">
+    <value>Conair an fhillteáin</value>
+  </data>
+  <data name="SettingsPage_ApplyThemeButton.Content" xml:space="preserve">
+    <value>Cuir an téama i bhfeidhm</value>
+  </data>
+  <data name="SettingsPage_ApplyLanguageButton.Content" xml:space="preserve">
+    <value>Cuir an teanga i bhfeidhm</value>
+  </data>
+  <data name="Startup.InitializingServices" xml:space="preserve">
+    <value>Seirbhísí an fheidhmchláir á dtosú…</value>
+  </data>
+  <data name="Startup.StartupFailed" xml:space="preserve">
+    <value>Theip ar thosú an fheidhmchláir.</value>
+  </data>
+  <data name="StartupWindow.Title" xml:space="preserve">
+    <value>Veriado</value>
+  </data>
+  <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
+    <value>Bain triail eile as</value>
+  </data>
+</root>

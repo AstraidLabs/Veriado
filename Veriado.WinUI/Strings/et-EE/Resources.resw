@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common.OperationCancelled" xml:space="preserve">
+    <value>Toiming katkestati.</value>
+  </data>
+  <data name="Settings.ThemeApplied" xml:space="preserve">
+    <value>Teema rakendatud.</value>
+  </data>
+  <data name="Settings.PageSizeInvalid" xml:space="preserve">
+    <value>Sisestage lehe suurus positiivse arvuna.</value>
+  </data>
+  <data name="Settings.PageSizeUpdated" xml:space="preserve">
+    <value>Lehe suurus on seatud {0} elemendile.</value>
+  </data>
+  <data name="Settings.LanguageApplied" xml:space="preserve">
+    <value>Keel vahetati {0} peale.</value>
+  </data>
+  <data name="SettingsPage_Title.Text" xml:space="preserve">
+    <value>Seaded</value>
+  </data>
+  <data name="SettingsPage_ThemeCombo.Header" xml:space="preserve">
+    <value>Rakenduse teema</value>
+  </data>
+  <data name="SettingsPage_LanguageCombo.Header" xml:space="preserve">
+    <value>Rakenduse keel</value>
+  </data>
+  <data name="SettingsPage_PageSizeBox.Header" xml:space="preserve">
+    <value>Lehe suurus</value>
+  </data>
+  <data name="SettingsPage_FolderBox.Header" xml:space="preserve">
+    <value>Viimane kaust</value>
+  </data>
+  <data name="SettingsPage_FolderBox.PlaceholderText" xml:space="preserve">
+    <value>Kausta tee</value>
+  </data>
+  <data name="SettingsPage_ApplyThemeButton.Content" xml:space="preserve">
+    <value>Rakenda teema</value>
+  </data>
+  <data name="SettingsPage_ApplyLanguageButton.Content" xml:space="preserve">
+    <value>Rakenda keel</value>
+  </data>
+  <data name="Startup.InitializingServices" xml:space="preserve">
+    <value>Rakenduse teenuste käivitamine…</value>
+  </data>
+  <data name="Startup.StartupFailed" xml:space="preserve">
+    <value>Rakendust ei õnnestunud käivitada.</value>
+  </data>
+  <data name="StartupWindow.Title" xml:space="preserve">
+    <value>Veriado</value>
+  </data>
+  <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
+    <value>Proovi uuesti</value>
+  </data>
+</root>

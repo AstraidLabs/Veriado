@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common.OperationCancelled" xml:space="preserve">
+    <value>Operácia bola zrušená.</value>
+  </data>
+  <data name="Settings.ThemeApplied" xml:space="preserve">
+    <value>Téma bola použitá.</value>
+  </data>
+  <data name="Settings.PageSizeInvalid" xml:space="preserve">
+    <value>Zadajte kladnú veľkosť stránky.</value>
+  </data>
+  <data name="Settings.PageSizeUpdated" xml:space="preserve">
+    <value>Veľkosť stránky nastavená na {0} položiek.</value>
+  </data>
+  <data name="Settings.LanguageApplied" xml:space="preserve">
+    <value>Jazyk bol zmenený na {0}.</value>
+  </data>
+  <data name="SettingsPage_Title.Text" xml:space="preserve">
+    <value>Nastavenia</value>
+  </data>
+  <data name="SettingsPage_ThemeCombo.Header" xml:space="preserve">
+    <value>Téma aplikácie</value>
+  </data>
+  <data name="SettingsPage_LanguageCombo.Header" xml:space="preserve">
+    <value>Jazyk aplikácie</value>
+  </data>
+  <data name="SettingsPage_PageSizeBox.Header" xml:space="preserve">
+    <value>Veľkosť stránky</value>
+  </data>
+  <data name="SettingsPage_FolderBox.Header" xml:space="preserve">
+    <value>Posledný priečinok</value>
+  </data>
+  <data name="SettingsPage_FolderBox.PlaceholderText" xml:space="preserve">
+    <value>Cesta k priečinku</value>
+  </data>
+  <data name="SettingsPage_ApplyThemeButton.Content" xml:space="preserve">
+    <value>Použiť tému</value>
+  </data>
+  <data name="SettingsPage_ApplyLanguageButton.Content" xml:space="preserve">
+    <value>Použiť jazyk</value>
+  </data>
+  <data name="Startup.InitializingServices" xml:space="preserve">
+    <value>Spúšťajú sa služby aplikácie…</value>
+  </data>
+  <data name="Startup.StartupFailed" xml:space="preserve">
+    <value>Aplikáciu sa nepodarilo spustiť.</value>
+  </data>
+  <data name="StartupWindow.Title" xml:space="preserve">
+    <value>Veriado</value>
+  </data>
+  <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
+    <value>Skúsiť znova</value>
+  </data>
+</root>

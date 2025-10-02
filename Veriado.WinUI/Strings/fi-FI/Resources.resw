@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common.OperationCancelled" xml:space="preserve">
+    <value>Toiminto peruttiin.</value>
+  </data>
+  <data name="Settings.ThemeApplied" xml:space="preserve">
+    <value>Teema otettiin käyttöön.</value>
+  </data>
+  <data name="Settings.PageSizeInvalid" xml:space="preserve">
+    <value>Syötä positiivinen sivukoko.</value>
+  </data>
+  <data name="Settings.PageSizeUpdated" xml:space="preserve">
+    <value>Sivukooksi asetettiin {0} kohdetta.</value>
+  </data>
+  <data name="Settings.LanguageApplied" xml:space="preserve">
+    <value>Kieli vaihdettiin kieleen {0}.</value>
+  </data>
+  <data name="SettingsPage_Title.Text" xml:space="preserve">
+    <value>Asetukset</value>
+  </data>
+  <data name="SettingsPage_ThemeCombo.Header" xml:space="preserve">
+    <value>Sovelluksen teema</value>
+  </data>
+  <data name="SettingsPage_LanguageCombo.Header" xml:space="preserve">
+    <value>Sovelluksen kieli</value>
+  </data>
+  <data name="SettingsPage_PageSizeBox.Header" xml:space="preserve">
+    <value>Sivukoko</value>
+  </data>
+  <data name="SettingsPage_FolderBox.Header" xml:space="preserve">
+    <value>Viimeisin kansio</value>
+  </data>
+  <data name="SettingsPage_FolderBox.PlaceholderText" xml:space="preserve">
+    <value>Kansiopolku</value>
+  </data>
+  <data name="SettingsPage_ApplyThemeButton.Content" xml:space="preserve">
+    <value>Käytä teemaa</value>
+  </data>
+  <data name="SettingsPage_ApplyLanguageButton.Content" xml:space="preserve">
+    <value>Käytä kieltä</value>
+  </data>
+  <data name="Startup.InitializingServices" xml:space="preserve">
+    <value>Käynnistetään sovelluksen palveluja…</value>
+  </data>
+  <data name="Startup.StartupFailed" xml:space="preserve">
+    <value>Sovelluksen käynnistäminen epäonnistui.</value>
+  </data>
+  <data name="StartupWindow.Title" xml:space="preserve">
+    <value>Veriado</value>
+  </data>
+  <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
+    <value>Yritä uudelleen</value>
+  </data>
+</root>
