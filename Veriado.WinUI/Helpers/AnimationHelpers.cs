@@ -1,10 +1,10 @@
 using System;
 using System.Numerics;
 using Microsoft.UI.Composition;
-using Microsoft.UI.ViewManagement;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
+using Windows.UI.ViewManagement;
 
 namespace Veriado.WinUI.Helpers;
 
@@ -145,6 +145,12 @@ public static class ExpanderAnimationHelper
         typeof(ExpanderAnimationHelper),
         new PropertyMetadata(false));
 
+    private static readonly DependencyProperty PropertyChangedCallbackTokenProperty = DependencyProperty.RegisterAttached(
+        "PropertyChangedCallbackToken",
+        typeof(long),
+        typeof(ExpanderAnimationHelper),
+        new PropertyMetadata(-1L));
+
     public static readonly DependencyProperty IsEnabledProperty = DependencyProperty.RegisterAttached(
         "IsEnabled",
         typeof(bool),
@@ -158,6 +164,10 @@ public static class ExpanderAnimationHelper
     private static bool GetIsCollapsingInternally(DependencyObject element) => (bool)element.GetValue(IsCollapsingInternallyProperty);
 
     private static void SetIsCollapsingInternally(DependencyObject element, bool value) => element.SetValue(IsCollapsingInternallyProperty, value);
+
+    private static long GetPropertyChangedCallbackToken(DependencyObject element) => (long)element.GetValue(PropertyChangedCallbackTokenProperty);
+
+    private static void SetPropertyChangedCallbackToken(DependencyObject element, long value) => element.SetValue(PropertyChangedCallbackTokenProperty, value);
 
     private static void OnIsEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -202,10 +212,12 @@ public static class ExpanderAnimationHelper
     private static void Attach(Expander expander)
     {
         expander.Expanding += OnExpanderExpanding;
-        expander.Collapsing += OnExpanderCollapsing;
         expander.Collapsed += OnExpanderCollapsed;
 
-        if (expander.Content is UIElement content)
+        var token = expander.RegisterPropertyChangedCallback(Expander.IsExpandedProperty, OnExpanderIsExpandedChanged);
+        SetPropertyChangedCallbackToken(expander, token);
+
+        if (expander.Content is FrameworkElement content)
         {
             content.Opacity = expander.IsExpanded ? 1d : 0d;
         }
@@ -214,13 +226,19 @@ public static class ExpanderAnimationHelper
     private static void Detach(Expander expander)
     {
         expander.Expanding -= OnExpanderExpanding;
-        expander.Collapsing -= OnExpanderCollapsing;
         expander.Collapsed -= OnExpanderCollapsed;
+
+        var token = GetPropertyChangedCallbackToken(expander);
+        if (token >= 0)
+        {
+            expander.UnregisterPropertyChangedCallback(Expander.IsExpandedProperty, token);
+            SetPropertyChangedCallbackToken(expander, -1);
+        }
     }
 
     private static void OnExpanderExpanding(Expander sender, ExpanderExpandingEventArgs args)
     {
-        if (sender.Content is not UIElement content)
+        if (sender.Content is not FrameworkElement content)
         {
             return;
         }
@@ -260,26 +278,50 @@ public static class ExpanderAnimationHelper
         batch.End();
     }
 
-    private static void OnExpanderCollapsing(Expander sender, ExpanderCollapsingEventArgs args)
+    private static void OnExpanderIsExpandedChanged(DependencyObject sender, DependencyProperty dependencyProperty)
     {
-        if (sender.Content is not UIElement content)
+        if (sender is not Expander expander || dependencyProperty != Expander.IsExpandedProperty)
         {
             return;
         }
 
-        if (GetIsCollapsingInternally(sender) || !AnimationSettings.AreEnabled)
+        if (expander.Content is not FrameworkElement content)
         {
             return;
         }
 
-        args.Cancel = true;
+        if (expander.IsExpanded)
+        {
+            if (!AnimationSettings.AreEnabled)
+            {
+                content.Opacity = 1d;
+            }
+
+            return;
+        }
+
+        HandleCollapse(expander, content);
+    }
+
+    private static void HandleCollapse(Expander expander, FrameworkElement content)
+    {
+        if (GetIsCollapsingInternally(expander))
+        {
+            return;
+        }
+
+        if (!AnimationSettings.AreEnabled)
+        {
+            content.Opacity = 0d;
+            return;
+        }
 
         var visual = ElementCompositionPreview.GetElementVisual(content);
         var compositor = visual.Compositor;
         var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Panel);
         var easing = AnimationResourceHelper.CreateEasing(compositor, AnimationResourceKeys.EaseOut);
 
-        EnsureCenterPoint(visual, content, sender);
+        EnsureCenterPoint(visual, content, expander);
 
         var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
         scaleAnimation.Target = nameof(Visual.Scale);
@@ -297,12 +339,14 @@ public static class ExpanderAnimationHelper
         batch.Completed += (_, __) =>
         {
             content.Opacity = 0d;
-            SetIsCollapsingInternally(sender, true);
-            sender.IsExpanded = false;
+            _ = expander.DispatcherQueue.TryEnqueue(() => expander.IsExpanded = false);
         };
         visual.StartAnimation(nameof(Visual.Scale), scaleAnimation);
         visual.StartAnimation(nameof(Visual.Opacity), opacityAnimation);
         batch.End();
+
+        SetIsCollapsingInternally(expander, true);
+        expander.IsExpanded = true;
     }
 
     private static void OnExpanderCollapsed(Expander sender, ExpanderCollapsedEventArgs args)
@@ -312,13 +356,16 @@ public static class ExpanderAnimationHelper
             SetIsCollapsingInternally(sender, false);
         }
 
-        if (sender.Content is UIElement content && !AnimationSettings.AreEnabled)
+        if (sender.Content is FrameworkElement content)
         {
-            content.Opacity = 0d;
+            if (!AnimationSettings.AreEnabled)
+            {
+                content.Opacity = 0d;
+            }
         }
     }
 
-    private static void EnsureCenterPoint(Visual visual, UIElement content, FrameworkElement expander)
+    private static void EnsureCenterPoint(Visual visual, FrameworkElement content, FrameworkElement expander)
     {
         var width = content.RenderSize.Width > 0 ? content.RenderSize.Width : expander.ActualWidth;
         visual.CenterPoint = new Vector3((float)(width / 2), 0f, 0f);

@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition;
-using Microsoft.UI.ViewManagement;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
@@ -18,6 +17,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Import;
+using Windows.UI.ViewManagement;
 
 namespace Veriado.WinUI.Views.Import;
 
@@ -409,18 +409,18 @@ public sealed partial class ImportPage : Page
 
     private void Pulse(UIElement? target, double peak)
     {
-        if (target is null || !_animationsEnabled || _compositor is null)
+        if (target is not FrameworkElement element || !_animationsEnabled || _compositor is null)
         {
             return;
         }
 
-        if (target.ActualWidth <= 0 || target.ActualHeight <= 0)
+        if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
         {
             return;
         }
 
-        var visual = ElementCompositionPreview.GetElementVisual(target);
-        visual.CenterPoint = new Vector3((float)(target.ActualWidth / 2), (float)(target.ActualHeight / 2), 0f);
+        var visual = ElementCompositionPreview.GetElementVisual(element);
+        visual.CenterPoint = new Vector3((float)(element.ActualWidth / 2), (float)(element.ActualHeight / 2), 0f);
 
         var duration = AnimationResourceHelper.GetDuration(AnimationResourceKeys.Fast);
         var easeOut = AnimationResourceHelper.CreateEasing(_compositor, AnimationResourceKeys.EaseOut);
