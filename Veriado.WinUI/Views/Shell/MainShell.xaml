@@ -5,6 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    Background="{ThemeResource AppBackgroundBrush}"
     mc:Ignorable="d">
     <controls:NavigationView
         x:Name="RootNavigation"
@@ -14,20 +15,33 @@
         OpenPaneLength="320"
         IsPaneToggleButtonVisible="True"
         IsPaneOpen="{Binding IsNavOpen, Mode=TwoWay}"
+        Background="{ThemeResource AppSurfaceBrush}"
+        PaneBackground="{ThemeResource AppNavigationBackgroundBrush}"
+        ContentBackground="{ThemeResource AppBackgroundBrush}"
+        Foreground="{ThemeResource AppNavigationForegroundBrush}"
         ItemInvoked="OnNavigationViewItemInvoked">
         <controls:NavigationView.Resources>
             <SolidColorBrush
                 x:Key="NavigationViewDefaultPaneBackground"
-                Color="{ThemeResource SystemChromeHighColor}" />
+                Color="{ThemeResource AppNavigationBackgroundColor}" />
             <SolidColorBrush
                 x:Key="NavigationViewExpandedPaneBackground"
-                Color="{ThemeResource SystemChromeHighColor}" />
+                Color="{ThemeResource AppNavigationBackgroundColor}" />
             <SolidColorBrush
                 x:Key="NavigationViewMinimalPaneBackground"
-                Color="{ThemeResource SystemChromeHighColor}" />
+                Color="{ThemeResource AppNavigationBackgroundColor}" />
             <SolidColorBrush
                 x:Key="NavigationViewTopPaneBackground"
-                Color="{ThemeResource SystemChromeHighColor}" />
+                Color="{ThemeResource AppNavigationBackgroundColor}" />
+            <SolidColorBrush
+                x:Key="NavigationViewItemForeground"
+                Color="{ThemeResource AppNavigationForegroundColor}" />
+            <SolidColorBrush
+                x:Key="NavigationViewItemForegroundSelected"
+                Color="{ThemeResource AppNavigationForegroundColor}" />
+            <SolidColorBrush
+                x:Key="NavigationViewSelectionIndicatorForeground"
+                Color="{ThemeResource AppAccentColor}" />
         </controls:NavigationView.Resources>
         <controls:NavigationView.MenuItems>
             <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
@@ -35,9 +49,11 @@
             <controls:NavigationViewItem Tag="settings" Content="Nastavení" Icon="Setting" />
         </controls:NavigationView.MenuItems>
         <controls:NavigationView.Content>
-            <ContentPresenter
-                x:Name="ContentHost"
-                Content="{x:Bind CurrentContent, Mode=OneWay}" />
+            <Grid Background="{ThemeResource AppBackgroundBrush}">
+                <ContentPresenter
+                    x:Name="ContentHost"
+                    Content="{x:Bind CurrentContent, Mode=OneWay}" />
+            </Grid>
         </controls:NavigationView.Content>
     </controls:NavigationView>
 </Window>
