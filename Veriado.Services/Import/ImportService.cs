@@ -92,8 +92,10 @@ public sealed class ImportService : IImportService
         var batchResult = new ImportBatchResult(
             aggregate.Status,
             aggregate.Total,
+            aggregate.Processed,
             aggregate.Succeeded,
             aggregate.Failed,
+            aggregate.Skipped,
             aggregate.Errors);
 
         if (aggregate.Status == ImportBatchStatus.FatalError)
@@ -128,9 +130,12 @@ public sealed class ImportService : IImportService
 
     private static ImportBatchStatus DetermineStatus(
         int total,
+        int processed,
         int succeeded,
         int failed,
+        int skipped,
         bool fatalEncountered,
+        bool cancellationEncountered,
         IReadOnlyCollection<ImportError> errors)
     {
         if (fatalEncountered)
@@ -138,9 +143,20 @@ public sealed class ImportService : IImportService
             return ImportBatchStatus.FatalError;
         }
 
+        if (cancellationEncountered)
+        {
+            return ImportBatchStatus.PartialSuccess;
+        }
+
         if (total == 0 && errors.Count == 0)
         {
             return ImportBatchStatus.Success;
+        }
+
+        var accounted = succeeded + failed + skipped;
+        if (accounted < total)
+        {
+            return ImportBatchStatus.PartialSuccess;
         }
 
         if (failed == 0)
@@ -148,7 +164,7 @@ public sealed class ImportService : IImportService
             return ImportBatchStatus.Success;
         }
 
-        if (succeeded == 0)
+        if (succeeded == 0 && skipped == 0)
         {
             return ImportBatchStatus.Failure;
         }
@@ -170,11 +186,11 @@ public sealed class ImportService : IImportService
                 "Verify the folder path and try again.",
                 null,
                 _clock.UtcNow);
-            var fatalAggregate = new ImportAggregateResult(ImportBatchStatus.FatalError, 0, 0, 0, new[] { missingError });
+            var fatalAggregate = new ImportAggregateResult(ImportBatchStatus.FatalError, 0, 0, 0, 0, 0, new[] { missingError });
             var now = _clock.UtcNow;
 
             yield return ImportProgressEvent.BatchStarted(0, now);
-            yield return ImportProgressEvent.ErrorOccurred(missingError, 0, 0, 0, 0, now);
+            yield return ImportProgressEvent.ErrorOccurred(missingError, 0, 0, 0, 0, 0, now);
             yield return ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow);
             yield break;
         }
@@ -186,11 +202,13 @@ public sealed class ImportService : IImportService
                 0,
                 0,
                 0,
+                0,
+                0,
                 new[] { validationError });
             var startedAt = validationError.Timestamp;
 
             yield return ImportProgressEvent.BatchStarted(0, startedAt);
-            yield return ImportProgressEvent.ErrorOccurred(validationError, 0, 0, 0, 0);
+            yield return ImportProgressEvent.ErrorOccurred(validationError, 0, 0, 0, 0, 0);
             yield return ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow);
             yield break;
         }
@@ -216,12 +234,14 @@ public sealed class ImportService : IImportService
                 0,
                 0,
                 0,
+                0,
+                0,
                 new[] { enumerationError });
 
             enumerationFailureEvents = new[]
             {
                 ImportProgressEvent.BatchStarted(0, enumerationError.Timestamp),
-                ImportProgressEvent.ErrorOccurred(enumerationError, 0, 0, 0, 0),
+                ImportProgressEvent.ErrorOccurred(enumerationError, 0, 0, 0, 0, 0),
                 ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow),
             };
 
@@ -261,6 +281,7 @@ public sealed class ImportService : IImportService
         var processed = 0;
         var succeeded = 0;
         var failed = 0;
+        var skipped = 0;
         var fatalEncountered = false;
         var cancellationEncountered = false;
 
@@ -297,6 +318,7 @@ public sealed class ImportService : IImportService
                                 createRequest.ContentHash);
 
                             var completedSkip = Interlocked.Increment(ref processed);
+                            var skippedSnapshot = Interlocked.Increment(ref skipped);
                             successCountSnapshot = Volatile.Read(ref succeeded);
                             failedCountSnapshot = Volatile.Read(ref failed);
                             var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
@@ -307,6 +329,7 @@ public sealed class ImportService : IImportService
                                     completedSkip,
                                     total,
                                     successCountSnapshot,
+                                    skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
                                 CancellationToken.None).ConfigureAwait(false);
@@ -317,6 +340,7 @@ public sealed class ImportService : IImportService
                                     total,
                                     successCountSnapshot,
                                     failedCountSnapshot,
+                                    skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
                                 CancellationToken.None).ConfigureAwait(false);
@@ -330,13 +354,26 @@ public sealed class ImportService : IImportService
                         {
                             var completed = Interlocked.Increment(ref processed);
                             var success = Interlocked.Increment(ref succeeded);
+                            var skippedSnapshot = Volatile.Read(ref skipped);
 
                             await channel.Writer.WriteAsync(
-                                ImportProgressEvent.FileCompleted(filePath, completed, total, success, timestamp: _clock.UtcNow),
+                                ImportProgressEvent.FileCompleted(
+                                    filePath,
+                                    completed,
+                                    total,
+                                    success,
+                                    skippedSnapshot,
+                                    timestamp: _clock.UtcNow),
                                 CancellationToken.None).ConfigureAwait(false);
 
                             await channel.Writer.WriteAsync(
-                                ImportProgressEvent.Progress(completed, total, success, Volatile.Read(ref failed), timestamp: _clock.UtcNow),
+                                ImportProgressEvent.Progress(
+                                    completed,
+                                    total,
+                                    success,
+                                    Volatile.Read(ref failed),
+                                    skippedSnapshot,
+                                    timestamp: _clock.UtcNow),
                                 CancellationToken.None).ConfigureAwait(false);
 
                             return;
@@ -349,6 +386,7 @@ public sealed class ImportService : IImportService
                                 filePath);
 
                             var completedSkip = Interlocked.Increment(ref processed);
+                            var skippedSnapshot = Interlocked.Increment(ref skipped);
                             successCountSnapshot = Volatile.Read(ref succeeded);
                             failedCountSnapshot = Volatile.Read(ref failed);
                             var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
@@ -359,6 +397,7 @@ public sealed class ImportService : IImportService
                                     completedSkip,
                                     total,
                                     successCountSnapshot,
+                                    skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
                                 CancellationToken.None).ConfigureAwait(false);
@@ -369,6 +408,7 @@ public sealed class ImportService : IImportService
                                     total,
                                     successCountSnapshot,
                                     failedCountSnapshot,
+                                    skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
                                 CancellationToken.None).ConfigureAwait(false);
@@ -391,13 +431,27 @@ public sealed class ImportService : IImportService
                         var completedFailure = Interlocked.Increment(ref processed);
                         successCountSnapshot = Volatile.Read(ref succeeded);
                         failedCountSnapshot = Interlocked.Increment(ref failed);
+                        var skippedSnapshot = Volatile.Read(ref skipped);
 
                         await channel.Writer.WriteAsync(
-                            ImportProgressEvent.ErrorOccurred(primaryError, completedFailure, total, successCountSnapshot, failedCountSnapshot, _clock.UtcNow),
+                            ImportProgressEvent.ErrorOccurred(
+                                primaryError,
+                                completedFailure,
+                                total,
+                                successCountSnapshot,
+                                failedCountSnapshot,
+                                skippedSnapshot,
+                                _clock.UtcNow),
                             CancellationToken.None).ConfigureAwait(false);
 
                         await channel.Writer.WriteAsync(
-                            ImportProgressEvent.Progress(completedFailure, total, successCountSnapshot, failedCountSnapshot, timestamp: _clock.UtcNow),
+                            ImportProgressEvent.Progress(
+                                completedFailure,
+                                total,
+                                successCountSnapshot,
+                                failedCountSnapshot,
+                                skippedSnapshot,
+                                timestamp: _clock.UtcNow),
                             CancellationToken.None).ConfigureAwait(false);
                     }
                     catch (FileTooLargeException ex)
@@ -420,13 +474,27 @@ public sealed class ImportService : IImportService
                         var completedFailure = Interlocked.Increment(ref processed);
                         successCountSnapshot = Volatile.Read(ref succeeded);
                         failedCountSnapshot = Interlocked.Increment(ref failed);
+                        var skippedSnapshot = Volatile.Read(ref skipped);
 
                         await channel.Writer.WriteAsync(
-                            ImportProgressEvent.ErrorOccurred(error, completedFailure, total, successCountSnapshot, failedCountSnapshot, _clock.UtcNow),
+                            ImportProgressEvent.ErrorOccurred(
+                                error,
+                                completedFailure,
+                                total,
+                                successCountSnapshot,
+                                failedCountSnapshot,
+                                skippedSnapshot,
+                                _clock.UtcNow),
                             CancellationToken.None).ConfigureAwait(false);
 
                         await channel.Writer.WriteAsync(
-                            ImportProgressEvent.Progress(completedFailure, total, successCountSnapshot, failedCountSnapshot, timestamp: _clock.UtcNow),
+                            ImportProgressEvent.Progress(
+                                completedFailure,
+                                total,
+                                successCountSnapshot,
+                                failedCountSnapshot,
+                                skippedSnapshot,
+                                timestamp: _clock.UtcNow),
                             CancellationToken.None).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
@@ -449,13 +517,27 @@ public sealed class ImportService : IImportService
                         var completedFailure = Interlocked.Increment(ref processed);
                         successCountSnapshot = Volatile.Read(ref succeeded);
                         failedCountSnapshot = Interlocked.Increment(ref failed);
+                        var skippedSnapshot = Volatile.Read(ref skipped);
 
                         await channel.Writer.WriteAsync(
-                            ImportProgressEvent.ErrorOccurred(error, completedFailure, total, successCountSnapshot, failedCountSnapshot, _clock.UtcNow),
+                            ImportProgressEvent.ErrorOccurred(
+                                error,
+                                completedFailure,
+                                total,
+                                successCountSnapshot,
+                                failedCountSnapshot,
+                                skippedSnapshot,
+                                _clock.UtcNow),
                             CancellationToken.None).ConfigureAwait(false);
 
                         await channel.Writer.WriteAsync(
-                            ImportProgressEvent.Progress(completedFailure, total, successCountSnapshot, failedCountSnapshot, timestamp: _clock.UtcNow),
+                            ImportProgressEvent.Progress(
+                                completedFailure,
+                                total,
+                                successCountSnapshot,
+                                failedCountSnapshot,
+                                skippedSnapshot,
+                                timestamp: _clock.UtcNow),
                             CancellationToken.None).ConfigureAwait(false);
                     }
                 }).ConfigureAwait(false);
@@ -481,6 +563,7 @@ public sealed class ImportService : IImportService
                         total,
                         Volatile.Read(ref succeeded),
                         Volatile.Read(ref failed),
+                        Volatile.Read(ref skipped),
                         _clock.UtcNow),
                     CancellationToken.None).ConfigureAwait(false);
             }
@@ -505,6 +588,7 @@ public sealed class ImportService : IImportService
                         total,
                         Volatile.Read(ref succeeded),
                         Volatile.Read(ref failed),
+                        Volatile.Read(ref skipped),
                         _clock.UtcNow),
                     CancellationToken.None).ConfigureAwait(false);
             }
@@ -524,9 +608,18 @@ public sealed class ImportService : IImportService
         var processedFinal = Volatile.Read(ref processed);
         var succeededFinal = Volatile.Read(ref succeeded);
         var failedFinal = Volatile.Read(ref failed);
+        var skippedFinal = Volatile.Read(ref skipped);
         var errorArray = errors.ToArray();
-        var status = DetermineStatus(processedFinal, succeededFinal, failedFinal, fatalEncountered || cancellationEncountered, errorArray);
-        var aggregate = new ImportAggregateResult(status, processedFinal, succeededFinal, failedFinal, errorArray);
+        var status = DetermineStatus(
+            total,
+            processedFinal,
+            succeededFinal,
+            failedFinal,
+            skippedFinal,
+            fatalEncountered,
+            cancellationEncountered,
+            errorArray);
+        var aggregate = new ImportAggregateResult(status, total, processedFinal, succeededFinal, failedFinal, skippedFinal, errorArray);
 
         yield return ImportProgressEvent.BatchCompleted(aggregate, _clock.UtcNow);
     }

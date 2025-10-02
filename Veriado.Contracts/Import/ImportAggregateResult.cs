@@ -4,20 +4,24 @@ namespace Veriado.Contracts.Import;
 /// Represents the aggregated outcome of a streaming import batch.
 /// </summary>
 /// <param name="Status">The resulting status of the batch.</param>
-/// <param name="Total">The total number of processed files.</param>
+/// <param name="Total">The total number of files discovered in the batch.</param>
+/// <param name="Processed">The number of files that were actually processed.</param>
 /// <param name="Succeeded">The number of successfully imported files.</param>
 /// <param name="Failed">The number of files that failed to import.</param>
+/// <param name="Skipped">The number of files that were intentionally skipped.</param>
 /// <param name="Errors">The collection of captured errors.</param>
 public sealed record class ImportAggregateResult(
     ImportBatchStatus Status,
     int Total,
+    int Processed,
     int Succeeded,
     int Failed,
+    int Skipped,
     IReadOnlyList<ImportError> Errors)
 {
     /// <summary>
     /// Gets an empty success result.
     /// </summary>
     public static ImportAggregateResult EmptySuccess { get; }
-        = new(ImportBatchStatus.Success, 0, 0, 0, Array.Empty<ImportError>());
+        = new(ImportBatchStatus.Success, 0, 0, 0, 0, 0, Array.Empty<ImportError>());
 }
