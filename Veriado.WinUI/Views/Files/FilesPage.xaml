@@ -233,13 +233,13 @@
                 </StackPanel>
             </StackPanel>
             <controls:InfoBar
+                x:Name="IndexingInfoBar"
                 x:Uid="FilesPage_IndexingInfoBar"
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.IsIndexingPending, Mode=OneWay}"
                 Severity="Warning"
                 Title="Probíhá indexace"
                 Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay}"
-                Opened="OnInfoBarOpened"
                 Closing="OnInfoBarClosing">
                 <controls:InfoBar.Transitions>
                     <TransitionCollection>
@@ -248,13 +248,13 @@
                 </controls:InfoBar.Transitions>
             </controls:InfoBar>
             <controls:InfoBar
+                x:Name="ErrorInfoBar"
                 x:Uid="FilesPage_ErrorInfoBar"
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                 Severity="Error"
                 Title="Chyba načítání"
                 Message="Nepodařilo se načíst výsledky."
-                Opened="OnInfoBarOpened"
                 Closing="OnInfoBarClosing">
                 <controls:InfoBar.Transitions>
                     <TransitionCollection>

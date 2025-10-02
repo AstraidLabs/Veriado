@@ -14,6 +14,7 @@ namespace Veriado.WinUI.Views.Files;
 public sealed partial class FilesPage : Page
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
+    private readonly Dictionary<InfoBar, long> _infoBarTokens = new();
     private ImplicitAnimationCollection? _itemAnimations;
 
     public FilesPage(FilesPageViewModel viewModel)
@@ -24,6 +25,7 @@ public sealed partial class FilesPage : Page
         FilesRepeater.ElementPrepared += OnFilesRepeaterElementPrepared;
         FilesRepeater.ElementClearing += OnFilesRepeaterElementClearing;
         UpdateLoadingState(ViewModel.IsBusy, animate: false);
+        RegisterInfoBars();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -42,6 +44,50 @@ public sealed partial class FilesPage : Page
     {
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         ViewModel.StopHealthMonitoring();
+        UnregisterInfoBars();
+    }
+
+    private void RegisterInfoBars()
+    {
+        if (IndexingInfoBar is not null)
+        {
+            RegisterInfoBar(IndexingInfoBar);
+        }
+
+        if (ErrorInfoBar is not null)
+        {
+            RegisterInfoBar(ErrorInfoBar);
+        }
+    }
+
+    private void RegisterInfoBar(InfoBar infoBar)
+    {
+        if (_infoBarTokens.TryGetValue(infoBar, out var token))
+        {
+            infoBar.UnregisterPropertyChangedCallback(InfoBar.IsOpenProperty, token);
+        }
+
+        var newToken = infoBar.RegisterPropertyChangedCallback(InfoBar.IsOpenProperty, OnInfoBarIsOpenChanged);
+        _infoBarTokens[infoBar] = newToken;
+
+        if (infoBar.IsOpen)
+        {
+            AnimateInfoBarOpen(infoBar);
+        }
+        else
+        {
+            infoBar.Opacity = 0d;
+        }
+    }
+
+    private void UnregisterInfoBars()
+    {
+        foreach (var (infoBar, token) in _infoBarTokens)
+        {
+            infoBar.UnregisterPropertyChangedCallback(InfoBar.IsOpenProperty, token);
+        }
+
+        _infoBarTokens.Clear();
     }
 
     private Task ExecuteInitialRefreshAsync()
@@ -162,13 +208,25 @@ public sealed partial class FilesPage : Page
         }
     }
 
-    private void OnInfoBarOpened(object sender, object e)
+    private void OnInfoBarIsOpenChanged(DependencyObject sender, DependencyProperty dependencyProperty)
     {
         if (sender is not InfoBar infoBar)
         {
             return;
         }
 
+        if (infoBar.IsOpen)
+        {
+            AnimateInfoBarOpen(infoBar);
+        }
+        else if (!_closingInfoBars.Contains(infoBar))
+        {
+            infoBar.Opacity = 0d;
+        }
+    }
+
+    private void AnimateInfoBarOpen(InfoBar infoBar)
+    {
         if (!AnimationSettings.AreEnabled)
         {
             infoBar.Opacity = 1d;
