@@ -239,7 +239,7 @@
                 Severity="Warning"
                 Title="Probíhá indexace"
                 Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay}"
-                Opened="OnInfoBarOpened"
+                Loaded="OnInfoBarLoaded"
                 Closing="OnInfoBarClosing">
                 <controls:InfoBar.Transitions>
                     <TransitionCollection>
@@ -254,7 +254,7 @@
                 Severity="Error"
                 Title="Chyba načítání"
                 Message="Nepodařilo se načíst výsledky."
-                Opened="OnInfoBarOpened"
+                Loaded="OnInfoBarLoaded"
                 Closing="OnInfoBarClosing">
                 <controls:InfoBar.Transitions>
                     <TransitionCollection>
