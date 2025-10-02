@@ -41,7 +41,6 @@
                     Grid.Column="0"
                     PlaceholderText="Hledat soubory"
                     ItemsSource="{x:Bind ViewModel.SearchSuggestions}"
-                    IsTextCompletionEnabled="True"
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     UpdateTextOnSelect="True" />
                 <ToggleSwitch
