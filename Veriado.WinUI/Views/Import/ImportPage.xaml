@@ -139,13 +139,25 @@
                                 <TextBlock FontWeight="SemiBold" Text="Shrnutí importu" />
                                 <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="12">
-                                    <TextBlock Text="{Binding OkCount, StringFormat='OK: {0}'}" />
-                                    <TextBlock Text="{Binding ErrorCount, StringFormat='Chyby: {0}'}" />
-                                    <TextBlock Text="{Binding SkipCount, StringFormat='Přeskočeno: {0}'}" />
+                                    <TextBlock>
+                                        <Run Text="OK: " />
+                                        <Run Text="{Binding OkCount}" />
+                                    </TextBlock>
+                                    <TextBlock>
+                                        <Run Text="Chyby: " />
+                                        <Run Text="{Binding ErrorCount}" />
+                                    </TextBlock>
+                                    <TextBlock>
+                                        <Run Text="Přeskočeno: " />
+                                        <Run Text="{Binding SkipCount}" />
+                                    </TextBlock>
                                 </StackPanel>
                                 <TextBlock
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}, StringFormat='Zpracováno dat: {0}'}" />
+                                    TextWrapping="Wrap">
+                                    <Run Text="Zpracováno dat: " />
+                                    <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                                </TextBlock>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -322,11 +334,11 @@
                                                     Glyph="&#xE73E;"
                                                     FontSize="16"
                                                     VerticalAlignment="Center">
-                                                    <FontIcon.Transitions>
-                                                        <TransitionCollection>
-                                                            <CrossFadeThemeTransition />
-                                                        </TransitionCollection>
-                                                    </FontIcon.Transitions>
+                                                <FontIcon.Transitions>
+                                                    <TransitionCollection>
+                                                        <ContentThemeTransition />
+                                                    </TransitionCollection>
+                                                </FontIcon.Transitions>
                                                 </FontIcon>
                                                 <TextBlock
                                                     x:Name="StatusText"
@@ -335,7 +347,7 @@
                                                     TextTrimming="CharacterEllipsis">
                                                     <TextBlock.Transitions>
                                                         <TransitionCollection>
-                                                            <CrossFadeThemeTransition />
+                                                            <ContentThemeTransition />
                                                         </TransitionCollection>
                                                     </TextBlock.Transitions>
                                                 </TextBlock>
