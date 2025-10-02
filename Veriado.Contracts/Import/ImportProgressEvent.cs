@@ -25,6 +25,7 @@ public sealed record class ImportProgressEvent(
     int? TotalFiles,
     int? SucceededFiles,
     int? FailedFiles,
+    int? SkippedFiles,
     double? ProgressPercent)
 {
     /// <summary>
@@ -44,6 +45,7 @@ public sealed record class ImportProgressEvent(
             TotalFiles: totalFiles,
             SucceededFiles: 0,
             FailedFiles: 0,
+            SkippedFiles: 0,
             ProgressPercent: ComputePercent(0, totalFiles));
 
     /// <summary>
@@ -61,16 +63,19 @@ public sealed record class ImportProgressEvent(
             TotalFiles: total,
             SucceededFiles: null,
             FailedFiles: null,
+            SkippedFiles: null,
             ProgressPercent: ComputePercent(processed, total));
 
     /// <summary>
     /// Creates a progress snapshot event.
     /// </summary>
+    /// <param name="skipped">The number of skipped files so far.</param>
     public static ImportProgressEvent Progress(
         int processed,
         int? total,
         int succeeded,
         int failed,
+        int skipped,
         string? message = null,
         DateTimeOffset? timestamp = null)
         => new(
@@ -84,16 +89,19 @@ public sealed record class ImportProgressEvent(
             TotalFiles: total,
             SucceededFiles: succeeded,
             FailedFiles: failed,
+            SkippedFiles: skipped,
             ProgressPercent: ComputePercent(processed, total));
 
     /// <summary>
     /// Creates a file completed event.
     /// </summary>
+    /// <param name="skipped">The number of skipped files when the file completed.</param>
     public static ImportProgressEvent FileCompleted(
         string filePath,
         int processed,
         int? total,
         int succeeded,
+        int skipped,
         string? message = null,
         DateTimeOffset? timestamp = null)
         => new(
@@ -107,17 +115,20 @@ public sealed record class ImportProgressEvent(
             TotalFiles: total,
             SucceededFiles: succeeded,
             FailedFiles: null,
+            SkippedFiles: skipped,
             ProgressPercent: ComputePercent(processed, total));
 
     /// <summary>
     /// Creates an error event.
     /// </summary>
+    /// <param name="skipped">The number of skipped files recorded when the error occurred.</param>
     public static ImportProgressEvent ErrorOccurred(
         ImportError error,
         int processed,
         int? total,
         int succeeded,
         int failed,
+        int skipped,
         DateTimeOffset? timestamp = null)
         => new(
             ImportProgressKind.Error,
@@ -130,6 +141,7 @@ public sealed record class ImportProgressEvent(
             TotalFiles: total,
             SucceededFiles: succeeded,
             FailedFiles: failed,
+            SkippedFiles: skipped,
             ProgressPercent: ComputePercent(processed, total));
 
     /// <summary>
@@ -145,11 +157,12 @@ public sealed record class ImportProgressEvent(
             Message: BuildCompletionMessage(aggregate),
             Error: null,
             Aggregate: aggregate,
-            ProcessedFiles: aggregate.Total,
+            ProcessedFiles: aggregate.Processed,
             TotalFiles: aggregate.Total,
             SucceededFiles: aggregate.Succeeded,
             FailedFiles: aggregate.Failed,
-            ProgressPercent: ComputePercent(aggregate.Total, aggregate.Total));
+            SkippedFiles: aggregate.Skipped,
+            ProgressPercent: ComputePercent(aggregate.Processed, aggregate.Total));
 
     private static double? ComputePercent(int? processed, int? total)
     {
@@ -178,6 +191,7 @@ public sealed record class ImportProgressEvent(
             _ => "Import completed.",
         };
 
-        return $"{statusText} ({aggregate.Succeeded}/{aggregate.Total} ok, {aggregate.Failed} failed).";
+        var skippedSuffix = aggregate.Skipped > 0 ? $", {aggregate.Skipped} skipped" : string.Empty;
+        return $"{statusText} ({aggregate.Succeeded}/{aggregate.Total} ok, {aggregate.Failed} failed{skippedSuffix}).";
     }
 }

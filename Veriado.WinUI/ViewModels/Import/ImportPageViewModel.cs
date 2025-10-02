@@ -653,12 +653,15 @@ public partial class ImportPageViewModel : ViewModelBase
             var currentProcessed = progress.ProcessedFiles ?? Processed;
             var currentSucceeded = progress.SucceededFiles ?? OkCount;
             var currentFailed = progress.FailedFiles ?? ErrorCount;
+            var currentSkipped = progress.SkippedFiles ?? SkipCount;
 
             Total = currentTotal;
             Processed = currentProcessed;
             OkCount = currentSucceeded;
             ErrorCount = currentFailed;
-            SkipCount = Math.Max(0, currentTotal - currentSucceeded - currentFailed);
+            SkipCount = progress.SkippedFiles.HasValue
+                ? Math.Max(0, currentSkipped)
+                : Math.Max(0, currentTotal - currentSucceeded - currentFailed);
 
             if (progress.TotalFiles.HasValue)
             {
@@ -770,11 +773,15 @@ public partial class ImportPageViewModel : ViewModelBase
 
         await Dispatcher.Enqueue(() =>
         {
-            SkipCount = Math.Max(0, aggregate.Total - aggregate.Succeeded - aggregate.Failed);
+            SkipCount = Math.Max(0, aggregate.Skipped);
             IsIndeterminate = false;
             ProgressPercent = progress.ProgressPercent ?? 100d;
             CurrentFileName = null;
             CurrentFilePath = null;
+            Processed = aggregate.Processed;
+            Total = aggregate.Total;
+            OkCount = aggregate.Succeeded;
+            ErrorCount = aggregate.Failed;
             ProcessedBytes = TotalBytes;
         });
 
@@ -783,14 +790,20 @@ public partial class ImportPageViewModel : ViewModelBase
         var result = new ImportBatchResult(
             aggregate.Status,
             aggregate.Total,
+            aggregate.Processed,
             aggregate.Succeeded,
             aggregate.Failed,
+            aggregate.Skipped,
             aggregate.Errors);
+
+        var skippedSummary = aggregate.Skipped > 0
+            ? $" (přeskočeno {aggregate.Skipped})"
+            : string.Empty;
 
         var summary = aggregate.Status switch
         {
-            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {aggregate.Succeeded} z {aggregate.Total} souborů.",
-            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({aggregate.Succeeded}/{aggregate.Total}). Zkontrolujte prosím chyby.",
+            ImportBatchStatus.Success => $"Import dokončen. Úspěšně importováno {aggregate.Succeeded} z {aggregate.Total} souborů{skippedSummary}.",
+            ImportBatchStatus.PartialSuccess => $"Import dokončen s částečným úspěchem ({aggregate.Succeeded}/{aggregate.Total}{skippedSummary}). Zkontrolujte prosím chyby.",
             ImportBatchStatus.Failure => "Import se nezdařil. Zkontrolujte chyby.",
             ImportBatchStatus.FatalError => "Import byl zastaven kvůli fatální chybě. Opravte problém a zkuste to znovu.",
             _ => "Import dokončen.",
@@ -873,10 +886,10 @@ public partial class ImportPageViewModel : ViewModelBase
         await Dispatcher.Enqueue(() =>
         {
             Total = result.Total;
-            Processed = result.Total;
+            Processed = result.Processed;
             OkCount = result.Succeeded;
             ErrorCount = result.Failed;
-            SkipCount = Math.Max(0, result.Total - result.Succeeded - result.Failed);
+            SkipCount = Math.Max(0, result.Skipped);
             ProgressPercent = 100d;
             CurrentFileName = null;
             CurrentFilePath = null;
@@ -1004,6 +1017,7 @@ public partial class ImportPageViewModel : ViewModelBase
             var builder = new StringBuilder();
             builder.AppendLine($"Stav: {statusText}");
             builder.AppendLine($"Celkem souborů: {Total}");
+            builder.AppendLine($"Zpracováno: {Processed}");
             builder.AppendLine($"Úspěšně: {OkCount}");
             builder.AppendLine($"Chyby: {ErrorCount}");
             builder.Append($"Přeskočeno: {skipped}");
@@ -1021,12 +1035,13 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private static string BuildResultDetail(ImportBatchResult result)
     {
-        var skipped = Math.Max(0, result.Total - result.Succeeded - result.Failed);
+        var skipped = Math.Max(0, result.Skipped);
         var statusText = GetStatusText(result.Status);
 
         var builder = new StringBuilder();
         builder.AppendLine($"Stav: {statusText}");
         builder.AppendLine($"Celkem souborů: {result.Total}");
+        builder.AppendLine($"Zpracováno: {result.Processed}");
         builder.AppendLine($"Úspěšně: {result.Succeeded}");
         builder.AppendLine($"Chyby: {result.Failed}");
         builder.Append($"Přeskočeno: {skipped}");
