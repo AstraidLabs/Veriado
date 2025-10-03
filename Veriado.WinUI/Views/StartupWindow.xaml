@@ -39,11 +39,13 @@
                 Foreground="{ThemeResource AppTextPrimaryBrush}"
                 Visibility="{Binding SafeMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <TextBlock
-                Text="{Binding DiagnosticsLogPath, Mode=OneWay, StringFormat='Podrobný log: {0}'}"
                 TextAlignment="Center"
                 TextWrapping="Wrap"
                 Foreground="{ThemeResource AppTextSecondaryBrush}"
-                Visibility="{Binding HasDiagnosticsLog, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                Visibility="{Binding HasDiagnosticsLog, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Run Text="Podrobný log: " />
+                <Run Text="{Binding DiagnosticsLogPath, Mode=OneWay}" />
+            </TextBlock>
             <Button
                 x:Uid="StartupWindow_RetryButton"
                 Width="160"
