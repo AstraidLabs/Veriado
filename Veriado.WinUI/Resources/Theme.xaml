@@ -10,6 +10,7 @@
       <Color x:Key="AppNavigationBackgroundColor">#FFF0F2F7</Color>
       <Color x:Key="AppNavigationForegroundColor">#FF101820</Color>
       <Color x:Key="AppTextPrimaryColor">#FF1B1F23</Color>
+      <Color x:Key="AppTextSecondaryColor">#FF5F6A79</Color>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <Color x:Key="AppAccentColor">#FF4CC2FF</Color>
@@ -18,6 +19,7 @@
       <Color x:Key="AppNavigationBackgroundColor">#FF2C313C</Color>
       <Color x:Key="AppNavigationForegroundColor">#FFE7ECF4</Color>
       <Color x:Key="AppTextPrimaryColor">#FFE7ECF4</Color>
+      <Color x:Key="AppTextSecondaryColor">#FFB0B7C6</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
@@ -27,4 +29,5 @@
   <SolidColorBrush x:Key="AppNavigationBackgroundBrush" Color="{ThemeResource AppNavigationBackgroundColor}" />
   <SolidColorBrush x:Key="AppNavigationForegroundBrush" Color="{ThemeResource AppNavigationForegroundColor}" />
   <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="{ThemeResource AppTextPrimaryColor}" />
+  <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="{ThemeResource AppTextSecondaryColor}" />
 </ResourceDictionary>
