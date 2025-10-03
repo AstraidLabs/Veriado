@@ -1,45 +1,43 @@
 using System.Globalization;
 using Microsoft.Windows.ApplicationModel.Resources;
-using Veriado.WinUI.Localization;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 
 public sealed class LocalizationService : ILocalizationService
 {
-    private readonly ISettingsService _settingsService;
+    private static readonly CultureInfo DefaultCulture = CultureInfo.GetCultureInfo("en-US");
+    private static readonly IReadOnlyList<CultureInfo> SupportedCultureList =
+        Array.AsReadOnly(new[] { DefaultCulture });
+
     private readonly ResourceManager _resourceManager = new();
     private readonly ResourceMap? _resourceMap;
-    private ResourceContext _resourceContext;
-    private readonly IReadOnlyList<CultureInfo> _supportedCultures;
-    private CultureInfo _currentCulture;
+    private readonly ResourceContext _resourceContext;
 
     public LocalizationService(ISettingsService settingsService)
     {
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        ArgumentNullException.ThrowIfNull(settingsService);
+
         _resourceMap = _resourceManager.MainResourceMap.TryGetSubtree("Resources");
         _resourceContext = new ResourceContext(_resourceManager);
-        _supportedCultures = LocalizationConfiguration.SupportedCultures;
-        _currentCulture = LocalizationConfiguration.NormalizeCulture(CultureInfo.CurrentUICulture);
-        UpdateCulture(_currentCulture, force: true);
+        _resourceContext.QualifierValues["Language"] = DefaultCulture.Name;
     }
 
     public event EventHandler<CultureInfo>? CultureChanged;
 
-    public CultureInfo CurrentCulture => _currentCulture;
+    public CultureInfo CurrentCulture => DefaultCulture;
 
-    public IReadOnlyList<CultureInfo> SupportedCultures => _supportedCultures;
+    public IReadOnlyList<CultureInfo> SupportedCultures => SupportedCultureList;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        var settings = await _settingsService.GetAsync(cancellationToken).ConfigureAwait(false);
-        var culture = LocalizationConfiguration.NormalizeCulture(settings.Language);
-        await ApplyCultureAsync(culture, persist: false, force: true, cancellationToken).ConfigureAwait(false);
+        return Task.CompletedTask;
     }
 
     public Task SetCultureAsync(CultureInfo culture, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(culture);
-        return ApplyCultureAsync(culture, persist: true, force: false, cancellationToken);
+        return Task.CompletedTask;
     }
 
     public string GetString(string resourceKey, string? defaultValue = null, params object?[] arguments)
@@ -54,45 +52,15 @@ public sealed class LocalizationService : ILocalizationService
         {
             try
             {
-                return string.Format(_currentCulture, template, arguments);
+                return string.Format(DefaultCulture, template, arguments);
             }
             catch (FormatException)
             {
-                // Ignore formatting errors to prevent crashing the UI when resources are misconfigured.
+                // Ignore formatting errors to avoid crashing the UI when resources are misconfigured.
             }
         }
 
         return template;
-    }
-
-    private async Task ApplyCultureAsync(CultureInfo culture, bool persist, bool force, CancellationToken cancellationToken)
-    {
-        var normalized = LocalizationConfiguration.NormalizeCulture(culture);
-        var hasChanged = !string.Equals(normalized.Name, _currentCulture.Name, StringComparison.OrdinalIgnoreCase);
-
-        if (hasChanged || force)
-        {
-            UpdateCulture(normalized, force);
-        }
-
-        if (persist)
-        {
-            await _settingsService.UpdateAsync(settings => settings.Language = normalized.Name, cancellationToken)
-                .ConfigureAwait(false);
-        }
-    }
-
-    private void UpdateCulture(CultureInfo culture, bool force)
-    {
-        if (!force && string.Equals(_currentCulture.Name, culture.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        _currentCulture = culture;
-        _resourceContext = new ResourceContext(_resourceManager);
-        _resourceContext.QualifierValues["Language"] = culture.Name;
-        CultureHelper.ApplyCulture(culture);
     }
 
     private string? TryGetString(string resourceKey)
@@ -104,10 +72,5 @@ public sealed class LocalizationService : ILocalizationService
 
         var candidate = _resourceMap.TryGetValue(resourceKey, _resourceContext);
         return candidate?.ValueAsString;
-    }
-
-    public void RaiseCultureChanged()
-    {
-        CultureChanged?.Invoke(this, _currentCulture);
     }
 }

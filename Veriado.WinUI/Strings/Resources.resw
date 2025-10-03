@@ -24,17 +24,11 @@
   <data name="Settings.PageSizeUpdated" xml:space="preserve">
     <value>Page size set to {0} items.</value>
   </data>
-  <data name="Settings.LanguageApplied" xml:space="preserve">
-    <value>Language switched to {0}.</value>
-  </data>
   <data name="SettingsPage_Title.Text" xml:space="preserve">
     <value>Settings</value>
   </data>
   <data name="SettingsPage_ThemeCombo.Header" xml:space="preserve">
     <value>Application theme</value>
-  </data>
-  <data name="SettingsPage_LanguageCombo.Header" xml:space="preserve">
-    <value>Application language</value>
   </data>
   <data name="SettingsPage_PageSizeBox.Header" xml:space="preserve">
     <value>Page size</value>
@@ -47,9 +41,6 @@
   </data>
   <data name="SettingsPage_ApplyThemeButton.Content" xml:space="preserve">
     <value>Apply theme</value>
-  </data>
-  <data name="SettingsPage_ApplyLanguageButton.Content" xml:space="preserve">
-    <value>Apply language</value>
   </data>
   <data name="Startup.InitializingServices" xml:space="preserve">
     <value>Starting application services…</value>

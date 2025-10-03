@@ -1,9 +1,20 @@
 using System.Globalization;
+using Microsoft.Windows.ApplicationModel.Resources;
 
 namespace Veriado.WinUI.Localization;
 
 internal static class LocalizedStrings
 {
+    private static readonly ResourceManager ResourceManager = new();
+    private static readonly ResourceMap? ResourceMap = ResourceManager.MainResourceMap.TryGetSubtree("Resources");
+    private static readonly ResourceContext ResourceContext = new(ResourceManager);
+    private static readonly CultureInfo DefaultCulture = CultureInfo.GetCultureInfo("en-US");
+
+    static LocalizedStrings()
+    {
+        ResourceContext.QualifierValues["Language"] = DefaultCulture.Name;
+    }
+
     public static string Get(string resourceKey, string? defaultValue = null, params object?[] arguments)
     {
         if (string.IsNullOrWhiteSpace(resourceKey))
@@ -11,16 +22,12 @@ internal static class LocalizedStrings
             throw new ArgumentException("Resource key must be provided.", nameof(resourceKey));
         }
 
-        var template = CultureHelper.GetString(resourceKey);
-        if (string.Equals(template, resourceKey, StringComparison.Ordinal))
-        {
-            template = defaultValue ?? resourceKey;
-        }
+        var template = TryGetString(resourceKey) ?? defaultValue ?? resourceKey;
         if (arguments is { Length: > 0 })
         {
             try
             {
-                return string.Format(CultureInfo.CurrentCulture, template, arguments);
+                return string.Format(DefaultCulture, template, arguments);
             }
             catch (FormatException)
             {
@@ -29,5 +36,16 @@ internal static class LocalizedStrings
         }
 
         return template;
+    }
+
+    private static string? TryGetString(string resourceKey)
+    {
+        if (ResourceMap is null)
+        {
+            return null;
+        }
+
+        var candidate = ResourceMap.TryGetValue(resourceKey, ResourceContext);
+        return candidate?.ValueAsString;
     }
 }

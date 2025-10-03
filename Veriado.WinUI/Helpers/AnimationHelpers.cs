@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Composition;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
@@ -15,6 +16,7 @@ internal static class AnimationSettings
     private const uint SPI_GETCLIENTAREAANIMATION = 0x1042;
 
     private static bool _areAnimationsEnabled = true;
+    private static DispatcherQueue? _dispatcherQueue;
 
     static AnimationSettings()
     {
@@ -31,6 +33,13 @@ internal static class AnimationSettings
     }
 
     public static bool AreEnabled => _areAnimationsEnabled;
+
+    public static void ConfigureDispatcherQueue(DispatcherQueue dispatcherQueue)
+    {
+        ArgumentNullException.ThrowIfNull(dispatcherQueue);
+
+        _dispatcherQueue ??= dispatcherQueue;
+    }
 
     public static event EventHandler<bool>? AnimationsEnabledChanged;
 
@@ -55,13 +64,31 @@ internal static class AnimationSettings
         if (_areAnimationsEnabled != enabled)
         {
             _areAnimationsEnabled = enabled;
-            AnimationsEnabledChanged?.Invoke(null, enabled);
+            RaiseAnimationsEnabledChanged(enabled);
         }
     }
 
     private static bool GetClientAreaAnimationPreference()
     {
         return SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, out bool enabled, 0) ? enabled : true;
+    }
+
+    private static void RaiseAnimationsEnabledChanged(bool enabled)
+    {
+        var handler = AnimationsEnabledChanged;
+
+        if (handler is null)
+        {
+            return;
+        }
+
+        if (_dispatcherQueue is null || _dispatcherQueue.HasThreadAccess)
+        {
+            handler.Invoke(null, enabled);
+            return;
+        }
+
+        _ = _dispatcherQueue.TryEnqueue(() => handler.Invoke(null, enabled));
     }
 
     [DllImport("user32.dll", SetLastError = true)]

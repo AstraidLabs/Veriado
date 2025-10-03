@@ -14,12 +14,6 @@
             ItemsSource="{Binding ThemeOptions}"
             SelectedItem="{Binding ThemeMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-        <ComboBox
-            x:Uid="SettingsPage_LanguageCombo"
-            ItemsSource="{Binding LanguageOptions}"
-            SelectedItem="{Binding SelectedLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            DisplayMemberPath="NativeName" />
-
         <controls:NumberBox
             x:Uid="SettingsPage_PageSizeBox"
             Minimum="1"
@@ -32,7 +26,6 @@
 
         <StackPanel Orientation="Horizontal" Spacing="8">
             <Button x:Uid="SettingsPage_ApplyThemeButton" Command="{Binding ApplyThemeCommand}" />
-            <Button x:Uid="SettingsPage_ApplyLanguageButton" Command="{Binding ApplyLanguageCommand}" />
         </StackPanel>
     </StackPanel>
 </Page>
