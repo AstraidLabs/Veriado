@@ -1,113 +1,119 @@
+using System;
 using System.Globalization;
+using System.Linq;
+using Microsoft.Extensions.Logging;
 using Microsoft.Windows.ApplicationModel.Resources;
 using Veriado.WinUI.Localization;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 
+/// <summary>
+/// Provides access to localized resources backed by the WinAppSDK resource manager.
+/// </summary>
 public sealed class LocalizationService : ILocalizationService
 {
-    private readonly ISettingsService _settingsService;
-    private readonly ResourceManager _resourceManager = new();
-    private readonly ResourceMap? _resourceMap;
-    private ResourceContext _resourceContext;
+    private readonly ILogger<LocalizationService>? _logger;
+    private readonly ResourceManager _resourceManager;
+    private readonly ResourceMap _resourceMap;
     private readonly IReadOnlyList<CultureInfo> _supportedCultures;
     private CultureInfo _currentCulture;
+    private readonly object _gate = new();
 
-    public LocalizationService(ISettingsService settingsService)
+    public LocalizationService(ILogger<LocalizationService>? logger = null)
     {
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _resourceMap = _resourceManager.MainResourceMap.TryGetSubtree("Resources");
-        _resourceContext = new ResourceContext(_resourceManager);
-        _supportedCultures = LocalizationConfiguration.SupportedCultures;
-        _currentCulture = LocalizationConfiguration.NormalizeCulture(CultureInfo.CurrentUICulture);
-        UpdateCulture(_currentCulture, force: true);
+        _logger = logger;
+        _resourceManager = new ResourceManager();
+        _resourceMap = _resourceManager.MainResourceMap;
+        _supportedCultures = CultureHelper.GetSupportedCultures(_resourceMap);
+        _currentCulture = CultureHelper.DetermineInitialCulture(_supportedCultures);
+        CultureHelper.ApplyCulture(_currentCulture);
     }
 
     public event EventHandler<CultureInfo>? CultureChanged;
 
-    public CultureInfo CurrentCulture => _currentCulture;
+    public CultureInfo CurrentCulture
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _currentCulture;
+            }
+        }
+    }
 
     public IReadOnlyList<CultureInfo> SupportedCultures => _supportedCultures;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public bool TrySetCulture(CultureInfo culture)
     {
-        var settings = await _settingsService.GetAsync(cancellationToken).ConfigureAwait(false);
-        var culture = LocalizationConfiguration.NormalizeCulture(settings.Language);
-        await ApplyCultureAsync(culture, persist: false, force: true, cancellationToken).ConfigureAwait(false);
+        if (culture is null)
+        {
+            throw new ArgumentNullException(nameof(culture));
+        }
+
+        if (!_supportedCultures.Contains(culture, CultureHelper.CultureComparer))
+        {
+            _logger?.LogWarning("Requested culture {Culture} is not part of the supported culture list.", culture);
+            return false;
+        }
+
+        CultureInfo previous;
+        lock (_gate)
+        {
+            if (CultureHelper.CultureComparer.Equals(_currentCulture, culture))
+            {
+                return false;
+            }
+
+            previous = _currentCulture;
+            _currentCulture = culture;
+        }
+
+        CultureHelper.ApplyCulture(culture);
+        _logger?.LogInformation("Application culture changed from {PreviousCulture} to {CurrentCulture}.", previous, culture);
+        CultureChanged?.Invoke(this, culture);
+        return true;
     }
 
-    public Task SetCultureAsync(CultureInfo culture, CancellationToken cancellationToken = default)
+    public string GetString(string resourceKey) => GetStringCore(resourceKey, CurrentCulture);
+
+    public string GetString(string resourceKey, params object?[] arguments)
     {
-        ArgumentNullException.ThrowIfNull(culture);
-        return ApplyCultureAsync(culture, persist: true, force: false, cancellationToken);
+        var raw = GetStringCore(resourceKey, CurrentCulture);
+
+        if (arguments is null || arguments.Length == 0)
+        {
+            return raw;
+        }
+
+        return string.Format(CurrentCulture, raw, arguments);
     }
 
-    public string GetString(string resourceKey, string? defaultValue = null, params object?[] arguments)
+    private string GetStringCore(string resourceKey, CultureInfo culture)
     {
         if (string.IsNullOrWhiteSpace(resourceKey))
         {
-            throw new ArgumentException("Resource key must be provided.", nameof(resourceKey));
+            throw new ArgumentException("Resource key cannot be null or whitespace.", nameof(resourceKey));
         }
 
-        var template = TryGetString(resourceKey) ?? defaultValue ?? resourceKey;
-        if (arguments is { Length: > 0 })
+        var context = _resourceManager.CreateResourceContext();
+        CultureHelper.ApplyCulture(context, culture);
+
+        try
         {
-            try
+            var candidate = _resourceMap.GetValue(resourceKey, context);
+            if (candidate is not null)
             {
-                return string.Format(_currentCulture, template, arguments);
-            }
-            catch (FormatException)
-            {
-                // Ignore formatting errors to prevent crashing the UI when resources are misconfigured.
+                var value = candidate.ValueAsString;
+                return string.IsNullOrEmpty(value) ? resourceKey : value;
             }
         }
-
-        return template;
-    }
-
-    private async Task ApplyCultureAsync(CultureInfo culture, bool persist, bool force, CancellationToken cancellationToken)
-    {
-        var normalized = LocalizationConfiguration.NormalizeCulture(culture);
-        var hasChanged = !string.Equals(normalized.Name, _currentCulture.Name, StringComparison.OrdinalIgnoreCase);
-
-        if (hasChanged || force)
+        catch (Exception ex)
         {
-            UpdateCulture(normalized, force);
+            _logger?.LogError(ex, "Failed to resolve resource {ResourceKey} for culture {Culture}.", resourceKey, culture);
         }
 
-        if (persist)
-        {
-            await _settingsService.UpdateAsync(settings => settings.Language = normalized.Name, cancellationToken)
-                .ConfigureAwait(false);
-        }
-    }
-
-    private void UpdateCulture(CultureInfo culture, bool force)
-    {
-        if (!force && string.Equals(_currentCulture.Name, culture.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        _currentCulture = culture;
-        _resourceContext = new ResourceContext(_resourceManager);
-        _resourceContext.QualifierValues["Language"] = culture.Name;
-        CultureHelper.ApplyCulture(culture);
-    }
-
-    private string? TryGetString(string resourceKey)
-    {
-        if (_resourceMap is null)
-        {
-            return null;
-        }
-
-        var candidate = _resourceMap.TryGetValue(resourceKey, _resourceContext);
-        return candidate?.ValueAsString;
-    }
-
-    public void RaiseCultureChanged()
-    {
-        CultureChanged?.Invoke(this, _currentCulture);
+        return resourceKey;
     }
 }

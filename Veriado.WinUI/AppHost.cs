@@ -52,6 +52,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IPreviewService, PreviewService>();
                 services.AddSingleton<ICacheService, MemoryCacheService>();
                 services.AddSingleton<IHotStateService, HotStateService>();
+                services.AddSingleton<ILocalizationService, LocalizationService>();
                 services.AddSingleton<INavigationService, NavigationService>();
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<IPickerService, PickerService>();
