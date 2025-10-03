@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Windows.ApplicationModel.Resources;
 using Veriado.WinUI.Localization;
@@ -14,20 +16,64 @@ namespace Veriado.WinUI.Services;
 public sealed class LocalizationService : ILocalizationService
 {
     private readonly ILogger<LocalizationService>? _logger;
+    private readonly ISettingsService _settingsService;
     private readonly ResourceManager _resourceManager;
     private readonly ResourceMap _resourceMap;
     private readonly IReadOnlyList<CultureInfo> _supportedCultures;
     private CultureInfo _currentCulture;
     private readonly object _gate = new();
 
-    public LocalizationService(ILogger<LocalizationService>? logger = null)
+    public LocalizationService(ISettingsService settingsService, ILogger<LocalizationService>? logger = null)
     {
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _logger = logger;
         _resourceManager = new ResourceManager();
         _resourceMap = _resourceManager.MainResourceMap;
         _supportedCultures = CultureHelper.GetSupportedCultures(_resourceMap);
         _currentCulture = CultureHelper.DetermineInitialCulture(_supportedCultures);
         CultureHelper.ApplyCulture(_currentCulture);
+    }
+
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var settings = await _settingsService.GetAsync(cancellationToken).ConfigureAwait(false);
+            var preferredCulture = LocalizationConfiguration.NormalizeCulture(settings.Language);
+
+            if (!_supportedCultures.Contains(preferredCulture, CultureHelper.CultureComparer))
+            {
+                preferredCulture = _supportedCultures[0];
+            }
+
+            var changed = false;
+
+            lock (_gate)
+            {
+                if (!CultureHelper.CultureComparer.Equals(_currentCulture, preferredCulture))
+                {
+                    _currentCulture = preferredCulture;
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            CultureHelper.ApplyCulture(preferredCulture);
+            _logger?.LogInformation("Application culture initialized to {Culture}.", preferredCulture);
+            CultureChanged?.Invoke(this, preferredCulture);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to initialize localization settings.");
+        }
     }
 
     public event EventHandler<CultureInfo>? CultureChanged;
@@ -73,21 +119,51 @@ public sealed class LocalizationService : ILocalizationService
         CultureHelper.ApplyCulture(culture);
         _logger?.LogInformation("Application culture changed from {PreviousCulture} to {CurrentCulture}.", previous, culture);
         CultureChanged?.Invoke(this, culture);
+        _ = PersistCultureAsync(culture);
         return true;
     }
 
-    public string GetString(string resourceKey) => GetStringCore(resourceKey, CurrentCulture);
+    public string GetString(string resourceKey) => GetString(resourceKey, null);
 
     public string GetString(string resourceKey, params object?[] arguments)
     {
-        var raw = GetStringCore(resourceKey, CurrentCulture);
+        return GetString(resourceKey, null, arguments);
+    }
 
-        if (arguments is null || arguments.Length == 0)
+    public string GetString(string resourceKey, string? defaultValue = null, params object?[] arguments)
+    {
+        var template = GetStringCore(resourceKey, CurrentCulture);
+
+        if (string.Equals(template, resourceKey, StringComparison.Ordinal) && defaultValue is not null)
         {
-            return raw;
+            template = defaultValue;
         }
 
-        return string.Format(CurrentCulture, raw, arguments);
+        if (arguments is { Length: > 0 })
+        {
+            try
+            {
+                return string.Format(CurrentCulture, template, arguments);
+            }
+            catch (FormatException ex)
+            {
+                _logger?.LogWarning(ex, "Failed to format resource {ResourceKey} with supplied arguments.", resourceKey);
+            }
+        }
+
+        return template;
+    }
+
+    private async Task PersistCultureAsync(CultureInfo culture)
+    {
+        try
+        {
+            await _settingsService.UpdateAsync(settings => settings.Language = culture.Name).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to persist culture {Culture} to settings.", culture);
+        }
     }
 
     private string GetStringCore(string resourceKey, CultureInfo culture)

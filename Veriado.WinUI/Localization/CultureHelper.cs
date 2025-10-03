@@ -12,27 +12,16 @@ namespace Veriado.WinUI.Localization;
 internal static class CultureHelper
 {
     private static readonly CultureInfoComparer _cultureComparer = new();
+    private static readonly ResourceManager _resourceManager = new();
+    private static readonly ResourceMap _resourceMap = _resourceManager.MainResourceMap;
 
     public static IEqualityComparer<CultureInfo> CultureComparer => _cultureComparer;
 
     public static IReadOnlyList<CultureInfo> GetSupportedCultures(ResourceMap resourceMap)
     {
-        if (resourceMap is null)
-        {
-            throw new ArgumentNullException(nameof(resourceMap));
-        }
+        ArgumentNullException.ThrowIfNull(resourceMap);
 
-        // WinAppSDK does not expose the list of available languages directly. We opt-in to a curated
-        // list that reflects the languages shipped with the application resources. If no explicit
-        // qualifiers exist we fall back to English and Czech which are the primary languages of the
-        // application.
-        var knownCultures = new[]
-        {
-            new CultureInfo("cs-CZ"),
-            new CultureInfo("en-US"),
-        };
-
-        return Array.AsReadOnly(knownCultures);
+        return LocalizationConfiguration.SupportedCultures;
     }
 
     public static CultureInfo DetermineInitialCulture(IReadOnlyList<CultureInfo> supportedCultures)
@@ -73,6 +62,33 @@ internal static class CultureHelper
         }
 
         context.QualifierValues["Language"] = culture.Name;
+    }
+
+    public static string GetString(string resourceKey)
+    {
+        if (string.IsNullOrWhiteSpace(resourceKey))
+        {
+            throw new ArgumentException("Resource key must be provided.", nameof(resourceKey));
+        }
+
+        var context = _resourceManager.CreateResourceContext();
+        ApplyCulture(context, CultureInfo.CurrentUICulture);
+
+        try
+        {
+            var candidate = _resourceMap.GetValue(resourceKey, context);
+            if (candidate is not null)
+            {
+                var value = candidate.ValueAsString;
+                return string.IsNullOrEmpty(value) ? resourceKey : value;
+            }
+        }
+        catch
+        {
+            // Swallow exceptions and fall back to the resource key to avoid crashing the caller.
+        }
+
+        return resourceKey;
     }
 
     private sealed class CultureInfoComparer : IEqualityComparer<CultureInfo>, IComparer<CultureInfo>
