@@ -39,13 +39,13 @@ internal static class QueryableFilters
                 {
                     var pattern = $"%{EscapeLike(normalized)}%";
                     query = query.Where(file => EF.Functions.Like(
-                        EF.Functions.Collate(file.Extension.Value, "NOCASE"),
+                        file.Extension.Value,
                         pattern,
                         EscapeChar));
                 }
                 else
                 {
-                    query = query.Where(file => EF.Functions.Collate(file.Extension.Value, "NOCASE") == normalized);
+                    query = query.Where(file => file.Extension.Value == normalized);
                 }
             }
         }
