@@ -1,5 +1,7 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.Errors;
@@ -11,6 +13,9 @@ namespace Veriado.WinUI.ViewModels.Startup;
 
 public partial class StartupViewModel : ObservableObject, IStartupReporter
 {
+    private readonly StartupDiagnosticsLog _diagnostics = new();
+    private readonly Dictionary<AppStartupPhase, StartupStepViewModel> _stepsMap;
+
     [ObservableProperty]
     private bool isLoading = true;
 
@@ -26,23 +31,52 @@ public partial class StartupViewModel : ObservableObject, IStartupReporter
     [ObservableProperty]
     private bool safeMode;
 
+    [ObservableProperty]
+    private string? diagnosticsLogPath;
+
+    public StartupViewModel()
+    {
+        Steps = new ObservableCollection<StartupStepViewModel>(Enum
+            .GetValues<AppStartupPhase>()
+            .Select(phase => new StartupStepViewModel(phase, GetPhaseTitle(phase))));
+        _stepsMap = Steps.ToDictionary(step => step.Phase);
+    }
+
+    public ObservableCollection<StartupStepViewModel> Steps { get; }
+
+    public bool HasDiagnosticsLog => !string.IsNullOrWhiteSpace(DiagnosticsLogPath);
+
     public event EventHandler? RetryRequested;
 
     public void Report(AppStartupPhase phase, string message)
     {
+        if (!_stepsMap.TryGetValue(phase, out var step))
+        {
+            return;
+        }
+
+        if (step.Status == StartupStepStatus.Pending)
+        {
+            step.Start(message);
+            _diagnostics.RecordStart(phase, message);
+        }
+        else
+        {
+            step.Message = message;
+            if (step.Status == StartupStepStatus.Running)
+            {
+                _diagnostics.RecordUpdate(phase, message);
+            }
+        }
+
         StatusMessage = message;
         DetailsMessage = null;
         HasError = false;
         IsLoading = true;
     }
 
-    public async Task<bool> RunStartupAsync(Func<IStartupReporter, Task> hostStart)
+    public async Task<bool> RunStartupAsync()
     {
-        if (hostStart is null)
-        {
-            throw new ArgumentNullException(nameof(hostStart));
-        }
-
         if (!AppHost.IsBuilt)
         {
             AppHost.Build();
@@ -52,43 +86,81 @@ public partial class StartupViewModel : ObservableObject, IStartupReporter
         HasError = false;
         DetailsMessage = null;
         SafeMode = false;
+        DiagnosticsLogPath = null;
+
+        foreach (var step in Steps)
+        {
+            step.Reset();
+        }
+
+        _diagnostics.Clear();
 
         var logger = AppHost.Services.GetService<ILogger<StartupViewModel>>();
 
         try
         {
-            await MeasureAsync(logger, "Bootstrap", () =>
-            {
-                App.Current.InitializeWindowsAppSdkSafe(this);
-                return Task.CompletedTask;
-            }).ConfigureAwait(true);
+            await RunStepAsync(
+                AppStartupPhase.Bootstrap,
+                "Inicializuji Windows App SDK…",
+                () =>
+                {
+                    App.Current.InitializeWindowsAppSdkSafe(this);
+                    return Task.CompletedTask;
+                },
+                logger).ConfigureAwait(true);
 
-            Report(AppStartupPhase.StorageCheck, "Kontroluji databázi…");
-            await MeasureAsync(logger, "StorageCheck", () => EnsureStorageExistsSafe(logger)).ConfigureAwait(true);
+            await RunStepAsync(
+                AppStartupPhase.StorageCheck,
+                "Kontroluji databázi…",
+                () => EnsureStorageExistsSafe(logger),
+                logger).ConfigureAwait(true);
 
-            Report(AppStartupPhase.HostBuild, "Připravuji služby…");
-            await MeasureAsync(logger, "HostStart+Migrations", () => hostStart(this)).ConfigureAwait(true);
+            await RunStepAsync(
+                AppStartupPhase.HostBuild,
+                "Připravuji služby…",
+                async () =>
+                {
+                    await RunStepAsync(
+                        AppStartupPhase.Migrations,
+                        "Provádím migrace…",
+                        AppHost.StartAsync,
+                        logger).ConfigureAwait(true);
+                },
+                logger).ConfigureAwait(true);
 
-            Report(AppStartupPhase.HotState, "Načítám uživatelské nastavení…");
-            await MeasureAsync(logger, "HotState", () => InitializeHotStateSafe(logger)).ConfigureAwait(true);
+            await RunStepAsync(
+                AppStartupPhase.HotState,
+                "Načítám uživatelské nastavení…",
+                () => InitializeHotStateSafe(logger),
+                logger).ConfigureAwait(true);
 
-            Report(AppStartupPhase.Shell, "Spouštím rozhraní…");
-            await MeasureAsync(logger, "Shell", ShowMainShellAsync).ConfigureAwait(true);
+            await RunStepAsync(
+                AppStartupPhase.Shell,
+                "Spouštím rozhraní…",
+                ShowMainShellAsync,
+                logger).ConfigureAwait(true);
 
             IsLoading = false;
+            StatusMessage = "Veriado je připraveno.";
             return true;
         }
         catch (InitializationException initEx)
         {
             logger?.LogError(initEx, "Startup initialization failed.");
             await AppHost.StopAsync().ConfigureAwait(true);
-            ShowErrorWithAction(initEx.Message, initEx.Hint ?? "Zkuste to prosím znovu.");
+            await ShowErrorWithActionAsync(
+                initEx.Message,
+                initEx.Hint ?? "Zkuste to prosím znovu.",
+                initEx).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             logger?.LogError(ex, "Unexpected error during startup.");
             await AppHost.StopAsync().ConfigureAwait(true);
-            ShowErrorWithAction("Neočekávaná chyba při startu.", ex.Message);
+            await ShowErrorWithActionAsync(
+                "Neočekávaná chyba při startu.",
+                ex.Message,
+                ex).ConfigureAwait(true);
         }
 
         return false;
@@ -105,25 +177,6 @@ public partial class StartupViewModel : ObservableObject, IStartupReporter
     partial void OnHasErrorChanged(bool value)
     {
         RetryCommand.NotifyCanExecuteChanged();
-    }
-
-    private static async Task MeasureAsync(ILogger? logger, string name, Func<Task> run)
-    {
-        var sw = Stopwatch.StartNew();
-        try
-        {
-            await run().ConfigureAwait(true);
-            logger?.LogInformation("{Step} OK in {Elapsed} ms", name, sw.ElapsedMilliseconds);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogError(ex, "{Step} FAILED in {Elapsed} ms", name, sw.ElapsedMilliseconds);
-            throw;
-        }
-        finally
-        {
-            sw.Stop();
-        }
     }
 
     private async Task EnsureStorageExistsSafe(ILogger? logger)
@@ -168,8 +221,10 @@ public partial class StartupViewModel : ObservableObject, IStartupReporter
         catch (Exception ex)
         {
             SafeMode = true;
+            var warningMessage = "HotState selhal – spouštím bezpečný režim…";
+            StatusMessage = warningMessage;
             logger?.LogWarning(ex, "HotState initialization failed. Starting in Safe Mode.");
-            StatusMessage = "HotState selhal – spouštím bezpečný režim…";
+            MarkPhaseWarning(AppStartupPhase.HotState, warningMessage, ex);
         }
     }
 
@@ -196,11 +251,92 @@ public partial class StartupViewModel : ObservableObject, IStartupReporter
         App.Current.RegisterMainWindow(shell);
     }
 
-    private void ShowErrorWithAction(string title, string? detail)
+    private async Task ShowErrorWithActionAsync(string title, string? detail, Exception exception)
     {
-        StatusMessage = string.IsNullOrWhiteSpace(detail) ? title : $"{title} — {detail}";
+        StatusMessage = title;
         DetailsMessage = detail;
         HasError = true;
         IsLoading = false;
+
+        var logPath = await _diagnostics.FlushAsync(exception, SafeMode).ConfigureAwait(true);
+        DiagnosticsLogPath = logPath;
     }
+
+    private async Task RunStepAsync(
+        AppStartupPhase phase,
+        string message,
+        Func<Task> action,
+        ILogger? logger)
+    {
+        if (action is null)
+        {
+            throw new ArgumentNullException(nameof(action));
+        }
+
+        Report(phase, message);
+
+        if (!_stepsMap.TryGetValue(phase, out var step))
+        {
+            await action().ConfigureAwait(true);
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await action().ConfigureAwait(true);
+            stopwatch.Stop();
+
+            var finalStatus = step.Status == StartupStepStatus.Running
+                ? StartupStepStatus.Succeeded
+                : step.Status;
+
+            step.Complete(stopwatch.Elapsed, finalStatus);
+            _diagnostics.RecordCompletion(phase, finalStatus, stopwatch.Elapsed, step.Message, step.ErrorMessage);
+            logger?.LogInformation(
+                "Startup phase {Phase} finished with {Status} in {Elapsed} ms",
+                phase,
+                finalStatus,
+                stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            step.Fail(ex, stopwatch.Elapsed);
+            _diagnostics.RecordFailure(phase, ex, stopwatch.Elapsed);
+            logger?.LogError(
+                ex,
+                "Startup phase {Phase} failed after {Elapsed} ms",
+                phase,
+                stopwatch.ElapsedMilliseconds);
+            throw;
+        }
+    }
+
+    private void MarkPhaseWarning(AppStartupPhase phase, string message, Exception exception)
+    {
+        if (!_stepsMap.TryGetValue(phase, out var step))
+        {
+            return;
+        }
+
+        step.Warn(message, exception);
+        _diagnostics.RecordWarning(phase, message, exception);
+    }
+
+    partial void OnDiagnosticsLogPathChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasDiagnosticsLog));
+    }
+
+    private static string GetPhaseTitle(AppStartupPhase phase) => phase switch
+    {
+        AppStartupPhase.Bootstrap => "Inicializace platformy",
+        AppStartupPhase.StorageCheck => "Kontrola úložiště",
+        AppStartupPhase.HostBuild => "Spuštění aplikačních služeb",
+        AppStartupPhase.Migrations => "Databázové migrace",
+        AppStartupPhase.HotState => "Načtení uživatelského nastavení",
+        AppStartupPhase.Shell => "Inicializace uživatelského rozhraní",
+        _ => phase.ToString()
+    };
 }

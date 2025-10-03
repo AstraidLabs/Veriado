@@ -42,11 +42,7 @@ public partial class App : Application
         startupWindow.DataContext = startupViewModel;
         startupWindow.Activate();
 
-        async Task<bool> RunAsync() => await startupViewModel.RunStartupAsync(async reporter =>
-        {
-            reporter.Report(AppStartupPhase.Migrations, "Provádím migrace…");
-            await AppHost.StartAsync().ConfigureAwait(true);
-        }).ConfigureAwait(true);
+        async Task<bool> RunAsync() => await startupViewModel.RunStartupAsync().ConfigureAwait(true);
 
         while (!await RunAsync().ConfigureAwait(true))
         {
