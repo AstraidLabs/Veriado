@@ -40,7 +40,6 @@
                 <AutoSuggestBox
                     x:Uid="FilesPage_SearchBox"
                     Grid.Column="0"
-                    PlaceholderText="Hledat soubory"
                     ItemsSource="{x:Bind ViewModel.SearchSuggestions}"
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     UpdateTextOnSelect="True" />
@@ -62,58 +61,47 @@
                 <StackPanel Spacing="12">
                     <controls:Expander
                         x:Uid="FilesPage_AttributesExpander"
-                        Header="Atributy"
                         IsExpanded="True"
                         Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <TextBox
                                 x:Uid="FilesPage_ExtensionTextBox"
-                                PlaceholderText="Přípona"
                                 Text="{x:Bind ViewModel.ExtensionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_MimeTextBox"
-                                PlaceholderText="MIME"
                                 Text="{x:Bind ViewModel.MimeFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_AuthorTextBox"
-                                PlaceholderText="Autor"
                                 Text="{x:Bind ViewModel.AuthorFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_VersionTextBox"
-                                PlaceholderText="Verze"
                                 Text="{x:Bind ViewModel.VersionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </controls:Expander>
 
                     <controls:Expander
                         x:Uid="FilesPage_ValidityExpander"
-                        Header="Platnost"
                         IsExpanded="True"
                         Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <CheckBox
                                 x:Uid="FilesPage_ReadOnlyCheckBox"
-                                Content="Jen pro čtení"
                                 IsThreeState="True"
                                 IsChecked="{x:Bind ViewModel.ReadOnlyFilter, Mode=TwoWay}" />
                             <CheckBox
                                 x:Uid="FilesPage_IndexStaleCheckBox"
-                                Content="Neaktuální index"
                                 IsThreeState="True"
                                 IsChecked="{x:Bind ViewModel.IsIndexStaleFilter, Mode=TwoWay}" />
                             <CheckBox
                                 x:Uid="FilesPage_HasValidityCheckBox"
-                                Content="Má platnost"
                                 IsThreeState="True"
                                 IsChecked="{x:Bind ViewModel.HasValidityFilter, Mode=TwoWay}" />
                             <CheckBox
                                 x:Uid="FilesPage_CurrentlyValidCheckBox"
-                                Content="Aktuálně platné"
                                 IsThreeState="True"
                                 IsChecked="{x:Bind ViewModel.CurrentlyValidFilter, Mode=TwoWay}" />
                             <controls:NumberBox
                                 x:Uid="FilesPage_ExpiringNumberBox"
-                                Header="Vyprší za (dní)"
                                 Minimum="0"
                                 SmallChange="1"
                                 SpinButtonPlacementMode="Compact"
@@ -123,44 +111,36 @@
 
                     <controls:Expander
                         x:Uid="FilesPage_DatesExpander"
-                        Header="Data"
                         IsExpanded="False"
                         Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <CalendarDatePicker
                                 x:Uid="FilesPage_CreatedFromPicker"
-                                PlaceholderText="Vytvořeno od"
                                 Date="{x:Bind ViewModel.CreatedFromFilter, Mode=TwoWay}" />
                             <CalendarDatePicker
                                 x:Uid="FilesPage_CreatedToPicker"
-                                PlaceholderText="Vytvořeno do"
                                 Date="{x:Bind ViewModel.CreatedToFilter, Mode=TwoWay}" />
                             <CalendarDatePicker
                                 x:Uid="FilesPage_ModifiedFromPicker"
-                                PlaceholderText="Upraveno od"
                                 Date="{x:Bind ViewModel.ModifiedFromFilter, Mode=TwoWay}" />
                             <CalendarDatePicker
                                 x:Uid="FilesPage_ModifiedToPicker"
-                                PlaceholderText="Upraveno do"
                                 Date="{x:Bind ViewModel.ModifiedToFilter, Mode=TwoWay}" />
                         </StackPanel>
                     </controls:Expander>
 
                     <controls:Expander
                         x:Uid="FilesPage_SizeExpander"
-                        Header="Velikost"
                         IsExpanded="False"
                         Style="{StaticResource AnimatedExpander}">
                         <StackPanel Spacing="8">
                             <controls:NumberBox
                                 x:Uid="FilesPage_SizeMinNumberBox"
-                                Header="Minimální velikost (B)"
                                 Minimum="0"
                                 SpinButtonPlacementMode="Compact"
                                 Value="{x:Bind ViewModel.SizeMinFilter, Mode=TwoWay, Converter={StaticResource NullableLongToDoubleConverter}}" />
                             <controls:NumberBox
                                 x:Uid="FilesPage_SizeMaxNumberBox"
-                                Header="Maximální velikost (B)"
                                 Minimum="0"
                                 SpinButtonPlacementMode="Compact"
                                 Value="{x:Bind ViewModel.SizeMaxFilter, Mode=TwoWay, Converter={StaticResource NullableLongToDoubleConverter}}" />
@@ -177,13 +157,11 @@
                 <Button
                     x:Uid="FilesPage_ApplyButton"
                     Grid.Column="0"
-                    Content="Použít"
                     Command="{x:Bind ViewModel.RefreshCommand}"
                     Style="{StaticResource PulseButton}" />
                 <Button
                     x:Uid="FilesPage_ClearButton"
                     Grid.Column="1"
-                    Content="Vyčistit"
                     Command="{x:Bind ViewModel.ClearFiltersCommand}"
                     Style="{StaticResource PulseButton}" />
             </Grid>
@@ -204,7 +182,6 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button
                         x:Uid="FilesPage_PreviousPageButton"
-                        Content="Předchozí"
                         Command="{x:Bind ViewModel.PreviousPageCommand}" />
                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <controls:NumberBox
@@ -220,11 +197,10 @@
                     </StackPanel>
                     <Button
                         x:Uid="FilesPage_NextPageButton"
-                        Content="Další"
                         Command="{x:Bind ViewModel.NextPageCommand}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" Text="Na stránce" />
+                    <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" />
                     <ComboBox
                         x:Uid="FilesPage_PageSizeComboBox"
                         Width="90"
@@ -238,7 +214,6 @@
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.IsIndexingPending, Mode=OneWay}"
                 Severity="Warning"
-                Title="Probíhá indexace"
                 Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay}"
                 Loaded="OnInfoBarLoaded"
                 Closing="OnInfoBarClosing">
@@ -253,8 +228,6 @@
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                 Severity="Error"
-                Title="Chyba načítání"
-                Message="Nepodařilo se načíst výsledky."
                 Loaded="OnInfoBarLoaded"
                 Closing="OnInfoBarClosing">
                 <controls:InfoBar.Transitions>
