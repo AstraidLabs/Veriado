@@ -1,15 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 using Microsoft.Windows.ApplicationModel.DynamicDependency;
+using Veriado.WinUI.Errors;
+using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
-using Veriado.WinUI.Views.Shell;
-using Veriado.WinUI.Services.Abstractions;
-using Veriado.WinUI.Helpers;
-using Veriado.WinUI.Localization;
 
 namespace Veriado.WinUI;
 
@@ -21,19 +18,15 @@ public partial class App : Application
 
     private static bool _isBootstrapInitialized;
 
-    private AppHost? _appHost;
-
     public App()
     {
-        InitializeWindowsAppSdk();
         InitializeComponent();
+        AppHost.Build();
     }
 
     public static new App Current => (App)Application.Current;
 
-    public static IServiceProvider Services =>
-        Current._appHost?.Services
-        ?? throw new InvalidOperationException("Application host has not been started.");
+    public static IServiceProvider Services => AppHost.Services;
 
     public Window? MainWindow { get; private set; }
 
@@ -44,11 +37,18 @@ public partial class App : Application
         ApplyDefaultCulture();
         AnimationSettings.ConfigureDispatcherQueue(DispatcherQueue.GetForCurrentThread());
 
+        var startupWindow = new StartupWindow();
         var startupViewModel = new StartupViewModel();
-        var startupWindow = new StartupWindow(startupViewModel);
+        startupWindow.DataContext = startupViewModel;
         startupWindow.Activate();
 
-        while (!await TryInitializeAsync(startupViewModel).ConfigureAwait(true))
+        async Task<bool> RunAsync() => await startupViewModel.RunStartupAsync(async reporter =>
+        {
+            reporter.Report(AppStartupPhase.Migrations, "Provádím migrace…");
+            await AppHost.StartAsync().ConfigureAwait(true);
+        }).ConfigureAwait(true);
+
+        while (!await RunAsync().ConfigureAwait(true))
         {
             await WaitForRetryAsync(startupViewModel).ConfigureAwait(true);
         }
@@ -71,79 +71,6 @@ public partial class App : Application
         return completion.Task;
     }
 
-    private async Task<bool> TryInitializeAsync(StartupViewModel startupViewModel)
-    {
-        startupViewModel.ShowProgress(LocalizedStrings.Get("Startup.InitializingServices"));
-
-        AppHost? host = null;
-
-        try
-        {
-            host = await AppHost.StartAsync().ConfigureAwait(true);
-
-            _appHost = host;
-
-            var services = host.Services;
-
-            var shell = services.GetRequiredService<MainShell>();
-
-            var windowProvider = services.GetRequiredService<IWindowProvider>();
-            windowProvider.SetWindow(shell);
-
-            var dispatcherService = services.GetRequiredService<IDispatcherService>();
-            dispatcherService.ResetDispatcher(shell.DispatcherQueue);
-
-            var localizationService = services.GetRequiredService<ILocalizationService>();
-            await localizationService.InitializeAsync().ConfigureAwait(true);
-
-            var themeService = services.GetRequiredService<IThemeService>();
-            await themeService.InitializeAsync().ConfigureAwait(true);
-
-            shell.Activate();
-            shell.Closed += OnWindowClosed;
-
-            MainWindow = shell;
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            startupViewModel.ShowError(
-                LocalizedStrings.Get("Startup.StartupFailed"),
-                ex.Message);
-
-            LogStartupFailure(host, ex);
-
-            if (host is not null)
-            {
-                await host.DisposeAsync().ConfigureAwait(false);
-            }
-
-            _appHost = null;
-            MainWindow = null;
-            return false;
-        }
-    }
-
-    private void LogStartupFailure(AppHost? host, Exception exception)
-    {
-        ILogger<App>? logger = null;
-
-        if (host is not null)
-        {
-            try
-            {
-                logger = host.Services.GetService<ILogger<App>>();
-            }
-            catch
-            {
-                // Ignore errors retrieving the logger during startup failure handling.
-            }
-        }
-
-        (logger ?? BootstrapLogger).LogError(exception, "Application startup failed.");
-    }
-
     private async void OnWindowClosed(object sender, WindowEventArgs e)
     {
         if (sender is Window window)
@@ -151,11 +78,7 @@ public partial class App : Application
             window.Closed -= OnWindowClosed;
         }
 
-        if (_appHost is not null)
-        {
-            await _appHost.DisposeAsync().ConfigureAwait(false);
-            _appHost = null;
-        }
+        await AppHost.StopAsync().ConfigureAwait(false);
 
         MainWindow = null;
 
@@ -178,15 +101,17 @@ public partial class App : Application
         }
     }
 
-    private static void InitializeWindowsAppSdk()
+    internal void InitializeWindowsAppSdkSafe(IStartupReporter reporter)
     {
-        if (_isBootstrapInitialized)
-        {
-            return;
-        }
-
         try
         {
+            if (_isBootstrapInitialized)
+            {
+                reporter.Report(AppStartupPhase.Bootstrap, "Windows App SDK je připravena.");
+                return;
+            }
+
+            reporter.Report(AppStartupPhase.Bootstrap, "Inicializuji Windows App SDK…");
             const uint majorMinorVersion = 0x00010008; // Windows App SDK 1.8
             Bootstrap.Initialize(majorMinorVersion);
             _isBootstrapInitialized = true;
@@ -194,7 +119,10 @@ public partial class App : Application
         catch (Exception ex)
         {
             BootstrapLogger.LogError(ex, "Failed to initialize Windows App SDK bootstrapper.");
-            throw;
+            throw new InitializationException(
+                "Windows App SDK bootstrap selhal. Zkontrolujte instalaci Windows App SDK runtime.",
+                ex,
+                "Nainstalujte nebo opravte Windows App SDK Runtime a spusťte aplikaci znovu.");
         }
     }
 
@@ -213,6 +141,22 @@ public partial class App : Application
         {
             _isBootstrapInitialized = false;
         }
+    }
+
+    internal void RegisterMainWindow(Window window)
+    {
+        if (window is null)
+        {
+            throw new ArgumentNullException(nameof(window));
+        }
+
+        if (MainWindow is not null)
+        {
+            MainWindow.Closed -= OnWindowClosed;
+        }
+
+        MainWindow = window;
+        window.Closed += OnWindowClosed;
     }
 
     private sealed class DebugLoggerProvider : ILoggerProvider

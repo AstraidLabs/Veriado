@@ -1,35 +1,39 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Veriado.Appl.DependencyInjection;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services;
 using Veriado.Services.DependencyInjection;
+using Veriado.WinUI.DependencyInjection;
 using Veriado.WinUI.Services;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.ViewModels.Shell;
-using Veriado.Appl.DependencyInjection;
-using Veriado.WinUI.DependencyInjection;
 
 namespace Veriado.WinUI;
 
-internal sealed class AppHost : IAsyncDisposable
+public static class AppHost
 {
-    private readonly IHost _host;
+    private static IHost? _host;
 
-    private AppHost(IHost host)
+    public static bool IsBuilt => _host is not null;
+
+    public static IServiceProvider Services =>
+        _host?.Services ?? throw new InvalidOperationException(
+            "AppHost is not initialized. Call AppHost.Build() and StartAsync() before accessing Services.");
+
+    public static void Build()
     {
-        _host = host;
-    }
+        if (_host is not null)
+        {
+            return;
+        }
 
-    public IServiceProvider Services => _host.Services;
-
-    public static async Task<AppHost> StartAsync()
-    {
-        var host = Host
+        _host = Host
             .CreateDefaultBuilder()
             .ConfigureServices((context, services) =>
             {
@@ -39,7 +43,7 @@ internal sealed class AppHost : IAsyncDisposable
 
                 var infrastructureConfig = new InfrastructureConfigProvider();
                 services.AddSingleton<IInfrastructureConfigProvider>(infrastructureConfig);
-                services.AddSingleton<InfrastructureConfigProvider>(infrastructureConfig);
+                services.AddSingleton(infrastructureConfig);
 
                 services.AddSingleton<IWindowProvider, WindowProvider>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
@@ -68,7 +72,6 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddInfrastructure(context.Configuration, options =>
                 {
                     var databasePath = infrastructureConfig.GetDatabasePath();
-                    infrastructureConfig.EnsureStorageExists(databasePath);
                     options.DbPath = databasePath;
                     options.FtsIndexingMode = FtsIndexingMode.Outbox;
                 });
@@ -77,25 +80,38 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IFilesSearchSuggestionsProvider, FilesSearchSuggestionsProvider>();
             })
             .Build();
+    }
 
-        var configProvider = host.Services.GetRequiredService<IInfrastructureConfigProvider>();
+    public static async Task StartAsync()
+    {
+        if (_host is null)
+        {
+            throw new InvalidOperationException("AppHost.Build() must be called before StartAsync().");
+        }
+
+        var configProvider = _host.Services.GetRequiredService<IInfrastructureConfigProvider>();
         var databasePath = configProvider.GetDatabasePath();
         var mutexKey = BuildMigrationMutexKey(databasePath);
 
         using (var gate = new NamedGlobalMutex(mutexKey))
         {
             gate.Acquire(TimeSpan.FromSeconds(30));
-            await host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
+            await _host.Services.InitializeInfrastructureAsync().ConfigureAwait(false);
         }
-        await host.StartAsync().ConfigureAwait(false);
-        await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
-        return new AppHost(host);
+
+        await _host.StartAsync().ConfigureAwait(false);
     }
 
-    public async ValueTask DisposeAsync()
+    public static async Task StopAsync()
     {
+        if (_host is null)
+        {
+            return;
+        }
+
         await _host.StopAsync().ConfigureAwait(false);
         _host.Dispose();
+        _host = null;
     }
 
     private static string BuildMigrationMutexKey(string databasePath)
@@ -106,43 +122,43 @@ internal sealed class AppHost : IAsyncDisposable
             .Replace(':', '_');
         return $"Veriado-Migrate-{sanitized}";
     }
-}
 
-internal sealed class NamedGlobalMutex : IDisposable
-{
-    private readonly Mutex _mutex;
-    private bool _hasHandle;
-
-    public NamedGlobalMutex(string name)
+    private sealed class NamedGlobalMutex : IDisposable
     {
-        var mutexName = OperatingSystem.IsWindows() ? @$"Global\{name}" : name;
-        _mutex = new Mutex(false, mutexName);
-    }
+        private readonly Mutex _mutex;
+        private bool _hasHandle;
 
-    public void Acquire(TimeSpan timeout)
-    {
-        try
+        public NamedGlobalMutex(string name)
         {
-            _hasHandle = _mutex.WaitOne(timeout);
-        }
-        catch (AbandonedMutexException)
-        {
-            _hasHandle = true;
+            var mutexName = OperatingSystem.IsWindows() ? @$"Global\{name}" : name;
+            _mutex = new Mutex(false, mutexName);
         }
 
-        if (!_hasHandle)
+        public void Acquire(TimeSpan timeout)
         {
-            throw new TimeoutException("Nelze získat migrační mutex – pravděpodobně běží jiná instance.");
-        }
-    }
+            try
+            {
+                _hasHandle = _mutex.WaitOne(timeout);
+            }
+            catch (AbandonedMutexException)
+            {
+                _hasHandle = true;
+            }
 
-    public void Dispose()
-    {
-        if (_hasHandle)
+            if (!_hasHandle)
+            {
+                throw new TimeoutException("Nelze získat migrační mutex – pravděpodobně běží jiná instance.");
+            }
+        }
+
+        public void Dispose()
         {
-            _mutex.ReleaseMutex();
-        }
+            if (_hasHandle)
+            {
+                _mutex.ReleaseMutex();
+            }
 
-        _mutex.Dispose();
+            _mutex.Dispose();
+        }
     }
 }
