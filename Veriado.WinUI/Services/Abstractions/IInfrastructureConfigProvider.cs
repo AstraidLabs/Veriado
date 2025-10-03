@@ -5,4 +5,6 @@ public interface IInfrastructureConfigProvider
     string GetDatabasePath();
 
     void EnsureStorageExists(string path);
+
+    Task EnsureStorageExistsSafe();
 }
