@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
+using Microsoft.Windows.ApplicationModel.DynamicDependency;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
@@ -18,10 +19,13 @@ public partial class App : Application
         .Create(builder => builder.AddProvider(new DebugLoggerProvider()))
         .CreateLogger<App>();
 
+    private static bool _isBootstrapInitialized;
+
     private AppHost? _appHost;
 
     public App()
     {
+        InitializeWindowsAppSdk();
         InitializeComponent();
     }
 
@@ -154,6 +158,8 @@ public partial class App : Application
         }
 
         MainWindow = null;
+
+        ShutdownWindowsAppSdk();
     }
 
     private static void ApplyDefaultCulture()
@@ -169,6 +175,43 @@ public partial class App : Application
         catch (CultureNotFoundException ex)
         {
             BootstrapLogger.LogWarning(ex, "Failed to apply default culture.");
+        }
+    }
+
+    private static void InitializeWindowsAppSdk()
+    {
+        if (_isBootstrapInitialized)
+        {
+            return;
+        }
+
+        try
+        {
+            const uint majorMinorVersion = 0x00010008; // Windows App SDK 1.8
+            Bootstrap.Initialize(majorMinorVersion);
+            _isBootstrapInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogError(ex, "Failed to initialize Windows App SDK bootstrapper.");
+            throw;
+        }
+    }
+
+    private static void ShutdownWindowsAppSdk()
+    {
+        if (!_isBootstrapInitialized)
+        {
+            return;
+        }
+
+        try
+        {
+            Bootstrap.Shutdown();
+        }
+        finally
+        {
+            _isBootstrapInitialized = false;
         }
     }
 
