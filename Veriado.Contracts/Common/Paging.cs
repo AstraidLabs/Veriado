@@ -29,7 +29,7 @@ public sealed record PageResult<T>
     /// <param name="page">The current one-based page number.</param>
     /// <param name="pageSize">The requested page size.</param>
     /// <param name="totalCount">The total number of items across all pages.</param>
-    public PageResult(IReadOnlyList<T> items, int page, int pageSize, int totalCount)
+    public PageResult(IReadOnlyList<T> items, int page, int pageSize, int totalCount, bool hasMore = false, bool isTruncated = false)
     {
         ArgumentNullException.ThrowIfNull(items);
         if (page <= 0)
@@ -51,6 +51,8 @@ public sealed record PageResult<T>
         Page = page;
         PageSize = pageSize;
         TotalCount = totalCount;
+        HasMore = hasMore;
+        IsTruncated = isTruncated;
     }
 
     /// <summary>
@@ -72,6 +74,16 @@ public sealed record PageResult<T>
     /// Gets the total number of items available.
     /// </summary>
     public int TotalCount { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether another page is available after the current one.
+    /// </summary>
+    public bool HasMore { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the result set was truncated by policy.
+    /// </summary>
+    public bool IsTruncated { get; }
 
     /// <summary>
     /// Gets the total number of pages available.

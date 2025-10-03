@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using AutoMapper.QueryableExtensions;
@@ -6,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Common;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
@@ -114,25 +116,91 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         {
             var match = fuzzyMatchQuery!;
             var plan = ApplyFiltersToPlan(SearchQueryPlanFactory.FromTrigram(match, queryText), dto, today);
-            var candidates = await _searchQueryService
-                .SearchFuzzyWithScoresAsync(plan, 0, _options.MaxCandidateResults, cancellationToken)
-                .ConfigureAwait(false);
+            var searchOffset = (pageNumber - 1) * pageSize;
+            var candidateTake = Math.Max(pageSize * 2, searchOffset + pageSize);
+            candidateTake = Math.Min(candidateTake, _options.MaxCandidateResults);
+            IReadOnlyList<(Guid Id, double Score)> candidates;
+            var candidateScores = new Dictionary<Guid, double>();
+            HashSet<Guid> matchingIds = new();
+            var orderedIds = new List<Guid>();
 
-            if (candidates.Count == 0)
+            while (true)
             {
-                await _historyService.AddAsync(queryText, match, 0, true, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
+                candidates = await _searchQueryService
+                    .SearchFuzzyWithScoresAsync(plan, 0, candidateTake, cancellationToken)
+                    .ConfigureAwait(false);
 
-            var candidateScores = new Dictionary<Guid, double>(candidates.Count);
-            foreach (var (id, score) in candidates)
-            {
-                candidateScores[id] = score;
-            }
+                if (candidates.Count == 0)
+                {
+                    await _historyService.AddAsync(queryText, match, 0, true, cancellationToken).ConfigureAwait(false);
+                    return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
+                }
 
-            var candidateIds = candidates.Select(static candidate => candidate.Id).ToArray();
-            var matchingIds = await CollectMatchingIdsAsync(context, filteredQuery, candidateIds, cancellationToken)
-                .ConfigureAwait(false);
+                candidateScores = new Dictionary<Guid, double>(candidates.Count);
+                var candidateIds = new Guid[candidates.Count];
+                var index = 0;
+                foreach (var (id, score) in candidates)
+                {
+                    candidateScores[id] = score;
+                    candidateIds[index++] = id;
+                }
+
+                matchingIds = await CollectMatchingIdsAsync(context, filteredQuery, candidateIds, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (matchingIds.Count == 0)
+                {
+                    if (candidateTake >= _options.MaxCandidateResults)
+                    {
+                        await _historyService.AddAsync(queryText, match, 0, true, cancellationToken)
+                            .ConfigureAwait(false);
+                        return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
+                    }
+
+                    var nextTake = Math.Min(
+                        _options.MaxCandidateResults,
+                        Math.Max(candidateTake * 2, searchOffset + (2 * pageSize)));
+                    if (nextTake == candidateTake)
+                    {
+                        await _historyService.AddAsync(queryText, match, 0, true, cancellationToken)
+                            .ConfigureAwait(false);
+                        return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
+                    }
+
+                    candidateTake = nextTake;
+                    continue;
+                }
+
+                if (sortByScore)
+                {
+                    orderedIds = new List<Guid>(matchingIds.Count);
+                    foreach (var (id, _) in candidates)
+                    {
+                        if (matchingIds.Contains(id))
+                        {
+                            orderedIds.Add(id);
+                        }
+                    }
+
+                    if (orderedIds.Count >= searchOffset + pageSize || candidateTake >= _options.MaxCandidateResults)
+                    {
+                        break;
+                    }
+
+                    var nextTake = Math.Min(
+                        _options.MaxCandidateResults,
+                        Math.Max(candidateTake * 2, searchOffset + (2 * pageSize)));
+                    if (nextTake == candidateTake)
+                    {
+                        break;
+                    }
+
+                    candidateTake = nextTake;
+                    continue;
+                }
+
+                break;
+            }
 
             if (matchingIds.Count == 0)
             {
@@ -142,23 +210,16 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
             if (sortByScore)
             {
-                var orderedIds = new List<Guid>(matchingIds.Count);
-                foreach (var (id, _) in candidates)
-                {
-                    if (matchingIds.Contains(id))
-                    {
-                        orderedIds.Add(id);
-                    }
-                }
-
                 var totalCount = orderedIds.Count;
-                var skip = (pageNumber - 1) * pageSize;
+                var skip = searchOffset;
                 var pageIds = orderedIds.Skip(skip).Take(pageSize).ToArray();
+
+                var hasMore = totalCount > skip + pageIds.Length;
 
                 if (pageIds.Length == 0)
                 {
                     await _historyService.AddAsync(queryText, match, totalCount, true, cancellationToken).ConfigureAwait(false);
-                    return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, totalCount);
+                    return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, totalCount, hasMore);
                 }
 
                 var summaries = await FetchSummariesAsync(context, filteredQuery, pageIds, cancellationToken)
@@ -180,7 +241,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                 }
 
                 await _historyService.AddAsync(queryText, match, totalCount, true, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(items, pageNumber, pageSize, totalCount);
+                return new PageResult<FileSummaryDto>(items, pageNumber, pageSize, totalCount, hasMore);
             }
 
             var summaryMap = await FetchSummariesAsync(context, filteredQuery, matchingIds, cancellationToken)
@@ -208,9 +269,10 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
             var totalCountNonScore = orderedItems.Count;
             var skipCount = (pageNumber - 1) * pageSize;
             var pageItems = orderedItems.Skip(skipCount).Take(pageSize).ToList();
+            var hasMoreNonScore = totalCountNonScore > skipCount + pageItems.Count;
 
             await _historyService.AddAsync(queryText, match, totalCountNonScore, true, cancellationToken).ConfigureAwait(false);
-            return new PageResult<FileSummaryDto>(pageItems, pageNumber, pageSize, totalCountNonScore);
+            return new PageResult<FileSummaryDto>(pageItems, pageNumber, pageSize, totalCountNonScore, hasMoreNonScore);
         }
 
         if ((fuzzyRequestedByFavorite || fuzzyRequestedByDto) && !fuzzyMode)
@@ -222,7 +284,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         {
             var match = matchQuery!;
             var searchOffset = (pageNumber - 1) * pageSize;
-            var candidateLimit = Math.Min(pageSize * 2, _options.MaxCandidateResults);
+            var candidateLimit = Math.Max(pageSize * 2, searchOffset + pageSize);
+            candidateLimit = Math.Min(candidateLimit, _options.MaxCandidateResults);
             FileGridSearchResult gridResult;
 
             while (true)
@@ -241,12 +304,13 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                     break;
                 }
 
-                if (gridResult.TotalCount <= searchOffset + gridResult.Items.Count)
+                if (!gridResult.HasMore)
                 {
                     break;
                 }
 
-                var next = Math.Min(candidateLimit * 2, _options.MaxCandidateResults);
+                var doubled = Math.Max(candidateLimit * 2, searchOffset + (2 * pageSize));
+                var next = Math.Min(doubled, _options.MaxCandidateResults);
                 if (next == candidateLimit)
                 {
                     break;
@@ -255,8 +319,14 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                 candidateLimit = next;
             }
 
+            if (candidateLimit >= _options.MaxCandidateResults && gridResult.Items.Count < pageSize)
+            {
+                var clippedHasMore = searchOffset + pageSize < _options.MaxCandidateResults;
+                gridResult = gridResult with { HasMore = gridResult.HasMore || clippedHasMore };
+            }
+
             await _historyService.AddAsync(queryText, match, gridResult.TotalCount, false, cancellationToken).ConfigureAwait(false);
-            return new PageResult<FileSummaryDto>(gridResult.Items, pageNumber, pageSize, gridResult.TotalCount);
+            return new PageResult<FileSummaryDto>(gridResult.Items, pageNumber, pageSize, gridResult.TotalCount, gridResult.HasMore, gridResult.IsTruncated);
         }
 
         var total = await context.CountAsync(filteredQuery, cancellationToken).ConfigureAwait(false);
@@ -268,7 +338,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
             .ProjectTo<FileSummaryDto>(_mapper.ConfigurationProvider);
 
         var projectedItems = await context.ToListAsync(pageQueryProjection, cancellationToken).ConfigureAwait(false);
-        return new PageResult<FileSummaryDto>(projectedItems, pageNumber, pageSize, total);
+        var hasMorePages = total > offset + projectedItems.Count;
+        return new PageResult<FileSummaryDto>(projectedItems, pageNumber, pageSize, total, hasMorePages);
     }
 
     private static async Task<HashSet<Guid>> CollectMatchingIdsAsync(
@@ -410,11 +481,39 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
             clauses.Add($"{column} LIKE {parameter} ESCAPE '\\'");
         }
 
+        void AddExtensionClause()
+        {
+            if (string.IsNullOrWhiteSpace(dto.Extension))
+            {
+                return;
+            }
+
+            var trimmed = dto.Extension.Trim();
+            var sanitized = trimmed.TrimStart('.');
+            if (string.IsNullOrWhiteSpace(sanitized))
+            {
+                return;
+            }
+
+            var normalized = sanitized.ToLowerInvariant();
+            if (dto.ExtensionMatchMode == ExtensionMatchMode.Contains)
+            {
+                var pattern = $"%{QueryableFilters.EscapeLike(normalized)}%";
+                var parameter = AddParameter(pattern, SqliteType.Text);
+                clauses.Add($"LOWER(f.extension) LIKE {parameter} ESCAPE '\\'");
+            }
+            else
+            {
+                var parameter = AddParameter(normalized, SqliteType.Text);
+                clauses.Add($"LOWER(f.extension) = {parameter}");
+            }
+        }
+
         static string FormatDate(DateTimeOffset value)
             => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
         AddLikeClause("f.name", dto.Name);
-        AddLikeClause("f.extension", dto.Extension);
+        AddExtensionClause();
         AddLikeClause("f.mime", dto.Mime);
         AddLikeClause("f.author", dto.Author);
 
