@@ -28,7 +28,8 @@ public interface IFulltextIntegrityService
 /// <param name="OrphanIndexIds">The identifiers present in the index without corresponding files.</param>
 public sealed record IntegrityReport(
     IReadOnlyCollection<Guid> MissingFileIds,
-    IReadOnlyCollection<Guid> OrphanIndexIds)
+    IReadOnlyCollection<Guid> OrphanIndexIds,
+    bool RequiresFullRebuild = false)
 {
     public int MissingCount => MissingFileIds.Count;
 

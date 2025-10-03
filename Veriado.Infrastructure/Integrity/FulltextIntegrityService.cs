@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using Veriado.Infrastructure.Search;
 
@@ -53,12 +54,16 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         var searchIndexIds = new HashSet<Guid>();
         var trigramIndexIds = new HashSet<Guid>();
+        var searchTableExists = false;
+        var trigramTableExists = false;
         var searchMapExists = false;
         var trigramMapExists = false;
         await using (var connection = CreateConnection())
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+            searchTableExists = await TableExistsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
+            trigramTableExists = await TableExistsAsync(connection, "file_trgm", cancellationToken).ConfigureAwait(false);
             searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
             trigramMapExists = await TableExistsAsync(connection, "file_trgm_map", cancellationToken).ConfigureAwait(false);
 
@@ -87,9 +92,37 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             }
         }
 
-        if (!searchMapExists || !trigramMapExists)
+        var requiresFullRebuild = !searchTableExists
+            || !trigramTableExists
+            || !searchMapExists
+            || !trigramMapExists;
+
+        if (requiresFullRebuild)
         {
-            _logger.LogWarning("Full-text index metadata tables are missing; a rebuild will be required when repairs run.");
+            var missingTables = new List<string>();
+            if (!searchTableExists)
+            {
+                missingTables.Add("file_search");
+            }
+
+            if (!trigramTableExists)
+            {
+                missingTables.Add("file_trgm");
+            }
+
+            if (!searchMapExists)
+            {
+                missingTables.Add("file_search_map");
+            }
+
+            if (!trigramMapExists)
+            {
+                missingTables.Add("file_trgm_map");
+            }
+
+            _logger.LogWarning(
+                "Full-text index metadata tables are missing; a rebuild will be required when repairs run. Missing: {MissingTables}",
+                string.Join(", ", missingTables));
         }
 
         var missing = fileIds
@@ -103,7 +136,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             .Distinct()
             .ToArray();
 
-        return new IntegrityReport(missing, orphans);
+        return new IntegrityReport(missing, orphans, requiresFullRebuild);
     }
 
     public async Task<int> RepairAsync(bool reindexAll, CancellationToken cancellationToken = default)
@@ -121,6 +154,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         try
         {
             report = await VerifyAsync(cancellationToken).ConfigureAwait(false);
+            requiresFullRebuild |= report.RequiresFullRebuild;
         }
         catch (SqliteException ex)
         {
