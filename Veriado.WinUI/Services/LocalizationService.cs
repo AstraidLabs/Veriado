@@ -123,7 +123,7 @@ public sealed class LocalizationService : ILocalizationService
         return true;
     }
 
-    public string GetString(string resourceKey) => GetString(resourceKey, null);
+ 
 
     public string GetString(string resourceKey, params object?[] arguments)
     {
@@ -191,5 +191,10 @@ public sealed class LocalizationService : ILocalizationService
         }
 
         return resourceKey;
+    }
+
+    public string GetString(string resourceKey)
+    {
+        throw new NotImplementedException();
     }
 }
