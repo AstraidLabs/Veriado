@@ -19,12 +19,18 @@ public partial class App : Application
         .Create(builder => builder.AddProvider(new DebugLoggerProvider()))
         .CreateLogger<App>();
 
+    private static readonly SemaphoreSlim ShutdownSemaphore = new(1, 1);
+
     private static bool _isBootstrapInitialized;
+    private static bool _isShutdownStarted;
 
     public App()
     {
         InitializeComponent();
         AppHost.Build();
+
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
     }
 
     public static new App Current => (App)Application.Current;
@@ -81,11 +87,21 @@ public partial class App : Application
             window.Closed -= OnWindowClosed;
         }
 
-        await AppHost.StopAsync().ConfigureAwait(false);
+        await StopHostSafelyAsync().ConfigureAwait(false);
 
         MainWindow = null;
 
         ShutdownWindowsAppSdk();
+    }
+
+    private static void OnProcessExit(object? sender, EventArgs e)
+    {
+        StopHostSafelyBlocking();
+    }
+
+    private static void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        StopHostSafelyBlocking();
     }
 
     private static void ApplyDefaultCulture()
@@ -175,6 +191,60 @@ public partial class App : Application
         finally
         {
             _isBootstrapInitialized = false;
+        }
+    }
+
+    private static async Task StopHostSafelyAsync()
+    {
+        if (!AppHost.IsBuilt)
+        {
+            return;
+        }
+
+        var shouldStop = false;
+
+        await ShutdownSemaphore.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (!_isShutdownStarted)
+            {
+                _isShutdownStarted = true;
+                shouldStop = true;
+            }
+        }
+        finally
+        {
+            ShutdownSemaphore.Release();
+        }
+
+        if (!shouldStop)
+        {
+            return;
+        }
+
+        try
+        {
+            await AppHost.StopAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogError(ex, "Failed to stop AppHost during shutdown.");
+        }
+    }
+
+    private static void StopHostSafelyBlocking()
+    {
+        try
+        {
+            StopHostSafelyAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogError(ex, "Failed to synchronously stop AppHost during shutdown.");
+        }
+        finally
+        {
+            ShutdownWindowsAppSdk();
         }
     }
 
