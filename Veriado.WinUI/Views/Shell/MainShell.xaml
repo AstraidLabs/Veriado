@@ -49,7 +49,6 @@
             <Grid Background="{ThemeResource AppBackgroundBrush}">
                 <Frame
                     x:Name="ContentFrame"
-                    NavigationCacheMode="Disabled"
                     IsNavigationStackEnabled="False" />
             </Grid>
         </controls:NavigationView.Content>
