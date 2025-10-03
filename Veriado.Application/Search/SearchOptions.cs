@@ -68,6 +68,7 @@ public sealed class SearchScoreOptions
     public double TrigramFloor { get; set; } = 0.30d;
     public string MergeMode { get; set; } = "max";
     public double WeightedFts { get; set; } = 0.7d;
+    public double RecencyHalfLifeDays { get; set; } = 0d;
 }
 
 /// <summary>

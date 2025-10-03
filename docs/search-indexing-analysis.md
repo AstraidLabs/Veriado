@@ -30,3 +30,6 @@ Tento dokument shrnuje, jak Veriado provádí indexaci souborů do SQLite FTS5 a
 2. **Telemetry indexace.** Sběr metrik (počet tokenů, velikost trigram tabulky, čas indexace) by umožnil sledovat efekt limitu 2 048 trigramů a včas reagovat na anomálie.
 3. **Incrementální reindexace.** Aktuální pipeline vyžaduje úplné přepsání řádků. Zavedení fronty pro přírůstkovou aktualizaci trigramů by mohlo zrychlit indexaci velkých dokumentů.
 4. **Lepší fallback pro JSON metadata.** Uživatelé využívající staré indexy by ocenili, kdyby se JSON pole transformovalo do čitelnějších párů `key:value` během snippetů, místo syrového JSON.
+
+## Implementovaná zlepšení (2025-10-03)
+- **Časový boost relevance.** Konfigurovatelná poločas rozpadu (`SearchOptions.Score.RecencyHalfLifeDays`) aplikuje penalizaci na starší dokumenty přímo v SQL výpočtu ranku. Dotazy tak preferují nově aktualizované soubory, aniž by se změnila logika indexace nebo nutnost reindexace. 【F:Veriado.Application/Search/SearchOptions.cs†L55-L72】【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L341-L374】
