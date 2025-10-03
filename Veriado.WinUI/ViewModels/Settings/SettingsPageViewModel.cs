@@ -14,8 +14,9 @@ public partial class SettingsPageViewModel : ViewModelBase
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
-        IExceptionHandler exceptionHandler)
-        : base(messenger, statusService, dispatcher, exceptionHandler)
+        IExceptionHandler exceptionHandler,
+        ILocalizationService localizationService)
+        : base(messenger, statusService, dispatcher, exceptionHandler, localizationService)
     {
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));

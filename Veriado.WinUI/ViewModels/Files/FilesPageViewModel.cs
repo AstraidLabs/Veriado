@@ -41,8 +41,9 @@ public partial class FilesPageViewModel : ViewModelBase
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
-        IExceptionHandler exceptionHandler)
-        : base(messenger, statusService, dispatcher, exceptionHandler)
+        IExceptionHandler exceptionHandler,
+        ILocalizationService localizationService)
+        : base(messenger, statusService, dispatcher, exceptionHandler, localizationService)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
