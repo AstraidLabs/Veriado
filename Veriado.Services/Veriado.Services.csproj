@@ -9,6 +9,5 @@
     <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
     <ProjectReference Include="../Veriado.Contracts/Veriado.Contracts.csproj" />
     <ProjectReference Include="../Veriado.Mapping/Veriado.Mapping.csproj" />
-    <ProjectReference Include="../Veriado.Infrastructure/Veriado.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

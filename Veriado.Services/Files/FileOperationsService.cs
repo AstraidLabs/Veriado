@@ -142,18 +142,16 @@ public sealed class FileOperationsService : IFileOperationsService
     public async Task<ApiResponse<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
-        using var scope = BeginScope();
-        var command = new ApplySystemMetadataCommand(
-            fileId,
-            (Veriado.Domain.Metadata.FileAttributesFlags)metadata.Attributes,
-            metadata.CreatedUtc,
-            metadata.LastWriteUtc,
-            metadata.LastAccessUtc,
-            metadata.OwnerSid,
-            metadata.HardLinkCount,
-            metadata.AlternateDataStreamCount);
+        var mapping = await _mappingPipeline
+            .MapApplySystemMetadataAsync(fileId, metadata, cancellationToken)
+            .ConfigureAwait(false);
+        if (!mapping.IsSuccess)
+        {
+            return ValidationFailure(mapping.Errors);
+        }
 
-        var result = await _mediator.Send(command, cancellationToken).ConfigureAwait(false);
+        using var scope = BeginScope();
+        var result = await _mediator.Send(mapping.Data!, cancellationToken).ConfigureAwait(false);
         return ToIdResponse(result);
     }
     private ApiResponse<Guid> ValidationFailure(IReadOnlyList<ApiError> errors)
