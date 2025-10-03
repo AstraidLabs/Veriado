@@ -1,5 +1,7 @@
 using System;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Veriado.WinUI.Services.Abstractions;
 
@@ -8,6 +10,8 @@ namespace Veriado.WinUI.Services.Abstractions;
 /// </summary>
 public interface ILocalizationService
 {
+    Task InitializeAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Occurs when the current culture changes.
     /// </summary>
@@ -44,4 +48,13 @@ public interface ILocalizationService
     /// <param name="arguments">Arguments used to format the resource string.</param>
     /// <returns>The formatted localized string.</returns>
     string GetString(string resourceKey, params object?[] arguments);
+
+    /// <summary>
+    /// Gets a localized string using the current culture and formats it with optional arguments.
+    /// </summary>
+    /// <param name="resourceKey">The resource key.</param>
+    /// <param name="defaultValue">The default value to use if the resource is missing.</param>
+    /// <param name="arguments">Optional formatting arguments.</param>
+    /// <returns>The localized string or the provided default value.</returns>
+    string GetString(string resourceKey, string? defaultValue = null, params object?[] arguments);
 }
