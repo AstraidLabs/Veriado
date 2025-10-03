@@ -1,12 +1,14 @@
 using System.Diagnostics;
-using Veriado.WinUI.Localization;
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.UI.Dispatching;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
-using Veriado.WinUI.Services;
 using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Helpers;
+using Veriado.WinUI.Localization;
 
 namespace Veriado.WinUI;
 
@@ -35,7 +37,8 @@ public partial class App : Application
     {
         base.OnLaunched(args);
 
-        await ApplySavedCultureAsync().ConfigureAwait(true);
+        ApplyDefaultCulture();
+        AnimationSettings.ConfigureDispatcherQueue(DispatcherQueue.GetForCurrentThread());
 
         var startupViewModel = new StartupViewModel();
         var startupWindow = new StartupWindow(startupViewModel);
@@ -153,18 +156,19 @@ public partial class App : Application
         MainWindow = null;
     }
 
-    private static async Task ApplySavedCultureAsync()
+    private static void ApplyDefaultCulture()
     {
         try
         {
-            var settingsService = new JsonSettingsService();
-            var settings = await settingsService.GetAsync().ConfigureAwait(true);
-            var culture = LocalizationConfiguration.NormalizeCulture(settings.Language);
-            CultureHelper.ApplyCulture(culture);
+            var culture = CultureInfo.GetCultureInfo("en-US");
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.DefaultThreadCurrentCulture = culture;
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
         }
-        catch (Exception ex)
+        catch (CultureNotFoundException ex)
         {
-            BootstrapLogger.LogWarning(ex, "Failed to apply saved culture before host startup.");
+            BootstrapLogger.LogWarning(ex, "Failed to apply default culture.");
         }
     }
 
