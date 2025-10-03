@@ -462,6 +462,9 @@ namespace Veriado.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeadLetteredUtc")
+                        .HasDatabaseName("idx_fts_write_ahead_dlq_dead_lettered");
+
                     b.ToTable("fts_write_ahead_dlq", (string)null);
                 });
 
@@ -496,6 +499,9 @@ namespace Veriado.Infrastructure.Migrations
                         .HasColumnName("title_hash");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EnqueuedUtc")
+                        .HasDatabaseName("idx_fts_write_ahead_enqueued");
 
                     b.ToTable("fts_write_ahead", (string)null);
                 });
