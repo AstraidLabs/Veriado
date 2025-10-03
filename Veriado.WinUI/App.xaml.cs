@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
 using Microsoft.Windows.ApplicationModel.DynamicDependency;
 using Veriado.WinUI.Errors;
 using Veriado.WinUI.Helpers;
@@ -39,7 +40,11 @@ public partial class App : Application
 
         var startupWindow = new StartupWindow();
         var startupViewModel = new StartupViewModel();
-        startupWindow.DataContext = startupViewModel;
+
+        if (startupWindow.Content is FrameworkElement rootElement)
+        {
+            rootElement.DataContext = startupViewModel;
+        }
         startupWindow.Activate();
 
         async Task<bool> RunAsync() => await startupViewModel.RunStartupAsync().ConfigureAwait(true);
