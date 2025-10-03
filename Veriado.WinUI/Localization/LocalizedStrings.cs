@@ -5,15 +5,10 @@ namespace Veriado.WinUI.Localization;
 
 internal static class LocalizedStrings
 {
+    private static readonly CultureInfo DefaultCulture = CultureInfo.GetCultureInfo("en-US");
     private static readonly ResourceManager ResourceManager = new();
     private static readonly ResourceMap? ResourceMap = ResourceManager.MainResourceMap.TryGetSubtree("Resources");
-    private static readonly ResourceContext ResourceContext = new(ResourceManager);
-    private static readonly CultureInfo DefaultCulture = CultureInfo.GetCultureInfo("en-US");
-
-    static LocalizedStrings()
-    {
-        ResourceContext.QualifierValues["Language"] = DefaultCulture.Name;
-    }
+    private static readonly ResourceContext ResourceContext = CreateResourceContext();
 
     public static string Get(string resourceKey, string? defaultValue = null, params object?[] arguments)
     {
@@ -47,5 +42,19 @@ internal static class LocalizedStrings
 
         var candidate = ResourceMap.TryGetValue(resourceKey, ResourceContext);
         return candidate?.ValueAsString;
+    }
+    private static ResourceContext CreateResourceContext()
+    {
+        var context = ResourceManager.CreateResourceContext();
+        if (context.QualifierValues.ContainsKey("Language"))
+        {
+            context.QualifierValues["Language"] = DefaultCulture.Name;
+        }
+        else
+        {
+            context.QualifierValues.Add("Language", DefaultCulture.Name);
+        }
+
+        return context;
     }
 }

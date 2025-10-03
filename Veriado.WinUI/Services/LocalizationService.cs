@@ -13,7 +13,7 @@ public sealed class LocalizationService : ILocalizationService
     private readonly ISettingsService _settingsService;
     private readonly ResourceManager _resourceManager = new();
     private readonly ResourceMap? _resourceMap;
-    private readonly ResourceContext _resourceContext;
+    private ResourceContext _resourceContext;
 
     private CultureInfo _currentCulture = DefaultCulture;
     private bool _isInitialized;
@@ -161,14 +161,7 @@ public sealed class LocalizationService : ILocalizationService
 
     private void UpdateQualifierLanguage(string language)
     {
-        if (_resourceContext.QualifierValues.ContainsKey("Language"))
-        {
-            _resourceContext.QualifierValues["Language"] = language;
-        }
-        else
-        {
-            _resourceContext.QualifierValues.Add("Language", language);
-        }
+        SetQualifierLanguage(_resourceContext, language);
     }
 
     private static void ApplyCultureToThread(CultureInfo culture)
@@ -181,13 +174,19 @@ public sealed class LocalizationService : ILocalizationService
 
     private void ResetResourceContexts()
     {
-        try
+        _resourceContext = _resourceManager.CreateResourceContext();
+        SetQualifierLanguage(_resourceContext, _currentCulture.Name);
+    }
+
+    private static void SetQualifierLanguage(ResourceContext context, string language)
+    {
+        if (context.QualifierValues.ContainsKey("Language"))
         {
-            _resourceContext.Reset();
+            context.QualifierValues["Language"] = language;
         }
-        catch
+        else
         {
-            // Ignore failures when the resource context is not yet available (e.g. during tests).
+            context.QualifierValues.Add("Language", language);
         }
     }
 }
