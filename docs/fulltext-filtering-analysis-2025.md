@@ -1,0 +1,27 @@
+# Analýza problémů fulltextového vyhledávání, filtrace a řazení
+
+## Současný stav
+- Fulltextové dotazy zajišťuje kombinace `SqliteFts5QueryService` a `HybridSearchQueryService`, které nad indexem `file_search` skládají skóre, vracejí kandidáty a případně doplňují trigramové výsledky.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L56-L226】【F:Veriado.Infrastructure/Search/HybridSearchQueryService.cs†L7-L149】
+- Dotaz pro grid souborů řeší `FileGridQueryHandler`. Nejprve sestaví EF dotaz s filtry (`QueryableFilters.ApplyFilters`), následně spojuje výsledky z fulltextu s databází, aplikuje další omezení a až poté promítá na DTO.【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L51-L332】
+- Filtrační kritéria (název, přípony, MIME, autor, platnosti…) jsou implementována duplicitně: jednou na úrovni EF (`QueryableFilters`), podruhé při sestavování `SearchQueryPlan`, aby se promítla i do FTS dotazu.【F:Veriado.Application/UseCases/Queries/FileGrid/QueryableFilters.cs†L13-L118】【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L424-L577】
+
+## Identifikované problémy
+1. **Neefektivní textové filtry.** Všechny stringové filtry používají `LIKE` s předponou `%…%`, což na SQLite deaktivuje indexy a nutí databázi ke skenování celé tabulky `files` i při relativně malých dotazech.【F:Veriado.Application/UseCases/Queries/FileGrid/QueryableFilters.cs†L21-L43】【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L461-L505】
+2. **Dvojí správa filtrační logiky.** Každé kritérium je definováno jak pro EF, tak pro FTS plán. Jakmile se přidá nové pole nebo se změní logika, je nutné aktualizovat dvě místa – riziko nekonzistence a regresí roste s počtem filtrů.【F:Veriado.Application/UseCases/Queries/FileGrid/QueryableFilters.cs†L13-L118】【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L424-L577】
+3. **Řazení mimo databázi.** Pokud se neřadí primárně podle skóre, výsledky se načtou do paměti a třídí pomocí `OrderSummaries`. To degraduje výkon pro větší množství výsledků a znemožňuje server-side stránkování s deterministickým pořadím.【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L300-L421】
+4. **Více průchodů nad databází.** Metody `CollectMatchingIdsAsync` a `FetchSummariesAsync` posílají opakované dotazy po dávkách 900 ID. Při rozsáhlých výsledcích to generuje stovky round-tripů a komplikuje latenci.【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L334-L385】
+5. **Omezená škálovatelnost fuzzy vyhledávání.** Fuzzy režim získá kandidáty přes trigramy, ale finální filtrace probíhá opět přes EF a ruční třídění. Výsledek je citlivý na nastavený limit `MaxCandidateResults` a může vynechat relevantní položky po aplikaci dodatečných filtrů.【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L109-L212】
+
+## Doporučené řešení
+1. **Centralizovat filtry do SQL view/procedury.** Přesuň logiku filtrace do jediné vrstvy – např. vytvořením materializovaného pohledu nebo parametrizovaného SQL dotazu, který spojuje `file_search`, mapovací tabulky a `files`. Aplikace pak udržuje jediný zdroj pravdy a EF může mapovat na view místo ručního skládání klauzulí.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L138-L226】
+   - V dotazu využít FTS prefixy (`MATCH 'title:účt*'`) nebo trigramové tabulky pro textové filtry, místo `%LIKE%`. To umožní využít existující indexy a zmenší potřebu česání celé tabulky.
+2. **Server-side řazení a stránkování.** Doplnit FTS dotazy o `ORDER BY` podle požadovaných polí (`name`, `modified_utc`, `size`) a `ROW_NUMBER()` (případně `LIMIT/OFFSET`) přímo ve SQLite. Tím odpadne `OrderSummaries`, stránkování zůstane deterministické a paměťové nároky handleru výrazně klesnou.【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L300-L421】
+3. **Sloučit získání kandidátů a projekci.** Rozšířit `SqliteFts5QueryService.SearchAsync` tak, aby kromě `SearchHit` vracel rovnou potřebné sloupce pro `FileSummaryDto` (název, velikost, platnost…). Většinu dat už dotaz na `file_search`/`files` stejně vybírá, takže lze snížit počet round-tripů na jeden.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L174-L226】【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L334-L385】
+4. **Adaptivní limit pro fuzzy dotazy.** Po sjednocení dotazu lze přepnout na `ORDER BY combined_score DESC` s postupným rozšiřováním `LIMIT` při nedostatku výsledků, místo fixního `MaxCandidateResults`. To drží latenci pod kontrolou a zároveň neignoruje relevantní dokumenty při striktnější filtraci.【F:Veriado.Application/UseCases/Queries/FileGrid/FileGridQueryHandler.cs†L109-L212】
+5. **Indexy pro nefuzzy filtry.** Pokud v datasetu převládají filtry na velikost, datum nebo příznaky (`is_read_only`, `fts_is_stale`), doplň sekundární indexy v SQLite a využij je v centralizovaném dotazu. To odstraní plné skeny při kombinaci fulltextu a strukturovaných filtrů.【F:Veriado.Application/UseCases/Queries/FileGrid/QueryableFilters.cs†L55-L110】
+
+## Očekávané přínosy
+- Jednoznačná filtrační logika → menší riziko regresí při rozšiřování doménového modelu.
+- Řádově nižší počet SQL dotazů na jeden fulltextový dotaz, nižší latence a menší zatížení databáze.
+- Lepší relevance a stabilnější stránkování výsledků díky řazení přímo na úrovni FTS dotazu.
+- Připravená infrastruktura pro další funkce (facety, suggestion) bez potřeby duplikovat filtrační pravidla v EF.

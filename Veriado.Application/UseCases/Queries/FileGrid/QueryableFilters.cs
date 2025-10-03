@@ -204,7 +204,7 @@ internal static class QueryableFilters
         return descending ? query.OrderByDescending(selector) : query.OrderBy(selector);
     }
 
-    private static string EscapeLike(string value)
+    internal static string EscapeLike(string value)
     {
         return value
             .Replace("\\", "\\\\", StringComparison.Ordinal)

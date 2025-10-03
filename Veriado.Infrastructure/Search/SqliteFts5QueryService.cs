@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
 using Veriado.Domain.Search;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Infrastructure.Search;
 
@@ -14,6 +17,8 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5QueryService
 {
     private const char Ellipsis = '…';
+    private const string SearchTableName = "file_search";
+    private const string SearchTableAlias = "s";
     private static readonly Encoding Utf8 = Encoding.UTF8;
 
     private static readonly int[] SnippetPriority =
@@ -50,6 +55,418 @@ internal sealed class SqliteFts5QueryService
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
+
+    public async Task<FileGridSearchResult> SearchGridAsync(
+        string? matchQuery,
+        FileGridQueryDto parameters,
+        IReadOnlyList<FileSortSpecDto> sort,
+        DateTimeOffset today,
+        int offset,
+        int limit,
+        int candidateLimit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(sort);
+
+        if (string.IsNullOrWhiteSpace(matchQuery))
+        {
+            return FileGridSearchResult.Empty;
+        }
+
+        if (!_options.IsFulltextAvailable)
+        {
+            return FileGridSearchResult.Empty;
+        }
+
+        if (limit <= 0)
+        {
+            return FileGridSearchResult.Empty;
+        }
+
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        await using var command = connection.CreateCommand();
+        var sql = BuildGridSql(sort, parameters, today, out var parameterDefinitions);
+        command.CommandText = sql;
+        command.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
+        command.Parameters.Add("$candidateLimit", SqliteType.Integer).Value = Math.Max(candidateLimit, limit);
+        command.Parameters.Add("$limit", SqliteType.Integer).Value = limit;
+        command.Parameters.Add("$offset", SqliteType.Integer).Value = Math.Max(offset, 0);
+
+        foreach (var definition in parameterDefinitions)
+        {
+            var parameter = command.Parameters.Add(definition.Name, definition.Type ?? SqliteType.Text);
+            parameter.Value = definition.Value ?? DBNull.Value;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var items = new List<FileSummaryDto>();
+        var totalCount = 0;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var totalOrdinal = reader.FieldCount > 0 ? reader.FieldCount - 1 : -1;
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (totalOrdinal >= 0 && !reader.IsDBNull(totalOrdinal))
+            {
+                totalCount = reader.GetInt32(totalOrdinal);
+            }
+
+            var dto = MapSummary(reader, totalOrdinal);
+            items.Add(dto);
+        }
+
+        stopwatch.Stop();
+        _telemetry.RecordFtsQuery(stopwatch.Elapsed);
+
+        if (items.Count == 0)
+        {
+            return FileGridSearchResult.Empty;
+        }
+
+        var hasMore = offset + limit < totalCount;
+        return new FileGridSearchResult(items, totalCount, hasMore);
+    }
+
+    private static string BuildGridSql(
+        IReadOnlyList<FileSortSpecDto> sort,
+        FileGridQueryDto parameters,
+        DateTimeOffset today,
+        out IReadOnlyList<SqliteParameterDefinition> parameterDefinitions)
+    {
+        var sql = new StringBuilder();
+        var defs = new List<SqliteParameterDefinition>();
+
+        sql.AppendLine("WITH fts_matches AS (");
+        sql.AppendLine("    SELECT");
+        sql.AppendLine("        s.rowid AS id,");
+        sql.AppendLine("        (1.0 / (1.0 + bm25(file_search))) AS fts_score");
+        sql.AppendLine("    FROM file_search AS s");
+        sql.AppendLine("    WHERE s MATCH $match");
+        sql.AppendLine("    ORDER BY bm25(file_search)");
+        sql.AppendLine("    LIMIT $candidateLimit");
+        sql.AppendLine("), joined AS (");
+        sql.AppendLine("    SELECT");
+        sql.AppendLine("        m.id,");
+        sql.AppendLine("        b.name,");
+        sql.AppendLine("        b.title,");
+        sql.AppendLine("        b.extension,");
+        sql.AppendLine("        b.mime_type,");
+        sql.AppendLine("        b.author,");
+        sql.AppendLine("        b.size_bytes,");
+        sql.AppendLine("        b.created_utc,");
+        sql.AppendLine("        b.modified_utc,");
+        sql.AppendLine("        b.version,");
+        sql.AppendLine("        b.is_read_only,");
+        sql.AppendLine("        b.fts_is_stale,");
+        sql.AppendLine("        b.fts_last_indexed_utc,");
+        sql.AppendLine("        b.fts_indexed_title,");
+        sql.AppendLine("        b.fts_schema_version,");
+        sql.AppendLine("        b.fts_indexed_hash,");
+        sql.AppendLine("        b.validity_issued_at,");
+        sql.AppendLine("        b.validity_valid_until,");
+        sql.AppendLine("        b.validity_has_physical,");
+        sql.AppendLine("        b.validity_has_electronic,");
+        sql.AppendLine("        m.fts_score AS fts_score,");
+        sql.AppendLine("        m.fts_score AS combined_score");
+        sql.AppendLine("    FROM fts_matches AS m");
+        sql.AppendLine("    JOIN v_file_search_base AS b ON b.id = m.id");
+        sql.AppendLine("    WHERE 1 = 1");
+        AppendGridFilters(sql, defs, parameters, today);
+        sql.AppendLine(")");
+        sql.AppendLine("SELECT");
+        sql.AppendLine("    j.id,");
+        sql.AppendLine("    j.name,");
+        sql.AppendLine("    j.title,");
+        sql.AppendLine("    j.extension,");
+        sql.AppendLine("    j.mime_type,");
+        sql.AppendLine("    j.author,");
+        sql.AppendLine("    j.size_bytes,");
+        sql.AppendLine("    j.created_utc,");
+        sql.AppendLine("    j.modified_utc,");
+        sql.AppendLine("    j.version,");
+        sql.AppendLine("    j.is_read_only,");
+        sql.AppendLine("    j.fts_is_stale,");
+        sql.AppendLine("    j.fts_last_indexed_utc,");
+        sql.AppendLine("    j.fts_indexed_title,");
+        sql.AppendLine("    j.fts_schema_version,");
+        sql.AppendLine("    j.fts_indexed_hash,");
+        sql.AppendLine("    j.validity_issued_at,");
+        sql.AppendLine("    j.validity_valid_until,");
+        sql.AppendLine("    j.validity_has_physical,");
+        sql.AppendLine("    j.validity_has_electronic,");
+        sql.AppendLine("    j.fts_score,");
+        sql.AppendLine("    j.combined_score,");
+        sql.AppendLine("    COUNT(*) OVER() AS total_count");
+        sql.AppendLine("FROM joined AS j");
+        sql.Append("ORDER BY ").Append(BuildOrderClause(sort)).AppendLine();
+        sql.AppendLine("LIMIT $limit OFFSET $offset;");
+
+        parameterDefinitions = defs;
+        return sql.ToString();
+    }
+
+    private static string BuildOrderClause(IReadOnlyList<FileSortSpecDto> sort)
+    {
+        if (sort.Count == 0)
+        {
+            return "j.name COLLATE NOCASE ASC, j.id ASC";
+        }
+
+        var parts = new List<string>();
+
+        foreach (var spec in sort)
+        {
+            if (string.IsNullOrWhiteSpace(spec.Field))
+            {
+                continue;
+            }
+
+            var direction = spec.Descending ? "DESC" : "ASC";
+            switch (spec.Field.ToLowerInvariant())
+            {
+                case "score":
+                    parts.Add($"j.combined_score {direction}");
+                    break;
+                case "name":
+                    parts.Add($"j.name COLLATE NOCASE {direction}");
+                    break;
+                case "mime":
+                    parts.Add($"j.mime_type COLLATE NOCASE {direction}");
+                    break;
+                case "extension":
+                    parts.Add($"j.extension COLLATE NOCASE {direction}");
+                    break;
+                case "size":
+                    parts.Add($"j.size_bytes {direction}");
+                    break;
+                case "createdutc":
+                    parts.Add($"j.created_utc {direction}");
+                    break;
+                case "modifiedutc":
+                    parts.Add($"j.modified_utc {direction}");
+                    break;
+                case "version":
+                    parts.Add($"j.version {direction}");
+                    break;
+                case "author":
+                    parts.Add($"j.author COLLATE NOCASE {direction}");
+                    break;
+                case "validuntil":
+                    parts.Add($"j.validity_valid_until {direction}");
+                    break;
+            }
+        }
+
+        if (parts.Count == 0)
+        {
+            parts.Add("j.name COLLATE NOCASE ASC");
+        }
+
+        parts.Add("j.id ASC");
+        return string.Join(", ", parts);
+    }
+
+    private static void AppendGridFilters(
+        StringBuilder sql,
+        List<SqliteParameterDefinition> parameters,
+        FileGridQueryDto dto,
+        DateTimeOffset today)
+    {
+        if (!string.IsNullOrWhiteSpace(dto.Name))
+        {
+            var param = AddParameter(parameters, "name", dto.Name.Trim(), SqliteType.Text);
+            sql.Append("        AND instr(lower(b.name), lower(").Append(param).AppendLine(")) > 0");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Extension))
+        {
+            var param = AddParameter(parameters, "extension", dto.Extension.Trim(), SqliteType.Text);
+            sql.Append("        AND lower(b.extension) = lower(").Append(param).AppendLine(")");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Mime))
+        {
+            var param = AddParameter(parameters, "mime", dto.Mime.Trim(), SqliteType.Text);
+            sql.Append("        AND instr(lower(b.mime_type), lower(").Append(param).AppendLine(")) > 0");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Author))
+        {
+            var param = AddParameter(parameters, "author", dto.Author.Trim(), SqliteType.Text);
+            sql.Append("        AND instr(lower(b.author), lower(").Append(param).AppendLine(")) > 0");
+        }
+
+        if (dto.IsReadOnly.HasValue)
+        {
+            var param = AddParameter(parameters, "readonly", dto.IsReadOnly.Value ? 1 : 0, SqliteType.Integer);
+            sql.Append("        AND b.is_read_only = ").Append(param).AppendLine();
+        }
+
+        if (dto.IsIndexStale.HasValue)
+        {
+            var param = AddParameter(parameters, "stale", dto.IsIndexStale.Value ? 1 : 0, SqliteType.Integer);
+            sql.Append("        AND b.fts_is_stale = ").Append(param).AppendLine();
+        }
+
+        if (dto.SizeMin.HasValue)
+        {
+            var param = AddParameter(parameters, "sizemin", dto.SizeMin.Value, SqliteType.Integer);
+            sql.Append("        AND b.size_bytes >= ").Append(param).AppendLine();
+        }
+
+        if (dto.SizeMax.HasValue)
+        {
+            var param = AddParameter(parameters, "sizemax", dto.SizeMax.Value, SqliteType.Integer);
+            sql.Append("        AND b.size_bytes <= ").Append(param).AppendLine();
+        }
+
+        if (dto.CreatedFromUtc.HasValue)
+        {
+            var param = AddParameter(parameters, "createdfrom", FormatDate(dto.CreatedFromUtc.Value), SqliteType.Text);
+            sql.Append("        AND b.created_utc >= ").Append(param).AppendLine();
+        }
+
+        if (dto.CreatedToUtc.HasValue)
+        {
+            var param = AddParameter(parameters, "createdto", FormatDate(dto.CreatedToUtc.Value), SqliteType.Text);
+            sql.Append("        AND b.created_utc <= ").Append(param).AppendLine();
+        }
+
+        if (dto.ModifiedFromUtc.HasValue)
+        {
+            var param = AddParameter(parameters, "modifiedfrom", FormatDate(dto.ModifiedFromUtc.Value), SqliteType.Text);
+            sql.Append("        AND b.modified_utc >= ").Append(param).AppendLine();
+        }
+
+        if (dto.ModifiedToUtc.HasValue)
+        {
+            var param = AddParameter(parameters, "modifiedto", FormatDate(dto.ModifiedToUtc.Value), SqliteType.Text);
+            sql.Append("        AND b.modified_utc <= ").Append(param).AppendLine();
+        }
+
+        if (dto.Version.HasValue)
+        {
+            var param = AddParameter(parameters, "version", dto.Version.Value, SqliteType.Integer);
+            sql.Append("        AND b.version = ").Append(param).AppendLine();
+        }
+
+        if (dto.HasValidity.HasValue)
+        {
+            if (dto.HasValidity.Value)
+            {
+                sql.AppendLine("        AND b.validity_issued_at IS NOT NULL");
+            }
+            else
+            {
+                sql.AppendLine("        AND b.validity_issued_at IS NULL");
+            }
+        }
+
+        if (dto.IsCurrentlyValid.HasValue)
+        {
+            var reference = AddParameter(parameters, "current", FormatDate(today), SqliteType.Text);
+            if (dto.IsCurrentlyValid.Value)
+            {
+                sql.Append("        AND b.validity_issued_at IS NOT NULL AND b.validity_issued_at <= ").Append(reference)
+                    .Append(" AND b.validity_valid_until >= ").Append(reference).AppendLine();
+            }
+            else
+            {
+                sql.Append("        AND (b.validity_issued_at IS NULL OR b.validity_issued_at > ").Append(reference)
+                    .Append(" OR b.validity_valid_until < ").Append(reference).AppendLine(")");
+            }
+        }
+
+        if (dto.ExpiringInDays.HasValue)
+        {
+            var start = AddParameter(parameters, "validstart", FormatDate(today), SqliteType.Text);
+            var end = AddParameter(
+                parameters,
+                "validend",
+                FormatDate(today.AddDays(dto.ExpiringInDays.Value)),
+                SqliteType.Text);
+
+            sql.Append("        AND b.validity_valid_until IS NOT NULL AND b.validity_valid_until >= ").Append(start)
+                .Append(" AND b.validity_valid_until <= ").Append(end).AppendLine();
+        }
+    }
+
+    private static string AddParameter(
+        List<SqliteParameterDefinition> parameters,
+        string name,
+        object value,
+        SqliteType type)
+    {
+        var parameterName = $"$fg_{name}_{parameters.Count}";
+        parameters.Add(new SqliteParameterDefinition(parameterName, value, type));
+        return parameterName;
+    }
+
+    private static FileSummaryDto MapSummary(SqliteDataReader reader, int totalOrdinal)
+    {
+        _ = totalOrdinal;
+        var idBytes = (byte[])reader.GetValue(0);
+        var id = new Guid(idBytes);
+
+        FileValidityDto? validity = null;
+        if (!reader.IsDBNull(16) && !reader.IsDBNull(17))
+        {
+            var issued = ParseDateTime(reader, 16);
+            var validUntil = ParseDateTime(reader, 17);
+            var hasPhysical = !reader.IsDBNull(18) && reader.GetInt32(18) != 0;
+            var hasElectronic = !reader.IsDBNull(19) && reader.GetInt32(19) != 0;
+            validity = new FileValidityDto(issued, validUntil, hasPhysical, hasElectronic);
+        }
+
+        var summary = new FileSummaryDto
+        {
+            Id = id,
+            Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+            Title = ReadNullableString(reader, 2),
+            Extension = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+            Mime = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+            Author = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+            Size = reader.IsDBNull(6) ? 0L : reader.GetInt64(6),
+            CreatedUtc = ParseDateTime(reader, 7),
+            LastModifiedUtc = ParseDateTime(reader, 8),
+            Version = reader.IsDBNull(9) ? 0 : reader.GetInt32(9),
+            IsReadOnly = ReadBoolean(reader, 10),
+            IsIndexStale = ReadBoolean(reader, 11),
+            LastIndexedUtc = ParseNullableDateTime(reader, 12),
+            IndexedTitle = ReadNullableString(reader, 13),
+            IndexSchemaVersion = reader.IsDBNull(14) ? 0 : reader.GetInt32(14),
+            IndexedContentHash = ReadNullableString(reader, 15),
+            Validity = validity,
+            Score = reader.IsDBNull(21) ? null : reader.GetDouble(21),
+        };
+
+        return summary;
+    }
+
+    private static DateTimeOffset ParseDateTime(SqliteDataReader reader, int ordinal)
+    {
+        var text = reader.GetString(ordinal);
+        return DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+    }
+
+    private static DateTimeOffset? ParseNullableDateTime(SqliteDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal)
+            ? null
+            : DateTimeOffset.Parse(reader.GetString(ordinal), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    private static string? ReadNullableString(SqliteDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+
+    private static bool ReadBoolean(SqliteDataReader reader, int ordinal)
+        => !reader.IsDBNull(ordinal) && reader.GetInt32(ordinal) != 0;
+
+    private static string FormatDate(DateTimeOffset value)
+        => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
     public async Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
         SearchQueryPlan plan,
@@ -152,10 +569,10 @@ internal sealed class SqliteFts5QueryService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
-        builder.Append("SELECT COUNT(*) FROM file_search s ");
+        builder.Append("SELECT COUNT(*) FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
         builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
         builder.Append("JOIN files f ON f.id = m.file_id ");
-        builder.Append("WHERE file_search MATCH $query ");
+        builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append(';');
         command.CommandText = builder.ToString();
@@ -314,7 +731,7 @@ internal sealed class SqliteFts5QueryService
     {
         var bm25 = string.Format(
             CultureInfo.InvariantCulture,
-            "bm25(s, {0}, {1}, {2}, {3}, {4})",
+            "bm25(" + SearchTableName + ", {0}, {1}, {2}, {3}, {4})",
             scorePlan.TitleWeight,
             scorePlan.MimeWeight,
             scorePlan.AuthorWeight,
@@ -339,12 +756,36 @@ internal sealed class SqliteFts5QueryService
             rank = bm25;
         }
 
+        var recencyExpression = BuildRecencyExpression(scorePlan);
+        if (!string.IsNullOrWhiteSpace(recencyExpression))
+        {
+            rank = string.Format(
+                CultureInfo.InvariantCulture,
+                scorePlan.HigherScoreIsBetter ? "({0} / {1})" : "({0} * {1})",
+                rank,
+                recencyExpression);
+        }
+
         if (Math.Abs(scorePlan.ScoreMultiplier - 1d) > double.Epsilon)
         {
             rank = string.Format(CultureInfo.InvariantCulture, "({0} * {1})", rank, scorePlan.ScoreMultiplier);
         }
 
         return (bm25, rank);
+    }
+
+    private static string BuildRecencyExpression(SearchScorePlan scorePlan)
+    {
+        if (scorePlan.RecencyHalfLifeDays <= 0d)
+        {
+            return string.Empty;
+        }
+
+        var halfLife = scorePlan.RecencyHalfLifeDays.ToString(CultureInfo.InvariantCulture);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "(1.0 + (MAX(0.0, julianday('now') - julianday(COALESCE(f.modified_utc, f.created_utc, '1970-01-01T00:00:00Z'))) / {0}))",
+            halfLife);
     }
 
     private string BuildScoreQuery(SearchQueryPlan plan, string bm25Expression, string rankExpression)
@@ -361,14 +802,19 @@ internal sealed class SqliteFts5QueryService
         }
 
         builder.Append(", f.modified_utc ");
-        builder.Append("FROM file_search s ");
+        builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
         builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
         builder.Append("JOIN files f ON f.id = m.file_id ");
-        builder.Append("WHERE file_search MATCH $query ");
+        builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
-        builder.Append(", f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE ");
+        const string TitleSortExpression = "COALESCE(f.title, '')";
+        builder.Append(", f.modified_utc DESC, CASE WHEN lower(");
+        builder.Append(TitleSortExpression);
+        builder.Append(") = lower($raw) THEN 0 ELSE 1 END, ");
+        builder.Append(TitleSortExpression);
+        builder.Append(" COLLATE NOCASE ");
         builder.Append("LIMIT $take OFFSET $skip;");
         return builder.ToString();
     }
@@ -388,12 +834,12 @@ internal sealed class SqliteFts5QueryService
             "       COALESCE(f.author, s.author, '') AS author, " +
             "       COALESCE(s.metadata_text, '') AS metadata_text, " +
             "       COALESCE(s.metadata, '') AS metadata_json, " +
-            "       snippet(s, 0, '', '', '…', 32) AS snippet_title, " +
-            "       snippet(s, 1, '', '', '…', 24) AS snippet_mime, " +
-            "       snippet(s, 2, '', '', '…', 24) AS snippet_author, " +
-            "       snippet(s, 3, '', '', '…', 32) AS snippet_metadata_text, " +
-            "       snippet(s, 4, '', '', '…', 32) AS snippet_metadata_json, " +
-            "       offsets(s) AS offsets, ");
+            "       snippet(" + SearchTableName + ", 0, '', '', '…', 32) AS snippet_title, " +
+            "       snippet(" + SearchTableName + ", 1, '', '', '…', 24) AS snippet_mime, " +
+            "       snippet(" + SearchTableName + ", 2, '', '', '…', 24) AS snippet_author, " +
+            "       snippet(" + SearchTableName + ", 3, '', '', '…', 32) AS snippet_metadata_text, " +
+            "       snippet(" + SearchTableName + ", 4, '', '', '…', 32) AS snippet_metadata_json, " +
+            "       offsets(" + SearchTableName + ") AS offsets, ");
         builder.Append(bm25Expression).Append(" AS bm25_score, ");
         builder.Append(rankExpression).Append(" AS score");
 
@@ -404,14 +850,14 @@ internal sealed class SqliteFts5QueryService
         }
 
         builder.Append(", f.modified_utc ");
-        builder.Append("FROM file_search s ");
+        builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
         builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
         builder.Append("JOIN files f ON f.id = m.file_id ");
-        builder.Append("WHERE file_search MATCH $query ");
+        builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
-        builder.Append(", f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE ");
+        builder.Append(", f.modified_utc DESC, CASE WHEN lower(title) = lower($raw) THEN 0 ELSE 1 END, title COLLATE NOCASE ");
         builder.Append("LIMIT $take;");
         return builder.ToString();
     }
@@ -790,6 +1236,7 @@ internal sealed class SqliteFts5QueryService
     private sealed record OffsetInfo(int Column, int TermIndex, int ByteStart, int ByteEnd);
 
 }
+
 
 /// <summary>
 /// Represents the result of an FTS search operation including diagnostic metadata.

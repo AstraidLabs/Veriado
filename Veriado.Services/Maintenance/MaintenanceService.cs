@@ -1,5 +1,3 @@
-using Veriado.Infrastructure.DependencyInjection;
-
 namespace Veriado.Services.Maintenance;
 
 /// <summary>

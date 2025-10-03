@@ -1,6 +1,8 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using AutoMapper.QueryableExtensions;
+using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
 using Veriado.Contracts.Common;
@@ -99,6 +101,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         await using var context = await _contextFactory.CreateAsync(cancellationToken).ConfigureAwait(false);
         var filesQuery = context.Files;
 
+        var todayReference = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
         var filteredQuery = QueryableFilters.ApplyFilters(filesQuery, dto, today);
         var sortSpecifications = dto.Sort ?? new List<FileSortSpecDto>();
         bool sortByScore = sortSpecifications.Count > 0
@@ -109,7 +113,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (fuzzyMode)
         {
             var match = fuzzyMatchQuery!;
-            var plan = SearchQueryPlanFactory.FromTrigram(match, queryText);
+            var plan = ApplyFiltersToPlan(SearchQueryPlanFactory.FromTrigram(match, queryText), dto, today);
             var candidates = await _searchQueryService
                 .SearchFuzzyWithScoresAsync(plan, 0, _options.MaxCandidateResults, cancellationToken)
                 .ConfigureAwait(false);
@@ -217,104 +221,42 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (!string.IsNullOrWhiteSpace(matchQuery))
         {
             var match = matchQuery!;
-            var plan = SearchQueryPlanFactory.FromMatch(match, queryText);
-            var candidates = await _searchQueryService
-                .SearchWithScoresAsync(plan, 0, _options.MaxCandidateResults, cancellationToken)
-                .ConfigureAwait(false);
+            var offset = (pageNumber - 1) * pageSize;
+            var candidateLimit = Math.Min(pageSize * 2, _options.MaxCandidateResults);
+            FileGridSearchResult gridResult;
 
-            if (candidates.Count == 0)
+            while (true)
             {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
-
-            var candidateScores = new Dictionary<Guid, double>(candidates.Count);
-            foreach (var (id, score) in candidates)
-            {
-                candidateScores[id] = score;
-            }
-
-            var candidateIds = candidates.Select(static candidate => candidate.Id).ToArray();
-            var matchingIds = await CollectMatchingIdsAsync(context, filteredQuery, candidateIds, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (matchingIds.Count == 0)
-            {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
-
-            if (sortByScore)
-            {
-                var orderedIds = new List<Guid>(matchingIds.Count);
-                foreach (var (id, _) in candidates)
-                {
-                    if (matchingIds.Contains(id))
-                    {
-                        orderedIds.Add(id);
-                    }
-                }
-
-                var totalCount = orderedIds.Count;
-                var skip = (pageNumber - 1) * pageSize;
-                var pageIds = orderedIds.Skip(skip).Take(pageSize).ToArray();
-
-                if (pageIds.Length == 0)
-                {
-                    await _historyService.AddAsync(queryText, match, totalCount, false, cancellationToken).ConfigureAwait(false);
-                    return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, totalCount);
-                }
-
-                var summaries = await FetchSummariesAsync(context, filteredQuery, pageIds, cancellationToken)
+                gridResult = await _searchQueryService
+                    .SearchGridAsync(match, dto, sortSpecifications, todayReference, offset, pageSize, candidateLimit, cancellationToken)
                     .ConfigureAwait(false);
-                var items = new List<FileSummaryDto>(pageIds.Length);
-                foreach (var id in pageIds)
+
+                if (gridResult.Items.Count >= pageSize)
                 {
-                    if (summaries.TryGetValue(id, out var summary))
-                    {
-                        if (candidateScores.TryGetValue(id, out var score))
-                        {
-                            items.Add(summary with { Score = score });
-                        }
-                        else
-                        {
-                            items.Add(summary);
-                        }
-                    }
+                    break;
                 }
 
-                await _historyService.AddAsync(queryText, match, totalCount, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(items, pageNumber, pageSize, totalCount);
-            }
-
-            var summaryMap = await FetchSummariesAsync(context, filteredQuery, matchingIds, cancellationToken)
-                .ConfigureAwait(false);
-            if (summaryMap.Count == 0)
-            {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
-
-            var enrichedSummaries = new List<FileSummaryDto>(summaryMap.Count);
-            foreach (var summary in summaryMap.Values)
-            {
-                if (candidateScores.TryGetValue(summary.Id, out var score))
+                if (candidateLimit >= _options.MaxCandidateResults)
                 {
-                    enrichedSummaries.Add(summary with { Score = score });
+                    break;
                 }
-                else
+
+                if (gridResult.TotalCount <= offset + gridResult.Items.Count)
                 {
-                    enrichedSummaries.Add(summary);
+                    break;
                 }
+
+                var next = Math.Min(candidateLimit * 2, _options.MaxCandidateResults);
+                if (next == candidateLimit)
+                {
+                    break;
+                }
+
+                candidateLimit = next;
             }
 
-            var orderedItems = OrderSummaries(enrichedSummaries, sortSpecifications);
-            var totalCountNonScore = orderedItems.Count;
-            var skipCount = (pageNumber - 1) * pageSize;
-            var pageItems = orderedItems.Skip(skipCount).Take(pageSize).ToList();
-
-            await _historyService.AddAsync(queryText, match, totalCountNonScore, false, cancellationToken).ConfigureAwait(false);
-            return new PageResult<FileSummaryDto>(pageItems, pageNumber, pageSize, totalCountNonScore);
+            await _historyService.AddAsync(queryText, match, gridResult.TotalCount, false, cancellationToken).ConfigureAwait(false);
+            return new PageResult<FileSummaryDto>(gridResult.Items, pageNumber, pageSize, gridResult.TotalCount);
         }
 
         var total = await context.CountAsync(filteredQuery, cancellationToken).ConfigureAwait(false);
@@ -417,6 +359,162 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         });
 
         return summaries;
+    }
+
+    private SearchQueryPlan ApplyFiltersToPlan(SearchQueryPlan plan, FileGridQueryDto dto, DateOnly today)
+    {
+        if (dto is null)
+        {
+            return plan;
+        }
+
+        var clauses = plan.WhereClauses.Count > 0
+            ? new List<string>(plan.WhereClauses)
+            : new List<string>();
+        var parameters = plan.Parameters.Count > 0
+            ? new List<SqliteParameterDefinition>(plan.Parameters)
+            : new List<SqliteParameterDefinition>();
+
+        var usedNames = new HashSet<string>(parameters.Select(static parameter => parameter.Name), StringComparer.Ordinal);
+        var parameterIndex = 0;
+        var todayReference = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
+        string NextParameterName()
+        {
+            string candidate;
+            do
+            {
+                candidate = "$fg" + parameterIndex++;
+            }
+            while (!usedNames.Add(candidate));
+
+            return candidate;
+        }
+
+        string AddParameter(object value, SqliteType type)
+        {
+            var name = NextParameterName();
+            parameters.Add(new SqliteParameterDefinition(name, value, type));
+            return name;
+        }
+
+        void AddLikeClause(string column, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            var pattern = $"%{QueryableFilters.EscapeLike(value)}%";
+            var parameter = AddParameter(pattern, SqliteType.Text);
+            clauses.Add($"{column} LIKE {parameter} ESCAPE '\\'");
+        }
+
+        static string FormatDate(DateTimeOffset value)
+            => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+
+        AddLikeClause("f.name", dto.Name);
+        AddLikeClause("f.extension", dto.Extension);
+        AddLikeClause("f.mime", dto.Mime);
+        AddLikeClause("f.author", dto.Author);
+
+        if (dto.IsReadOnly.HasValue)
+        {
+            var parameter = AddParameter(dto.IsReadOnly.Value ? 1 : 0, SqliteType.Integer);
+            clauses.Add($"f.is_read_only = {parameter}");
+        }
+
+        if (dto.IsIndexStale.HasValue)
+        {
+            var parameter = AddParameter(dto.IsIndexStale.Value ? 1 : 0, SqliteType.Integer);
+            clauses.Add($"f.fts_is_stale = {parameter}");
+        }
+
+        if (dto.SizeMin.HasValue)
+        {
+            var parameter = AddParameter(dto.SizeMin.Value, SqliteType.Integer);
+            clauses.Add($"f.size_bytes >= {parameter}");
+        }
+
+        if (dto.SizeMax.HasValue)
+        {
+            var parameter = AddParameter(dto.SizeMax.Value, SqliteType.Integer);
+            clauses.Add($"f.size_bytes <= {parameter}");
+        }
+
+        if (dto.CreatedFromUtc.HasValue)
+        {
+            var parameter = AddParameter(FormatDate(dto.CreatedFromUtc.Value), SqliteType.Text);
+            clauses.Add($"f.created_utc >= {parameter}");
+        }
+
+        if (dto.CreatedToUtc.HasValue)
+        {
+            var parameter = AddParameter(FormatDate(dto.CreatedToUtc.Value), SqliteType.Text);
+            clauses.Add($"f.created_utc <= {parameter}");
+        }
+
+        if (dto.ModifiedFromUtc.HasValue)
+        {
+            var parameter = AddParameter(FormatDate(dto.ModifiedFromUtc.Value), SqliteType.Text);
+            clauses.Add($"f.modified_utc >= {parameter}");
+        }
+
+        if (dto.ModifiedToUtc.HasValue)
+        {
+            var parameter = AddParameter(FormatDate(dto.ModifiedToUtc.Value), SqliteType.Text);
+            clauses.Add($"f.modified_utc <= {parameter}");
+        }
+
+        if (dto.Version.HasValue)
+        {
+            var parameter = AddParameter(dto.Version.Value, SqliteType.Integer);
+            clauses.Add($"f.version = {parameter}");
+        }
+
+        if (dto.HasValidity.HasValue)
+        {
+            if (dto.HasValidity.Value)
+            {
+                clauses.Add("EXISTS (SELECT 1 FROM files_validity v WHERE v.file_id = f.id)");
+            }
+            else
+            {
+                clauses.Add("NOT EXISTS (SELECT 1 FROM files_validity v WHERE v.file_id = f.id)");
+            }
+        }
+
+        if (dto.IsCurrentlyValid.HasValue)
+        {
+            var reference = AddParameter(FormatDate(todayReference), SqliteType.Text);
+            if (dto.IsCurrentlyValid.Value)
+            {
+                clauses.Add($"EXISTS (SELECT 1 FROM files_validity v WHERE v.file_id = f.id AND v.issued_at <= {reference} AND v.valid_until >= {reference})");
+            }
+            else
+            {
+                clauses.Add($"NOT EXISTS (SELECT 1 FROM files_validity v WHERE v.file_id = f.id AND v.issued_at <= {reference} AND v.valid_until >= {reference})");
+            }
+        }
+
+        if (dto.ExpiringInDays.HasValue)
+        {
+            var horizon = today.AddDays(dto.ExpiringInDays.Value);
+            var start = AddParameter(FormatDate(todayReference), SqliteType.Text);
+            var end = AddParameter(FormatDate(new DateTimeOffset(horizon.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc))), SqliteType.Text);
+            clauses.Add($"EXISTS (SELECT 1 FROM files_validity v WHERE v.file_id = f.id AND v.valid_until >= {start} AND v.valid_until <= {end})");
+        }
+
+        if (clauses.Count == plan.WhereClauses.Count && parameters.Count == plan.Parameters.Count)
+        {
+            return plan;
+        }
+
+        return plan with
+        {
+            WhereClauses = clauses,
+            Parameters = parameters,
+        };
     }
 
     private string NormalizeForTrigram(string text)

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -24,42 +23,31 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IFileQueryService _fileQueryService;
     private readonly IHotStateService _hotStateService;
     private readonly IHealthService _healthService;
-    private readonly IFilesSearchSuggestionsProvider _searchSuggestionsProvider;
-    private readonly IExceptionHandler _exceptionHandler;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
-    private CancellationTokenSource? _suggestionsDebounceSource;
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
     private bool _suppressTargetPageChange;
 
-    private const int SuggestionDebounceDelayMilliseconds = 150;
-
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
         IHealthService healthService,
-        IFilesSearchSuggestionsProvider searchSuggestionsProvider,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
-        IExceptionHandler exceptionHandler,
-        ILocalizationService localizationService)
-        : base(messenger, statusService, dispatcher, exceptionHandler, localizationService)
+        IExceptionHandler exceptionHandler)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
-        _searchSuggestionsProvider = searchSuggestionsProvider
-            ?? throw new ArgumentNullException(nameof(searchSuggestionsProvider));
-        _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
 
         Items = new ObservableCollection<FileSummaryDto>();
-        SearchSuggestions = new ObservableCollection<string>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
 
@@ -72,12 +60,9 @@ public partial class FilesPageViewModel : ViewModelBase
 
         PageSize = Math.Clamp(_hotStateService.PageSize <= 0 ? DefaultPageSize : _hotStateService.PageSize, 1, 200);
         SearchText = _hotStateService.LastQuery;
-        QueueSuggestionsRefresh(SearchText);
     }
 
     public ObservableCollection<FileSummaryDto> Items { get; }
-
-    public ObservableCollection<string> SearchSuggestions { get; }
 
     public IAsyncRelayCommand RefreshCommand { get; }
 
@@ -223,9 +208,24 @@ public partial class FilesPageViewModel : ViewModelBase
 
     partial void OnSearchTextChanged(string? value)
     {
-        _hotStateService.LastQuery = value;
-        QueueSuggestionsRefresh(value);
+        var sanitized = NormalizeSearchText(value);
+        if (!string.Equals(value, sanitized, StringComparison.Ordinal))
+        {
+            SearchText = sanitized;
+            return;
+        }
+
+        _hotStateService.LastQuery = sanitized;
         DebounceRefresh();
+    }
+
+    partial void OnExtensionFilterChanged(string? value)
+    {
+        var sanitized = NormalizeExtension(value);
+        if (!string.Equals(value, sanitized, StringComparison.Ordinal))
+        {
+            ExtensionFilter = sanitized;
+        }
     }
 
     partial void OnFuzzyChanged(bool value)
@@ -326,94 +326,6 @@ public partial class FilesPageViewModel : ViewModelBase
         _searchDebounceSource = null;
     }
 
-    private void QueueSuggestionsRefresh(string? query)
-    {
-        CancelSuggestionsDebounce();
-
-        var cts = new CancellationTokenSource();
-        _suggestionsDebounceSource = cts;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(SuggestionDebounceDelayMilliseconds, cts.Token).ConfigureAwait(false);
-                cts.Token.ThrowIfCancellationRequested();
-
-                var suggestions = await _searchSuggestionsProvider
-                    .GetSuggestionsAsync(cts.Token)
-                    .ConfigureAwait(false);
-
-                var filtered = FilterSuggestions(suggestions, query);
-
-                await Dispatcher.Enqueue(() =>
-                {
-                    SearchSuggestions.Clear();
-                    foreach (var suggestion in filtered)
-                    {
-                        SearchSuggestions.Add(suggestion);
-                    }
-                }).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Intentionally ignored.
-            }
-            catch (Exception ex)
-            {
-                var message = _exceptionHandler.Handle(ex);
-                if (!string.IsNullOrWhiteSpace(message))
-                {
-                    await Dispatcher.Enqueue(() => StatusService.Error(message)).ConfigureAwait(false);
-                }
-            }
-            finally
-            {
-                if (ReferenceEquals(_suggestionsDebounceSource, cts))
-                {
-                    _suggestionsDebounceSource = null;
-                }
-
-                cts.Dispose();
-            }
-        });
-    }
-
-    private void CancelSuggestionsDebounce()
-    {
-        if (_suggestionsDebounceSource is null)
-        {
-            return;
-        }
-
-        _suggestionsDebounceSource.Cancel();
-        _suggestionsDebounceSource.Dispose();
-        _suggestionsDebounceSource = null;
-    }
-
-    private static IEnumerable<string> FilterSuggestions(IReadOnlyList<string> suggestions, string? query)
-    {
-        if (suggestions.Count == 0)
-        {
-            return Array.Empty<string>();
-        }
-
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return suggestions;
-        }
-
-        var trimmed = query.Trim();
-
-        var comparison = StringComparison.CurrentCultureIgnoreCase;
-
-        return suggestions
-            .Where(suggestion => suggestion.Contains(trimmed, comparison))
-            .OrderBy(suggestion => suggestion.StartsWith(trimmed, comparison) ? 0 : 1)
-            .ThenBy(static suggestion => suggestion, StringComparer.CurrentCultureIgnoreCase)
-            .ToArray();
-    }
-
     private Task RefreshAsync() => RefreshAsync(true);
 
     private Task RefreshAsync(bool resetPage) => RefreshAsync(resetPage, null);
@@ -471,14 +383,15 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private FileGridQueryDto BuildQuery(int page)
     {
-        var extension = string.IsNullOrWhiteSpace(ExtensionFilter) ? null : ExtensionFilter.Trim();
+        var searchText = NormalizeSearchText(SearchText);
+        var extension = NormalizeExtension(ExtensionFilter);
         var mime = string.IsNullOrWhiteSpace(MimeFilter) ? null : MimeFilter.Trim();
         var author = string.IsNullOrWhiteSpace(AuthorFilter) ? null : AuthorFilter.Trim();
         var version = ParseVersion(VersionFilter);
 
         var query = new FileGridQueryDto
         {
-            Text = SearchText,
+            Text = searchText,
             Fuzzy = Fuzzy,
             Extension = extension,
             Mime = mime,
@@ -500,6 +413,35 @@ public partial class FilesPageViewModel : ViewModelBase
         };
 
         return query;
+    }
+
+    private static string? NormalizeSearchText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    private static string? NormalizeExtension(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        var normalized = trimmed.TrimStart('.');
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        return normalized.ToLowerInvariant();
     }
 
     private static int? ParseVersion(string? value)

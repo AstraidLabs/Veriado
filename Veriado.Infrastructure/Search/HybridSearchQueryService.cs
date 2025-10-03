@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Veriado.Appl.Search;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -45,6 +46,19 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         CancellationToken cancellationToken)
     {
         return _trigramService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
+    }
+
+    public Task<FileGridSearchResult> SearchGridAsync(
+        string? matchQuery,
+        FileGridQueryDto parameters,
+        IReadOnlyList<FileSortSpecDto> sort,
+        DateTimeOffset today,
+        int offset,
+        int limit,
+        int candidateLimit,
+        CancellationToken cancellationToken)
+    {
+        return _ftsService.SearchGridAsync(matchQuery, parameters, sort, today, offset, limit, candidateLimit, cancellationToken);
     }
 
     public Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)

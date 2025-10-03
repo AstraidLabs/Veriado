@@ -21,6 +21,7 @@ public sealed class WriteMappingPipeline
     private readonly IValidator<CreateFileCommand> _createValidator;
     private readonly IValidator<ReplaceFileContentCommand> _replaceValidator;
     private readonly IValidator<UpdateFileMetadataCommand> _updateValidator;
+    private readonly IValidator<ApplySystemMetadataCommand> _applyMetadataValidator;
     private readonly IValidator<RenameFileCommand> _renameValidator;
     private readonly IValidator<SetFileValidityCommand> _setValidityValidator;
     private readonly IValidator<ClearFileValidityCommand> _clearValidityValidator;
@@ -32,6 +33,7 @@ public sealed class WriteMappingPipeline
         IValidator<CreateFileCommand> createValidator,
         IValidator<ReplaceFileContentCommand> replaceValidator,
         IValidator<UpdateFileMetadataCommand> updateValidator,
+        IValidator<ApplySystemMetadataCommand> applyMetadataValidator,
         IValidator<RenameFileCommand> renameValidator,
         IValidator<SetFileValidityCommand> setValidityValidator,
         IValidator<ClearFileValidityCommand> clearValidityValidator)
@@ -39,6 +41,7 @@ public sealed class WriteMappingPipeline
         _createValidator = createValidator ?? throw new ArgumentNullException(nameof(createValidator));
         _replaceValidator = replaceValidator ?? throw new ArgumentNullException(nameof(replaceValidator));
         _updateValidator = updateValidator ?? throw new ArgumentNullException(nameof(updateValidator));
+        _applyMetadataValidator = applyMetadataValidator ?? throw new ArgumentNullException(nameof(applyMetadataValidator));
         _renameValidator = renameValidator ?? throw new ArgumentNullException(nameof(renameValidator));
         _setValidityValidator = setValidityValidator ?? throw new ArgumentNullException(nameof(setValidityValidator));
         _clearValidityValidator = clearValidityValidator ?? throw new ArgumentNullException(nameof(clearValidityValidator));
@@ -163,6 +166,44 @@ public sealed class WriteMappingPipeline
 
         var mapped = new UpdateFileMetadataMappedRequest(metadataCommand, systemCommand, readOnlyCommand);
         return ApiResponse<UpdateFileMetadataMappedRequest>.Success(mapped);
+    }
+
+    /// <summary>
+    /// Maps an apply-system-metadata request to a validated command.
+    /// </summary>
+    public async Task<ApiResponse<ApplySystemMetadataCommand>> MapApplySystemMetadataAsync(
+        Guid fileId,
+        FileSystemMetadataDto metadata,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+
+        var errors = new List<ApiError>();
+        if (fileId == Guid.Empty)
+        {
+            errors.Add(ApiError.ForValue(nameof(fileId), "File identifier must be a non-empty GUID."));
+        }
+
+        var metadataResult = Parsers.ParseFileSystemMetadata(metadata, nameof(metadata));
+        if (!metadataResult.IsSuccess)
+        {
+            CollectError(metadataResult, errors);
+        }
+
+        if (errors.Count > 0)
+        {
+            return ApiResponse<ApplySystemMetadataCommand>.Failure(errors);
+        }
+
+        var command = CreateSystemMetadataCommand(fileId, metadataResult.Value);
+        var validation = await _applyMetadataValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
+        if (!validation.IsValid)
+        {
+            AddValidationErrors(errors, validation);
+            return ApiResponse<ApplySystemMetadataCommand>.Failure(errors);
+        }
+
+        return ApiResponse<ApplySystemMetadataCommand>.Success(command);
     }
 
     /// <summary>

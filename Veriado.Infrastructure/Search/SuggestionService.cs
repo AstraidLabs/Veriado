@@ -46,7 +46,7 @@ internal sealed class SuggestionService : ISearchSuggestionService
             var builder = new StringBuilder();
             builder.Append("SELECT s.term, s.weight, s.lang, s.source_field FROM suggestions_fts f ");
             builder.Append("JOIN suggestions s ON s.id = f.rowid ");
-            builder.Append("WHERE f MATCH $match ");
+            builder.Append("WHERE suggestions_fts MATCH $match ");
             if (!string.IsNullOrWhiteSpace(lang))
             {
                 builder.Append("AND s.lang = $lang ");

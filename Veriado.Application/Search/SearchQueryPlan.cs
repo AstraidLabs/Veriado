@@ -131,6 +131,12 @@ public sealed record SearchScorePlan
     public double ScoreMultiplier { get; set; } = 1.0d;
 
     /// <summary>
+    /// Gets or sets the recency half-life (in days) used to penalise older documents.
+    /// When less than or equal to zero the recency adjustment is disabled.
+    /// </summary>
+    public double RecencyHalfLifeDays { get; set; } = 0d;
+
+    /// <summary>
     /// Gets or sets a value indicating whether larger rank values represent better matches.
     /// When <see langword="false"/>, lower scores are considered better (the default for BM25).
     /// </summary>

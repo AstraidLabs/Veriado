@@ -111,6 +111,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         _scorePlan.HigherScoreIsBetter = options.HigherScoreIsBetter;
         _scorePlan.UseTfIdfAlternative = options.UseTfIdfAlternative;
         _scorePlan.TfIdfDampingFactor = options.TfIdfDampingFactor;
+        _scorePlan.RecencyHalfLifeDays = options.RecencyHalfLifeDays;
     }
 
     /// <inheritdoc />
@@ -408,6 +409,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         return token.TokenType switch
         {
             QueryTokenType.Term => FormatTerm(fieldPrefix, token.Value),
+            QueryTokenType.Fuzzy => FormatTerm(fieldPrefix, token.Value),
             QueryTokenType.Phrase => fieldPrefix + '"' + EscapeQuotes(token.Value) + '"',
             QueryTokenType.Proximity => fieldPrefix + token.Value,
             QueryTokenType.Prefix => fieldPrefix + token.Value,
@@ -516,13 +518,15 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         }
 
         var expanded = _synonymProvider.Expand(_language, term);
-        if (expanded.Count == 0)
+        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ordered = new List<string>(expanded.Count + 1);
+
+        var original = NormalizeText(term);
+        if (!string.IsNullOrWhiteSpace(original) && unique.Add(original))
         {
-            return Array.Empty<string>();
+            ordered.Add(original);
         }
 
-        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ordered = new List<string>(expanded.Count);
         foreach (var candidate in expanded)
         {
             var normalised = NormalizeText(candidate);
@@ -534,15 +538,6 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             if (unique.Add(normalised))
             {
                 ordered.Add(normalised);
-            }
-        }
-
-        if (ordered.Count == 0)
-        {
-            var fallback = NormalizeText(term);
-            if (!string.IsNullOrWhiteSpace(fallback))
-            {
-                ordered.Add(fallback);
             }
         }
 
