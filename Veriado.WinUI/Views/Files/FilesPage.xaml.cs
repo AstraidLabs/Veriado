@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
@@ -41,7 +43,10 @@ public sealed partial class FilesPage : CultureAwarePage
         Loaded -= OnLoaded;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.StartHealthMonitoring();
-        await ExecuteInitialRefreshAsync().ConfigureAwait(true);
+
+        await Task.WhenAll(
+            ExecuteInitialRefreshAsync(),
+            ViewModel.LoadSearchSuggestionsAsync(CancellationToken.None)).ConfigureAwait(true);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

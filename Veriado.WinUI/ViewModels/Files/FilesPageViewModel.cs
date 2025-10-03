@@ -23,6 +23,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IFileQueryService _fileQueryService;
     private readonly IHotStateService _hotStateService;
     private readonly IHealthService _healthService;
+    private readonly IFilesSearchSuggestionsProvider _searchSuggestionsProvider;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
@@ -38,6 +39,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
         IHealthService healthService,
+        IFilesSearchSuggestionsProvider searchSuggestionsProvider,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -48,8 +50,10 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
+        _searchSuggestionsProvider = searchSuggestionsProvider ?? throw new ArgumentNullException(nameof(searchSuggestionsProvider));
 
         Items = new ObservableCollection<FileSummaryDto>();
+        SearchSuggestions = new ObservableCollection<string>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
 
@@ -65,6 +69,8 @@ public partial class FilesPageViewModel : ViewModelBase
     }
 
     public ObservableCollection<FileSummaryDto> Items { get; }
+
+    public ObservableCollection<string> SearchSuggestions { get; }
 
     public IAsyncRelayCommand RefreshCommand { get; }
 
@@ -187,6 +193,31 @@ public partial class FilesPageViewModel : ViewModelBase
             var cts = new CancellationTokenSource();
             _healthMonitorSource = cts;
             _ = MonitorHealthStatusAsync(cts.Token);
+        }
+    }
+
+    public async Task LoadSearchSuggestionsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var suggestions = await _searchSuggestionsProvider.GetSuggestionsAsync(cancellationToken).ConfigureAwait(false);
+
+            await Dispatcher.Enqueue(() =>
+            {
+                SearchSuggestions.Clear();
+                foreach (var suggestion in suggestions)
+                {
+                    SearchSuggestions.Add(suggestion);
+                }
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            await Dispatcher.Enqueue(() => SearchSuggestions.Clear()).ConfigureAwait(false);
         }
     }
 
