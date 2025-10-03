@@ -221,14 +221,14 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (!string.IsNullOrWhiteSpace(matchQuery))
         {
             var match = matchQuery!;
-            var offset = (pageNumber - 1) * pageSize;
+            var searchOffset = (pageNumber - 1) * pageSize;
             var candidateLimit = Math.Min(pageSize * 2, _options.MaxCandidateResults);
             FileGridSearchResult gridResult;
 
             while (true)
             {
                 gridResult = await _searchQueryService
-                    .SearchGridAsync(match, dto, sortSpecifications, todayReference, offset, pageSize, candidateLimit, cancellationToken)
+                    .SearchGridAsync(match, dto, sortSpecifications, todayReference, searchOffset, pageSize, candidateLimit, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (gridResult.Items.Count >= pageSize)
@@ -241,7 +241,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                     break;
                 }
 
-                if (gridResult.TotalCount <= offset + gridResult.Items.Count)
+                if (gridResult.TotalCount <= searchOffset + gridResult.Items.Count)
                 {
                     break;
                 }
