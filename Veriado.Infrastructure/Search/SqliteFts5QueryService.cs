@@ -14,6 +14,8 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5QueryService
 {
     private const char Ellipsis = '…';
+    private const string SearchTableName = "file_search";
+    private const string SearchTableAlias = "s";
     private static readonly Encoding Utf8 = Encoding.UTF8;
 
     private static readonly int[] SnippetPriority =
@@ -152,10 +154,10 @@ internal sealed class SqliteFts5QueryService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
-        builder.Append("SELECT COUNT(*) FROM file_search s ");
+        builder.Append("SELECT COUNT(*) FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
         builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
         builder.Append("JOIN files f ON f.id = m.file_id ");
-        builder.Append("WHERE file_search MATCH $query ");
+        builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append(';');
         command.CommandText = builder.ToString();
@@ -314,7 +316,7 @@ internal sealed class SqliteFts5QueryService
     {
         var bm25 = string.Format(
             CultureInfo.InvariantCulture,
-            "bm25(s, {0}, {1}, {2}, {3}, {4})",
+            "bm25(" + SearchTableName + ", {0}, {1}, {2}, {3}, {4})",
             scorePlan.TitleWeight,
             scorePlan.MimeWeight,
             scorePlan.AuthorWeight,
@@ -361,10 +363,10 @@ internal sealed class SqliteFts5QueryService
         }
 
         builder.Append(", f.modified_utc ");
-        builder.Append("FROM file_search s ");
+        builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
         builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
         builder.Append("JOIN files f ON f.id = m.file_id ");
-        builder.Append("WHERE file_search MATCH $query ");
+        builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
@@ -393,12 +395,12 @@ internal sealed class SqliteFts5QueryService
             "       COALESCE(f.author, s.author, '') AS author, " +
             "       COALESCE(s.metadata_text, '') AS metadata_text, " +
             "       COALESCE(s.metadata, '') AS metadata_json, " +
-            "       snippet(s, 0, '', '', '…', 32) AS snippet_title, " +
-            "       snippet(s, 1, '', '', '…', 24) AS snippet_mime, " +
-            "       snippet(s, 2, '', '', '…', 24) AS snippet_author, " +
-            "       snippet(s, 3, '', '', '…', 32) AS snippet_metadata_text, " +
-            "       snippet(s, 4, '', '', '…', 32) AS snippet_metadata_json, " +
-            "       offsets(s) AS offsets, ");
+            "       snippet(" + SearchTableName + ", 0, '', '', '…', 32) AS snippet_title, " +
+            "       snippet(" + SearchTableName + ", 1, '', '', '…', 24) AS snippet_mime, " +
+            "       snippet(" + SearchTableName + ", 2, '', '', '…', 24) AS snippet_author, " +
+            "       snippet(" + SearchTableName + ", 3, '', '', '…', 32) AS snippet_metadata_text, " +
+            "       snippet(" + SearchTableName + ", 4, '', '', '…', 32) AS snippet_metadata_json, " +
+            "       offsets(" + SearchTableName + ") AS offsets, ");
         builder.Append(bm25Expression).Append(" AS bm25_score, ");
         builder.Append(rankExpression).Append(" AS score");
 
@@ -409,10 +411,10 @@ internal sealed class SqliteFts5QueryService
         }
 
         builder.Append(", f.modified_utc ");
-        builder.Append("FROM file_search s ");
+        builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
         builder.Append("JOIN file_search_map m ON s.rowid = m.rowid ");
         builder.Append("JOIN files f ON f.id = m.file_id ");
-        builder.Append("WHERE file_search MATCH $query ");
+        builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
