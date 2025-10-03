@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Veriado.Appl.DependencyInjection;
@@ -130,8 +131,12 @@ public static class AppHost
 
         public NamedGlobalMutex(string name)
         {
-            var mutexName = OperatingSystem.IsWindows() ? @$"Global\{name}" : name;
-            _mutex = new Mutex(false, mutexName);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("Mutex name must be provided.", nameof(name));
+            }
+
+            _mutex = TryCreateMutex(name) ?? new Mutex(false, name);
         }
 
         public void Acquire(TimeSpan timeout)
@@ -159,6 +164,32 @@ public static class AppHost
             }
 
             _mutex.Dispose();
+        }
+
+        private static Mutex? TryCreateMutex(string name)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return null;
+            }
+
+            foreach (var scope in new[] { "Global", "Local" })
+            {
+                try
+                {
+                    return new Mutex(false, @$"{scope}\{name}");
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Fall back to the next scope if the current scope is not accessible.
+                }
+                catch (WaitHandleCannotBeOpenedException)
+                {
+                    // The target scope is unavailable – try the next one.
+                }
+            }
+
+            return null;
         }
     }
 }
