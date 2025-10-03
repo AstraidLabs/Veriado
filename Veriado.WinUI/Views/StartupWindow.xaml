@@ -77,32 +77,32 @@
                                 </Grid.ColumnDefinitions>
                                 <FontIcon
                                     Grid.Column="0"
-                                    Glyph="{x:Bind Glyph}"
+                                    Glyph="{Binding Glyph}"
                                     FontSize="16"
                                     VerticalAlignment="Top" />
                                 <StackPanel Grid.Column="1" Spacing="2">
                                     <TextBlock
-                                        Text="{x:Bind Title}"
+                                        Text="{Binding Title}"
                                         Foreground="{ThemeResource AppTextPrimaryBrush}"
                                         Style="{ThemeResource BodyStrongTextBlockStyle}" />
                                     <TextBlock
-                                        Text="{x:Bind Message}"
+                                        Text="{Binding Message}"
                                         TextWrapping="WrapWholeWords"
                                         Foreground="{ThemeResource AppTextSecondaryBrush}" />
                                     <TextBlock
-                                        Text="{x:Bind ErrorMessage}"
+                                        Text="{Binding ErrorMessage}"
                                         TextWrapping="WrapWholeWords"
                                         Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                        Visibility="{x:Bind HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" HorizontalAlignment="Right" Spacing="4">
                                     <TextBlock
-                                        Text="{x:Bind StatusText}"
+                                        Text="{Binding StatusText}"
                                         Foreground="{ThemeResource AppTextSecondaryBrush}" />
                                     <TextBlock
-                                        Text="{x:Bind DurationText}"
+                                        Text="{Binding DurationText}"
                                         Foreground="{ThemeResource AppTextSecondaryBrush}"
-                                        Visibility="{x:Bind HasDuration, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        Visibility="{Binding HasDuration, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>
