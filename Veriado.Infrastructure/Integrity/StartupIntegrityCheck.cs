@@ -31,13 +31,22 @@ internal static class StartupIntegrityCheck
 
         var integrity = provider.GetRequiredService<IFulltextIntegrityService>();
         var report = await integrity.VerifyAsync(cancellationToken).ConfigureAwait(false);
-        if (report.MissingCount == 0 && report.OrphanCount == 0)
+        if (!report.RequiresFullRebuild && report.MissingCount == 0 && report.OrphanCount == 0)
         {
             logger.LogInformation("Full-text index verified: no inconsistencies detected");
             return;
         }
 
-        logger.LogWarning("Full-text index inconsistencies detected: {Missing} missing, {Orphans} orphans", report.MissingCount, report.OrphanCount);
+        if (report.RequiresFullRebuild)
+        {
+            logger.LogWarning("Full-text index requires a full rebuild because metadata tables are missing.");
+        }
+
+        if (report.MissingCount > 0 || report.OrphanCount > 0)
+        {
+            logger.LogWarning("Full-text index inconsistencies detected: {Missing} missing, {Orphans} orphans", report.MissingCount, report.OrphanCount);
+        }
+
         if (report.MissingFileIds.Count > 0)
         {
             logger.LogWarning("Missing search index entries for files: {MissingIds}", string.Join(", ", report.MissingFileIds));
@@ -50,7 +59,7 @@ internal static class StartupIntegrityCheck
 
         if (options.RepairIntegrityAutomatically)
         {
-            var repaired = await integrity.RepairAsync(reindexAll: false, cancellationToken)
+            var repaired = await integrity.RepairAsync(report.RequiresFullRebuild, cancellationToken)
                 .ConfigureAwait(false);
             logger.LogInformation("Full-text index repair completed ({Repaired} entries)", repaired);
         }
