@@ -41,6 +41,9 @@ public sealed class FileGridQueryValidator : AbstractValidator<FileGridQueryDto>
             .Must(extension => extension is null || extension.Length <= 16)
             .WithMessage("Extension must be at most 16 characters long.");
 
+        RuleFor(dto => dto.ExtensionMatchMode)
+            .IsInEnum();
+
         RuleFor(dto => dto.Mime)
             .Must(mime => mime is null || mime.Contains('/'))
             .WithMessage("Mime must contain a '/' separator.");

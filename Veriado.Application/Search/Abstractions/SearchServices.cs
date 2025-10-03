@@ -369,4 +369,27 @@ public interface ISearchTelemetry
     /// </summary>
     /// <param name="driftCount">The number of entries detected as missing or drifted.</param>
     void RecordIndexDrift(int driftCount);
+
+    /// <summary>
+    /// Records metrics describing paging behaviour and candidate limits of an FTS grid query.
+    /// </summary>
+    /// <param name="requestedOffset">The requested offset.</param>
+    /// <param name="pageSize">The requested page size.</param>
+    /// <param name="candidateLimit">The effective candidate limit.</param>
+    /// <param name="maxCandidateResults">The configured maximum candidate results.</param>
+    /// <param name="returnedCount">The number of items returned on the current page.</param>
+    /// <param name="reportedTotalCount">The total count reported to callers (capped).</param>
+    /// <param name="actualTotalCount">The actual total count measured.</param>
+    /// <param name="hasMore">Indicates whether more pages are available.</param>
+    /// <param name="isTruncated">Indicates whether the result set was truncated by policy.</param>
+    void RecordFtsPagingMetrics(
+        int requestedOffset,
+        int pageSize,
+        int candidateLimit,
+        int maxCandidateResults,
+        int returnedCount,
+        int reportedTotalCount,
+        int actualTotalCount,
+        bool hasMore,
+        bool isTruncated);
 }
