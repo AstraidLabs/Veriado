@@ -9,6 +9,7 @@ public sealed class InfrastructureOptions
     private const int DefaultBatchWindowMs = 250;
     private const int DefaultOutboxBatchSize = 50;
     private const int DefaultRetryBudget = 5;
+    private const int DefaultMaxCandidateResults = 2_000;
 
     /// <summary>
     /// Gets or sets the absolute path to the SQLite database file.
@@ -26,6 +27,15 @@ public sealed class InfrastructureOptions
     /// </summary>
     public FtsIndexingMode FtsIndexingMode { get; set; }
         = FtsIndexingMode.SameTransaction;
+
+    /// <summary>
+    /// Gets or sets the maximum number of FTS candidates retrieved before applying filters.
+    /// </summary>
+    public int MaxCandidateResults
+    {
+        get => _maxCandidateResults;
+        set => _maxCandidateResults = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
 
     /// <summary>
     /// Gets a value indicating whether the runtime environment provides the required SQLite FTS5 features.
@@ -98,6 +108,7 @@ public sealed class InfrastructureOptions
     private int _batchWindowMs = DefaultBatchWindowMs;
     private int _outboxBatchSize = DefaultOutboxBatchSize;
     private int _retryBudget = DefaultRetryBudget;
+    private int _maxCandidateResults = DefaultMaxCandidateResults;
 
     internal string? ConnectionString { get; set; }
         = null;
