@@ -98,7 +98,7 @@ internal sealed class TrigramQueryService
             "JOIN files f ON f.id = m.file_id " +
             "WHERE fts MATCH $query ");
         AppendWhereClauses(builder, plan);
-        builder.Append("ORDER BY bm25(fts) ASC, m.rowid ASC LIMIT $limit;");
+        builder.Append("ORDER BY bm25(file_trgm) ASC, m.rowid ASC LIMIT $limit;");
         command.CommandText = builder.ToString();
         command.Parameters.Add("$query", SqliteType.Text).Value = trigramQuery;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = fetch;
@@ -215,7 +215,7 @@ internal sealed class TrigramQueryService
             "JOIN files f ON f.id = tm.file_id " +
             "WHERE fts MATCH $query ");
         AppendWhereClauses(builder, plan);
-        builder.Append("ORDER BY bm25(fts) ASC, tm.rowid ASC LIMIT $limit;");
+        builder.Append("ORDER BY bm25(file_trgm) ASC, tm.rowid ASC LIMIT $limit;");
         command.CommandText = builder.ToString();
         command.Parameters.Add("$query", SqliteType.Text).Value = matchQuery;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = take;
