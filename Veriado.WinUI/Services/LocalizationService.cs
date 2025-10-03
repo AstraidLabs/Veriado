@@ -107,7 +107,7 @@ public sealed class LocalizationService : ILocalizationService
 
         UpdateQualifierLanguage(resolved.Name);
         ApplyCultureToThread(resolved);
-        ResetViewContexts();
+        ResetResourceContexts();
 
         if (persist)
         {
@@ -179,26 +179,15 @@ public sealed class LocalizationService : ILocalizationService
         CultureInfo.DefaultThreadCurrentUICulture = culture;
     }
 
-    private static void ResetViewContexts()
+    private void ResetResourceContexts()
     {
         try
         {
-            var viewContext = ResourceContext.GetForCurrentView();
-            viewContext.Reset();
+            _resourceContext.Reset();
         }
         catch
         {
-            // Ignore failures – view contexts might be unavailable during startup or in tests.
-        }
-
-        try
-        {
-            var appContext = ResourceContext.GetForViewIndependentUse();
-            appContext.Reset();
-        }
-        catch
-        {
-            // Ignore failures when the platform does not support independent contexts yet.
+            // Ignore failures when the resource context is not yet available (e.g. during tests).
         }
     }
 }

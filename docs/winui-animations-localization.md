@@ -37,7 +37,7 @@
 ### Lokalizace
 1. **Deklarativní lokalizace importu** – převést `ImportPage` na `x:Uid` + `resw` klíče (včetně binding textů a `Content` tlačítek) a přidat nové řetězce do základního `Resources.resw`. Následně generovat prázdné položky pro všechny jazykové soubory, aby překladatelé snadno identifikovali nové texty.【F:Veriado.WinUI/Views/Import/ImportPage.xaml†L64-L162】【F:Veriado.WinUI/Strings/Resources.resw†L15-L66】
 2. **Standardizace workflow** – vytvořit guideline: (a) pojmenovat `x:Uid` podle `{Page}_{Control}`; (b) používat `LocalizedStrings.Get` pouze ve ViewModel/servis vrstvě; (c) přidat kontrolu v CI, která porovná klíče mezi jednotlivými `.resw` soubory.
-3. **Reakce na změnu kultury** – poskytovat helper (např. `CultureAwarePage`) naslouchající `ILocalizationService.CultureChanged`, který zavolá `ResourceContext.GetForCurrentView().Reset()`, případně znovu naváže `x:Bind`. Tím se zajistí, že již otevřená okna přeladí obsah bez nutnosti restartu.【F:Veriado.WinUI/Services/LocalizationService.cs†L32-L88】
+3. **Reakce na změnu kultury** – poskytovat helper (např. `CultureAwarePage`) naslouchající `ILocalizationService.CultureChanged`, který po změně kultury vyresetuje vlastní `ResourceContext` a případně znovu naváže `x:Bind`. Tím se zajistí, že již otevřená okna přeladí obsah bez nutnosti restartu i v prostředí WinUI.【F:Veriado.WinUI/Services/LocalizationService.cs†L32-L188】
 4. **Formátovací testy** – pro řetězce s parametry (např. `Settings.PageSizeUpdated`) přidejte unit testy, které projdou všemi kulturami a ověří, že `string.Format` nevyhazuje výjimky. To minimalizuje riziko run-time chyb v lokalizovaném prostředí.【F:Veriado.WinUI/Strings/Resources.resw†L21-L29】
 
 ## Doporučený postup implementace
