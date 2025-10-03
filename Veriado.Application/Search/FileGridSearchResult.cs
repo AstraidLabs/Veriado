@@ -9,10 +9,11 @@ namespace Veriado.Appl.Search;
 public sealed record FileGridSearchResult(
     IReadOnlyList<FileSummaryDto> Items,
     int TotalCount,
-    bool HasMore)
+    bool HasMore,
+    bool IsTruncated)
 {
     /// <summary>
     /// Gets an empty result instance.
     /// </summary>
-    public static FileGridSearchResult Empty { get; } = new(Array.Empty<FileSummaryDto>(), 0, false);
+    public static FileGridSearchResult Empty { get; } = new(Array.Empty<FileSummaryDto>(), 0, false, false);
 }

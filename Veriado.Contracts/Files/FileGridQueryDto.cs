@@ -48,6 +48,12 @@ public sealed record FileGridQueryDto
         = null;
 
     /// <summary>
+    /// Gets or sets the matching strategy applied to the extension filter.
+    /// </summary>
+    public ExtensionMatchMode ExtensionMatchMode { get; init; }
+        = ExtensionMatchMode.Equals;
+
+    /// <summary>
     /// Gets or sets a filter applied to the MIME type.
     /// </summary>
     public string? Mime { get; init; }

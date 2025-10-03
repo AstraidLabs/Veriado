@@ -90,12 +90,17 @@ internal sealed class SqliteFts5QueryService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
+        var effectiveLimit = Math.Max(limit, 0);
+        var effectiveOffset = Math.Max(offset, 0);
+        var effectiveCandidateLimit = Math.Max(Math.Max(candidateLimit, effectiveLimit), effectiveOffset + effectiveLimit);
+        effectiveCandidateLimit = Math.Min(effectiveCandidateLimit, _options.MaxCandidateResults);
+
         var sql = BuildGridSql(sort, parameters, today, out var parameterDefinitions);
         command.CommandText = sql;
         command.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
-        command.Parameters.Add("$candidateLimit", SqliteType.Integer).Value = Math.Max(candidateLimit, limit);
-        command.Parameters.Add("$limit", SqliteType.Integer).Value = limit;
-        command.Parameters.Add("$offset", SqliteType.Integer).Value = Math.Max(offset, 0);
+        command.Parameters.Add("$candidateLimit", SqliteType.Integer).Value = effectiveCandidateLimit;
+        command.Parameters.Add("$limit", SqliteType.Integer).Value = effectiveLimit;
+        command.Parameters.Add("$offset", SqliteType.Integer).Value = effectiveOffset;
 
         foreach (var definition in parameterDefinitions)
         {
@@ -105,7 +110,7 @@ internal sealed class SqliteFts5QueryService
 
         var stopwatch = Stopwatch.StartNew();
         var items = new List<FileSummaryDto>();
-        var totalCount = 0;
+        var windowCount = 0;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var totalOrdinal = reader.FieldCount > 0 ? reader.FieldCount - 1 : -1;
@@ -113,23 +118,49 @@ internal sealed class SqliteFts5QueryService
         {
             if (totalOrdinal >= 0 && !reader.IsDBNull(totalOrdinal))
             {
-                totalCount = reader.GetInt32(totalOrdinal);
+                windowCount = reader.GetInt32(totalOrdinal);
             }
 
             var dto = MapSummary(reader, totalOrdinal);
             items.Add(dto);
         }
 
+        var actualCount = await ExecuteGridCountAsync(
+                connection,
+                matchQuery!,
+                parameters,
+                today,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (actualCount == 0)
+        {
+            actualCount = windowCount;
+        }
+
         stopwatch.Stop();
         _telemetry.RecordFtsQuery(stopwatch.Elapsed);
 
-        if (items.Count == 0)
+        var cappedByPolicy = Math.Min(actualCount, _options.MaxCandidateResults);
+        if (items.Count == 0 && cappedByPolicy == 0)
         {
-            return FileGridSearchResult.Empty;
+            cappedByPolicy = windowCount;
         }
 
-        var hasMore = offset + limit < totalCount;
-        return new FileGridSearchResult(items, totalCount, hasMore);
+        var hasMore = effectiveOffset + items.Count < cappedByPolicy;
+        var isTruncated = actualCount > _options.MaxCandidateResults;
+
+        _telemetry.RecordFtsPagingMetrics(
+            effectiveOffset,
+            effectiveLimit,
+            effectiveCandidateLimit,
+            _options.MaxCandidateResults,
+            items.Count,
+            cappedByPolicy,
+            actualCount,
+            hasMore,
+            isTruncated);
+
+        return new FileGridSearchResult(items, cappedByPolicy, hasMore, isTruncated);
     }
 
     private static string BuildGridSql(
@@ -210,6 +241,33 @@ internal sealed class SqliteFts5QueryService
         return sql.ToString();
     }
 
+    private static string BuildGridCountSql(
+        FileGridQueryDto parameters,
+        DateTimeOffset today,
+        out IReadOnlyList<SqliteParameterDefinition> parameterDefinitions)
+    {
+        var sql = new StringBuilder();
+        var defs = new List<SqliteParameterDefinition>();
+
+        sql.AppendLine("WITH fts_matches AS (");
+        sql.AppendLine("    SELECT");
+        sql.AppendLine("        s.rowid AS id");
+        sql.AppendLine("    FROM file_search AS s");
+        sql.AppendLine("    WHERE s MATCH $match");
+        sql.AppendLine("), joined AS (");
+        sql.AppendLine("    SELECT");
+        sql.AppendLine("        m.id");
+        sql.AppendLine("    FROM fts_matches AS m");
+        sql.AppendLine("    JOIN v_file_search_base AS b ON b.id = m.id");
+        sql.AppendLine("    WHERE 1 = 1");
+        AppendGridFilters(sql, defs, parameters, today);
+        sql.AppendLine(")");
+        sql.AppendLine("SELECT COUNT(*) FROM joined;");
+
+        parameterDefinitions = defs;
+        return sql.ToString();
+    }
+
     private static string BuildOrderClause(IReadOnlyList<FileSortSpecDto> sort)
     {
         if (sort.Count == 0)
@@ -285,8 +343,21 @@ internal sealed class SqliteFts5QueryService
 
         if (!string.IsNullOrWhiteSpace(dto.Extension))
         {
-            var param = AddParameter(parameters, "extension", dto.Extension.Trim(), SqliteType.Text);
-            sql.Append("        AND lower(b.extension) = lower(").Append(param).AppendLine(")");
+            var trimmed = dto.Extension.Trim();
+            var sanitized = trimmed.TrimStart('.');
+            if (!string.IsNullOrWhiteSpace(sanitized))
+            {
+                var normalized = sanitized.ToLowerInvariant();
+                var param = AddParameter(parameters, "extension", normalized, SqliteType.Text);
+                if (dto.ExtensionMatchMode == ExtensionMatchMode.Contains)
+                {
+                    sql.Append("        AND instr(lower(b.extension), ").Append(param).AppendLine(") > 0");
+                }
+                else
+                {
+                    sql.Append("        AND lower(b.extension) = ").Append(param).AppendLine();
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Mime))
@@ -405,6 +476,33 @@ internal sealed class SqliteFts5QueryService
         var parameterName = $"$fg_{name}_{parameters.Count}";
         parameters.Add(new SqliteParameterDefinition(parameterName, value, type));
         return parameterName;
+    }
+
+    private static async Task<int> ExecuteGridCountAsync(
+        SqliteConnection connection,
+        string matchQuery,
+        FileGridQueryDto parameters,
+        DateTimeOffset today,
+        CancellationToken cancellationToken)
+    {
+        await using var countCommand = connection.CreateCommand();
+        var countSql = BuildGridCountSql(parameters, today, out var countParameters);
+        countCommand.CommandText = countSql;
+        countCommand.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
+
+        foreach (var definition in countParameters)
+        {
+            var parameter = countCommand.Parameters.Add(definition.Name, definition.Type ?? SqliteType.Text);
+            parameter.Value = definition.Value ?? DBNull.Value;
+        }
+
+        var scalar = await countCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (scalar is null || scalar is DBNull)
+        {
+            return 0;
+        }
+
+        return Convert.ToInt32(scalar, CultureInfo.InvariantCulture);
     }
 
     private static FileSummaryDto MapSummary(SqliteDataReader reader, int totalOrdinal)

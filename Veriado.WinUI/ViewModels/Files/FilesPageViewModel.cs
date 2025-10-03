@@ -28,6 +28,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
+    private CancellationTokenSource? _activeSearchSource;
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
@@ -142,6 +143,12 @@ public partial class FilesPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private double targetPage;
+
+    [ObservableProperty]
+    private bool hasMorePages;
+
+    [ObservableProperty]
+    private bool isTruncated;
 
     [ObservableProperty]
     private bool isIndexingPending;
@@ -267,7 +274,7 @@ public partial class FilesPageViewModel : ViewModelBase
             return;
         }
 
-        _ = RefreshAsync(false, clamped);
+        _ = RefreshAsync(false, clamped, CancellationToken.None);
     }
 
     partial void OnPageSizeChanged(int value)
@@ -296,7 +303,7 @@ public partial class FilesPageViewModel : ViewModelBase
             {
                 await Task.Delay(DebounceDelayMilliseconds, cts.Token).ConfigureAwait(false);
                 cts.Token.ThrowIfCancellationRequested();
-                await RefreshAsync(true).ConfigureAwait(false);
+                await RefreshAsync(true, CancellationToken.None).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -326,11 +333,11 @@ public partial class FilesPageViewModel : ViewModelBase
         _searchDebounceSource = null;
     }
 
-    private Task RefreshAsync() => RefreshAsync(true);
+    private Task RefreshAsync(CancellationToken cancellationToken) => RefreshAsync(true, null, cancellationToken);
 
-    private Task RefreshAsync(bool resetPage) => RefreshAsync(resetPage, null);
+    private Task RefreshAsync(bool resetPage, CancellationToken cancellationToken) => RefreshAsync(resetPage, null, cancellationToken);
 
-    private async Task RefreshAsync(bool resetPage, int? explicitPage)
+    private async Task RefreshAsync(bool resetPage, int? explicitPage, CancellationToken cancellationToken)
     {
         CancelPendingDebounce();
 
@@ -340,22 +347,64 @@ public partial class FilesPageViewModel : ViewModelBase
             page = 1;
         }
 
-        await SafeExecuteAsync(async cancellationToken =>
+        await ExecuteSearchAsync(page, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ExecuteSearchAsync(int page, CancellationToken commandToken)
+    {
+        commandToken.ThrowIfCancellationRequested();
+
+        TryCancelRunning();
+
+        if (_activeSearchSource is not null)
         {
-            var query = BuildQuery(page);
-            var result = await _fileQueryService.GetGridAsync(query, cancellationToken).ConfigureAwait(false);
+            _activeSearchSource.Cancel();
+            _activeSearchSource.Dispose();
+            _activeSearchSource = null;
+        }
 
-            await Dispatcher.Enqueue(() =>
+        await WaitForSearchCompletionAsync(commandToken).ConfigureAwait(false);
+
+        var searchScope = CancellationTokenSource.CreateLinkedTokenSource(commandToken);
+        _activeSearchSource = searchScope;
+
+        try
+        {
+            await SafeExecuteAsync(async innerToken =>
             {
-                Items.Clear();
-                foreach (var item in result.Items)
-                {
-                    Items.Add(item);
-                }
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(innerToken, searchScope.Token);
+                var query = BuildQuery(page);
+                var result = await _fileQueryService.GetGridAsync(query, linked.Token).ConfigureAwait(false);
 
-                UpdatePaginationState(result.Page, result.TotalPages, result.TotalCount, result.Items.Count);
+                await Dispatcher.Enqueue(() =>
+                {
+                    Items.Clear();
+                    foreach (var item in result.Items)
+                    {
+                        Items.Add(item);
+                    }
+
+                    UpdatePaginationState(result.Page, result.TotalPages, result.TotalCount, result.Items.Count, result.HasMore, result.IsTruncated);
+                }).ConfigureAwait(false);
             }).ConfigureAwait(false);
-        });
+        }
+        finally
+        {
+            searchScope.Dispose();
+            if (ReferenceEquals(_activeSearchSource, searchScope))
+            {
+                _activeSearchSource = null;
+            }
+        }
+    }
+
+    private async Task WaitForSearchCompletionAsync(CancellationToken cancellationToken)
+    {
+        while (IsBusy)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task ClearFiltersAsync()
@@ -376,9 +425,9 @@ public partial class FilesPageViewModel : ViewModelBase
         ModifiedFromFilter = null;
         ModifiedToFilter = null;
 
-        UpdatePaginationState(0, 0, 0, 0);
+        UpdatePaginationState(0, 0, 0, 0, false, false);
 
-        await RefreshAsync(true).ConfigureAwait(false);
+        await RefreshAsync(true, CancellationToken.None).ConfigureAwait(false);
     }
 
     private FileGridQueryDto BuildQuery(int page)
@@ -521,20 +570,20 @@ public partial class FilesPageViewModel : ViewModelBase
     private async Task LoadNextPageAsync()
     {
         var target = CurrentPage + 1;
-        await RefreshAsync(false, target).ConfigureAwait(false);
+        await RefreshAsync(false, target, CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task LoadPreviousPageAsync()
     {
         var target = CurrentPage - 1;
-        await RefreshAsync(false, target).ConfigureAwait(false);
+        await RefreshAsync(false, target, CancellationToken.None).ConfigureAwait(false);
     }
 
-    private bool CanLoadNextPage() => TotalPages > 0 && CurrentPage < TotalPages;
+    private bool CanLoadNextPage() => HasMorePages;
 
     private bool CanLoadPreviousPage() => TotalPages > 0 && CurrentPage > 1;
 
-    private void UpdatePaginationState(int currentPage, int totalPages, int totalCount, int itemsOnPage)
+    private void UpdatePaginationState(int currentPage, int totalPages, int totalCount, int itemsOnPage, bool hasMore, bool isTruncated)
     {
         if (totalPages <= 0)
         {
@@ -550,6 +599,8 @@ public partial class FilesPageViewModel : ViewModelBase
         CurrentPage = currentPage;
         TotalPages = totalPages;
         TotalCount = totalCount;
+        HasMorePages = hasMore;
+        IsTruncated = isTruncated;
 
         try
         {

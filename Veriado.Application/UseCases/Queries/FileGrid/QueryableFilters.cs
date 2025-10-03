@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
@@ -29,8 +30,24 @@ internal static class QueryableFilters
 
         if (!string.IsNullOrWhiteSpace(dto.Extension))
         {
-            var pattern = $"%{EscapeLike(dto.Extension)}%";
-            query = query.Where(file => EF.Functions.Like(file.Extension.Value, pattern, EscapeChar));
+            var trimmed = dto.Extension.Trim();
+            var sanitized = trimmed.TrimStart('.');
+            if (!string.IsNullOrWhiteSpace(sanitized))
+            {
+                var normalized = sanitized.ToLowerInvariant();
+                if (dto.ExtensionMatchMode == ExtensionMatchMode.Contains)
+                {
+                    var pattern = $"%{EscapeLike(normalized)}%";
+                    query = query.Where(file => EF.Functions.Like(
+                        EF.Functions.Collate(file.Extension.Value, "NOCASE"),
+                        pattern,
+                        EscapeChar));
+                }
+                else
+                {
+                    query = query.Where(file => EF.Functions.Collate(file.Extension.Value, "NOCASE") == normalized);
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Mime))
