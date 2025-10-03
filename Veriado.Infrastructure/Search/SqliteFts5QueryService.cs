@@ -341,12 +341,36 @@ internal sealed class SqliteFts5QueryService
             rank = bm25;
         }
 
+        var recencyExpression = BuildRecencyExpression(scorePlan);
+        if (!string.IsNullOrWhiteSpace(recencyExpression))
+        {
+            rank = string.Format(
+                CultureInfo.InvariantCulture,
+                scorePlan.HigherScoreIsBetter ? "({0} / {1})" : "({0} * {1})",
+                rank,
+                recencyExpression);
+        }
+
         if (Math.Abs(scorePlan.ScoreMultiplier - 1d) > double.Epsilon)
         {
             rank = string.Format(CultureInfo.InvariantCulture, "({0} * {1})", rank, scorePlan.ScoreMultiplier);
         }
 
         return (bm25, rank);
+    }
+
+    private static string BuildRecencyExpression(SearchScorePlan scorePlan)
+    {
+        if (scorePlan.RecencyHalfLifeDays <= 0d)
+        {
+            return string.Empty;
+        }
+
+        var halfLife = scorePlan.RecencyHalfLifeDays.ToString(CultureInfo.InvariantCulture);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "(1.0 + (MAX(0.0, julianday('now') - julianday(COALESCE(f.modified_utc, f.created_utc, '1970-01-01T00:00:00Z'))) / {0}))",
+            halfLife);
     }
 
     private string BuildScoreQuery(SearchQueryPlan plan, string bm25Expression, string rankExpression)

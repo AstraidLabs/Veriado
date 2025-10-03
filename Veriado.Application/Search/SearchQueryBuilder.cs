@@ -111,6 +111,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         _scorePlan.HigherScoreIsBetter = options.HigherScoreIsBetter;
         _scorePlan.UseTfIdfAlternative = options.UseTfIdfAlternative;
         _scorePlan.TfIdfDampingFactor = options.TfIdfDampingFactor;
+        _scorePlan.RecencyHalfLifeDays = options.RecencyHalfLifeDays;
     }
 
     /// <inheritdoc />
