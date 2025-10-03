@@ -208,8 +208,24 @@ public partial class FilesPageViewModel : ViewModelBase
 
     partial void OnSearchTextChanged(string? value)
     {
-        _hotStateService.LastQuery = value;
+        var sanitized = NormalizeSearchText(value);
+        if (!string.Equals(value, sanitized, StringComparison.Ordinal))
+        {
+            SearchText = sanitized;
+            return;
+        }
+
+        _hotStateService.LastQuery = sanitized;
         DebounceRefresh();
+    }
+
+    partial void OnExtensionFilterChanged(string? value)
+    {
+        var sanitized = NormalizeExtension(value);
+        if (!string.Equals(value, sanitized, StringComparison.Ordinal))
+        {
+            ExtensionFilter = sanitized;
+        }
     }
 
     partial void OnFuzzyChanged(bool value)
@@ -367,14 +383,15 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private FileGridQueryDto BuildQuery(int page)
     {
-        var extension = string.IsNullOrWhiteSpace(ExtensionFilter) ? null : ExtensionFilter.Trim();
+        var searchText = NormalizeSearchText(SearchText);
+        var extension = NormalizeExtension(ExtensionFilter);
         var mime = string.IsNullOrWhiteSpace(MimeFilter) ? null : MimeFilter.Trim();
         var author = string.IsNullOrWhiteSpace(AuthorFilter) ? null : AuthorFilter.Trim();
         var version = ParseVersion(VersionFilter);
 
         var query = new FileGridQueryDto
         {
-            Text = SearchText,
+            Text = searchText,
             Fuzzy = Fuzzy,
             Extension = extension,
             Mime = mime,
@@ -396,6 +413,35 @@ public partial class FilesPageViewModel : ViewModelBase
         };
 
         return query;
+    }
+
+    private static string? NormalizeSearchText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    private static string? NormalizeExtension(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        var normalized = trimmed.TrimStart('.');
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        return normalized.ToLowerInvariant();
     }
 
     private static int? ParseVersion(string? value)
