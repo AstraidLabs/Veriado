@@ -101,6 +101,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         await using var context = await _contextFactory.CreateAsync(cancellationToken).ConfigureAwait(false);
         var filesQuery = context.Files;
 
+        var todayReference = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
         var filteredQuery = QueryableFilters.ApplyFilters(filesQuery, dto, today);
         var sortSpecifications = dto.Sort ?? new List<FileSortSpecDto>();
         bool sortByScore = sortSpecifications.Count > 0
@@ -219,104 +221,42 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (!string.IsNullOrWhiteSpace(matchQuery))
         {
             var match = matchQuery!;
-            var plan = ApplyFiltersToPlan(SearchQueryPlanFactory.FromMatch(match, queryText), dto, today);
-            var candidates = await _searchQueryService
-                .SearchWithScoresAsync(plan, 0, _options.MaxCandidateResults, cancellationToken)
-                .ConfigureAwait(false);
+            var offset = (pageNumber - 1) * pageSize;
+            var candidateLimit = Math.Min(pageSize * 2, _options.MaxCandidateResults);
+            FileGridSearchResult gridResult;
 
-            if (candidates.Count == 0)
+            while (true)
             {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
-
-            var candidateScores = new Dictionary<Guid, double>(candidates.Count);
-            foreach (var (id, score) in candidates)
-            {
-                candidateScores[id] = score;
-            }
-
-            var candidateIds = candidates.Select(static candidate => candidate.Id).ToArray();
-            var matchingIds = await CollectMatchingIdsAsync(context, filteredQuery, candidateIds, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (matchingIds.Count == 0)
-            {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
-
-            if (sortByScore)
-            {
-                var orderedIds = new List<Guid>(matchingIds.Count);
-                foreach (var (id, _) in candidates)
-                {
-                    if (matchingIds.Contains(id))
-                    {
-                        orderedIds.Add(id);
-                    }
-                }
-
-                var totalCount = orderedIds.Count;
-                var skip = (pageNumber - 1) * pageSize;
-                var pageIds = orderedIds.Skip(skip).Take(pageSize).ToArray();
-
-                if (pageIds.Length == 0)
-                {
-                    await _historyService.AddAsync(queryText, match, totalCount, false, cancellationToken).ConfigureAwait(false);
-                    return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, totalCount);
-                }
-
-                var summaries = await FetchSummariesAsync(context, filteredQuery, pageIds, cancellationToken)
+                gridResult = await _searchQueryService
+                    .SearchGridAsync(match, dto, sortSpecifications, todayReference, offset, pageSize, candidateLimit, cancellationToken)
                     .ConfigureAwait(false);
-                var items = new List<FileSummaryDto>(pageIds.Length);
-                foreach (var id in pageIds)
+
+                if (gridResult.Items.Count >= pageSize)
                 {
-                    if (summaries.TryGetValue(id, out var summary))
-                    {
-                        if (candidateScores.TryGetValue(id, out var score))
-                        {
-                            items.Add(summary with { Score = score });
-                        }
-                        else
-                        {
-                            items.Add(summary);
-                        }
-                    }
+                    break;
                 }
 
-                await _historyService.AddAsync(queryText, match, totalCount, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(items, pageNumber, pageSize, totalCount);
-            }
-
-            var summaryMap = await FetchSummariesAsync(context, filteredQuery, matchingIds, cancellationToken)
-                .ConfigureAwait(false);
-            if (summaryMap.Count == 0)
-            {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
-                return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
-            }
-
-            var enrichedSummaries = new List<FileSummaryDto>(summaryMap.Count);
-            foreach (var summary in summaryMap.Values)
-            {
-                if (candidateScores.TryGetValue(summary.Id, out var score))
+                if (candidateLimit >= _options.MaxCandidateResults)
                 {
-                    enrichedSummaries.Add(summary with { Score = score });
+                    break;
                 }
-                else
+
+                if (gridResult.TotalCount <= offset + gridResult.Items.Count)
                 {
-                    enrichedSummaries.Add(summary);
+                    break;
                 }
+
+                var next = Math.Min(candidateLimit * 2, _options.MaxCandidateResults);
+                if (next == candidateLimit)
+                {
+                    break;
+                }
+
+                candidateLimit = next;
             }
 
-            var orderedItems = OrderSummaries(enrichedSummaries, sortSpecifications);
-            var totalCountNonScore = orderedItems.Count;
-            var skipCount = (pageNumber - 1) * pageSize;
-            var pageItems = orderedItems.Skip(skipCount).Take(pageSize).ToList();
-
-            await _historyService.AddAsync(queryText, match, totalCountNonScore, false, cancellationToken).ConfigureAwait(false);
-            return new PageResult<FileSummaryDto>(pageItems, pageNumber, pageSize, totalCountNonScore);
+            await _historyService.AddAsync(queryText, match, gridResult.TotalCount, false, cancellationToken).ConfigureAwait(false);
+            return new PageResult<FileSummaryDto>(gridResult.Items, pageNumber, pageSize, gridResult.TotalCount);
         }
 
         var total = await context.CountAsync(filteredQuery, cancellationToken).ConfigureAwait(false);

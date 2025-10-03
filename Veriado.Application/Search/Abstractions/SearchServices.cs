@@ -1,4 +1,5 @@
 using Veriado.Appl.Search;
+using Veriado.Contracts.Files;
 using Veriado.Domain.Search;
 
 namespace Veriado.Appl.Search.Abstractions;
@@ -34,6 +35,27 @@ public interface ISearchQueryService
         SearchQueryPlan plan,
         int skip,
         int take,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes a grid-oriented search query using the centralised SQL pipeline.
+    /// </summary>
+    /// <param name="matchQuery">The optional FTS5 match query.</param>
+    /// <param name="parameters">The grid filter parameters.</param>
+    /// <param name="sort">The requested sort specification.</param>
+    /// <param name="today">Reference timestamp used for validity filters.</param>
+    /// <param name="offset">The zero-based offset.</param>
+    /// <param name="limit">The requested page size.</param>
+    /// <param name="candidateLimit">The number of candidates evaluated before filtering.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task<FileGridSearchResult> SearchGridAsync(
+        string? matchQuery,
+        FileGridQueryDto parameters,
+        IReadOnlyList<FileSortSpecDto> sort,
+        DateTimeOffset today,
+        int offset,
+        int limit,
+        int candidateLimit,
         CancellationToken cancellationToken);
 
     /// <summary>
