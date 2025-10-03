@@ -368,7 +368,12 @@ internal sealed class SqliteFts5QueryService
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
-        builder.Append(", f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE ");
+        const string TitleSortExpression = "COALESCE(f.title, '')";
+        builder.Append(", f.modified_utc DESC, CASE WHEN lower(");
+        builder.Append(TitleSortExpression);
+        builder.Append(") = lower($raw) THEN 0 ELSE 1 END, ");
+        builder.Append(TitleSortExpression);
+        builder.Append(" COLLATE NOCASE ");
         builder.Append("LIMIT $take OFFSET $skip;");
         return builder.ToString();
     }
@@ -411,7 +416,7 @@ internal sealed class SqliteFts5QueryService
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
-        builder.Append(", f.modified_utc DESC, CASE WHEN lower(s.title) = lower($raw) THEN 0 ELSE 1 END, s.title COLLATE NOCASE ");
+        builder.Append(", f.modified_utc DESC, CASE WHEN lower(title) = lower($raw) THEN 0 ELSE 1 END, title COLLATE NOCASE ");
         builder.Append("LIMIT $take;");
         return builder.ToString();
     }
