@@ -120,7 +120,7 @@ public partial class App : Application
 
         try
         {
-            return AppInstance.GetCurrent().IsCurrent;
+            return Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().IsCurrent;
         }
         catch
         {
