@@ -76,10 +76,18 @@ public partial class SettingsPageViewModel : ViewModelBase, IDisposable
             return Task.CompletedTask;
         }
 
-        return SafeExecuteAsync(async cancellationToken =>
+        return SafeExecuteAsync(cancellationToken =>
         {
-            await _localizationService.SetCultureAsync(SelectedLanguage, cancellationToken).ConfigureAwait(false);
-            StatusService.Info(GetString("Settings.LanguageApplied", null, SelectedLanguage.NativeName));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var applied = _localizationService.TrySetCulture(SelectedLanguage);
+
+            if (applied)
+            {
+                StatusService.Info(GetString("Settings.LanguageApplied", null, SelectedLanguage.NativeName));
+            }
+
+            return Task.CompletedTask;
         });
     }
 

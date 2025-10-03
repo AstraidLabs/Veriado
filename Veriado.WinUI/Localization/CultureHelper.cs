@@ -58,9 +58,6 @@ internal static class CultureHelper
         CultureInfo.DefaultThreadCurrentUICulture = culture;
         CultureInfo.CurrentCulture = culture;
         CultureInfo.CurrentUICulture = culture;
-
-        var viewIndependentContext = ResourceContext.GetForViewIndependentUse();
-        ApplyCulture(viewIndependentContext, culture);
     }
 
     public static void ApplyCulture(ResourceContext context, CultureInfo culture)
