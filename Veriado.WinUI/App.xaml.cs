@@ -3,11 +3,13 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.ApplicationModel.DynamicDependency;
 using Veriado.WinUI.Errors;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
+using Windows.ApplicationModel;
 
 namespace Veriado.WinUI;
 
@@ -102,10 +104,42 @@ public partial class App : Application
         }
     }
 
+    private static bool IsRunningInPackagedContext()
+    {
+        try
+        {
+            _ = Package.Current;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+        }
+
+        try
+        {
+            return AppInstance.GetCurrent().IsCurrent;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal void InitializeWindowsAppSdkSafe(IStartupReporter reporter)
     {
         try
         {
+            if (IsRunningInPackagedContext())
+            {
+                reporter.Report(AppStartupPhase.Bootstrap, "Windows App SDK je připravena.");
+                BootstrapLogger.LogInformation(
+                    "Skipping Windows App SDK bootstrap initialization because the runtime is provided by the app package.");
+                return;
+            }
+
             if (_isBootstrapInitialized)
             {
                 reporter.Report(AppStartupPhase.Bootstrap, "Windows App SDK je připravena.");
