@@ -21,7 +21,20 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+
+#if DEBUG
+        try
+        {
+            this.DebugSettings.XamlResourceReferenceFailed += (s, e) =>
+                System.Diagnostics.Debug.WriteLine("XamlResourceReferenceFailed: " + e.Message);
+            this.DebugSettings.BindingFailed += (s, e) =>
+                System.Diagnostics.Debug.WriteLine("BindingFailed: " + e.Message);
+        }
+        catch { }
+#endif
     }
+
+
 
     public static new App Current => (App)Application.Current;
 
