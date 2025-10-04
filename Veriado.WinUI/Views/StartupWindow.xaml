@@ -24,9 +24,9 @@
                 Foreground="{ThemeResource AppTextPrimaryBrush}"
                 Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button
-                x:Uid="StartupWindow_RetryButton"
                 Width="160"
                 HorizontalAlignment="Center"
+                Content="Try again"
                 Command="{Binding RetryCommand}"
                 Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>

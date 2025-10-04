@@ -67,7 +67,7 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock x:Uid="ImportPage_TitleTextBlock" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="Import files" FontSize="28" FontWeight="SemiBold" />
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -77,14 +77,14 @@
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <Button
                         x:Name="RunImportButton"
-                        x:Uid="ImportPage_RunImportButton"
+                        Content="Start import"
                         Command="{Binding RunImportCommand}" />
                     <Button
-                        x:Uid="ImportPage_StopButton"
+                        Content="Stop"
                         Command="{Binding StopImportCommand}"
                         IsEnabled="{Binding IsImporting}" />
-                    <Button x:Uid="ImportPage_ClearResultsButton" Command="{Binding ClearResultsCommand}" />
-                    <Button x:Uid="ImportPage_ExportLogButton" Command="{Binding ExportLogCommand}" />
+                    <Button Content="Clear results" Command="{Binding ClearResultsCommand}" />
+                    <Button Content="Export log" Command="{Binding ExportLogCommand}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
@@ -114,9 +114,9 @@
                                 <TextBlock FontWeight="SemiBold" Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
                                 <TextBlock Text="{Binding ProgressText}" />
                             </StackPanel>
-                            <TextBlock x:Uid="ImportPage_CurrentFileNameTextBlock" FontWeight="SemiBold">
+                            <TextBlock FontWeight="SemiBold">
                                 <TextBlock.Text>
-                                    <Binding Path="CurrentFileName" />
+                                    <Binding Path="CurrentFileName" TargetNullValue="(No file)" />
                                 </TextBlock.Text>
                             </TextBlock>
                             <TextBlock
@@ -125,9 +125,9 @@
                                 TextTrimming="CharacterEllipsis"
                                 MaxLines="2" />
                             <TextBlock>
-                                <Run x:Uid="ImportPage_ProcessedLabelRun" />
+                                <Run Text="Processed: " />
                                 <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
-                                <Run x:Uid="ImportPage_ProcessedSeparatorRun" />
+                                <Run Text=" / " />
                                 <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
                             </TextBlock>
                         </StackPanel>
@@ -140,26 +140,26 @@
                             Visibility="Collapsed"
                             IsHitTestVisible="False">
                             <StackPanel Spacing="4">
-                                <TextBlock x:Uid="ImportPage_SummaryTitleTextBlock" FontWeight="SemiBold" />
+                                <TextBlock Text="Import summary" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="12">
                                     <TextBlock>
-                                        <Run x:Uid="ImportPage_SummaryOkLabelRun" />
+                                        <Run Text="OK: " />
                                         <Run Text="{Binding OkCount}" />
                                     </TextBlock>
                                     <TextBlock>
-                                        <Run x:Uid="ImportPage_SummaryErrorLabelRun" />
+                                        <Run Text="Errors: " />
                                         <Run Text="{Binding ErrorCount}" />
                                     </TextBlock>
                                     <TextBlock>
-                                        <Run x:Uid="ImportPage_SummarySkippedLabelRun" />
+                                        <Run Text="Skipped: " />
                                         <Run Text="{Binding SkipCount}" />
                                     </TextBlock>
                                 </StackPanel>
                                 <TextBlock
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     TextWrapping="Wrap">
-                                    <Run x:Uid="ImportPage_SummaryDataLabelRun" />
+                                    <Run Text="Processed data: " />
                                     <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
                                 </TextBlock>
                             </StackPanel>
@@ -212,7 +212,7 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock x:Uid="ImportPage_SourceTitleTextBlock" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="Import source" FontSize="20" FontWeight="SemiBold" />
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -220,7 +220,7 @@
                 </Grid.ColumnDefinitions>
                 <Button
                     Grid.Column="0"
-                    x:Uid="ImportPage_PickFolderButton"
+                    Content="Choose folder"
                     Command="{Binding PickFolderCommand}" />
                 <TextBox
                     Grid.Column="1"
@@ -237,18 +237,18 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock x:Uid="ImportPage_OptionsTitleTextBlock" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="Import options" FontSize="20" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <StackPanel Orientation="Vertical" Spacing="8">
-                    <CheckBox x:Uid="ImportPage_RecursiveCheckBox" IsChecked="{Binding Recursive, Mode=TwoWay}" />
-                    <CheckBox x:Uid="ImportPage_PreserveMetadataCheckBox" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
+                    <CheckBox Content="Recursive" IsChecked="{Binding Recursive, Mode=TwoWay}" />
+                    <CheckBox Content="Preserve file system metadata" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8">
-                    <CheckBox x:Uid="ImportPage_ReadOnlyCheckBox" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
-                    <CheckBox x:Uid="ImportPage_ParallelCheckBox" IsChecked="{Binding UseParallel, Mode=TwoWay}" />
+                    <CheckBox Content="Set read-only" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
+                    <CheckBox Content="Parallel" IsChecked="{Binding UseParallel, Mode=TwoWay}" />
                     <NumberBox
-                        x:Uid="ImportPage_MaxThreadsNumberBox"
                         Minimum="1"
+                        Header="Max parallel threads"
                         SpinButtonPlacementMode="Compact"
                         IsEnabled="{Binding UseParallel}"
                         ValidationMode="InvalidInputOverwritten"
@@ -257,16 +257,18 @@
                         Margin="0,4,0,0"
                         IsOpen="{Binding HasParallelismError}"
                         Severity="Error"
-                        x:Uid="ImportPage_MaxThreadsInfoBar"
+                        Title="Invalid thread count"
+                        Message="Enter a positive integer greater than zero."
                         IsClosable="False" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8" Width="200">
                     <TextBox
-                        x:Uid="ImportPage_DefaultAuthorTextBox"
+                        Header="Default author"
+                        PlaceholderText="(not set)"
                         Text="{Binding DefaultAuthor, Mode=TwoWay}" />
                     <NumberBox
-                        x:Uid="ImportPage_MaxFileSizeNumberBox"
                         Minimum="0"
+                        Header="Max file size (MB)"
                         SpinButtonPlacementMode="Compact"
                         ValidationMode="InvalidInputOverwritten"
                         Value="{Binding MaxFileSizeMegabytes, Mode=TwoWay, TargetNullValue=0}" />
@@ -274,12 +276,13 @@
                         Margin="0,4,0,0"
                         IsOpen="{Binding HasMaxFileSizeError}"
                         Severity="Warning"
-                        x:Uid="ImportPage_MaxFileSizeInfoBar"
+                        Title="Invalid file size"
+                        Message="Enter a non-negative value or leave 0 for no limit."
                         IsClosable="False" />
                     <TextBlock
-                        x:Uid="ImportPage_MaxFileSizeHintTextBlock"
                         FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="0 = no limit" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>
@@ -291,9 +294,9 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock x:Uid="ImportPage_LogTitleTextBlock" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="Import log" FontSize="20" FontWeight="SemiBold" />
             <StackPanel x:Name="QueueSection" Spacing="8" Visibility="Collapsed">
-                <TextBlock x:Uid="ImportPage_QueueTitleTextBlock" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock Text="Import queue" FontSize="16" FontWeight="SemiBold" />
                 <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
                     <muxc:ItemsRepeater
                         x:Name="ImportQueueRepeater"
@@ -384,19 +387,19 @@
                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <datagrid:DataGrid.Columns>
-                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogTimeColumn" Binding="{Binding FormattedTimestamp}" Width="Auto" />
-                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogEventColumn" Binding="{Binding Title}" Width="2*">
+                        <datagrid:DataGridTextColumn Header="Time" Binding="{Binding FormattedTimestamp}" Width="Auto" />
+                        <datagrid:DataGridTextColumn Header="Event" Binding="{Binding Title}" Width="2*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
                         </datagrid:DataGridTextColumn>
-                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogMessageColumn" Binding="{Binding Message}" Width="3*">
+                        <datagrid:DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="3*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
                         </datagrid:DataGridTextColumn>
-                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogStatusColumn" Binding="{Binding Status}" Width="Auto" />
-                        <datagrid:DataGridTextColumn x:Uid="ImportPage_LogDetailColumn" Binding="{Binding Detail}" Width="3*">
+                        <datagrid:DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="Auto" />
+                        <datagrid:DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="3*">
                             <datagrid:DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                             </datagrid:DataGridTextColumn.ElementStyle>
@@ -432,7 +435,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock
                                 VerticalAlignment="Center"
-                                x:Uid="ImportPage_FilterLabelTextBlock" />
+                                Text="Filter:" />
                             <ComboBox
                                 Width="180"
                                 ItemsSource="{Binding ErrorFilterOptions}"
@@ -465,17 +468,17 @@
                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <datagrid:DataGrid.Columns>
-                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorTimeColumn" Binding="{Binding FormattedTimestamp}" Width="Auto" />
-                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorFileColumn" Binding="{Binding FileName}" Width="2*">
+                            <datagrid:DataGridTextColumn Header="Time" Binding="{Binding FormattedTimestamp}" Width="Auto" />
+                            <datagrid:DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*">
                                 <datagrid:DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}">
                                         <Setter Property="ToolTipService.ToolTip" Value="{Binding FilePath}" />
                                     </Style>
                                 </datagrid:DataGridTextColumn.ElementStyle>
                             </datagrid:DataGridTextColumn>
-                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorCodeColumn" Binding="{Binding Code}" Width="Auto" />
-                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorSeverityColumn" Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}" Width="Auto" />
-                            <datagrid:DataGridTextColumn x:Uid="ImportPage_ErrorMessageColumn" Binding="{Binding ErrorMessage}" Width="3*">
+                            <datagrid:DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="Auto" />
+                            <datagrid:DataGridTextColumn Header="Severity" Binding="{Binding Severity, Converter={StaticResource ErrorSeverityToStringConverter}}" Width="Auto" />
+                            <datagrid:DataGridTextColumn Header="Message" Binding="{Binding ErrorMessage}" Width="3*">
                                 <datagrid:DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}" />
                                 </datagrid:DataGridTextColumn.ElementStyle>
@@ -497,7 +500,7 @@
                                         TextWrapping="Wrap"
                                         Visibility="{Binding HasSuggestion, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     <Button
-                                        x:Uid="ImportPage_OpenDetailButton"
+                                        Content="Open detail"
                                         HorizontalAlignment="Left"
                                         Command="{Binding ElementName=ErrorsDataGrid, Path=DataContext.OpenErrorDetailCommand}"
                                         CommandParameter="{Binding Source}" />
@@ -510,7 +513,7 @@
                         Grid.Row="3"
                         Margin="0,8,0,0"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        x:Uid="ImportPage_NoErrorsTextBlock"
+                        Text="No errors match the selected filter."
                         Visibility="{Binding HasNoFilteredErrors, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 </Grid>
             </Grid>
@@ -529,8 +532,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
                 <StackPanel Spacing="8" HorizontalAlignment="Center">
-                    <TextBlock x:Uid="ImportPage_DropPromptTextBlock" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                    <TextBlock x:Uid="ImportPage_DropHintTextBlock" HorizontalAlignment="Center" />
+                    <TextBlock Text="Drop a folder to import" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Text="You can also choose a folder using the button." HorizontalAlignment="Center" />
                 </StackPanel>
             </Border>
         </Grid>
