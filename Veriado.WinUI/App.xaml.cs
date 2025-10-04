@@ -76,7 +76,7 @@ public partial class App : Application
 
     private async Task<bool> TryInitializeAsync(StartupViewModel startupViewModel)
     {
-        startupViewModel.ShowProgress(LocalizedStrings.Get("Startup.InitializingServices"));
+        startupViewModel.ShowProgress("Starting application services…");
 
         AppHost? host = null;
 
@@ -109,7 +109,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             startupViewModel.ShowError(
-                LocalizedStrings.Get("Startup.StartupFailed"),
+                "Failed to start the application.",
                 ex.Message);
 
             LogStartupFailure(host, ex);

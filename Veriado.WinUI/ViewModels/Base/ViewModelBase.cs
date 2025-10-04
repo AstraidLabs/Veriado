@@ -86,7 +86,7 @@ public abstract partial class ViewModelBase : ObservableObject
         catch (OperationCanceledException)
         {
             await _dispatcher.Enqueue(() => HasError = false);
-            _statusService.Info(GetString("Common.OperationCancelled"));
+            _statusService.Info("Operation was cancelled.");
         }
         catch (Exception ex)
         {
@@ -108,7 +108,4 @@ public abstract partial class ViewModelBase : ObservableObject
             }
         }
     }
-
-    protected string GetString(string resourceKey, string? defaultValue = null, params object?[] arguments)
-        => LocalizedStrings.Get(resourceKey, defaultValue, arguments);
 }

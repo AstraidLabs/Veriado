@@ -47,7 +47,7 @@ public partial class SettingsPageViewModel : ViewModelBase
         return SafeExecuteAsync(async cancellationToken =>
         {
             await _themeService.SetThemeAsync(ThemeMode, cancellationToken).ConfigureAwait(false);
-            StatusService.Info(GetString("Settings.ThemeApplied"));
+            StatusService.Info("Theme applied.");
         });
     }
 
@@ -55,13 +55,13 @@ public partial class SettingsPageViewModel : ViewModelBase
     {
         if (value <= 0)
         {
-            StatusService.Error(GetString("Settings.PageSizeInvalid"));
+            StatusService.Error("Enter a positive page size.");
             PageSize = _hotStateService.PageSize;
             return;
         }
 
         _hotStateService.PageSize = value;
-        StatusService.Info(GetString("Settings.PageSizeUpdated", null, value));
+        StatusService.Info($"Page size set to {value} items.");
     }
 
     partial void OnLastFolderChanged(string? value)
