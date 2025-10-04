@@ -10,11 +10,10 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Files;
-using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.Views.Files;
 
-public sealed partial class FilesPage : CultureAwarePage
+public sealed partial class FilesPage : Page
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
     private readonly Dictionary<InfoBar, long> _infoBarIsOpenCallbacks = new();

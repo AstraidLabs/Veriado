@@ -1,4 +1,4 @@
-<views:CultureAwarePage
+<Page
     x:Class="Veriado.WinUI.Views.Import.ImportPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,7 +11,6 @@
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:animations="using:Microsoft.UI.Xaml.Media.Animation"
-    xmlns:views="using:Veriado.WinUI.Views"
     d:DataContext="{d:DesignInstance Type=import:ImportPageViewModel}"
     AllowDrop="True"
     DragOver="OnPageDragOver"
@@ -19,13 +18,13 @@
     DragLeave="OnPageDragLeave"
     mc:Ignorable="d">
 
-    <views:CultureAwarePage.KeyboardAccelerators>
+    <Page.KeyboardAccelerators>
         <KeyboardAccelerator Key="Enter" Invoked="OnEnterAcceleratorInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAcceleratorInvoked" />
         <KeyboardAccelerator Key="O" Modifiers="Control" Invoked="OnOpenAcceleratorInvoked" />
-    </views:CultureAwarePage.KeyboardAccelerators>
+    </Page.KeyboardAccelerators>
 
-    <views:CultureAwarePage.Resources>
+    <Page.Resources>
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:ImportErrorSeverityToStringConverter x:Key="ErrorSeverityToStringConverter" />
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
@@ -33,7 +32,7 @@
         <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
-    </views:CultureAwarePage.Resources>
+    </Page.Resources>
 
 <Grid
         x:Name="DropZoneHost"
@@ -536,4 +535,4 @@
             </Border>
         </Grid>
     </Grid>
-</views:CultureAwarePage>
+</Page>

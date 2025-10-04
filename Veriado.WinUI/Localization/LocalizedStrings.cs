@@ -1,9 +1,12 @@
 using System.Globalization;
+using Microsoft.Windows.ApplicationModel.Resources;
 
 namespace Veriado.WinUI.Localization;
 
 internal static class LocalizedStrings
 {
+    private static readonly ResourceLoader ResourceLoader = new();
+
     public static string Get(string resourceKey, string? defaultValue = null, params object?[] arguments)
     {
         if (string.IsNullOrWhiteSpace(resourceKey))
@@ -11,11 +14,13 @@ internal static class LocalizedStrings
             throw new ArgumentException("Resource key must be provided.", nameof(resourceKey));
         }
 
-        var template = CultureHelper.GetString(resourceKey);
-        if (string.Equals(template, resourceKey, StringComparison.Ordinal))
+        var template = ResourceLoader.GetString(resourceKey);
+
+        if (string.IsNullOrWhiteSpace(template))
         {
             template = defaultValue ?? resourceKey;
         }
+
         if (arguments is { Length: > 0 })
         {
             try

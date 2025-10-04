@@ -1,4 +1,4 @@
-<views:CultureAwarePage
+<Page
     x:Class="Veriado.WinUI.Views.Files.FilesPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -7,13 +7,12 @@
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:contracts="using:Veriado.Contracts.Files"
-    xmlns:views="using:Veriado.WinUI.Views"
     mc:Ignorable="d">
-    <views:CultureAwarePage.Resources>
+    <Page.Resources>
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
         <converters:NullableLongToDoubleConverter x:Key="NullableLongToDoubleConverter" />
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
-    </views:CultureAwarePage.Resources>
+    </Page.Resources>
 
     <Grid Padding="24" RowSpacing="16" ColumnSpacing="24">
         <Grid.RowDefinitions>
@@ -300,4 +299,4 @@
             </controls:ScrollViewer>
         </controls:ItemsRepeaterScrollHost>
     </Grid>
-</views:CultureAwarePage>
+</Page>
