@@ -178,11 +178,17 @@ public sealed class LocalizationService : ILocalizationService
 
         try
         {
-            var candidate = _resourceMap.GetValue(resourceKey, context);
-            if (candidate is not null)
+            if (_resourceMap.TryGetValue(resourceKey, context, out var candidate) && candidate is not null)
             {
                 var value = candidate.ValueAsString;
-                return string.IsNullOrEmpty(value) ? resourceKey : value;
+                if (!string.IsNullOrEmpty(value))
+                {
+                    return value;
+                }
+            }
+            else
+            {
+                _logger?.LogWarning("Resource key {ResourceKey} was not found for culture {Culture}.", resourceKey, culture);
             }
         }
         catch (Exception ex)
