@@ -7,6 +7,7 @@ using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
 using Veriado.WinUI.Services;
 using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Helpers;
 
 namespace Veriado.WinUI;
 
@@ -21,6 +22,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        ThemeResourceFallback.Ensure();
 
 #if DEBUG
         try
