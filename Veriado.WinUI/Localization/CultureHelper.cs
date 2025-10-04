@@ -76,11 +76,14 @@ internal static class CultureHelper
 
         try
         {
-            var candidate = _resourceMap.GetValue(resourceKey, context);
+            var candidate = _resourceMap.TryGetValue(resourceKey, context);
             if (candidate is not null)
             {
                 var value = candidate.ValueAsString;
-                return string.IsNullOrEmpty(value) ? resourceKey : value;
+                if (!string.IsNullOrEmpty(value))
+                {
+                    return value;
+                }
             }
         }
         catch
