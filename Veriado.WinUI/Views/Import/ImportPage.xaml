@@ -79,8 +79,7 @@
                     <Button
                         x:Name="RunImportButton"
                         x:Uid="ImportPage_RunImportButton"
-                        Command="{Binding RunImportCommand}"
-                        Style="{StaticResource PulseButton}" />
+                        Command="{Binding RunImportCommand}" />
                     <Button
                         x:Uid="ImportPage_StopButton"
                         Command="{Binding StopImportCommand}"
