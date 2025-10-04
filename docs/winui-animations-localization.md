@@ -9,11 +9,8 @@
 - `ImportPage` kombinuje XAML přechody (`EntranceThemeTransition`) s nízkoúrovňovými kompozičními animacemi pro cross-fade panelů, zvýraznění „drop zóny“ a pulsování akčních prvků; všechny animace respektují `AnimationSettings`.【F:Veriado.WinUI/Views/Import/ImportPage.xaml†L37-L200】【F:Veriado.WinUI/Views/Import/ImportPage.xaml.cs†L200-L416】
 
 ### Lokalizace
-- `LocalizationConfiguration` definuje 27 podporovaných kultur, normalizuje vstupní kódy jazyků a poskytuje výchozí jazyk `en-US`. `CultureHelper` synchronizuje vybranou kulturu s .NET, WinRT i `ResourceContext` WinUI.【F:Veriado.WinUI/Localization/LocalizationConfiguration.cs†L8-L56】【F:Veriado.WinUI/Localization/CultureHelper.cs†L8-L24】
-- `LocalizationService` načítá `Resources.resw`, ukládá vybraný jazyk přes `ISettingsService`, vyvolává `CultureChanged` a exponuje `SupportedCultures` pro UI. Lokalizované řetězce lze získat i bez XAML (např. při startu).【F:Veriado.WinUI/Services/LocalizationService.cs†L7-L110】
-- Základní řetězce (např. pro nastavení a start aplikace) jsou v `Strings/Resources.resw`; odpovídající XAML prvky používají `x:Uid`, díky čemuž je UI překládáno po přepnutí jazyka a reaguje na `CultureChanged`.【F:Veriado.WinUI/Strings/Resources.resw†L1-L66】【F:Veriado.WinUI/Views/Settings/SettingsPage.xaml†L9-L36】
-- ViewModel nastavení poskytuje seznam jazyků (`LanguageOptions`) z lokalizační služby a volá `SetCultureAsync`, takže změna jazyka je trvalá a signalizuje se stavovým hlášením.【F:Veriado.WinUI/ViewModels/Settings/SettingsPageViewModel.cs†L7-L125】
-- Spouštěcí okno i bootstrap sekvence získávají texty programově přes `LocalizedStrings` a `LocalizationService`, takže i statusy startu reagují na lokalizaci.【F:Veriado.WinUI/Views/StartupWindow.xaml.cs†L8-L22】【F:Veriado.WinUI/App.xaml.cs†L67-L118】
+- Texty uživatelského rozhraní jsou uloženy v `Strings/Resources.resw` a načítají se přes `x:Uid` nebo pomocnou metodu `LocalizedStrings.Get` pro scénáře mimo XAML (např. start aplikace).【F:Veriado.WinUI/Strings/Resources.resw†L1-L66】【F:Veriado.WinUI/Localization/LocalizedStrings.cs†L1-L37】【F:Veriado.WinUI/Views/StartupWindow.xaml.cs†L8-L22】
+- Aplikace spoléhá na výchozí systémovou kulturu – runtime přepínání jazyka ani ukládání preferencí není k dispozici. Nastavení pracuje pouze s motivem, velikostí stránky a poslední složkou.【F:Veriado.WinUI/ViewModels/Settings/SettingsPageViewModel.cs†L1-L78】【F:Veriado.WinUI/Views/Settings/SettingsPage.xaml†L9-L32】
 
 ## Identifikované mezery
 
@@ -23,9 +20,9 @@
 - V některých částech UI (např. nové panely nebo data gridy) se animace nepoužívají vůbec, i když by zlepšily vnímání odezvy.
 
 ### Lokalizace
-- `ImportPage` obsahuje mnoho pevně zakódovaných českých textů, což brání překladům do ostatních podporovaných jazyků.【F:Veriado.WinUI/Views/Import/ImportPage.xaml†L64-L162】
+- `ImportPage` obsahuje mnoho pevně zakódovaných českých textů, což brání překladům do ostatních jazyků.【F:Veriado.WinUI/Views/Import/ImportPage.xaml†L64-L162】
 - V projektech chybí guideline pro přidávání nových klíčů do `resw` a jejich validaci; rizikem jsou chybějící překlady nebo odlišné formátovací řetězce.
-- Po změně kultury se existující `Window` nepřerenderuje automaticky – pro některé scénáře (např. otevřená dialogová okna) je nutná explicitní re-inicializace nebo posluchač `CultureChanged`.
+- Aplikace neumožňuje přepnout kulturu bez restartu a nemá infrastrukturu pro přetrvání volby uživatele.
 
 ## Návrhy na rozšíření
 
@@ -38,8 +35,8 @@
 ### Lokalizace
 1. **Deklarativní lokalizace importu** – převést `ImportPage` na `x:Uid` + `resw` klíče (včetně binding textů a `Content` tlačítek) a přidat nové řetězce do základního `Resources.resw`. Následně generovat prázdné položky pro všechny jazykové soubory, aby překladatelé snadno identifikovali nové texty.【F:Veriado.WinUI/Views/Import/ImportPage.xaml†L64-L162】【F:Veriado.WinUI/Strings/Resources.resw†L15-L66】
 2. **Standardizace workflow** – vytvořit guideline: (a) pojmenovat `x:Uid` podle `{Page}_{Control}`; (b) používat `LocalizedStrings.Get` pouze ve ViewModel/servis vrstvě; (c) přidat kontrolu v CI, která porovná klíče mezi jednotlivými `.resw` soubory.
-3. **Reakce na změnu kultury** – poskytovat helper (např. `CultureAwarePage`) naslouchající `ILocalizationService.CultureChanged`, který zavolá `ResourceContext.GetForCurrentView().Reset()`, případně znovu naváže `x:Bind`. Tím se zajistí, že již otevřená okna přeladí obsah bez nutnosti restartu.【F:Veriado.WinUI/Services/LocalizationService.cs†L32-L88】
-4. **Formátovací testy** – pro řetězce s parametry (např. `Settings.PageSizeUpdated`) přidejte unit testy, které projdou všemi kulturami a ověří, že `string.Format` nevyhazuje výjimky. To minimalizuje riziko run-time chyb v lokalizovaném prostředí.【F:Veriado.WinUI/Strings/Resources.resw†L21-L29】
+3. **Runtime přepínání jazyka** – doplnit službu, která dovolí uložit preferovanou kulturu a při startu ji znovu aplikovat (včetně reinitializace otevřených oken).【F:Veriado.WinUI/Localization/LocalizedStrings.cs†L1-L37】【F:Veriado.WinUI/App.xaml.cs†L67-L130】
+4. **Formátovací testy** – pro řetězce s parametry (např. `Settings.PageSizeUpdated`) přidejte unit testy, které projdou dostupnými kulturami a ověří, že `string.Format` nevyhazuje výjimky. To minimalizuje riziko run-time chyb v lokalizovaném prostředí.【F:Veriado.WinUI/Strings/Resources.resw†L21-L29】
 
 ## Doporučený postup implementace
 1. **Refaktor importního UI** – zavést `x:Uid` a přesunout texty do `resw`. Následně napojit existující helper animace (`PulseButton`, `CrossFade`) přes styly, aby se nově přidané prvky chovaly konzistentně.【F:Veriado.WinUI/Resources/Animations.xaml†L16-L29】【F:Veriado.WinUI/Views/Import/ImportPage.xaml.cs†L200-L416】

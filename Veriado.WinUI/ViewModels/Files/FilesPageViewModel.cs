@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -43,9 +42,8 @@ public partial class FilesPageViewModel : ViewModelBase
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
-        IExceptionHandler exceptionHandler,
-        ILocalizationService localizationService)
-        : base(messenger, statusService, dispatcher, exceptionHandler, localizationService)
+        IExceptionHandler exceptionHandler)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));

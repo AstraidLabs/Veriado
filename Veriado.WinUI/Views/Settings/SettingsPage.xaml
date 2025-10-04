@@ -7,32 +7,26 @@
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     mc:Ignorable="d">
     <StackPanel Padding="24" Spacing="12">
-        <TextBlock x:Uid="SettingsPage_Title" FontSize="20" FontWeight="SemiBold" />
+        <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" />
 
         <ComboBox
-            x:Uid="SettingsPage_ThemeCombo"
+            Header="Application theme"
             ItemsSource="{Binding ThemeOptions}"
             SelectedItem="{Binding ThemeMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-        <ComboBox
-            x:Uid="SettingsPage_LanguageCombo"
-            ItemsSource="{Binding LanguageOptions}"
-            SelectedItem="{Binding SelectedLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            DisplayMemberPath="NativeName" />
-
         <controls:NumberBox
-            x:Uid="SettingsPage_PageSizeBox"
             Minimum="1"
+            Header="Page size"
             SmallChange="1"
             Value="{Binding PageSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
         <TextBox
-            x:Uid="SettingsPage_FolderBox"
+            Header="Last folder"
+            PlaceholderText="Folder path"
             Text="{Binding LastFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button x:Uid="SettingsPage_ApplyThemeButton" Command="{Binding ApplyThemeCommand}" />
-            <Button x:Uid="SettingsPage_ApplyLanguageButton" Command="{Binding ApplyLanguageCommand}" />
+            <Button Content="Apply theme" Command="{Binding ApplyThemeCommand}" />
         </StackPanel>
     </StackPanel>
 </Page>

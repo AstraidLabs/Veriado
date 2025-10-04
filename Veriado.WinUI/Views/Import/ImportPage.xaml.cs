@@ -17,11 +17,10 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.ViewModels.Import;
-using Veriado.WinUI.Views;
 
 namespace Veriado.WinUI.Views.Import;
 
-public sealed partial class ImportPage : CultureAwarePage
+public sealed partial class ImportPage : Page
 {
     private readonly HashSet<InfoBar> _closingInfoBars = new();
     private Compositor? _compositor;
