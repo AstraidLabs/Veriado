@@ -150,6 +150,25 @@ public partial class App : Application
         (logger ?? BootstrapLogger).LogError(exception, "Application startup failed.");
     }
 
+    private void LogShutdownFailure(AppHost? host, Exception exception)
+    {
+        ILogger<App>? logger = null;
+
+        if (host is not null)
+        {
+            try
+            {
+                logger = host.Services.GetService<ILogger<App>>();
+            }
+            catch
+            {
+                // Ignore errors retrieving the logger during shutdown failure handling.
+            }
+        }
+
+        (logger ?? BootstrapLogger).LogError(exception, "Application shutdown failed.");
+    }
+
     private async void OnWindowClosed(object sender, WindowEventArgs e)
     {
         if (sender is Window window)
@@ -157,13 +176,23 @@ public partial class App : Application
             window.Closed -= OnWindowClosed;
         }
 
-        if (_appHost is not null)
+        var host = _appHost;
+        try
         {
-            await _appHost.DisposeAsync().ConfigureAwait(false);
-            _appHost = null;
+            if (host is not null)
+            {
+                await host.DisposeAsync().ConfigureAwait(false);
+            }
         }
-
-        MainWindow = null;
+        catch (Exception ex)
+        {
+            LogShutdownFailure(host, ex);
+        }
+        finally
+        {
+            _appHost = null;
+            MainWindow = null;
+        }
     }
 
     private static async Task ApplySavedCultureAsync()
