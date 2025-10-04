@@ -195,6 +195,6 @@ public sealed class LocalizationService : ILocalizationService
 
     public string GetString(string resourceKey)
     {
-        throw new NotImplementedException();
+        return GetString(resourceKey, null, Array.Empty<object?>());
     }
 }
