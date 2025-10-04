@@ -62,8 +62,12 @@
                 <StackPanel Spacing="12">
                     <controls:Expander
                         x:Uid="FilesPage_AttributesExpander"
-                        IsExpanded="True"
-                        Style="{StaticResource AnimatedExpander}">
+                        IsExpanded="True">
+                        <controls:Expander.ContentTransitions>
+                            <TransitionCollection>
+                                <ContentThemeTransition />
+                            </TransitionCollection>
+                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <TextBox
                                 x:Uid="FilesPage_ExtensionTextBox"
@@ -82,8 +86,12 @@
 
                     <controls:Expander
                         x:Uid="FilesPage_ValidityExpander"
-                        IsExpanded="True"
-                        Style="{StaticResource AnimatedExpander}">
+                        IsExpanded="True">
+                        <controls:Expander.ContentTransitions>
+                            <TransitionCollection>
+                                <ContentThemeTransition />
+                            </TransitionCollection>
+                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <CheckBox
                                 x:Uid="FilesPage_ReadOnlyCheckBox"
@@ -112,8 +120,12 @@
 
                     <controls:Expander
                         x:Uid="FilesPage_DatesExpander"
-                        IsExpanded="False"
-                        Style="{StaticResource AnimatedExpander}">
+                        IsExpanded="False">
+                        <controls:Expander.ContentTransitions>
+                            <TransitionCollection>
+                                <ContentThemeTransition />
+                            </TransitionCollection>
+                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <CalendarDatePicker
                                 x:Uid="FilesPage_CreatedFromPicker"
@@ -132,8 +144,12 @@
 
                     <controls:Expander
                         x:Uid="FilesPage_SizeExpander"
-                        IsExpanded="False"
-                        Style="{StaticResource AnimatedExpander}">
+                        IsExpanded="False">
+                        <controls:Expander.ContentTransitions>
+                            <TransitionCollection>
+                                <ContentThemeTransition />
+                            </TransitionCollection>
+                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <controls:NumberBox
                                 x:Uid="FilesPage_SizeMinNumberBox"
@@ -158,13 +174,11 @@
                 <Button
                     x:Uid="FilesPage_ApplyButton"
                     Grid.Column="0"
-                    Command="{x:Bind ViewModel.RefreshCommand}"
-                    Style="{StaticResource PulseButton}" />
+                    Command="{x:Bind ViewModel.RefreshCommand}" />
                 <Button
                     x:Uid="FilesPage_ClearButton"
                     Grid.Column="1"
-                    Command="{x:Bind ViewModel.ClearFiltersCommand}"
-                    Style="{StaticResource PulseButton}" />
+                    Command="{x:Bind ViewModel.ClearFiltersCommand}" />
             </Grid>
         </Grid>
 
@@ -189,7 +203,7 @@
                             x:Uid="FilesPage_PageNumberBox"
                             Width="80"
                             HorizontalAlignment="Left"
-                            Minimum="1"
+                            Minimum="0"
                             Maximum="{x:Bind ViewModel.TargetPageMaximum, Mode=OneWay}"
                             SmallChange="1"
                             Value="{x:Bind ViewModel.TargetPage, Mode=TwoWay}" />

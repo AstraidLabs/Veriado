@@ -9,8 +9,6 @@
             <ResourceDictionary.MergedDictionaries>
                 <!-- WinUI knihovní zdroje MUSÍ být první -->
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-                <!-- Vždy používej ms-appx:/// -->
-                <ResourceDictionary Source="ms-appx:///Resources/Animations.xaml" />
                 <ResourceDictionary Source="ms-appx:///Resources/Theme.xaml" />
                 <ResourceDictionary Source="ms-appx:///Resources/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
