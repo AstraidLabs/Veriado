@@ -203,7 +203,7 @@
                             x:Uid="FilesPage_PageNumberBox"
                             Width="80"
                             HorizontalAlignment="Left"
-                            Minimum="1"
+                            Minimum="0"
                             Maximum="{x:Bind ViewModel.TargetPageMaximum, Mode=OneWay}"
                             SmallChange="1"
                             Value="{x:Bind ViewModel.TargetPage, Mode=TwoWay}" />
