@@ -291,4 +291,19 @@
   <data name="FilesPage_ErrorInfoBar.Message" xml:space="preserve">
     <value>Unable to load the results.</value>
   </data>
+  <data name="FilesPage_SearchRow.[AutomationProperties].Name" xml:space="preserve">
+    <value>Search and fuzzy options</value>
+  </data>
+  <data name="FilesPage_FilterScrollViewer.[AutomationProperties].Name" xml:space="preserve">
+    <value>Filter list</value>
+  </data>
+  <data name="FilesPage_StatusText.[AutomationProperties].Name" xml:space="preserve">
+    <value>Result status</value>
+  </data>
+  <data name="FilesPage_PageNumberBox.Header" xml:space="preserve">
+    <value>Target page</value>
+  </data>
+  <data name="FilesPage_PageSizeComboBox.[AutomationProperties].Name" xml:space="preserve">
+    <value>Page size options</value>
+  </data>
 </root>
