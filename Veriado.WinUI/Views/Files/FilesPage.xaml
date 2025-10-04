@@ -12,6 +12,7 @@
     <views:CultureAwarePage.Resources>
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
         <converters:NullableLongToDoubleConverter x:Key="NullableLongToDoubleConverter" />
+        <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
     </views:CultureAwarePage.Resources>
 
     <Grid Padding="24" RowSpacing="16" ColumnSpacing="24">
