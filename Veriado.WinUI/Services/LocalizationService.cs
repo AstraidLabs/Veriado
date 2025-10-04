@@ -178,7 +178,9 @@ public sealed class LocalizationService : ILocalizationService
 
         try
         {
-            if (_resourceMap.TryGetValue(resourceKey, context, out var candidate) && candidate is not null)
+            var candidate = _resourceMap.TryGetValue(resourceKey, context);
+
+            if (candidate is not null)
             {
                 var value = candidate.ValueAsString;
                 if (!string.IsNullOrEmpty(value))
