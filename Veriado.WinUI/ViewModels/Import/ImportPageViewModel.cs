@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -42,10 +41,9 @@ public partial class ImportPageViewModel : ViewModelBase
         IDispatcherService dispatcher,
         IExceptionHandler exceptionHandler,
         IDialogService dialogService,
-        ILocalizationService localizationService,
         IHotStateService? hotStateService = null,
         IPickerService? pickerService = null)
-        : base(messenger, statusService, dispatcher, exceptionHandler, localizationService)
+        : base(messenger, statusService, dispatcher, exceptionHandler)
     {
         _importService = importService ?? throw new ArgumentNullException(nameof(importService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));

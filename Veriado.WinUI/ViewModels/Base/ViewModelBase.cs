@@ -1,3 +1,5 @@
+using Veriado.WinUI.Localization;
+
 namespace Veriado.WinUI.ViewModels.Base;
 
 /// <summary>
@@ -9,21 +11,18 @@ public abstract partial class ViewModelBase : ObservableObject
     private readonly IStatusService _statusService;
     private readonly IDispatcherService _dispatcher;
     private readonly IExceptionHandler _exceptionHandler;
-    private readonly ILocalizationService _localizationService;
     private CancellationTokenSource? _cancellationSource;
 
     protected ViewModelBase(
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
-        IExceptionHandler exceptionHandler,
-        ILocalizationService localizationService)
+        IExceptionHandler exceptionHandler)
     {
         _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
         _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
-        _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
     }
 
     protected IMessenger Messenger => _messenger;
@@ -31,8 +30,6 @@ public abstract partial class ViewModelBase : ObservableObject
     protected IStatusService StatusService => _statusService;
 
     protected IDispatcherService Dispatcher => _dispatcher;
-
-    protected ILocalizationService LocalizationService => _localizationService;
 
     [ObservableProperty]
     private bool isBusy;
@@ -114,5 +111,5 @@ public abstract partial class ViewModelBase : ObservableObject
     }
 
     protected string GetString(string resourceKey, string? defaultValue = null, params object?[] arguments)
-        => _localizationService.GetString(resourceKey, defaultValue, arguments);
+        => LocalizedStrings.Get(resourceKey, defaultValue, arguments);
 }

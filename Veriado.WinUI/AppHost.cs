@@ -43,7 +43,6 @@ internal sealed class AppHost : IAsyncDisposable
 
                 services.AddSingleton<IWindowProvider, WindowProvider>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
-                services.AddSingleton<ILocalizationService, LocalizationService>();
                 services.AddSingleton<IDispatcherService, DispatcherService>();
                 services.AddSingleton<IThemeService, ThemeService>();
                 services.AddSingleton<IExceptionHandler, ExceptionHandler>();
@@ -52,7 +51,6 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IPreviewService, PreviewService>();
                 services.AddSingleton<ICacheService, MemoryCacheService>();
                 services.AddSingleton<IHotStateService, HotStateService>();
-                services.AddSingleton<ILocalizationService, LocalizationService>();
                 services.AddSingleton<INavigationService, NavigationService>();
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<IPickerService, PickerService>();
