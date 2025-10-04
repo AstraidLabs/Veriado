@@ -1,4 +1,3 @@
-using Veriado.WinUI.Localization;
 
 namespace Veriado.WinUI.ViewModels.Base;
 

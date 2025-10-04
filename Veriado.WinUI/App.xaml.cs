@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Veriado.WinUI.Localization;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
