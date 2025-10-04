@@ -12,10 +12,10 @@ public sealed class NullableIntToDoubleConverter : IValueConverter
         if (value is int?)
         {
             var nullable = (int?)value;
-            return nullable.HasValue ? (double)nullable.Value : 0d;
+            return nullable.HasValue ? (double)nullable.Value : double.NaN;
         }
 
-        return 0d;
+        return double.NaN;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
