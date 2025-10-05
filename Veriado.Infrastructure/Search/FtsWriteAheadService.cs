@@ -67,6 +67,38 @@ internal sealed class FtsWriteAheadService
             return null;
         }
 
+        var titleHash = ComputeTitleHash(normalizedTitle);
+
+        if (transaction is null && !connection.AutoCommit)
+        {
+            await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+            var isolatedConnection = lease.Connection;
+            await isolatedConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await SqlitePragmaHelper.ApplyAsync(isolatedConnection, cancellationToken).ConfigureAwait(false);
+            return await LogInternalAsync(
+                    isolatedConnection,
+                    transaction: null,
+                    fileId,
+                    operation,
+                    contentHash,
+                    titleHash,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return await LogInternalAsync(connection, transaction, fileId, operation, contentHash, titleHash, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<long?> LogInternalAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        Guid fileId,
+        string operation,
+        string? contentHash,
+        string? titleHash,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
@@ -77,7 +109,7 @@ internal sealed class FtsWriteAheadService
         command.Parameters.AddWithValue("$file_id", fileId.ToString("D"));
         command.Parameters.AddWithValue("$op", operation);
         command.Parameters.AddWithValue("$content_hash", (object?)contentHash ?? DBNull.Value);
-        command.Parameters.AddWithValue("$title_hash", (object?)ComputeTitleHash(normalizedTitle) ?? DBNull.Value);
+        command.Parameters.AddWithValue("$title_hash", (object?)titleHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$enqueued_utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is long id ? id : null;
