@@ -58,7 +58,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         for (var i = 0; i < reader.NumDocs; i++)
         {
             var doc = reader.Document(i);
-            if (Guid.TryParse(doc.Get(LuceneIndexManager.FieldNames.Id), out var parsed))
+            if (Guid.TryParse(doc.Get(SearchFieldNames.Id), out var parsed))
             {
                 indexIds.Add(parsed);
             }

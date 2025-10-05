@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 /// <param name="MatchExpression">The Lucene query expression.</param>
 /// <param name="WhereClauses">Additional SQL <c>WHERE</c> fragments joined using <c>AND</c>.</param>
 /// <param name="Parameters">The parameters required by <see cref="WhereClauses"/>.</param>
+/// <param name="RangeFilters">Structured range filters applied to the Lucene query.</param>
 /// <param name="ScorePlan">The scoring configuration.</param>
 /// <param name="RequiresTrigramFallback">Indicates whether the query needs trigram evaluation.</param>
 /// <param name="TrigramExpression">The optional trigram query expression.</param>
@@ -21,6 +22,7 @@ public sealed record SearchQueryPlan(
     string MatchExpression,
     IReadOnlyList<string> WhereClauses,
     IReadOnlyList<SqliteParameterDefinition> Parameters,
+    IReadOnlyList<SearchRangeFilter> RangeFilters,
     SearchScorePlan ScorePlan,
     bool RequiresTrigramFallback,
     string? TrigramExpression,
@@ -45,6 +47,7 @@ public static class SearchQueryPlanFactory
             matchExpression,
             Array.Empty<string>(),
             Array.Empty<SqliteParameterDefinition>(),
+            Array.Empty<SearchRangeFilter>(),
             new SearchScorePlan(),
             false,
             null,
@@ -65,6 +68,7 @@ public static class SearchQueryPlanFactory
             string.Empty,
             Array.Empty<string>(),
             Array.Empty<SqliteParameterDefinition>(),
+            Array.Empty<SearchRangeFilter>(),
             new SearchScorePlan(),
             true,
             trigramExpression,
@@ -169,3 +173,36 @@ public sealed record SearchScorePlan
 /// <param name="Value">The parameter value.</param>
 /// <param name="Type">The optional SQLite type hint.</param>
 public sealed record SqliteParameterDefinition(string Name, object? Value, SqliteType? Type);
+
+/// <summary>
+/// Enumerates the range value kinds supported by the Lucene query planner.
+/// </summary>
+public enum SearchRangeValueKind
+{
+    /// <summary>
+    /// Indicates that the range values should be interpreted as 64-bit integers.
+    /// </summary>
+    Numeric,
+
+    /// <summary>
+    /// Indicates that the range values should be compared lexicographically.
+    /// </summary>
+    Lexicographic,
+}
+
+/// <summary>
+/// Represents a structured range filter produced by the query builder.
+/// </summary>
+/// <param name="Field">The Lucene field name.</param>
+/// <param name="ValueKind">The value type represented by <paramref name="LowerValue"/> and <paramref name="UpperValue"/>.</param>
+/// <param name="LowerValue">The optional inclusive lower bound.</param>
+/// <param name="IncludeLower">Indicates whether <paramref name="LowerValue"/> is inclusive.</param>
+/// <param name="UpperValue">The optional inclusive upper bound.</param>
+/// <param name="IncludeUpper">Indicates whether <paramref name="UpperValue"/> is inclusive.</param>
+public sealed record SearchRangeFilter(
+    string Field,
+    SearchRangeValueKind ValueKind,
+    object? LowerValue,
+    bool IncludeLower,
+    object? UpperValue,
+    bool IncludeUpper);
