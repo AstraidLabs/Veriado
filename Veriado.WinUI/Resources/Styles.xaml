@@ -11,7 +11,7 @@
     <Setter Property="Foreground" Value="{ThemeResource AppNavigationForegroundBrush}" />
   </Style>
 
-  <Style TargetType="TextBlock" x:Key="SectionTitleTextBlockStyle" BasedOn="{StaticResource HeaderTextBlockStyle}">
+  <Style TargetType="TextBlock" x:Key="SectionTitleTextBlockStyle" BasedOn="{StaticResource TitleTextBlockStyle}">
     <Setter Property="Margin" Value="0,24,0,12" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{ThemeResource AppTextPrimaryBrush}" />
