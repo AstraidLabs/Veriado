@@ -39,12 +39,19 @@ internal sealed class WriteQueue : IWriteQueue
 
     public async ValueTask<WriteRequest?> DequeueAsync(CancellationToken cancellationToken)
     {
-        while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            if (_channel.Reader.TryRead(out var request))
+            while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                return request;
+                if (_channel.Reader.TryRead(out var request))
+                {
+                    return request;
+                }
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
         }
 
         return null;
