@@ -5,6 +5,11 @@ namespace Veriado.WinUI.Views;
 
 public sealed partial class StartupWindow : Window
 {
+    public StartupWindow()
+        : this(new StartupViewModel())
+    {
+    }
+
     public StartupWindow(StartupViewModel viewModel)
     {
         InitializeComponent();
