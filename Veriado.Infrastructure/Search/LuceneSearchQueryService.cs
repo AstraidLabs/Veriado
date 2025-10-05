@@ -164,7 +164,7 @@ internal sealed class LuceneSearchQueryService : ISearchQueryService
                 Guid id;
                 if (doc is not null)
                 {
-                    if (!Guid.TryParse(doc.Get(LuceneIndexManager.FieldNames.Id), out id))
+                    if (!Guid.TryParse(doc.Get(SearchFieldNames.Id), out id))
                     {
                         continue;
                     }
@@ -198,45 +198,128 @@ internal sealed class LuceneSearchQueryService : ISearchQueryService
 
     private Query? BuildQuery(SearchQueryPlan plan)
     {
-        var raw = plan.RawQueryText;
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            raw = plan.TrigramExpression;
-        }
+        var matchExpression = plan.MatchExpression;
+        var fallback = string.IsNullOrWhiteSpace(plan.RawQueryText) ? plan.TrigramExpression : plan.RawQueryText;
+        var textToParse = string.IsNullOrWhiteSpace(matchExpression) ? fallback : matchExpression;
 
-        if (string.IsNullOrWhiteSpace(raw))
+        if (string.IsNullOrWhiteSpace(textToParse) && plan.RangeFilters.Count == 0)
         {
             return null;
         }
 
         var fields = new[]
         {
-            LuceneIndexManager.FieldNames.Title,
-            LuceneIndexManager.FieldNames.MetadataText,
-            LuceneIndexManager.FieldNames.FileNameSearch,
-            LuceneIndexManager.FieldNames.CatchAll,
-            LuceneIndexManager.FieldNames.Author,
+            SearchFieldNames.Title,
+            SearchFieldNames.MetadataText,
+            SearchFieldNames.FileNameSearch,
+            SearchFieldNames.CatchAll,
+            SearchFieldNames.Author,
         };
 
         var parser = new MultiFieldQueryParser(LuceneVersion.LUCENE_48, fields, _indexManager.Analyzer)
         {
             DefaultOperator = Operator.OR,
         };
+
+        Query baseQuery;
+        if (string.IsNullOrWhiteSpace(textToParse))
+        {
+            baseQuery = new MatchAllDocsQuery();
+        }
+        else
+        {
+            baseQuery = ParseWithFallback(parser, textToParse);
+        }
+
+        return AttachRangeFilters(baseQuery, plan.RangeFilters);
+    }
+
+    private static Query ParseWithFallback(MultiFieldQueryParser parser, string expression)
+    {
         try
         {
-            return parser.Parse(raw);
+            return parser.Parse(expression);
         }
         catch (ParseException)
         {
-            var escaped = QueryParserBase.Escape(raw);
+            var escaped = QueryParserBase.Escape(expression);
             return parser.Parse(escaped);
         }
+    }
+
+    private static Query AttachRangeFilters(Query baseQuery, IReadOnlyList<SearchRangeFilter> filters)
+    {
+        if (filters is null || filters.Count == 0)
+        {
+            return baseQuery;
+        }
+
+        var boolean = new BooleanQuery { { baseQuery, Occur.MUST } };
+        foreach (var filter in filters)
+        {
+            var rangeQuery = CreateRangeQuery(filter);
+            if (rangeQuery is not null)
+            {
+                boolean.Add(rangeQuery, Occur.MUST);
+            }
+        }
+
+        return boolean;
+    }
+
+    private static Query? CreateRangeQuery(SearchRangeFilter filter)
+    {
+        switch (filter.ValueKind)
+        {
+            case SearchRangeValueKind.Numeric:
+                var lowerNumeric = ToNullableInt64(filter.LowerValue);
+                var upperNumeric = ToNullableInt64(filter.UpperValue);
+                if (lowerNumeric is null && upperNumeric is null)
+                {
+                    return null;
+                }
+
+                var includeLower = lowerNumeric.HasValue ? filter.IncludeLower : true;
+                var includeUpper = upperNumeric.HasValue ? filter.IncludeUpper : true;
+                return NumericRangeQuery.NewInt64Range(filter.Field, lowerNumeric, upperNumeric, includeLower, includeUpper);
+
+            case SearchRangeValueKind.Lexicographic:
+                var lowerText = filter.LowerValue as string;
+                var upperText = filter.UpperValue as string;
+                if (string.IsNullOrWhiteSpace(lowerText) && string.IsNullOrWhiteSpace(upperText))
+                {
+                    return null;
+                }
+
+                var includeLowerText = string.IsNullOrEmpty(lowerText) ? true : filter.IncludeLower;
+                var includeUpperText = string.IsNullOrEmpty(upperText) ? true : filter.IncludeUpper;
+                return TermRangeQuery.NewStringRange(filter.Field, lowerText, upperText, includeLowerText, includeUpperText);
+
+            default:
+                return null;
+        }
+    }
+
+    private static long? ToNullableInt64(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            long l => l,
+            int i => i,
+            short s => s,
+            byte b => b,
+            uint ui => ui,
+            ulong ul when ul <= long.MaxValue => (long)ul,
+            string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => null,
+        };
     }
 
     private static Guid ExtractId(IndexSearcher searcher, int docId)
     {
         var document = searcher.Doc(docId);
-        if (Guid.TryParse(document.Get(LuceneIndexManager.FieldNames.Id), out var parsed))
+        if (Guid.TryParse(document.Get(SearchFieldNames.Id), out var parsed))
         {
             return parsed;
         }
@@ -278,17 +361,17 @@ internal sealed class LuceneSearchQueryService : ISearchQueryService
                     null);
             }
 
-            var metadataText = doc.Get(LuceneIndexManager.FieldNames.MetadataTextStored) ?? string.Empty;
+            var metadataText = doc.Get(SearchFieldNames.MetadataTextStored) ?? string.Empty;
             var snippet = BuildSnippet(metadataText, DefaultSnippetLength);
             var fields = new Dictionary<string, string?>
             {
-                ["title"] = doc.Get(LuceneIndexManager.FieldNames.Title),
-                ["author"] = doc.Get(LuceneIndexManager.FieldNames.Author),
-                ["mime"] = doc.Get(LuceneIndexManager.FieldNames.Mime),
-                ["filename"] = doc.Get(LuceneIndexManager.FieldNames.FileName),
+                ["title"] = doc.Get(SearchFieldNames.Title),
+                ["author"] = doc.Get(SearchFieldNames.Author),
+                ["mime"] = doc.Get(SearchFieldNames.Mime),
+                ["filename"] = doc.Get(SearchFieldNames.FileName),
             };
 
-            var modifiedUtc = ParseDate(doc.Get(LuceneIndexManager.FieldNames.ModifiedUtc));
+            var modifiedUtc = ParseDate(doc.Get(SearchFieldNames.ModifiedUtc));
             var sortValues = modifiedUtc.HasValue
                 ? new SearchHitSortValues(modifiedUtc.Value, Score, RawScore)
                 : null;
@@ -297,7 +380,7 @@ internal sealed class LuceneSearchQueryService : ISearchQueryService
                 Id,
                 RawScore,
                 SourceName,
-                LuceneIndexManager.FieldNames.MetadataText,
+                SearchFieldNames.MetadataText,
                 snippet,
                 new List<HighlightSpan>(),
                 fields,

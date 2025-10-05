@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search.Abstractions;
+using Veriado.Domain.Search;
 
 /// <summary>
 /// Default implementation of <see cref="ISearchQueryBuilder"/> that targets Lucene.NET.
@@ -45,16 +46,29 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private static readonly IReadOnlyDictionary<string, RangeTarget> RangeMap = new Dictionary<string, RangeTarget>(
         StringComparer.OrdinalIgnoreCase)
     {
-        ["modified"] = new("f.modified_utc", SqliteType.Text, ConvertDateTime),
-        ["modified_utc"] = new("f.modified_utc", SqliteType.Text, ConvertDateTime),
-        ["created"] = new("f.created_utc", SqliteType.Text, ConvertDateTime),
-        ["created_utc"] = new("f.created_utc", SqliteType.Text, ConvertDateTime),
-        ["size"] = new("f.size_bytes", SqliteType.Integer, static value => value),
-        ["size_bytes"] = new("f.size_bytes", SqliteType.Integer, static value => value),
+        ["modified"] = new(
+            new SqlRangeTarget("f.modified_utc", SqliteType.Text, ConvertDateTime),
+            new LuceneRangeTarget(SearchFieldNames.ModifiedTicks, SearchRangeValueKind.Numeric, ConvertDateTimeTicks)),
+        ["modified_utc"] = new(
+            new SqlRangeTarget("f.modified_utc", SqliteType.Text, ConvertDateTime),
+            new LuceneRangeTarget(SearchFieldNames.ModifiedTicks, SearchRangeValueKind.Numeric, ConvertDateTimeTicks)),
+        ["created"] = new(
+            new SqlRangeTarget("f.created_utc", SqliteType.Text, ConvertDateTime),
+            new LuceneRangeTarget(SearchFieldNames.CreatedTicks, SearchRangeValueKind.Numeric, ConvertDateTimeTicks)),
+        ["created_utc"] = new(
+            new SqlRangeTarget("f.created_utc", SqliteType.Text, ConvertDateTime),
+            new LuceneRangeTarget(SearchFieldNames.CreatedTicks, SearchRangeValueKind.Numeric, ConvertDateTimeTicks)),
+        ["size"] = new(
+            new SqlRangeTarget("f.size_bytes", SqliteType.Integer, ConvertToInt64),
+            new LuceneRangeTarget(SearchFieldNames.SizeBytes, SearchRangeValueKind.Numeric, ConvertToInt64)),
+        ["size_bytes"] = new(
+            new SqlRangeTarget("f.size_bytes", SqliteType.Integer, ConvertToInt64),
+            new LuceneRangeTarget(SearchFieldNames.SizeBytes, SearchRangeValueKind.Numeric, ConvertToInt64)),
     };
 
     private readonly List<string> _whereClauses = new();
     private readonly List<SqliteParameterDefinition> _parameters = new();
+    private readonly List<SearchRangeFilter> _rangeFilters = new();
     private readonly SearchScorePlan _scorePlan;
     private readonly ISynonymProvider _synonymProvider;
     private readonly string _language;
@@ -225,23 +239,46 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             return;
         }
 
-        if (from is not null)
+        if (target.Sql is SqlRangeTarget sqlTarget)
         {
-            var parameter = CreateParameter(from, target, includeLower ? ">=" : ">");
-            if (parameter is not null)
+            if (from is not null)
             {
-                _whereClauses.Add(parameter.Value.Clause);
-                _parameters.Add(parameter.Value.Parameter);
+                var parameter = CreateParameter(from, sqlTarget, includeLower ? ">=" : ">");
+                if (parameter is not null)
+                {
+                    _whereClauses.Add(parameter.Value.Clause);
+                    _parameters.Add(parameter.Value.Parameter);
+                }
+            }
+
+            if (to is not null)
+            {
+                var parameter = CreateParameter(to, sqlTarget, includeUpper ? "<=" : "<");
+                if (parameter is not null)
+                {
+                    _whereClauses.Add(parameter.Value.Clause);
+                    _parameters.Add(parameter.Value.Parameter);
+                }
             }
         }
 
-        if (to is not null)
+        if (target.Lucene is LuceneRangeTarget luceneTarget)
         {
-            var parameter = CreateParameter(to, target, includeUpper ? "<=" : "<");
-            if (parameter is not null)
+            var lowerConverted = from is null ? null : luceneTarget.Converter(from);
+            var upperConverted = to is null ? null : luceneTarget.Converter(to);
+
+            var hasLower = lowerConverted is not null;
+            var hasUpper = upperConverted is not null;
+
+            if (hasLower || hasUpper)
             {
-                _whereClauses.Add(parameter.Value.Clause);
-                _parameters.Add(parameter.Value.Parameter);
+                _rangeFilters.Add(new SearchRangeFilter(
+                    luceneTarget.Field,
+                    luceneTarget.ValueKind,
+                    hasLower ? lowerConverted : null,
+                    hasLower && includeLower,
+                    hasUpper ? upperConverted : null,
+                    hasUpper && includeUpper));
             }
         }
     }
@@ -335,6 +372,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             match,
             _whereClauses.AsReadOnly(),
             _parameters.AsReadOnly(),
+            _rangeFilters.AsReadOnly(),
             _scorePlan,
             requiresTrigramFallback,
             trigramExpression,
@@ -834,7 +872,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
     private (string Clause, SqliteParameterDefinition Parameter)? CreateParameter(
         object value,
-        RangeTarget target,
+        SqlRangeTarget target,
         string op)
     {
         var converted = target.Converter(value);
@@ -864,7 +902,39 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         };
     }
 
-    private readonly record struct RangeTarget(string Column, SqliteType Type, Func<object, object?> Converter);
+    private static object? ConvertDateTimeTicks(object value)
+    {
+        return value switch
+        {
+            DateTimeOffset dto => dto.UtcTicks,
+            DateTime dt => DateTime.SpecifyKind(dt, DateTimeKind.Utc).Ticks,
+            string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto)
+                => dto.UtcTicks,
+            long l => l,
+            _ => null,
+        };
+    }
+
+    private static object? ConvertToInt64(object value)
+    {
+        return value switch
+        {
+            long l => l,
+            int i => (long)i,
+            short s => (long)s,
+            byte b => (long)b,
+            uint ui => ui,
+            ulong ul when ul <= long.MaxValue => (long)ul,
+            string s when long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => null,
+        };
+    }
+
+    private readonly record struct RangeTarget(SqlRangeTarget? Sql, LuceneRangeTarget? Lucene);
+
+    private readonly record struct SqlRangeTarget(string Column, SqliteType Type, Func<object, object?> Converter);
+
+    private readonly record struct LuceneRangeTarget(string Field, SearchRangeValueKind ValueKind, Func<object, object?> Converter);
 
     private sealed class EmptySynonymProvider : ISynonymProvider
     {

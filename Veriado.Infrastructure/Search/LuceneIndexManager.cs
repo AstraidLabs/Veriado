@@ -104,7 +104,7 @@ internal sealed class LuceneIndexManager : IDisposable
         try
         {
             var luceneDocument = CreateDocument(document);
-            var term = new Term(FieldNames.Id, document.FileId.ToString("D", CultureInfo.InvariantCulture));
+            var term = new Term(SearchFieldNames.Id, document.FileId.ToString("D", CultureInfo.InvariantCulture));
             _writer!.UpdateDocument(term, luceneDocument);
             _writer.Commit();
         }
@@ -121,7 +121,7 @@ internal sealed class LuceneIndexManager : IDisposable
         await _operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var term = new Term(FieldNames.Id, fileId.ToString("D", CultureInfo.InvariantCulture));
+            var term = new Term(SearchFieldNames.Id, fileId.ToString("D", CultureInfo.InvariantCulture));
             _writer!.DeleteDocuments(term);
             _writer.Commit();
         }
@@ -162,25 +162,27 @@ internal sealed class LuceneIndexManager : IDisposable
 
         var doc = new Document
         {
-            new StringField(FieldNames.Id, document.FileId.ToString("D", CultureInfo.InvariantCulture), Field.Store.YES),
-            new StringField(FieldNames.Mime, mime, Field.Store.YES),
-            new StringField(FieldNames.FileName, fileName, Field.Store.YES),
-            new StoredField(FieldNames.Metadata, metadataJson),
-            new StoredField(FieldNames.ContentHash, document.ContentHash ?? string.Empty),
-            new StoredField(FieldNames.CreatedUtc, document.CreatedUtc.ToString("O", CultureInfo.InvariantCulture)),
-            new StoredField(FieldNames.ModifiedUtc, document.ModifiedUtc.ToString("O", CultureInfo.InvariantCulture)),
-            new StoredField(FieldNames.MetadataTextStored, metadataText),
-            new TextField(FieldNames.CatchAll, catchAll, Field.Store.NO),
-            new TextField(FieldNames.MetadataText, metadataText, Field.Store.YES),
-            new TextField(FieldNames.Title, title, Field.Store.YES),
-            new TextField(FieldNames.Author, author, Field.Store.YES),
+            new StringField(SearchFieldNames.Id, document.FileId.ToString("D", CultureInfo.InvariantCulture), Field.Store.YES),
+            new StringField(SearchFieldNames.Mime, mime, Field.Store.YES),
+            new StringField(SearchFieldNames.FileName, fileName, Field.Store.YES),
+            new StoredField(SearchFieldNames.Metadata, metadataJson),
+            new StoredField(SearchFieldNames.ContentHash, document.ContentHash ?? string.Empty),
+            new StoredField(SearchFieldNames.CreatedUtc, document.CreatedUtc.ToString("O", CultureInfo.InvariantCulture)),
+            new StoredField(SearchFieldNames.ModifiedUtc, document.ModifiedUtc.ToString("O", CultureInfo.InvariantCulture)),
+            new StoredField(SearchFieldNames.MetadataTextStored, metadataText),
+            new TextField(SearchFieldNames.CatchAll, catchAll, Field.Store.NO),
+            new TextField(SearchFieldNames.MetadataText, metadataText, Field.Store.YES),
+            new TextField(SearchFieldNames.Title, title, Field.Store.YES),
+            new TextField(SearchFieldNames.Author, author, Field.Store.YES),
         };
 
-        doc.Add(new TextField(FieldNames.FileNameSearch, fileName, Field.Store.NO));
-        doc.Add(new TextField(FieldNames.MimeSearch, mime, Field.Store.NO));
-        doc.Add(new Int64Field(FieldNames.ModifiedTicks, document.ModifiedUtc.UtcTicks, Field.Store.YES));
-        doc.Add(new Int64Field(FieldNames.CreatedTicks, document.CreatedUtc.UtcTicks, Field.Store.YES));
-        doc.Add(new NumericDocValuesField(FieldNames.ModifiedTicksSort, document.ModifiedUtc.UtcTicks));
+        doc.Add(new TextField(SearchFieldNames.FileNameSearch, fileName, Field.Store.NO));
+        doc.Add(new TextField(SearchFieldNames.MimeSearch, mime, Field.Store.NO));
+        doc.Add(new Int64Field(SearchFieldNames.ModifiedTicks, document.ModifiedUtc.UtcTicks, Field.Store.YES));
+        doc.Add(new Int64Field(SearchFieldNames.CreatedTicks, document.CreatedUtc.UtcTicks, Field.Store.YES));
+        doc.Add(new Int64Field(SearchFieldNames.SizeBytes, document.SizeBytes, Field.Store.YES));
+        doc.Add(new NumericDocValuesField(SearchFieldNames.ModifiedTicksSort, document.ModifiedUtc.UtcTicks));
+        doc.Add(new NumericDocValuesField(SearchFieldNames.SizeBytesSort, document.SizeBytes));
 
         return doc;
     }
@@ -223,24 +225,4 @@ internal sealed class LuceneIndexManager : IDisposable
         _operationLock.Dispose();
     }
 
-    internal static class FieldNames
-    {
-        public const string Id = "id";
-        public const string Title = "title";
-        public const string Author = "author";
-        public const string MetadataText = "metadata_text";
-        public const string MetadataTextStored = "metadata_text_store";
-        public const string Metadata = "metadata";
-        public const string Mime = "mime";
-        public const string MimeSearch = "mime_search";
-        public const string FileName = "filename";
-        public const string FileNameSearch = "filename_search";
-        public const string ContentHash = "content_hash";
-        public const string CreatedUtc = "created_utc";
-        public const string ModifiedUtc = "modified_utc";
-        public const string ModifiedTicks = "modified_ticks";
-        public const string CreatedTicks = "created_ticks";
-        public const string ModifiedTicksSort = "modified_ticks_sort";
-        public const string CatchAll = "catch_all";
-    }
 }

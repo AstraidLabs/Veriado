@@ -389,6 +389,7 @@ public sealed class FileEntity : AggregateRoot
             Mime.Value,
             authorText,
             Name.Value,
+            Size.Value,
             CreatedUtc.Value,
             LastModifiedUtc.Value,
             metadataJson,

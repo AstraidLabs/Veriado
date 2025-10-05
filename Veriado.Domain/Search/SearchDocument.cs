@@ -14,6 +14,7 @@ public sealed record SearchDocument(
     string Mime,
     string? Author,
     string FileName,
+    long SizeBytes,
     DateTimeOffset CreatedUtc,
     DateTimeOffset ModifiedUtc,
     string? MetadataJson,

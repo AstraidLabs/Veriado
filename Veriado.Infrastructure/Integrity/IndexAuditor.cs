@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Search;
 
@@ -128,7 +129,7 @@ public sealed class IndexAuditor : IIndexAuditor
             {
                 ct.ThrowIfCancellationRequested();
                 var document = reader.Document(i);
-                if (Guid.TryParse(document.Get(LuceneIndexManager.FieldNames.Id), out var parsed))
+                if (Guid.TryParse(document.Get(SearchFieldNames.Id), out var parsed))
                 {
                     ids.Add(parsed);
                 }
