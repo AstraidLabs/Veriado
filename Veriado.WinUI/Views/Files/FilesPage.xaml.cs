@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,9 +44,17 @@ public sealed partial class FilesPage : Page
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.StartHealthMonitoring();
 
-        await Task.WhenAll(
-            ExecuteInitialRefreshAsync(),
-            ViewModel.LoadSearchSuggestionsAsync(CancellationToken.None)).ConfigureAwait(true);
+        try
+        {
+            await Task.WhenAll(
+                ExecuteInitialRefreshAsync(),
+                ViewModel.LoadSearchSuggestionsAsync(CancellationToken.None)).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to initialize {nameof(FilesPage)}: {ex}");
+            ViewModel.HasError = true;
+        }
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
