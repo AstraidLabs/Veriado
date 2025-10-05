@@ -113,14 +113,15 @@ internal sealed class FtsWriteAheadService
         command.Parameters.AddWithValue("$content_hash", (object?)contentHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$title_hash", (object?)titleHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$enqueued_utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        if (rows == 0)
+        await using var reader = await command
+            .ExecuteReaderAsync(System.Data.CommandBehavior.SingleRow, cancellationToken)
+            .ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             return null;
         }
 
-        // LastInsertRowId is connection scoped and therefore safe to read immediately after the insert completes.
-        return connection.LastInsertRowId;
+        return reader.GetInt64(0);
     }
 
     private static bool HasAmbientTransaction(SqliteConnection connection)
