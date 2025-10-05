@@ -179,13 +179,30 @@ internal sealed class WriteWorker : BackgroundService
 
     private async Task ProcessBatchAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
     {
+        var activeBatch = new List<WriteRequest>(batch.Count);
+        foreach (var request in batch)
+        {
+            if (request.IsCancellationRequested)
+            {
+                request.TrySetCanceled(request.RequestCancellation);
+                continue;
+            }
+
+            activeBatch.Add(request);
+        }
+
+        if (activeBatch.Count == 0)
+        {
+            return;
+        }
+
         var repairAttempted = false;
 
         while (true)
         {
             try
             {
-                await ProcessBatchAttemptAsync(batch, cancellationToken).ConfigureAwait(false);
+                await ProcessBatchAttemptAsync(activeBatch, cancellationToken).ConfigureAwait(false);
                 return;
             }
             catch (SearchIndexCorruptedException ex)

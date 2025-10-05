@@ -25,6 +25,10 @@ internal sealed class WriteRequest
 
     public IReadOnlyList<QueuedFileWrite>? TrackedFiles { get; }
 
+    public CancellationToken RequestCancellation => _requestCancellation;
+
+    public bool IsCancellationRequested => _requestCancellation.IsCancellationRequested;
+
     public async Task<object?> ExecuteAsync(AppDbContext context, CancellationToken workerCancellation)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(workerCancellation, _requestCancellation);
