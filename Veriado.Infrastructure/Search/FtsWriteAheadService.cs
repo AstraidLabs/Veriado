@@ -69,7 +69,7 @@ internal sealed class FtsWriteAheadService
 
         var titleHash = ComputeTitleHash(normalizedTitle);
 
-        if (transaction is null && !connection.AutoCommit)
+        if (transaction is null && connection.Transaction is not null)
         {
             await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
             var isolatedConnection = lease.Connection;
