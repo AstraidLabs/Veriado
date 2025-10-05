@@ -34,6 +34,7 @@ public sealed class ImportService : IImportService
     private readonly WriteMappingPipeline _mappingPipeline;
     private readonly IClock _clock;
     private readonly IRequestContext _requestContext;
+    private readonly ISearchIndexCoordinator _searchIndexCoordinator;
     private readonly ILogger<ImportService> _logger;
 
     public ImportService(
@@ -41,12 +42,15 @@ public sealed class ImportService : IImportService
         WriteMappingPipeline mappingPipeline,
         IClock clock,
         IRequestContext requestContext,
+        ISearchIndexCoordinator searchIndexCoordinator,
         ILogger<ImportService> logger)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _mappingPipeline = mappingPipeline ?? throw new ArgumentNullException(nameof(mappingPipeline));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _requestContext = requestContext ?? throw new ArgumentNullException(nameof(requestContext));
+        _searchIndexCoordinator = searchIndexCoordinator
+            ?? throw new ArgumentNullException(nameof(searchIndexCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -59,8 +63,15 @@ public sealed class ImportService : IImportService
 
         var normalized = NormalizeRequest(request);
         var descriptor = string.IsNullOrWhiteSpace(normalized.Name) ? normalized.Extension : normalized.Name;
-        return await ImportFileInternalAsync(normalized, descriptor, cancellationToken)
+        var response = await ImportFileInternalAsync(normalized, descriptor, cancellationToken)
             .ConfigureAwait(false);
+
+        if (response.IsSuccess)
+        {
+            await RefreshSearchIndexAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return response;
     }
 
     /// <inheritdoc />
@@ -611,6 +622,11 @@ public sealed class ImportService : IImportService
         var failedFinal = Volatile.Read(ref failed);
         var skippedFinal = Volatile.Read(ref skipped);
         var errorArray = errors.ToArray();
+
+        if (succeededFinal > 0)
+        {
+            await RefreshSearchIndexAsync(cancellationToken).ConfigureAwait(false);
+        }
         var status = DetermineStatus(
             total,
             processedFinal,
@@ -1058,6 +1074,28 @@ public sealed class ImportService : IImportService
     private IDisposable BeginScope()
     {
         return AmbientRequestContext.Begin(Guid.NewGuid(), _requestContext.UserId, _requestContext.CorrelationId);
+    }
+
+    private async Task RefreshSearchIndexAsync(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            await _searchIndexCoordinator.SearchIndexRefreshAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (
+            ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Search index refresh cancelled after import completion.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to refresh the search index after import operations.");
+        }
     }
 
     private async Task<bool> FileAlreadyExistsAsync(string contentHash, CancellationToken cancellationToken)
