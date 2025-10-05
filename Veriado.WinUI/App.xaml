@@ -13,10 +13,6 @@
                 <ResourceDictionary Source="ms-appx:///Resources/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Fallback, pokud by běhové prostředí nemělo DividerStrokeColorDefaultBrush -->
-            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush"
-                       Color="{ThemeResource SurfaceStrokeColorDefault}" />
-
             <!-- Globální konvertory -->
             <conv:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <conv:SizeToHumanConverter x:Key="SizeToHumanConverter" />
