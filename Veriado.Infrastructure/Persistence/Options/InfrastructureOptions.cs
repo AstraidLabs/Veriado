@@ -22,6 +22,13 @@ public sealed class InfrastructureOptions
         = null;
 
     /// <summary>
+    /// Gets or sets the optional directory where the Lucene.NET index should be stored. When
+    /// unspecified a path adjacent to the SQLite database file is used.
+    /// </summary>
+    public string? LuceneIndexPath { get; set; }
+        = null;
+
+    /// <summary>
     /// Gets or sets the indexing mode for the FTS5 subsystem.
     /// </summary>
     public FtsIndexingMode FtsIndexingMode { get; set; }

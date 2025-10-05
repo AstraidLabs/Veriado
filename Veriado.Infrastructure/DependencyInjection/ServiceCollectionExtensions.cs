@@ -145,12 +145,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWriteQueue, WriteQueue>();
         services.AddSingleton<SuggestionMaintenanceService>();
         services.AddSingleton<OutboxDrainService>();
+        services.AddSingleton<LuceneIndexManager>();
         services.AddSingleton<SqliteFts5Indexer>();
         services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
         services.AddSingleton<SqliteFts5QueryService>();
-        services.AddSingleton<TrigramQueryService>();
+        services.AddSingleton<LuceneQueryService>();
         services.AddSingleton<HybridSearchQueryService>();
         services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
         services.AddSingleton<FtsWriteAheadService>();

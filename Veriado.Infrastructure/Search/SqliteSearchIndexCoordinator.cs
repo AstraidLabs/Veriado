@@ -16,6 +16,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
     private readonly FtsWriteAheadService _writeAhead;
+    private readonly LuceneIndexManager _luceneIndex;
 
     public SqliteSearchIndexCoordinator(
         ISearchIndexer searchIndexer,
@@ -24,7 +25,8 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         OutboxDrainService outboxDrainService,
         IAnalyzerFactory analyzerFactory,
         TrigramIndexOptions trigramOptions,
-        FtsWriteAheadService writeAhead)
+        FtsWriteAheadService writeAhead,
+        LuceneIndexManager luceneIndex)
     {
         _searchIndexer = searchIndexer;
         _options = options;
@@ -33,6 +35,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
+        _luceneIndex = luceneIndex ?? throw new ArgumentNullException(nameof(luceneIndex));
     }
 
     public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken)
@@ -63,7 +66,12 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         {
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
             var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
-            await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, beforeCommit: null, cancellationToken)
+            await helper.IndexAsync(
+                document,
+                sqliteConnection,
+                sqliteTransaction,
+                beforeCommit: ct => _luceneIndex.IndexAsync(document, ct),
+                cancellationToken)
                 .ConfigureAwait(false);
             return true;
         }
