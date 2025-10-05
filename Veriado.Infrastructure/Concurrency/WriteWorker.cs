@@ -24,11 +24,8 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IFulltextIntegrityService _integrityService;
     private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
-    private readonly IAnalyzerFactory _analyzerFactory;
-    private readonly TrigramIndexOptions _trigramOptions;
     private readonly INeedsReindexEvaluator _needsReindexEvaluator;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
-    private readonly FtsWriteAheadService _writeAhead;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -40,11 +37,8 @@ internal sealed class WriteWorker : BackgroundService
         IFulltextIntegrityService integrityService,
         IEventPublisher eventPublisher,
         IClock clock,
-        IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions,
         INeedsReindexEvaluator needsReindexEvaluator,
-        ISearchIndexSignatureCalculator signatureCalculator,
-        FtsWriteAheadService writeAhead)
+        ISearchIndexSignatureCalculator signatureCalculator)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -55,11 +49,8 @@ internal sealed class WriteWorker : BackgroundService
         _integrityService = integrityService;
         _eventPublisher = eventPublisher;
         _clock = clock;
-        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
-        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _needsReindexEvaluator = needsReindexEvaluator ?? throw new ArgumentNullException(nameof(needsReindexEvaluator));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
-        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -345,7 +336,7 @@ internal sealed class WriteWorker : BackgroundService
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
         var reindexEvents = domainEvents.OfType<SearchReindexRequested>().ToList();
 
-        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && filesToIndex.Count > 0)
+        if (_options.SearchIndexingMode == SearchIndexingMode.Outbox && filesToIndex.Count > 0)
         {
             var reindexByFile = reindexEvents
                 .GroupBy(evt => evt.FileId)
@@ -424,90 +415,7 @@ internal sealed class WriteWorker : BackgroundService
             return false;
         }
 
-        if (!_options.IsFulltextAvailable)
-        {
-            foreach (var id in filesToDelete)
-            {
-                await _searchIndexer.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
-            }
-
-            if (filesToIndex.Count == 0)
-            {
-                return filesToDelete.Count > 0;
-            }
-
-            var timestamp = UtcTimestamp.From(_clock.UtcNow);
-            foreach (var (file, _) in filesToIndex)
-            {
-                var document = file.ToSearchDocument();
-                await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
-
-                var signature = _signatureCalculator.Compute(file);
-                file.ConfirmIndexed(
-                    file.SearchIndex.SchemaVersion,
-                    timestamp,
-                    signature.AnalyzerVersion,
-                    signature.TokenHash,
-                    signature.NormalizedTitle);
-            }
-
-            return true;
-        }
-
         var handled = false;
-        var dbTransaction = context.Database.CurrentTransaction?.GetDbTransaction();
-
-        if (_options.FtsIndexingMode == FtsIndexingMode.SameTransaction)
-        {
-            if (dbTransaction is not SqliteTransaction sqliteTransaction)
-            {
-                throw new InvalidOperationException("SQLite transaction is required for full-text updates.");
-            }
-
-            var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
-
-            foreach (var id in filesToDelete)
-            {
-                await ExecuteWithRetryAsync(
-                    async ct =>
-                    {
-                        await helper
-                            .DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit: null, ct)
-                            .ConfigureAwait(false);
-                    },
-                    $"delete index for {id}",
-                    cancellationToken).ConfigureAwait(false);
-            }
-
-            foreach (var (file, options) in filesToIndex)
-            {
-                var indexed = false;
-                await ExecuteWithRetryAsync(
-                    async ct =>
-                    {
-                        indexed = await _searchCoordinator
-                            .IndexAsync(file, options, sqliteTransaction, ct)
-                            .ConfigureAwait(false);
-                    },
-                    $"index file {file.Id}",
-                    cancellationToken).ConfigureAwait(false);
-                if (indexed)
-                {
-                    var timestamp = UtcTimestamp.From(_clock.UtcNow);
-                    var signature = _signatureCalculator.Compute(file);
-                    file.ConfirmIndexed(
-                        file.SearchIndex.SchemaVersion,
-                        timestamp,
-                        signature.AnalyzerVersion,
-                        signature.TokenHash,
-                        signature.NormalizedTitle);
-                    handled = true;
-                }
-            }
-
-            return handled;
-        }
 
         foreach (var id in filesToDelete)
         {
@@ -516,7 +424,7 @@ internal sealed class WriteWorker : BackgroundService
 
         foreach (var (file, options) in filesToIndex)
         {
-            var indexed = await _searchCoordinator.IndexAsync(file, options, dbTransaction, cancellationToken)
+            var indexed = await _searchCoordinator.IndexAsync(file, options, transaction: null, cancellationToken)
                 .ConfigureAwait(false);
             if (indexed)
             {
@@ -533,49 +441,6 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         return handled;
-    }
-
-    private async Task ExecuteWithRetryAsync(
-        Func<CancellationToken, Task> operation,
-        string description,
-        CancellationToken cancellationToken,
-        int maxAttempts = 3)
-    {
-        Exception? lastError = null;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                await operation(cancellationToken).ConfigureAwait(false);
-                return;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (SearchIndexCorruptedException)
-            {
-                throw;
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                lastError = ex;
-                _logger.LogWarning(
-                    ex,
-                    "{Operation} failed on attempt {Attempt}/{MaxAttempts}, retrying",
-                    description,
-                    attempt,
-                    maxAttempts);
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                lastError = ex;
-                break;
-            }
-        }
-
-        throw lastError ?? new InvalidOperationException($"Operation '{description}' failed without emitting an exception.");
     }
 
     private async Task AttemptIntegrityRepairAsync(CancellationToken cancellationToken)

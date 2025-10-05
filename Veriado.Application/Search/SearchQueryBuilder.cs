@@ -9,7 +9,7 @@ using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search.Abstractions;
 
 /// <summary>
-/// Default implementation of <see cref="ISearchQueryBuilder"/> that targets SQLite FTS5.
+/// Default implementation of <see cref="ISearchQueryBuilder"/> that targets Lucene.NET.
 /// <para>
 /// Example usage:
 /// <code>

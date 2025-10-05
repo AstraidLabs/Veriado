@@ -29,7 +29,7 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
         var isWal = string.Equals(journalMode, "wal", StringComparison.OrdinalIgnoreCase);
 
         var pendingOutbox = 0;
-        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox)
+        if (_options.SearchIndexingMode == SearchIndexingMode.Outbox)
         {
             var pending = await GetScalarAsync(connection, "SELECT COUNT(*) FROM outbox_events WHERE processed_utc IS NULL;", cancellationToken)
                 .ConfigureAwait(false);
@@ -55,16 +55,7 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 
         var total = await GetScalarAsync(connection, "SELECT COUNT(*) FROM files;", cancellationToken).ConfigureAwait(false);
         var stale = await GetScalarAsync(connection, "SELECT COUNT(*) FROM files WHERE fts_is_stale = 1;", cancellationToken).ConfigureAwait(false);
-        string? version;
-        if (_options.IsFulltextAvailable)
-        {
-            var rawVersion = await GetScalarAsync(connection, "SELECT fts5_source_id();", cancellationToken).ConfigureAwait(false);
-            version = string.IsNullOrWhiteSpace(rawVersion) ? null : rawVersion;
-        }
-        else
-        {
-            version = _options.FulltextAvailabilityError;
-        }
+        var version = LuceneVersion.LUCENE_48.ToString();
 
         var totalCount = int.TryParse(total, out var parsedTotal) ? parsedTotal : 0;
         var staleCount = int.TryParse(stale, out var parsedStale) ? parsedStale : 0;

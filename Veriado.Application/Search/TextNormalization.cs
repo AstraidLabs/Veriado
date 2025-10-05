@@ -53,7 +53,7 @@ public static class TextNormalization
     }
 
     /// <summary>
-    /// Builds a prefix token suitable for SQLite FTS5 queries.
+    /// Builds a prefix token suitable for Lucene queries.
     /// </summary>
     public static string BuildMatchPrefix(string token)
     {
@@ -62,7 +62,7 @@ public static class TextNormalization
     }
 
     /// <summary>
-    /// Escapes characters that would otherwise break an FTS5 MATCH token.
+    /// Escapes characters that would otherwise break a Lucene token.
     /// </summary>
     public static string EscapeMatchToken(string token)
     {

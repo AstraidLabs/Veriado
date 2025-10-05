@@ -5,6 +5,7 @@ global using System.IO;
 global using System.Linq;
 global using System.Threading;
 global using System.Threading.Tasks;
+global using Lucene.Net.Util;
 global using Microsoft.Data.Sqlite;
 global using Microsoft.EntityFrameworkCore;
 global using Microsoft.EntityFrameworkCore.Metadata.Builders;

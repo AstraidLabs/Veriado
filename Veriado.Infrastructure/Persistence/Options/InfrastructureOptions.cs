@@ -29,21 +29,10 @@ public sealed class InfrastructureOptions
         = null;
 
     /// <summary>
-    /// Gets or sets the indexing mode for the FTS5 subsystem.
+    /// Gets or sets the indexing coordination mode for the Lucene search subsystem.
     /// </summary>
-    public FtsIndexingMode FtsIndexingMode { get; set; }
-        = FtsIndexingMode.SameTransaction;
-
-    /// <summary>
-    /// Gets a value indicating whether the runtime environment provides the required SQLite FTS5 features.
-    /// </summary>
-    public bool IsFulltextAvailable { get; internal set; } = true;
-
-    /// <summary>
-    /// Gets the last detected failure reason when SQLite FTS5 support is unavailable.
-    /// </summary>
-    public string? FulltextAvailabilityError { get; internal set; }
-        = null;
+    public SearchIndexingMode SearchIndexingMode { get; set; }
+        = SearchIndexingMode.Immediate;
 
     /// <summary>
     /// Gets or sets the maximum number of work items processed in a single batch.
@@ -111,17 +100,17 @@ public sealed class InfrastructureOptions
 }
 
 /// <summary>
-/// Enumerates the supported FTS5 indexing coordination strategies.
+/// Enumerates the supported indexing coordination strategies for the Lucene subsystem.
 /// </summary>
-public enum FtsIndexingMode
+public enum SearchIndexingMode
 {
     /// <summary>
-    /// FTS changes are executed in the same database transaction as the EF Core persistence layer.
+    /// Index mutations are applied immediately within the write worker pipeline.
     /// </summary>
-    SameTransaction,
+    Immediate,
 
     /// <summary>
-    /// FTS changes are executed asynchronously using the outbox pattern.
+    /// Index mutations are deferred to the outbox processor.
     /// </summary>
     Outbox,
 }

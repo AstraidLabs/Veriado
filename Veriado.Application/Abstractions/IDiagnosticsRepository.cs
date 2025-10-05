@@ -36,7 +36,7 @@ public sealed record DatabaseHealthSnapshot(
 /// </summary>
 /// <param name="TotalDocuments">Total number of indexed documents.</param>
 /// <param name="StaleDocuments">Number of documents marked as stale.</param>
-/// <param name="FtsVersion">The SQLite FTS5 version string.</param>
+/// <param name="FtsVersion">The Lucene.NET version string.</param>
 public sealed record SearchIndexSnapshot(
     int TotalDocuments,
     int StaleDocuments,

@@ -5,12 +5,12 @@ using System.Linq;
 namespace Veriado.Appl.Search;
 
 /// <summary>
-/// Provides helpers to construct safe FTS5 match expressions from raw user input.
+/// Provides helpers to construct safe Lucene query expressions from raw user input.
 /// </summary>
 public static class FtsQueryBuilder
 {
     /// <summary>
-    /// Builds an FTS5 match expression from the provided text.
+    /// Builds a Lucene query expression from the provided text.
     /// </summary>
     /// <param name="text">The raw search text.</param>
     /// <param name="prefix">Whether each term should use prefix search.</param>

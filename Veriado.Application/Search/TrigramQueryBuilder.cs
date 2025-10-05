@@ -1,7 +1,7 @@
 namespace Veriado.Appl.Search;
 
 /// <summary>
-/// Provides helpers for constructing trigram match expressions compatible with SQLite FTS5.
+/// Provides helpers for constructing trigram match expressions compatible with the Lucene fallback pipeline.
 /// </summary>
 public static class TrigramQueryBuilder
 {

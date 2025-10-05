@@ -11,7 +11,7 @@ Veriado je moderní desktopová aplikace pro Windows, která firmám i profesion
 ## Jak Veriado funguje
 1. **Import dokumentů** – Uživatel zvolí soubory nebo složky a Veriado je paralelně zpracuje, uloží binární obsah i metadata a připraví je k vyhledávání.
 2. **Automatické obohacení** – Textové extraktory převádějí PDF, Office či OpenDocument formáty na čitelné náhledy, které se cacheují a zpřístupňují bez externích služeb.
-3. **Fulltextový index** – Aplikace buduje vysoce výkonný FTS5 index v SQLite a doplňuje ho trigramovou analýzou pro fuzzy i přesné dotazy.
+3. **Fulltextový index** – Aplikace využívá Lucene.NET pro plnotextové vyhledávání a nadále zachovává trigramovou analýzu pro fuzzy dotazy.
 4. **Práce s obsahem** – WinUI rozhraní nabízí rychlé náhledy, aktualizaci metadat, export obsahu a sdílení snippetů.
 5. **Pravidelná údržba** – Vestavěné rutiny kontrolují integritu indexu, umožňují reindexaci a optimalizaci úložiště.
 
@@ -30,7 +30,7 @@ Veriado je moderní desktopová aplikace pro Windows, která firmám i profesion
 
 ## Technologický základ
 - **.NET 8 & C# 12** – Výkon, bezpečnost a dlouhodobá podpora.
-- **SQLite s FTS5** – Rychlý fulltextový engine s možností lokálního nasazení bez serverové infrastruktury.
+- **Lucene.NET** – Vyspělý fulltextový engine s možností lokálního nasazení bez serverové infrastruktury.
 - **WinUI 3 & Windows App SDK** – Moderní nativní prostředí pro Windows 10+ s podporou x86, x64 i ARM64.
 - **MediatR, AutoMapper, FluentValidation** – Prověřené knihovny pro orchestraci use-case scénářů, mapování dat a validace.
 - **CommunityToolkit.Mvvm & Microsoft.Extensions.Hosting** – Stabilní základ pro MVVM logiku, navigaci a hostování služeb.

@@ -9,7 +9,7 @@ namespace Veriado.Appl.Search.Abstractions;
 public interface ISearchQueryService
 {
     /// <summary>
-    /// Executes an FTS5 search query and returns the matching file identifiers with scores.
+    /// Executes a Lucene search query and returns the matching file identifiers with scores.
     /// </summary>
     /// <param name="plan">The structured query plan.</param>
     /// <param name="skip">The number of results to skip.</param>
@@ -23,7 +23,7 @@ public interface ISearchQueryService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Executes a trigram-based fuzzy match query and returns matching identifiers with scores.
+    /// Executes a fuzzy search query (using trigram heuristics when needed) and returns matching identifiers with scores.
     /// </summary>
     /// <param name="plan">The structured query plan.</param>
     /// <param name="skip">The number of results to skip.</param>
@@ -63,7 +63,7 @@ public interface ISearchHistoryService
     /// Adds a new history entry or increments the execution count for an existing match.
     /// </summary>
     /// <param name="queryText">The user-supplied query text, if any.</param>
-    /// <param name="matchQuery">The generated FTS5 match query.</param>
+    /// <param name="matchQuery">The generated Lucene match query.</param>
     /// <param name="totalCount">The number of hits returned by the query.</param>
     /// <param name="isFuzzy">Indicates whether the query was executed using trigram fuzzy search.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -294,18 +294,6 @@ public interface ISearchSuggestionService
 /// </summary>
 public interface ISearchTelemetry
 {
-    /// <summary>
-    /// Records the elapsed time for an FTS query.
-    /// </summary>
-    /// <param name="elapsed">The elapsed duration.</param>
-    void RecordFtsQuery(TimeSpan elapsed);
-
-    /// <summary>
-    /// Records the elapsed time for a trigram query.
-    /// </summary>
-    /// <param name="elapsed">The elapsed duration.</param>
-    void RecordTrigramQuery(TimeSpan elapsed);
-
     /// <summary>
     /// Records the elapsed time for a facet computation.
     /// </summary>
