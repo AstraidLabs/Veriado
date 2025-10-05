@@ -30,19 +30,22 @@ internal sealed class FtsWriteAheadService
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly LuceneIndexManager _luceneIndex;
 
     public FtsWriteAheadService(
         ILogger<FtsWriteAheadService> logger,
         IDbContextFactory<AppDbContext> dbContextFactory,
         ISqliteConnectionFactory connectionFactory,
         IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions)
+        TrigramIndexOptions trigramOptions,
+        LuceneIndexManager luceneIndex)
     {
         _logger = logger;
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _luceneIndex = luceneIndex ?? throw new ArgumentNullException(nameof(luceneIndex));
     }
 
     public bool IsLoggingEnabled => SuppressionCounter.Value == 0;
@@ -273,6 +276,7 @@ internal sealed class FtsWriteAheadService
         if (committed)
         {
             await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
+            await _luceneIndex.IndexAsync(document, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -309,6 +313,7 @@ internal sealed class FtsWriteAheadService
         if (committed)
         {
             await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
+            await _luceneIndex.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
         }
     }
 

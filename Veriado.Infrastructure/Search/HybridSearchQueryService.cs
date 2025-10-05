@@ -5,25 +5,25 @@ using Veriado.Domain.Search;
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
-/// Aggregates FTS5 and trigram search providers into a unified result set.
+/// Aggregates FTS5 and Lucene search providers into a unified result set.
 /// </summary>
 internal sealed class HybridSearchQueryService : ISearchQueryService
 {
     private readonly SqliteFts5QueryService _ftsService;
-    private readonly TrigramQueryService _trigramService;
+    private readonly LuceneQueryService _luceneService;
     private readonly ISearchTelemetry _telemetry;
     private readonly SearchScoreOptions _scoreOptions;
     private readonly SearchParseOptions _parseOptions;
 
     public HybridSearchQueryService(
         SqliteFts5QueryService ftsService,
-        TrigramQueryService trigramService,
+        LuceneQueryService luceneService,
         ISearchTelemetry telemetry,
         SearchScoreOptions scoreOptions,
         SearchParseOptions parseOptions)
     {
         _ftsService = ftsService ?? throw new ArgumentNullException(nameof(ftsService));
-        _trigramService = trigramService ?? throw new ArgumentNullException(nameof(trigramService));
+        _luceneService = luceneService ?? throw new ArgumentNullException(nameof(luceneService));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _scoreOptions = scoreOptions ?? throw new ArgumentNullException(nameof(scoreOptions));
         _parseOptions = parseOptions ?? throw new ArgumentNullException(nameof(parseOptions));
@@ -44,7 +44,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         int take,
         CancellationToken cancellationToken)
     {
-        return _trigramService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
+        return _luceneService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
     }
 
     public Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)
@@ -77,13 +77,13 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
             ftsHits = ftsResult.Hits;
         }
 
-        IReadOnlyList<SearchHit> trigramHits = Array.Empty<SearchHit>();
-        if (ShouldRunTrigram(plan, ftsResult))
+        IReadOnlyList<SearchHit> luceneHits = Array.Empty<SearchHit>();
+        if (ShouldRunLucene(plan, ftsResult))
         {
-            trigramHits = await _trigramService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
+            luceneHits = await _luceneService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
         }
 
-        if (ftsHits.Count == 0 && trigramHits.Count == 0)
+        if (ftsHits.Count == 0 && luceneHits.Count == 0)
         {
             stopwatch.Stop();
             _telemetry.RecordSearchLatency(stopwatch.Elapsed);
@@ -103,7 +103,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         }
 
         var scale = ComputeScale(normalizedScores);
-        foreach (var hit in trigramHits)
+        foreach (var hit in luceneHits)
         {
             var normalized = ExtractNormalizedScore(hit.SortValues) ?? Math.Clamp(hit.Score, 0d, 1d);
             var scaled = Math.Clamp(normalized * scale, 0d, 1d);
@@ -149,7 +149,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         return ordered;
     }
 
-    private bool ShouldRunTrigram(SearchQueryPlan plan, FtsSearchResult ftsResult)
+    private bool ShouldRunLucene(SearchQueryPlan plan, FtsSearchResult ftsResult)
     {
         if (plan.RequiresTrigramFallback)
         {

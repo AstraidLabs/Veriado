@@ -14,6 +14,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly TrigramIndexOptions _trigramOptions;
     private readonly FtsWriteAheadService _writeAhead;
+    private readonly LuceneIndexManager _luceneIndex;
 
     public SqliteFts5Indexer(
         InfrastructureOptions options,
@@ -21,6 +22,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         ISqliteConnectionFactory connectionFactory,
         TrigramIndexOptions trigramOptions,
         FtsWriteAheadService writeAhead,
+        LuceneIndexManager luceneIndex,
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
@@ -28,6 +30,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
+        _luceneIndex = luceneIndex ?? throw new ArgumentNullException(nameof(luceneIndex));
         _suggestionMaintenance = suggestionMaintenance;
     }
 
@@ -86,6 +89,13 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
             throw;
         }
 
+        if (beforeCommit is not null)
+        {
+            await beforeCommit(cancellationToken).ConfigureAwait(false);
+        }
+
+        await _luceneIndex.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+
         if (_suggestionMaintenance is not null)
         {
             await _suggestionMaintenance.UpsertAsync(document, cancellationToken).ConfigureAwait(false);
@@ -127,6 +137,13 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
+
+        if (beforeCommit is not null)
+        {
+            await beforeCommit(cancellationToken).ConfigureAwait(false);
+        }
+
+        await _luceneIndex.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
     }
 
 }
