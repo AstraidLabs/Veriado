@@ -7,7 +7,7 @@ namespace Veriado.Appl.Search;
 /// <summary>
 /// Provides helpers to construct safe Lucene query expressions from raw user input.
 /// </summary>
-public static class FtsQueryBuilder
+public static class LuceneQueryBuilder
 {
     /// <summary>
     /// Builds a Lucene query expression from the provided text.

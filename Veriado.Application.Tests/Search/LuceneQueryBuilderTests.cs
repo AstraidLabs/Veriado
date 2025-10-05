@@ -6,14 +6,14 @@ using Xunit;
 
 namespace Veriado.Application.Tests.Search;
 
-public static class FtsQueryBuilderTests
+public static class LuceneQueryBuilderTests
 {
     [Fact]
     public static void BuildMatch_DropsReservedTokensFromRawInput()
     {
         var factory = new FakeAnalyzerFactory(text => text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
-        var result = FtsQueryBuilder.BuildMatch("alpha and beta", prefix: false, allTerms: false, factory);
+        var result = LuceneQueryBuilder.BuildMatch("alpha and beta", prefix: false, allTerms: false, factory);
 
         Assert.Equal("alpha OR beta", result);
     }
@@ -23,7 +23,7 @@ public static class FtsQueryBuilderTests
     {
         var factory = new FakeAnalyzerFactory(text => text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
-        var result = FtsQueryBuilder.BuildMatch("and or not", prefix: false, allTerms: false, factory);
+        var result = LuceneQueryBuilder.BuildMatch("and or not", prefix: false, allTerms: false, factory);
 
         Assert.Equal(string.Empty, result);
     }
@@ -33,7 +33,7 @@ public static class FtsQueryBuilderTests
     {
         var factory = new FakeAnalyzerFactory(_ => new[] { "alpha", "and" });
 
-        var result = FtsQueryBuilder.BuildMatch("alpha", prefix: false, allTerms: false, factory);
+        var result = LuceneQueryBuilder.BuildMatch("alpha", prefix: false, allTerms: false, factory);
 
         Assert.Equal("alpha OR \"and\"", result);
     }

@@ -90,7 +90,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
         if (!string.IsNullOrWhiteSpace(dto.Text) && string.IsNullOrWhiteSpace(matchQuery) && !(favorite?.IsFuzzy ?? false))
         {
-            if (FtsQueryBuilder.TryBuild(dto.Text!, dto.TextPrefix, dto.TextAllTerms, _analyzerFactory, out var built))
+            if (LuceneQueryBuilder.TryBuild(dto.Text!, dto.TextPrefix, dto.TextAllTerms, _analyzerFactory, out var built))
             {
                 matchQuery = built;
             }
