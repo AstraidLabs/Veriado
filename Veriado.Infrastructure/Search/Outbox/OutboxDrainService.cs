@@ -130,17 +130,24 @@ internal sealed class OutboxDrainService
 
     private async Task ProcessOutboxEventAsync(AppDbContext writeContext, OutboxEvent outbox, CancellationToken cancellationToken)
     {
-        using var payload = JsonDocument.Parse(outbox.Payload);
-        if (!payload.RootElement.TryGetProperty("FileId", out var fileIdElement) || !Guid.TryParse(fileIdElement.GetString(), out var fileId))
+        switch (outbox.Type)
         {
-            _logger.LogWarning("Outbox event {EventId} missing file identifier", outbox.Id);
-            outbox.ProcessedUtc = _clock.UtcNow;
-            return;
-        }
+            case SearchOutboxEventTypes.ReindexRequested:
+                await ProcessReindexEventAsync(writeContext, outbox, cancellationToken).ConfigureAwait(false);
+                break;
 
-        await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
-        outbox.ProcessedUtc = _clock.UtcNow;
-        outbox.Attempts = 0;
+            case SearchOutboxEventTypes.DeleteRequested:
+                await ProcessDeleteEventAsync(outbox, cancellationToken).ConfigureAwait(false);
+                break;
+
+            default:
+                _logger.LogWarning(
+                    "Outbox event {EventId} has unknown type {EventType}; marking as processed.",
+                    outbox.Id,
+                    outbox.Type);
+                outbox.ProcessedUtc = _clock.UtcNow;
+                break;
+        }
     }
 
     private async Task ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
@@ -260,5 +267,48 @@ internal sealed class OutboxDrainService
                 attempts,
                 _options.RetryBudget);
         }
+    }
+
+    private async Task ProcessReindexEventAsync(
+        AppDbContext writeContext,
+        OutboxEvent outbox,
+        CancellationToken cancellationToken)
+    {
+        if (!TryExtractFileId(outbox, out var fileId))
+        {
+            outbox.ProcessedUtc = _clock.UtcNow;
+            return;
+        }
+
+        await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
+        outbox.ProcessedUtc = _clock.UtcNow;
+        outbox.Attempts = 0;
+    }
+
+    private async Task ProcessDeleteEventAsync(OutboxEvent outbox, CancellationToken cancellationToken)
+    {
+        if (!TryExtractFileId(outbox, out var fileId))
+        {
+            outbox.ProcessedUtc = _clock.UtcNow;
+            return;
+        }
+
+        await _searchIndexer.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
+        outbox.ProcessedUtc = _clock.UtcNow;
+        outbox.Attempts = 0;
+    }
+
+    private bool TryExtractFileId(OutboxEvent outbox, out Guid fileId)
+    {
+        using var payload = JsonDocument.Parse(outbox.Payload);
+        if (payload.RootElement.TryGetProperty("FileId", out var fileIdElement)
+            && Guid.TryParse(fileIdElement.GetString(), out fileId))
+        {
+            return true;
+        }
+
+        fileId = Guid.Empty;
+        _logger.LogWarning("Outbox event {EventId} missing file identifier", outbox.Id);
+        return false;
     }
 }
