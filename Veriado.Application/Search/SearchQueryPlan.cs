@@ -4,9 +4,9 @@ using System;
 using Microsoft.Data.Sqlite;
 
 /// <summary>
-/// Represents a structured search query composed of FTS match clauses, range filters and scoring hints.
+/// Represents a structured search query composed of Lucene match clauses, range filters and scoring hints.
 /// </summary>
-/// <param name="MatchExpression">The SQLite FTS5 MATCH expression.</param>
+/// <param name="MatchExpression">The Lucene query expression.</param>
 /// <param name="WhereClauses">Additional SQL <c>WHERE</c> fragments joined using <c>AND</c>.</param>
 /// <param name="Parameters">The parameters required by <see cref="WhereClauses"/>.</param>
 /// <param name="ScorePlan">The scoring configuration.</param>
@@ -36,7 +36,7 @@ public sealed record SearchQueryPlan(
 public static class SearchQueryPlanFactory
 {
     /// <summary>
-    /// Creates a plan representing a plain FTS5 match query without additional filters.
+    /// Creates a plan representing a plain Lucene match query without additional filters.
     /// </summary>
     public static SearchQueryPlan FromMatch(string matchExpression, string? rawQueryText = null)
     {
@@ -77,7 +77,7 @@ public static class SearchQueryPlanFactory
 }
 
 /// <summary>
-/// Describes a scoring configuration for an FTS5 query.
+/// Describes a scoring configuration preserved for compatibility with legacy FTS queries.
 /// </summary>
 public sealed record SearchScorePlan
 {

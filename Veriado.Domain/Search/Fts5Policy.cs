@@ -1,7 +1,7 @@
 namespace Veriado.Domain.Search;
 
 /// <summary>
-/// Represents the configuration for the FTS5 tokenizer used by the offline search engine.
+/// Represents the legacy configuration for the tokenizer used by previous FTS-based search implementations.
 /// </summary>
 public sealed record Fts5Policy(bool RemoveDiacritics, string Tokenizer, string TokenChars)
 {

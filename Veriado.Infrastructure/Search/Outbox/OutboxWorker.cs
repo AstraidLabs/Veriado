@@ -25,9 +25,9 @@ internal sealed class OutboxWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (_options.FtsIndexingMode != FtsIndexingMode.Outbox)
+        if (_options.SearchIndexingMode != SearchIndexingMode.Outbox)
         {
-            _logger.LogDebug("Outbox worker skipped because indexing mode is {Mode}", _options.FtsIndexingMode);
+            _logger.LogDebug("Outbox worker skipped because indexing mode is {Mode}", _options.SearchIndexingMode);
             return;
         }
 

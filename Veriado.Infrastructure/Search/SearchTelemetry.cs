@@ -9,8 +9,6 @@ internal sealed class SearchTelemetry : ISearchTelemetry
 {
     private static readonly Meter Meter = new("Veriado.Search", "1.0.0");
 
-    private readonly Histogram<double> _ftsQueryHistogram = Meter.CreateHistogram<double>("search_fts_query_ms");
-    private readonly Histogram<double> _trigramQueryHistogram = Meter.CreateHistogram<double>("search_trigram_query_ms");
     private readonly Histogram<double> _facetHistogram = Meter.CreateHistogram<double>("search_facet_ms");
     private readonly Histogram<double> _overallHistogram = Meter.CreateHistogram<double>("search_latency_ms");
     private readonly Histogram<double> _verifyDurationHistogram = Meter.CreateHistogram<double>("fts_verify_duration_ms");
@@ -28,12 +26,6 @@ internal sealed class SearchTelemetry : ISearchTelemetry
         _documentGauge = Meter.CreateObservableGauge("search_documents_total", ObserveDocuments);
         _indexSizeGauge = Meter.CreateObservableGauge("search_index_bytes", ObserveIndexSize);
     }
-
-    public void RecordFtsQuery(TimeSpan elapsed)
-        => _ftsQueryHistogram.Record(elapsed.TotalMilliseconds);
-
-    public void RecordTrigramQuery(TimeSpan elapsed)
-        => _trigramQueryHistogram.Record(elapsed.TotalMilliseconds);
 
     public void RecordFacetComputation(TimeSpan elapsed)
         => _facetHistogram.Record(elapsed.TotalMilliseconds);

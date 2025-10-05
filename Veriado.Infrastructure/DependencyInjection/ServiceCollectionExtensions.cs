@@ -74,8 +74,6 @@ public static class ServiceCollectionExtensions
             SqlitePragmaHelper.ApplyAsync(connection, CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        SqliteFulltextSupportDetector.Detect(options);
-
         if (configuration is not null)
         {
             var indexingSection = configuration.GetSection("Search").GetSection("Indexing");
@@ -146,15 +144,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SuggestionMaintenanceService>();
         services.AddSingleton<OutboxDrainService>();
         services.AddSingleton<LuceneIndexManager>();
-        services.AddSingleton<SqliteFts5Indexer>();
-        services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
-        services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
+        services.AddSingleton<LuceneSearchIndexer>();
+        services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<LuceneSearchIndexer>());
+        services.AddSingleton<ISearchIndexCoordinator, SearchIndexCoordinator>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
-        services.AddSingleton<SqliteFts5QueryService>();
-        services.AddSingleton<LuceneQueryService>();
-        services.AddSingleton<HybridSearchQueryService>();
-        services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
-        services.AddSingleton<FtsWriteAheadService>();
+        services.AddSingleton<LuceneSearchQueryService>();
+        services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<LuceneSearchQueryService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
         services.AddSingleton<ISynonymProvider, SynonymService>();
@@ -174,7 +169,7 @@ public static class ServiceCollectionExtensions
 
         services.AddHostedService<WriteWorker>();
         services.AddHostedService<IdempotencyCleanupWorker>();
-        if (options.FtsIndexingMode == FtsIndexingMode.Outbox)
+        if (options.SearchIndexingMode == SearchIndexingMode.Outbox)
         {
             services.AddHostedService<OutboxWorker>();
         }

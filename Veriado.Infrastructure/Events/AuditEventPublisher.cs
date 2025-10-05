@@ -82,7 +82,7 @@ internal sealed class AuditEventPublisher : IEventPublisher
                     hasChanges = true;
                     break;
 
-                case SearchReindexRequested reindex when _options.FtsIndexingMode == FtsIndexingMode.Outbox:
+                case SearchReindexRequested reindex when _options.SearchIndexingMode == SearchIndexingMode.Outbox:
                     _logger.LogDebug(
                         "Search reindex request {EventId} for file {FileId} acknowledged by audit publisher",
                         reindex.EventId,

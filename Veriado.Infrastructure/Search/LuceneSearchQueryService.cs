@@ -11,25 +11,27 @@ using Lucene.Net.Search;
 using Lucene.Net.Util;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Search;
+using Veriado.Appl.Search.Abstractions;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
-/// Executes Lucene.NET based queries over the hybrid search index.
+/// Executes Lucene.NET based queries over the search index.
 /// </summary>
-internal sealed class LuceneQueryService
+internal sealed class LuceneSearchQueryService : ISearchQueryService
 {
     private const string SourceName = "LUCENE";
     private const int DefaultSnippetLength = 240;
 
     private readonly LuceneIndexManager _indexManager;
     private readonly ISearchTelemetry _telemetry;
-    private readonly ILogger<LuceneQueryService> _logger;
-    public LuceneQueryService(
+    private readonly ILogger<LuceneSearchQueryService> _logger;
+
+    public LuceneSearchQueryService(
         LuceneIndexManager indexManager,
         ISearchTelemetry telemetry,
-        ILogger<LuceneQueryService> logger)
+        ILogger<LuceneSearchQueryService> logger)
     {
         _indexManager = indexManager ?? throw new ArgumentNullException(nameof(indexManager));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
@@ -53,12 +55,52 @@ internal sealed class LuceneQueryService
         return hits.Select(hit => (hit.Id, hit.Score)).ToList();
     }
 
+    public Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
+        SearchQueryPlan plan,
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
+        => SearchWithScoresAsync(plan, skip, take, cancellationToken);
+
+    public async Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        await _indexManager.EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        BooleanQuery.SetMaxClauseCount(Math.Max(BooleanQuery.MaxClauseCount, 1024));
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            using var reader = _indexManager.OpenReader();
+            var searcher = new IndexSearcher(reader);
+            var query = BuildQuery(plan);
+            if (query is null)
+            {
+                return 0;
+            }
+
+            var docs = searcher.Search(query, 1);
+            return (int)Math.Min(int.MaxValue, docs.TotalHits);
+        }
+        catch (ParseException ex)
+        {
+            _logger.LogWarning(ex, "Lucene query parsing failed for raw query '{Query}'", plan.RawQueryText);
+            return 0;
+        }
+        finally
+        {
+            stopwatch.Stop();
+            _telemetry.RecordSearchLatency(stopwatch.Elapsed);
+        }
+    }
+
     public async Task<IReadOnlyList<SearchHit>> SearchAsync(
         SearchQueryPlan plan,
-        int take,
+        int? limit,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        var take = limit.GetValueOrDefault(10);
         if (take <= 0)
         {
             return Array.Empty<SearchHit>();
@@ -150,7 +192,7 @@ internal sealed class LuceneQueryService
         finally
         {
             stopwatch.Stop();
-            _telemetry.RecordTrigramQuery(stopwatch.Elapsed);
+            _telemetry.RecordSearchLatency(stopwatch.Elapsed);
         }
     }
 

@@ -45,7 +45,7 @@ internal sealed class OutboxDrainService
 
     public async Task<int> DrainAsync(CancellationToken cancellationToken)
     {
-        if (_options.FtsIndexingMode != FtsIndexingMode.Outbox)
+        if (_options.SearchIndexingMode != SearchIndexingMode.Outbox)
         {
             return 0;
         }
@@ -134,13 +134,6 @@ internal sealed class OutboxDrainService
         if (!payload.RootElement.TryGetProperty("FileId", out var fileIdElement) || !Guid.TryParse(fileIdElement.GetString(), out var fileId))
         {
             _logger.LogWarning("Outbox event {EventId} missing file identifier", outbox.Id);
-            outbox.ProcessedUtc = _clock.UtcNow;
-            return;
-        }
-
-        if (!_options.IsFulltextAvailable)
-        {
-            await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
             outbox.ProcessedUtc = _clock.UtcNow;
             return;
         }

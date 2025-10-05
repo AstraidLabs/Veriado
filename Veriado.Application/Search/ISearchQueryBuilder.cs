@@ -3,7 +3,7 @@ namespace Veriado.Appl.Search;
 using System;
 
 /// <summary>
-/// Provides a fluent API for constructing rich SQLite FTS5 search queries including range filters
+/// Provides a fluent API for constructing Lucene search queries including range filters
 /// and scoring metadata.
 /// </summary>
 public interface ISearchQueryBuilder
@@ -43,7 +43,7 @@ public interface ISearchQueryBuilder
     QueryNode? Prefix(string? field, string prefix);
 
     /// <summary>
-    /// Signals that the provided token should be resolved using trigram similarity instead of FTS5.
+    /// Signals that the provided token should be resolved using trigram similarity instead of Lucene term matching.
     /// </summary>
     /// <param name="field">The optional column restriction used for diagnostics.</param>
     /// <param name="term">The fuzzy term.</param>

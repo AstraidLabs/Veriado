@@ -116,7 +116,7 @@ public sealed class FileEntity : AggregateRoot
     public SearchIndexState SearchIndex { get; private set; } = new SearchIndexState(schemaVersion: 1);
 
     /// <summary>
-    /// Gets the FTS5 tokenizer policy.
+    /// Gets the legacy tokenizer policy persisted for backwards compatibility.
     /// </summary>
     public Fts5Policy FtsPolicy { get; private set; } = Fts5Policy.Default;
 

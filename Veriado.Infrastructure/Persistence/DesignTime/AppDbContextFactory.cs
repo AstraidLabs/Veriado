@@ -28,7 +28,7 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     {
         var options = new InfrastructureOptions
         {
-            FtsIndexingMode = FtsIndexingMode.Outbox,
+            SearchIndexingMode = SearchIndexingMode.Outbox,
         };
 
         if (string.IsNullOrWhiteSpace(options.DbPath))
@@ -50,7 +50,6 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         };
 
         options.ConnectionString = connectionStringBuilder.ConnectionString;
-        SqliteFulltextSupportDetector.Detect(options);
         return options;
     }
 }
