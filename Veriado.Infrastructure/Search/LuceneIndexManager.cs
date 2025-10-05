@@ -19,7 +19,7 @@ namespace Veriado.Infrastructure.Search;
 /// <summary>
 /// Provides shared Lucene.NET primitives for indexing and querying search documents.
 /// </summary>
-internal sealed class LuceneIndexManager : IDisposable
+public sealed class LuceneIndexManager : IDisposable
 {
     private readonly InfrastructureOptions _options;
     private readonly ILogger<LuceneIndexManager> _logger;
