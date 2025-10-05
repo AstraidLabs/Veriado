@@ -32,8 +32,9 @@ internal sealed class WriteQueue : IWriteQueue
             var value = await work(context, ct).ConfigureAwait(false);
             return (object?)value;
         }, completion, trackedFiles, cancellationToken);
+        using var registration = cancellationToken.Register(() => request.TrySetCanceled(cancellationToken));
         await _channel.Writer.WriteAsync(request, cancellationToken).ConfigureAwait(false);
-        var result = await completion.Task.ConfigureAwait(false);
+        var result = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         return result is T typed ? typed : default!;
     }
 
