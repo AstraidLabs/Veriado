@@ -76,12 +76,14 @@ public sealed partial class FilesPage : Page
             LoadingRing.Opacity = isBusy ? 1d : 0d;
             ResultsHost.Opacity = isBusy ? 0d : 1d;
             ResultsHost.IsHitTestVisible = !isBusy;
+            FilesScrollViewer.IsHitTestVisible = !isBusy;
             return;
         }
 
         LoadingRing.Visibility = Visibility.Visible;
         ResultsHost.Visibility = Visibility.Visible;
         ResultsHost.IsHitTestVisible = !isBusy;
+        FilesScrollViewer.IsHitTestVisible = !isBusy;
 
         var resultsVisual = ElementCompositionPreview.GetElementVisual(ResultsHost);
         var loadingVisual = ElementCompositionPreview.GetElementVisual(LoadingRing);
