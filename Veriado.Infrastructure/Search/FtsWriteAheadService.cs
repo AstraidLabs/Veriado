@@ -176,24 +176,32 @@ internal sealed class FtsWriteAheadService
 
         var document = file.ToSearchDocument();
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var committed = false;
+        await using (var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false))
         {
-            using var scope = SuppressLogging();
-            await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
-                .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var scope = SuppressLogging();
+                await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+                    .ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                committed = true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                _logger.LogError(
+                    ex,
+                    "Failed to replay FTS index entry {EntryId} for file {FileId}. Moving to DLQ.",
+                    entry.Id,
+                    entry.FileId);
+                await MoveToDeadLetterAsync(connection, entry, ex.Message, cancellationToken).ConfigureAwait(false);
+            }
         }
-        catch (Exception ex)
+
+        if (committed)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            _logger.LogError(
-                ex,
-                "Failed to replay FTS index entry {EntryId} for file {FileId}. Moving to DLQ.",
-                entry.Id,
-                entry.FileId);
-            await MoveToDeadLetterAsync(connection, entry, ex.Message, cancellationToken).ConfigureAwait(false);
+            await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -204,24 +212,32 @@ internal sealed class FtsWriteAheadService
         Guid fileId,
         CancellationToken cancellationToken)
     {
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var committed = false;
+        await using (var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false))
         {
-            using var scope = SuppressLogging();
-            await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
-                .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var scope = SuppressLogging();
+                await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+                    .ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                committed = true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                _logger.LogError(
+                    ex,
+                    "Failed to replay FTS delete entry {EntryId} for file {FileId}. Moving to DLQ.",
+                    entry.Id,
+                    entry.FileId);
+                await MoveToDeadLetterAsync(connection, entry, ex.Message, cancellationToken).ConfigureAwait(false);
+            }
         }
-        catch (Exception ex)
+
+        if (committed)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            _logger.LogError(
-                ex,
-                "Failed to replay FTS delete entry {EntryId} for file {FileId}. Moving to DLQ.",
-                entry.Id,
-                entry.FileId);
-            await MoveToDeadLetterAsync(connection, entry, ex.Message, cancellationToken).ConfigureAwait(false);
+            await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
         }
     }
 
