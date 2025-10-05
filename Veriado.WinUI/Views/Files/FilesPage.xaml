@@ -65,11 +65,6 @@
                     <controls:Expander
                         IsExpanded="True"
                         Header="Attributes">
-                        <controls:Expander.ContentTransitions>
-                            <TransitionCollection>
-                                <ContentThemeTransition />
-                            </TransitionCollection>
-                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <TextBox
                                 PlaceholderText="Extension"
@@ -89,11 +84,6 @@
                     <controls:Expander
                         IsExpanded="True"
                         Header="Validity">
-                        <controls:Expander.ContentTransitions>
-                            <TransitionCollection>
-                                <ContentThemeTransition />
-                            </TransitionCollection>
-                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <CheckBox
                                 IsThreeState="True"
@@ -123,11 +113,6 @@
                     <controls:Expander
                         IsExpanded="False"
                         Header="Dates">
-                        <controls:Expander.ContentTransitions>
-                            <TransitionCollection>
-                                <ContentThemeTransition />
-                            </TransitionCollection>
-                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <CalendarDatePicker
                                 Date="{x:Bind ViewModel.CreatedFromFilter, Mode=TwoWay}"
@@ -147,11 +132,6 @@
                     <controls:Expander
                         IsExpanded="False"
                         Header="Size">
-                        <controls:Expander.ContentTransitions>
-                            <TransitionCollection>
-                                <ContentThemeTransition />
-                            </TransitionCollection>
-                        </controls:Expander.ContentTransitions>
                         <StackPanel Spacing="8">
                             <controls:NumberBox
                                 Minimum="0"
@@ -231,28 +211,14 @@
                 IsOpen="{x:Bind ViewModel.IsIndexingPending, Mode=OneWay}"
                 Severity="Warning"
                 Title="Indexing in progress"
-                Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay, FallbackValue='Results may be incomplete while indexing finishes.'}"
-                Loaded="OnInfoBarLoaded"
-                Closing="OnInfoBarClosing">
-                <controls:InfoBar.Transitions>
-                    <TransitionCollection>
-                        <ContentThemeTransition />
-                    </TransitionCollection>
-                </controls:InfoBar.Transitions>
+                Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay, FallbackValue='Results may be incomplete while indexing finishes.'}">
             </controls:InfoBar>
             <controls:InfoBar
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                 Severity="Error"
                 Title="Loading error"
-                Message="Unable to load the results."
-                Loaded="OnInfoBarLoaded"
-                Closing="OnInfoBarClosing">
-                <controls:InfoBar.Transitions>
-                    <TransitionCollection>
-                        <ContentThemeTransition />
-                    </TransitionCollection>
-                </controls:InfoBar.Transitions>
+                Message="Unable to load the results.">
             </controls:InfoBar>
         </StackPanel>
 
