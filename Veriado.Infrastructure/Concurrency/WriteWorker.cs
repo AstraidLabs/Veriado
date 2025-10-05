@@ -426,14 +426,22 @@ internal sealed class WriteWorker : BackgroundService
 
         if (!_options.IsFulltextAvailable)
         {
+            foreach (var id in filesToDelete)
+            {
+                await _searchIndexer.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+            }
+
             if (filesToIndex.Count == 0)
             {
-                return false;
+                return filesToDelete.Count > 0;
             }
 
             var timestamp = UtcTimestamp.From(_clock.UtcNow);
             foreach (var (file, _) in filesToIndex)
             {
+                var document = file.ToSearchDocument();
+                await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+
                 var signature = _signatureCalculator.Compute(file);
                 file.ConfirmIndexed(
                     file.SearchIndex.SchemaVersion,

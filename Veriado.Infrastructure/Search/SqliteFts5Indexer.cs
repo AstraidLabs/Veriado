@@ -60,6 +60,18 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         ArgumentNullException.ThrowIfNull(document);
         if (!_options.IsFulltextAvailable)
         {
+            if (beforeCommit is not null)
+            {
+                await beforeCommit(cancellationToken).ConfigureAwait(false);
+            }
+
+            await _luceneIndex.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+
+            if (_suggestionMaintenance is not null)
+            {
+                await _suggestionMaintenance.UpsertAsync(document, cancellationToken).ConfigureAwait(false);
+            }
+
             return;
         }
 
@@ -109,6 +121,12 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     {
         if (!_options.IsFulltextAvailable)
         {
+            if (beforeCommit is not null)
+            {
+                await beforeCommit(cancellationToken).ConfigureAwait(false);
+            }
+
+            await _luceneIndex.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
             return;
         }
 
