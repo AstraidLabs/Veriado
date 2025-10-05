@@ -160,9 +160,24 @@
             </StackPanel.Transitions>
             <TextBlock Text="Volby importu" FontSize="20" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="16">
-                <StackPanel Orientation="Vertical" Spacing="8">
+                <StackPanel Orientation="Vertical" Spacing="8" Width="200">
                     <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
                     <CheckBox Content="Zachovat FS metadata" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
+                    <TextBox
+                        Header="Maska souborů"
+                        PlaceholderText="např. *.pdf"
+                        Text="{Binding SearchPattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <muxc:InfoBar
+                        Margin="0,4,0,0"
+                        IsOpen="{Binding HasSearchPatternError}"
+                        Severity="Error"
+                        Title="Neplatná maska"
+                        Message="{Binding SearchPatternErrorMessage}"
+                        IsClosable="False" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Použijte '*' nebo '?' jako zástupné znaky." />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8">
                     <CheckBox Content="Nastavit jen pro čtení" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
