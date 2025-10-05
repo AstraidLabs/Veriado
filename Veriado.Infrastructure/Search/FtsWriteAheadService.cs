@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -22,6 +23,7 @@ internal sealed class FtsWriteAheadService
     public const string OperationDelete = "delete";
 
     private static readonly AsyncLocal<int> SuppressionCounter = new();
+    private static readonly Func<SqliteConnection, object?> AmbientTransactionAccessor = CreateAmbientTransactionAccessor();
 
     private readonly ILogger<FtsWriteAheadService> _logger;
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
@@ -69,7 +71,7 @@ internal sealed class FtsWriteAheadService
 
         var titleHash = ComputeTitleHash(normalizedTitle);
 
-        if (transaction is null && connection.Transaction is not null)
+        if (transaction is null && HasAmbientTransaction(connection))
         {
             await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
             var isolatedConnection = lease.Connection;
@@ -113,6 +115,36 @@ internal sealed class FtsWriteAheadService
         command.Parameters.AddWithValue("$enqueued_utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is long id ? id : null;
+    }
+
+    private static bool HasAmbientTransaction(SqliteConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        return AmbientTransactionAccessor(connection) is not null;
+    }
+
+    private static Func<SqliteConnection, object?> CreateAmbientTransactionAccessor()
+    {
+        var property = typeof(SqliteConnection).GetProperty(
+            "Transaction",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (property is null)
+        {
+            return static _ => null;
+        }
+
+        return connection =>
+        {
+            try
+            {
+                return property.GetValue(connection);
+            }
+            catch (TargetInvocationException)
+            {
+                return null;
+            }
+        };
     }
 
     public async Task ClearAsync(SqliteConnection connection, SqliteTransaction? transaction, long id, CancellationToken cancellationToken)
