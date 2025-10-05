@@ -256,14 +256,15 @@
             </controls:InfoBar>
         </StackPanel>
 
-        <controls:ItemsRepeaterScrollHost x:Name="ResultsHost" Grid.Row="1" Grid.Column="1" Opacity="1">
-            <controls:ScrollViewer
-        x:Name="FilesScrollViewer"
-        HorizontalScrollMode="Disabled"
-        HorizontalScrollBarVisibility="Hidden"
-        VerticalScrollMode="Auto"
-        VerticalScrollBarVisibility="Auto">
-
+        <ScrollViewer
+            x:Name="FilesScrollViewer"
+            Grid.Row="1"
+            Grid.Column="1"
+            HorizontalScrollMode="Disabled"
+            HorizontalScrollBarVisibility="Hidden"
+            VerticalScrollMode="Auto"
+            VerticalScrollBarVisibility="Auto">
+            <controls:ItemsRepeaterScrollHost x:Name="ResultsHost" Opacity="1">
                 <controls:ItemsRepeater
                     x:Name="FilesRepeater"
                     ItemsSource="{x:Bind ViewModel.Items}"
@@ -299,8 +300,7 @@
                         </DataTemplate>
                     </controls:ItemsRepeater.ItemTemplate>
                 </controls:ItemsRepeater>
-
-            </controls:ScrollViewer>
-        </controls:ItemsRepeaterScrollHost>
+            </controls:ItemsRepeaterScrollHost>
+        </ScrollViewer>
     </Grid>
 </Page>
