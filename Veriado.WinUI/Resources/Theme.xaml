@@ -4,20 +4,20 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
-      <Color x:Key="AppAccentColor">#FF0063B1</Color>
-      <Color x:Key="AppBackgroundColor">#FFF7F8FC</Color>
-      <Color x:Key="AppSurfaceColor">#FFFFFFFF</Color>
-      <Color x:Key="AppNavigationBackgroundColor">#FFF0F2F7</Color>
-      <Color x:Key="AppNavigationForegroundColor">#FF101820</Color>
-      <Color x:Key="AppTextPrimaryColor">#FF1B1F23</Color>
+      <x:Color x:Key="AppAccentColor">#FF0063B1</x:Color>
+      <x:Color x:Key="AppBackgroundColor">#FFF7F8FC</x:Color>
+      <x:Color x:Key="AppSurfaceColor">#FFFFFFFF</x:Color>
+      <x:Color x:Key="AppNavigationBackgroundColor">#FFF0F2F7</x:Color>
+      <x:Color x:Key="AppNavigationForegroundColor">#FF101820</x:Color>
+      <x:Color x:Key="AppTextPrimaryColor">#FF1B1F23</x:Color>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
-      <Color x:Key="AppAccentColor">#FF4CC2FF</Color>
-      <Color x:Key="AppBackgroundColor">#FF1B1E23</Color>
-      <Color x:Key="AppSurfaceColor">#FF252932</Color>
-      <Color x:Key="AppNavigationBackgroundColor">#FF2C313C</Color>
-      <Color x:Key="AppNavigationForegroundColor">#FFE7ECF4</Color>
-      <Color x:Key="AppTextPrimaryColor">#FFE7ECF4</Color>
+      <x:Color x:Key="AppAccentColor">#FF4CC2FF</x:Color>
+      <x:Color x:Key="AppBackgroundColor">#FF1B1E23</x:Color>
+      <x:Color x:Key="AppSurfaceColor">#FF252932</x:Color>
+      <x:Color x:Key="AppNavigationBackgroundColor">#FF2C313C</x:Color>
+      <x:Color x:Key="AppNavigationForegroundColor">#FFE7ECF4</x:Color>
+      <x:Color x:Key="AppTextPrimaryColor">#FFE7ECF4</x:Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
