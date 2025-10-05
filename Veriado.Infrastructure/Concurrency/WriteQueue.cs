@@ -49,8 +49,9 @@ internal sealed class WriteQueue : IWriteQueue
                 }
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Propagate cancellation as a graceful shutdown signal for the background worker.
             return null;
         }
 
