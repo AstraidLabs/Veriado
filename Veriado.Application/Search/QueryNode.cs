@@ -3,7 +3,7 @@ namespace Veriado.Appl.Search;
 using System.Collections.Generic;
 
 /// <summary>
-/// Represents a node in the FTS query expression tree.
+/// Represents a node in the Lucene query expression tree.
 /// </summary>
 public abstract record QueryNode;
 

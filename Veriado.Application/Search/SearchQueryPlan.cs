@@ -81,7 +81,7 @@ public static class SearchQueryPlanFactory
 }
 
 /// <summary>
-/// Describes a scoring configuration preserved for compatibility with legacy FTS queries.
+/// Describes a scoring configuration preserved for compatibility with legacy search queries.
 /// </summary>
 public sealed record SearchScorePlan
 {

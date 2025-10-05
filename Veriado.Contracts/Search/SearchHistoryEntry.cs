@@ -5,7 +5,7 @@ namespace Veriado.Contracts.Search;
 /// </summary>
 /// <param name="Id">The entry identifier.</param>
 /// <param name="QueryText">The optional user supplied query text.</param>
-/// <param name="MatchQuery">The generated FTS match clause.</param>
+/// <param name="MatchQuery">The generated Lucene match clause.</param>
 /// <param name="LastQueriedUtc">The timestamp of the most recent execution.</param>
 /// <param name="Executions">The number of times the query was executed.</param>
 /// <param name="LastTotalHits">The last observed hit count.</param>

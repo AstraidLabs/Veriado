@@ -7,7 +7,7 @@ namespace Veriado.Appl.Search;
 public sealed class SearchOptions
 {
     /// <summary>
-    /// Gets or sets the scoring configuration applied to FTS and hybrid queries.
+    /// Gets or sets the scoring configuration applied to Lucene and hybrid queries.
     /// </summary>
     public SearchScoreOptions Score { get; set; } = new();
 
@@ -67,7 +67,7 @@ public sealed class SearchScoreOptions
     public double DefaultTrigramScale { get; set; } = 0.45d;
     public double TrigramFloor { get; set; } = 0.30d;
     public string MergeMode { get; set; } = "max";
-    public double WeightedFts { get; set; } = 0.7d;
+    public double LuceneWeight { get; set; } = 0.7d;
 }
 
 /// <summary>

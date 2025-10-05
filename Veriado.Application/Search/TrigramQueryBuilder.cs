@@ -7,7 +7,7 @@ public static class TrigramQueryBuilder
 {
     /// <summary>
     /// Defines the maximum number of tokens that will be emitted when building a trigram index entry.
-    /// Keeping the limit reasonably low prevents pathological documents from bloating the FTS index
+    /// Keeping the limit reasonably low prevents pathological documents from bloating the Lucene-backed index
     /// while still capturing enough context for fuzzy matching.
     /// </summary>
     private const int MaxIndexTokens = 2048;

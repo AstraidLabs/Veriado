@@ -17,7 +17,7 @@ public sealed class GetIndexStatisticsHandler : IRequestHandler<GetIndexStatisti
         try
         {
             var snapshot = await _diagnosticsRepository.GetIndexStatisticsAsync(cancellationToken).ConfigureAwait(false);
-            var dto = new IndexStatisticsDto(snapshot.TotalDocuments, snapshot.StaleDocuments, snapshot.FtsVersion);
+            var dto = new IndexStatisticsDto(snapshot.TotalDocuments, snapshot.StaleDocuments, snapshot.LuceneVersion);
             return AppResult<IndexStatisticsDto>.Success(dto);
         }
         catch (Exception ex)

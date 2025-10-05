@@ -14,7 +14,7 @@
 - **Data indexing health must cover binary ingestion.** Once text extraction exists, extend health diagnostics so `GetHealthStatusHandler` reports extractor/backlog issues, and surface warnings in the Files dashboard alongside current indexing alerts.【F:Veriado.Application/UseCases/Diagnostics/GetHealthStatusHandler.cs†L1-L200】【F:Veriado.WinUI/ViewModels/Files/FilesPageViewModel.cs†L19-L129】
 
 ## Quality & automation
-- **Test coverage focuses solely on query builders.** Testy pokrývají pouze Lucene/trigram buildery; chybí unit/integration testy pro importy, mutace souborů, UI view-modely nebo infrastrukturu. Rozšiřte sadu o doménové invariance, streamované importy a end-to-end smoke testy.【F:Veriado.Application.Tests/Search/FtsQueryBuilderTests.cs†L1-L64】【F:Veriado.Application.Tests/Search/TrigramQueryBuilderTests.cs†L1-L160】
+- **Test coverage focuses solely on query builders.** Testy pokrývají pouze Lucene/trigram buildery; chybí unit/integration testy pro importy, mutace souborů, UI view-modely nebo infrastrukturu. Rozšiřte sadu o doménové invariance, streamované importy a end-to-end smoke testy.【F:Veriado.Application.Tests/Search/LuceneQueryBuilderTests.cs†L1-L64】【F:Veriado.Application.Tests/Search/TrigramQueryBuilderTests.cs†L1-L160】
 - **Continuous integration is missing.** Add pipelines that build all projects, run tests, lint XAML, and produce signed MSIX artifacts. Include SQLite migration validation and full-text index smoke checks to catch regressions automatically.【F:README.md†L1-L68】
 
 ## Configuration & operations

@@ -36,7 +36,7 @@ public sealed class SearchFacade : ISearchFacade
             return Array.Empty<SearchHitDto>();
         }
 
-        var match = FtsQueryBuilder.BuildMatch(query, prefix: false, allTerms: false, _analyzerFactory);
+        var match = LuceneQueryBuilder.BuildMatch(query, prefix: false, allTerms: false, _analyzerFactory);
         if (string.IsNullOrWhiteSpace(match))
         {
             return Array.Empty<SearchHitDto>();
@@ -84,7 +84,7 @@ public sealed class SearchFacade : ISearchFacade
     public async Task AddToHistoryAsync(string query, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        if (!FtsQueryBuilder.TryBuild(query, prefix: true, allTerms: false, _analyzerFactory, out var matchQuery))
+        if (!LuceneQueryBuilder.TryBuild(query, prefix: true, allTerms: false, _analyzerFactory, out var matchQuery))
         {
             return;
         }

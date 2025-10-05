@@ -16,7 +16,7 @@ public sealed record HighlightSpanDto(string Field, int Start, int Length, strin
 /// </summary>
 /// <param name="Id">The identifier of the matching file.</param>
 /// <param name="Score">The relevance score.</param>
-/// <param name="Source">The origin of the hit (FTS or TRIGRAM).</param>
+/// <param name="Source">The origin of the hit (Lucene or TRIGRAM).</param>
 /// <param name="PrimaryField">The field from which the snippet was generated.</param>
 /// <param name="SnippetText">The plain-text snippet.</param>
 /// <param name="Highlights">The highlight spans located within the snippet.</param>

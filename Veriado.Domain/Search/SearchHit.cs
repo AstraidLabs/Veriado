@@ -16,7 +16,7 @@ public sealed record HighlightSpan(string Field, int Start, int Length, string? 
 /// </summary>
 /// <param name="Id">The unique identifier of the matching document.</param>
 /// <param name="Score">The relevance score for the hit.</param>
-/// <param name="Source">The origin of the hit (e.g. FTS or TRIGRAM).</param>
+/// <param name="Source">The origin of the hit (e.g. LUCENE or TRIGRAM).</param>
 /// <param name="PrimaryField">The primary field used to generate the snippet.</param>
 /// <param name="SnippetText">The snippet presented to the caller.</param>
 /// <param name="Highlights">The highlight spans contained within the snippet.</param>

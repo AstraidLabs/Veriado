@@ -11,7 +11,7 @@ public sealed class FileGridQueryOptions
     public int MaxPageSize { get; set; } = 200;
 
     /// <summary>
-    /// Gets or sets the maximum number of FTS candidates evaluated before filtering.
+    /// Gets or sets the maximum number of Lucene candidates evaluated before filtering.
     /// </summary>
     public int MaxCandidateResults { get; set; } = 2_000;
 }

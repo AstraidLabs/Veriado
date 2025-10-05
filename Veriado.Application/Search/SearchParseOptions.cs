@@ -11,12 +11,12 @@ public sealed class SearchParseOptions
     public bool EnableHeuristicFuzzy { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the minimum number of FTS hits required for prefix queries to avoid trigram fallback.
+    /// Gets or sets the minimum number of Lucene hits required for prefix queries to avoid trigram fallback.
     /// </summary>
     public int PrefixMinResults { get; set; } = 3;
 
     /// <summary>
-    /// Gets or sets the minimum number of FTS hits required for fuzzy queries to avoid trigram fallback.
+    /// Gets or sets the minimum number of Lucene hits required for fuzzy queries to avoid trigram fallback.
     /// </summary>
     public int FuzzyMinResults { get; set; } = 5;
 

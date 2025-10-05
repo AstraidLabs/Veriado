@@ -220,7 +220,7 @@ public interface IFacetService
 }
 
 /// <summary>
-/// Provides synonym expansion for FTS queries.
+/// Provides synonym expansion for Lucene queries.
 /// </summary>
 public interface ISynonymProvider
 {
@@ -310,7 +310,7 @@ public interface ISearchTelemetry
     /// Updates gauges describing the current index size and document counts.
     /// </summary>
     /// <param name="documentCount">The total number of indexed documents.</param>
-    /// <param name="indexSizeBytes">The combined size of FTS and trigram indices, when known.</param>
+    /// <param name="indexSizeBytes">The combined size of Lucene and trigram indices, when known.</param>
     void UpdateIndexMetrics(long documentCount, long indexSizeBytes);
 
     /// <summary>

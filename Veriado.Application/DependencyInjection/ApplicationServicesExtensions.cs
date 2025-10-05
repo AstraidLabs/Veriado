@@ -86,7 +86,7 @@ public sealed class ApplicationOptions
     public int MaxGridPageSize { get; set; } = 200;
 
     /// <summary>
-    /// Gets or sets the maximum number of FTS candidates retrieved before applying filters.
+    /// Gets or sets the maximum number of Lucene candidates retrieved before applying filters.
     /// </summary>
     public int MaxFulltextCandidates { get; set; } = 2_000;
 }

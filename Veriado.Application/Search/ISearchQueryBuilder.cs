@@ -48,7 +48,7 @@ public interface ISearchQueryBuilder
     /// <param name="field">The optional column restriction used for diagnostics.</param>
     /// <param name="term">The fuzzy term.</param>
     /// <param name="requireAllTerms">Indicates whether all trigram terms should match.</param>
-    /// <returns>An optional FTS node to combine with other clauses.</returns>
+    /// <returns>An optional search node to combine with other clauses.</returns>
     QueryNode? Fuzzy(string? field, string term, bool requireAllTerms = false);
 
     /// <summary>
