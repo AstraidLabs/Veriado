@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.Logging;
 
 namespace Veriado.WinUI.Services;
@@ -40,6 +41,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     [ObservableProperty]
     private double? importMaxFileSizeMegabytes;
 
+    [ObservableProperty]
+    private string importSearchPattern = "*";
+
     public HotStateService(
         ISettingsService settingsService,
         IStatusService statusService,
@@ -72,6 +76,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             importMaxFileSizeMegabytes = import.MaxFileSizeMegabytes.HasValue && import.MaxFileSizeMegabytes.Value > 0
                 ? import.MaxFileSizeMegabytes
                 : null;
+            importSearchPattern = NormalizeSearchPattern(import.SearchPattern);
 
             OnPropertyChanged(nameof(ImportRecursive));
             OnPropertyChanged(nameof(ImportKeepFsMetadata));
@@ -80,6 +85,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
             OnPropertyChanged(nameof(ImportDefaultAuthor));
             OnPropertyChanged(nameof(ImportMaxFileSizeMegabytes));
+            OnPropertyChanged(nameof(ImportSearchPattern));
             _initialized = true;
         }
         finally
@@ -135,6 +141,26 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         PersistAsync();
     }
 
+    partial void OnImportSearchPatternChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            importSearchPattern = "*";
+            OnPropertyChanged(nameof(ImportSearchPattern));
+        }
+        else
+        {
+            var normalized = value.Trim();
+            if (!string.Equals(normalized, value, StringComparison.Ordinal))
+            {
+                importSearchPattern = normalized;
+                OnPropertyChanged(nameof(ImportSearchPattern));
+            }
+        }
+
+        PersistAsync();
+    }
+
     private void PersistAsync()
     {
         if (!_initialized)
@@ -185,6 +211,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                     settings.Import.MaxFileSizeMegabytes = ImportMaxFileSizeMegabytes.HasValue && ImportMaxFileSizeMegabytes.Value > 0
                         ? ImportMaxFileSizeMegabytes
                         : null;
+                    settings.Import.SearchPattern = string.IsNullOrWhiteSpace(ImportSearchPattern)
+                        ? "*"
+                        : ImportSearchPattern;
                 }).ConfigureAwait(false);
             }
             finally
@@ -216,5 +245,15 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         public static PersistStateResult CreateSuccess() => new(true, null);
 
         public static PersistStateResult CreateFailure(Exception exception) => new(false, exception);
+    }
+
+    private static string NormalizeSearchPattern(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "*";
+        }
+
+        return value.Trim();
     }
 }

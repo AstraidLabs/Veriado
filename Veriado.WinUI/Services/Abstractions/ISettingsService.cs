@@ -48,4 +48,7 @@ public sealed class ImportPreferences
 
     public double? MaxFileSizeMegabytes { get; set; }
         = null;
+
+    public string? SearchPattern { get; set; }
+        = null;
 }

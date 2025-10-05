@@ -17,6 +17,18 @@ public partial class ImportPageViewModel : ViewModelBase
 {
     private const int MaxLogEntries = 250;
 
+    private static readonly char[] InvalidSearchPatternCharacters = Path
+        .GetInvalidFileNameChars()
+        .Where(static c => c is not '*' and not '?')
+        .Distinct()
+        .ToArray();
+
+    private static readonly char[] SearchPatternPathSeparators =
+    {
+        Path.DirectorySeparatorChar,
+        Path.AltDirectorySeparatorChar,
+    };
+
     private readonly IImportService _importService;
     private readonly IHotStateService? _hotStateService;
     private readonly IPickerService? _pickerService;
@@ -96,6 +108,9 @@ public partial class ImportPageViewModel : ViewModelBase
     private double? _maxFileSizeMegabytes;
 
     [ObservableProperty]
+    private string _searchPattern = "*";
+
+    [ObservableProperty]
     private bool _isImporting;
 
     [ObservableProperty]
@@ -127,6 +142,12 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _hasParallelismError;
+
+    [ObservableProperty]
+    private bool _hasSearchPatternError;
+
+    [ObservableProperty]
+    private string? _searchPatternErrorMessage;
 
     [ObservableProperty]
     private bool _isActiveStatusVisible;
@@ -258,7 +279,8 @@ public partial class ImportPageViewModel : ViewModelBase
         !IsImporting
         && !string.IsNullOrWhiteSpace(SelectedFolder)
         && !HasParallelismError
-        && !HasMaxFileSizeError;
+        && !HasMaxFileSizeError
+        && !HasSearchPatternError;
 
     private bool CanClearResults() => Log.Count > 0 || Errors.Count > 0 || Processed > 0 || Total > 0 || OkCount > 0 || ErrorCount > 0 || SkipCount > 0;
 
@@ -496,6 +518,7 @@ public partial class ImportPageViewModel : ViewModelBase
             MaxDegreeOfParallelism = ResolveParallelism(),
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
+            SearchPattern = ResolveSearchPattern(),
         };
     }
 
@@ -509,7 +532,7 @@ public partial class ImportPageViewModel : ViewModelBase
             SetReadOnly = SetReadOnly,
             Recursive = Recursive,
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
-            SearchPattern = "*",
+            SearchPattern = ResolveSearchPattern(),
         };
     }
 
@@ -547,6 +570,11 @@ public partial class ImportPageViewModel : ViewModelBase
         }
 
         return (long)Math.Round(bytes, MidpointRounding.AwayFromZero);
+    }
+
+    private string ResolveSearchPattern()
+    {
+        return string.IsNullOrWhiteSpace(SearchPattern) ? "*" : SearchPattern;
     }
 
     private async Task InitializeFileSizeCacheAsync(string folderPath, CancellationToken cancellationToken)
@@ -1308,6 +1336,7 @@ public partial class ImportPageViewModel : ViewModelBase
             : Environment.ProcessorCount;
         DefaultAuthor = _hotStateService.ImportDefaultAuthor;
         MaxFileSizeMegabytes = _hotStateService.ImportMaxFileSizeMegabytes ?? 0;
+        SearchPattern = _hotStateService.ImportSearchPattern;
     }
 
     private void PopulateDefaultAuthorFromCurrentUser()
@@ -1454,6 +1483,27 @@ public partial class ImportPageViewModel : ViewModelBase
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
+    partial void OnSearchPatternChanged(string value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        if (!string.Equals(normalized, value, StringComparison.Ordinal))
+        {
+            _searchPattern = normalized;
+            OnPropertyChanged(nameof(SearchPattern));
+        }
+
+        var (hasError, message) = ValidateSearchPattern(normalized);
+        HasSearchPatternError = hasError;
+        SearchPatternErrorMessage = hasError ? message : null;
+
+        if (!hasError && _hotStateService is not null)
+        {
+            _hotStateService.ImportSearchPattern = normalized;
+        }
+
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
     {
         UpdateFilteredErrors();
@@ -1485,6 +1535,34 @@ public partial class ImportPageViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(ProgressPercentValue));
         OnPropertyChanged(nameof(ProgressPercentDisplay));
+    }
+
+    private static (bool HasError, string? Message) ValidateSearchPattern(string pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            return (true, "Maska souborů nesmí být prázdná.");
+        }
+
+        if (pattern.IndexOfAny(SearchPatternPathSeparators) >= 0)
+        {
+            return (true, "Maska nesmí obsahovat lomítka nebo zpětná lomítka.");
+        }
+
+        var invalidCharacters = pattern
+            .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
+            .Distinct()
+            .ToArray();
+        if (invalidCharacters.Length > 0)
+        {
+            var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
+            var baseMessage = invalidCharacters.Length == 1
+                ? $"Maska obsahuje nepovolený znak '{joined}'."
+                : $"Maska obsahuje nepovolené znaky '{joined}'.";
+            return (true, $"{baseMessage} Odeberte je nebo nahraďte '*' či '?'.");
+        }
+
+        return (false, null);
     }
 
     private void UpdateFilteredErrors()
