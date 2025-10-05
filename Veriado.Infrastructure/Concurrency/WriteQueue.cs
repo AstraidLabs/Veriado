@@ -40,23 +40,65 @@ internal sealed class WriteQueue : IWriteQueue
 
     public async ValueTask<WriteRequest?> DequeueAsync(CancellationToken cancellationToken)
     {
-        try
+        if (cancellationToken.IsCancellationRequested)
         {
-            while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                if (_channel.Reader.TryRead(out var request))
-                {
-                    return request;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Propagate cancellation as a graceful shutdown signal for the background worker.
             return null;
         }
 
+        while (await WaitToReadWithoutThrowingAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (_channel.Reader.TryRead(out var request))
+            {
+                return request;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
         return null;
+    }
+
+    private async ValueTask<bool> WaitToReadWithoutThrowingAsync(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        var waitToRead = _channel.Reader.WaitToReadAsync();
+        if (waitToRead.IsCompletedSuccessfully)
+        {
+            return waitToRead.Result;
+        }
+
+        if (!cancellationToken.CanBeCanceled)
+        {
+            return await waitToRead.ConfigureAwait(false);
+        }
+
+        var waitTask = waitToRead.AsTask();
+        if (waitTask.IsCompleted)
+        {
+            return await waitTask.ConfigureAwait(false);
+        }
+
+        var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(static state =>
+        {
+            var tcs = (TaskCompletionSource<bool>)state!;
+            tcs.TrySetResult(false);
+        }, cancellationSource);
+
+        var completed = await Task.WhenAny(waitTask, cancellationSource.Task).ConfigureAwait(false);
+        if (completed == waitTask)
+        {
+            return await waitTask.ConfigureAwait(false);
+        }
+
+        return false;
     }
 
     public bool TryDequeue(out WriteRequest? request) => _channel.Reader.TryRead(out request);
