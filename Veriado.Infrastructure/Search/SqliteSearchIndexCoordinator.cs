@@ -42,16 +42,25 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        if (!_options.IsFulltextAvailable)
-        {
-            _logger.LogDebug("Skipping full-text indexing for file {FileId} because FTS5 support is unavailable.", file.Id);
-            return false;
-        }
-
         if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && options.AllowDeferredIndexing)
         {
             _logger.LogDebug("Search indexing deferred to outbox for file {FileId}", file.Id);
             return false;
+        }
+
+        var document = file.ToSearchDocument();
+        if (!_options.IsFulltextAvailable)
+        {
+            if (transaction is not null)
+            {
+                await _luceneIndex.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+            }
+
+            return true;
         }
 
         if (transaction is not null && transaction is not SqliteTransaction)
@@ -61,17 +70,16 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
 
         var sqliteTransaction = (SqliteTransaction?)transaction;
 
-        var document = file.ToSearchDocument();
         if (sqliteTransaction is not null)
         {
             var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
             var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
             await helper.IndexAsync(
-                document,
-                sqliteConnection,
-                sqliteTransaction,
-                beforeCommit: ct => _luceneIndex.IndexAsync(document, ct),
-                cancellationToken)
+                    document,
+                    sqliteConnection,
+                    sqliteTransaction,
+                    beforeCommit: ct => _luceneIndex.IndexAsync(document, ct),
+                    cancellationToken)
                 .ConfigureAwait(false);
             return true;
         }

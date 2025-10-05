@@ -140,18 +140,7 @@ internal sealed class OutboxDrainService
 
         if (!_options.IsFulltextAvailable)
         {
-            var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
-            if (tracked is not null)
-            {
-                var signature = _signatureCalculator.Compute(tracked);
-                tracked.ConfirmIndexed(
-                    tracked.SearchIndex.SchemaVersion,
-                    UtcTimestamp.From(_clock.UtcNow),
-                    signature.AnalyzerVersion,
-                    signature.TokenHash,
-                    signature.NormalizedTitle);
-            }
-
+            await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false);
             outbox.ProcessedUtc = _clock.UtcNow;
             return;
         }
