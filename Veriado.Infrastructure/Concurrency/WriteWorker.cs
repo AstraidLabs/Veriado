@@ -234,6 +234,7 @@ internal sealed class WriteWorker : BackgroundService
 
         var results = new object?[batch.Count];
         Exception? failure = null;
+        var workerCancellationTriggered = false;
         var trackedOptions = new Dictionary<FileEntity, FilePersistenceOptions>();
         foreach (var request in batch)
         {
@@ -256,6 +257,8 @@ internal sealed class WriteWorker : BackgroundService
             catch (OperationCanceledException oce)
             {
                 failure = oce;
+                workerCancellationTriggered = oce.CancellationToken == cancellationToken
+                    || (!oce.CancellationToken.CanBeCanceled && cancellationToken.IsCancellationRequested);
                 break;
             }
             catch (Exception ex)
@@ -270,7 +273,21 @@ internal sealed class WriteWorker : BackgroundService
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             foreach (var request in batch)
             {
-                request.TrySetException(failure);
+                if (failure is OperationCanceledException && workerCancellationTriggered)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        request.TrySetCanceled(cancellationToken);
+                    }
+                    else
+                    {
+                        request.TrySetCanceled();
+                    }
+                }
+                else
+                {
+                    request.TrySetException(failure);
+                }
             }
 
             return;
