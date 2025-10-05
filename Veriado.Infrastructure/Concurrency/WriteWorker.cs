@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Infrastructure.Search;
+using Veriado.Infrastructure.Search.Outbox;
 using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.Concurrency;
@@ -336,28 +337,43 @@ internal sealed class WriteWorker : BackgroundService
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
         var reindexEvents = domainEvents.OfType<SearchReindexRequested>().ToList();
 
-        if (_options.SearchIndexingMode == SearchIndexingMode.Outbox && filesToIndex.Count > 0)
+        if (_options.SearchIndexingMode == SearchIndexingMode.Outbox)
         {
-            var reindexByFile = reindexEvents
-                .GroupBy(evt => evt.FileId)
-                .ToDictionary(group => group.Key, group => group.OrderBy(evt => evt.OccurredOnUtc).Last());
-
-            foreach (var (file, options) in filesToIndex)
+            if (filesToIndex.Count > 0)
             {
-                if (!options.AllowDeferredIndexing)
-                {
-                    continue;
-                }
+                var reindexByFile = reindexEvents
+                    .GroupBy(evt => evt.FileId)
+                    .ToDictionary(group => group.Key, group => group.OrderBy(evt => evt.OccurredOnUtc).Last());
 
-                reindexByFile.TryGetValue(file.Id, out var reindexEvent);
-                var occurredUtc = reindexEvent?.OccurredOnUtc ?? _clock.UtcNow;
-                var reason = reindexEvent?.Reason.ToString() ?? ReindexReason.Manual.ToString();
-                var outbox = OutboxEvent.From(nameof(SearchReindexRequested), new
+                foreach (var (file, options) in filesToIndex)
                 {
-                    FileId = file.Id,
-                    Reason = reason,
-                }, occurredUtc);
-                context.OutboxEvents.Add(outbox);
+                    if (!options.AllowDeferredIndexing)
+                    {
+                        continue;
+                    }
+
+                    reindexByFile.TryGetValue(file.Id, out var reindexEvent);
+                    var occurredUtc = reindexEvent?.OccurredOnUtc ?? _clock.UtcNow;
+                    var reason = reindexEvent?.Reason.ToString() ?? ReindexReason.Manual.ToString();
+                    var outbox = OutboxEvent.From(SearchOutboxEventTypes.ReindexRequested, new
+                    {
+                        FileId = file.Id,
+                        Reason = reason,
+                    }, occurredUtc);
+                    context.OutboxEvents.Add(outbox);
+                }
+            }
+
+            if (filesToDelete.Count > 0)
+            {
+                foreach (var fileId in filesToDelete)
+                {
+                    var outbox = OutboxEvent.From(SearchOutboxEventTypes.DeleteRequested, new
+                    {
+                        FileId = fileId,
+                    }, _clock.UtcNow);
+                    context.OutboxEvents.Add(outbox);
+                }
             }
         }
 
@@ -417,9 +433,12 @@ internal sealed class WriteWorker : BackgroundService
 
         var handled = false;
 
-        foreach (var id in filesToDelete)
+        if (_options.SearchIndexingMode != SearchIndexingMode.Outbox)
         {
-            await _searchIndexer.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+            foreach (var id in filesToDelete)
+            {
+                await _searchIndexer.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         foreach (var (file, options) in filesToIndex)
