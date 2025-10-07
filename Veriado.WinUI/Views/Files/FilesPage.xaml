@@ -240,28 +240,39 @@
 
                     <controls:ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="contracts:FileSummaryDto">
-                            <Border
+                            <Button
                                 Margin="8"
-                                Padding="12"
-                                CornerRadius="6"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                HorizontalAlignment="Stretch">
-                                <StackPanel Spacing="4">
-                                    <TextBlock
-                                        Text="{x:Bind Name}"
-                                        FontWeight="SemiBold"
-                                        TextWrapping="Wrap" />
-                                    <TextBlock
-                                        Text="{x:Bind Mime}"
-                                        FontSize="12"
-                                        Opacity="0.7"
-                                        TextTrimming="CharacterEllipsis" />
-                                    <TextBlock
-                                        Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
-                                        FontSize="12" />
-                                </StackPanel>
-                            </Border>
+                                Padding="0"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="0"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.OpenDetailsCommand}"
+                                CommandParameter="{x:Bind}">
+                                <Button.Content>
+                                    <Border
+                                        Padding="12"
+                                        CornerRadius="6"
+                                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        HorizontalAlignment="Stretch">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock
+                                                Text="{x:Bind Name}"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap" />
+                                            <TextBlock
+                                                Text="{x:Bind Mime}"
+                                                FontSize="12"
+                                                Opacity="0.7"
+                                                TextTrimming="CharacterEllipsis" />
+                                            <TextBlock
+                                                Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
+                                                FontSize="12" />
+                                        </StackPanel>
+                                    </Border>
+                                </Button.Content>
+                            </Button>
                         </DataTemplate>
                     </controls:ItemsRepeater.ItemTemplate>
                 </controls:ItemsRepeater>

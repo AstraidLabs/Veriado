@@ -12,6 +12,7 @@ using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.Views.Files;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -24,6 +25,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IHotStateService _hotStateService;
     private readonly IHealthService _healthService;
     private readonly object _healthMonitorGate = new();
+    private readonly IDialogService _dialogService;
     private CancellationTokenSource? _healthMonitorSource;
 
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
@@ -37,6 +39,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
         IHealthService healthService,
+        IDialogService dialogService,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -46,10 +49,12 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
 
         Items = new ObservableCollection<FileSummaryDto>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
+        OpenDetailsCommand = new AsyncRelayCommand<FileSummaryDto?>(OpenDetailsAsync);
 
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
@@ -67,6 +72,8 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand RefreshCommand { get; }
 
     public IAsyncRelayCommand ClearFiltersCommand { get; }
+
+    public IAsyncRelayCommand<FileSummaryDto?> OpenDetailsCommand { get; }
 
     public IAsyncRelayCommand NextPageCommand => _nextPageCommand;
 
@@ -339,6 +346,26 @@ public partial class FilesPageViewModel : ViewModelBase
 
                 UpdatePaginationState(result.Page, result.TotalPages, result.TotalCount, result.Items.Count);
             }).ConfigureAwait(false);
+        });
+    }
+
+    private Task OpenDetailsAsync(FileSummaryDto? item)
+    {
+        if (item is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.EnqueueAsync(async () =>
+        {
+            var detailViewModel = new FileDetailViewModel(item);
+
+            var view = new FileDetailView
+            {
+                DataContext = detailViewModel,
+            };
+
+            await _dialogService.ShowAsync(detailViewModel.DialogTitle, view, "Zavřít").ConfigureAwait(false);
         });
     }
 
