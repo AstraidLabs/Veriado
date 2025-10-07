@@ -40,6 +40,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     [ObservableProperty]
     private double? importMaxFileSizeMegabytes;
 
+    [ObservableProperty]
+    private bool importAutoExportLog;
+
     public HotStateService(
         ISettingsService settingsService,
         IStatusService statusService,
@@ -72,6 +75,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             importMaxFileSizeMegabytes = import.MaxFileSizeMegabytes.HasValue && import.MaxFileSizeMegabytes.Value > 0
                 ? import.MaxFileSizeMegabytes
                 : null;
+            importAutoExportLog = import.AutoExportLog ?? false;
 
             OnPropertyChanged(nameof(ImportRecursive));
             OnPropertyChanged(nameof(ImportKeepFsMetadata));
@@ -80,6 +84,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
             OnPropertyChanged(nameof(ImportDefaultAuthor));
             OnPropertyChanged(nameof(ImportMaxFileSizeMegabytes));
+            OnPropertyChanged(nameof(ImportAutoExportLog));
             _initialized = true;
         }
         finally
@@ -110,6 +115,8 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     partial void OnImportSetReadOnlyChanged(bool value) => PersistAsync();
 
     partial void OnImportUseParallelChanged(bool value) => PersistAsync();
+
+    partial void OnImportAutoExportLogChanged(bool value) => PersistAsync();
 
     partial void OnImportMaxDegreeOfParallelismChanged(int value)
     {
@@ -185,6 +192,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                     settings.Import.MaxFileSizeMegabytes = ImportMaxFileSizeMegabytes.HasValue && ImportMaxFileSizeMegabytes.Value > 0
                         ? ImportMaxFileSizeMegabytes
                         : null;
+                    settings.Import.AutoExportLog = ImportAutoExportLog;
                 }).ConfigureAwait(false);
             }
             finally

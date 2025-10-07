@@ -163,6 +163,9 @@
                 <StackPanel Orientation="Vertical" Spacing="8">
                     <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
                     <CheckBox Content="Zachovat FS metadata" IsChecked="{Binding KeepFsMetadata, Mode=TwoWay}" />
+                    <CheckBox
+                        Content="Automaticky exportovat protokol po dokončení"
+                        IsChecked="{Binding AutoExportLog, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8">
                     <CheckBox Content="Nastavit jen pro čtení" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />

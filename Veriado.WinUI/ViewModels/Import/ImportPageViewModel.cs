@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Import;
 using Veriado.Services.Import;
@@ -94,6 +95,9 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private double? _maxFileSizeMegabytes;
+
+    [ObservableProperty]
+    private bool _autoExportLog;
 
     [ObservableProperty]
     private bool _isImporting;
@@ -341,43 +345,75 @@ public partial class ImportPageViewModel : ViewModelBase
 
     private Task ExecuteExportLogAsync()
     {
-        if (Log.Count == 0)
+        return SafeExecuteAsync(token => ExportLogInternalAsync(token, notifyWhenEmpty: true), "Exportuji protokol…");
+    }
+
+    private async Task ExportLogInternalAsync(CancellationToken token, bool notifyWhenEmpty)
+    {
+        var hasEntries = false;
+        await Dispatcher.Enqueue(() => hasEntries = Log.Count > 0);
+
+        if (!hasEntries)
         {
-            StatusService.Info("Protokol je prázdný, není co exportovat.");
-            return Task.CompletedTask;
+            if (notifyWhenEmpty)
+            {
+                StatusService.Info("Protokol je prázdný, není co exportovat.");
+            }
+
+            return;
         }
 
-        return SafeExecuteAsync(async token =>
+        ImportLogItem[] snapshot = Array.Empty<ImportLogItem>();
+        await Dispatcher.Enqueue(() => snapshot = Log.ToArray());
+
+        var selectedFolder = SelectedFolder;
+        var folder = !string.IsNullOrWhiteSpace(selectedFolder) && Directory.Exists(selectedFolder)
+            ? selectedFolder
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
         {
-            var selectedFolder = SelectedFolder;
-            var folder = !string.IsNullOrWhiteSpace(selectedFolder) && Directory.Exists(selectedFolder)
-                ? selectedFolder
-                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            folder = Path.GetTempPath();
+        }
 
-            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+        var timestamp = DateTimeOffset.Now.ToString("yyyyMMddHHmmss");
+        var fileName = $"import-log-{timestamp}.txt";
+        var targetPath = Path.Combine(folder, fileName);
+
+        var builder = new StringBuilder();
+        foreach (var item in snapshot)
+        {
+            builder.AppendLine($"[{item.FormattedTimestamp}] {item.Title}: {item.Message}");
+            if (!string.IsNullOrWhiteSpace(item.Detail))
             {
-                folder = Path.GetTempPath();
+                builder.AppendLine(item.Detail);
             }
 
-            var timestamp = DateTimeOffset.Now.ToString("yyyyMMddHHmmss");
-            var fileName = $"import-log-{timestamp}.txt";
-            var targetPath = Path.Combine(folder, fileName);
+            builder.AppendLine();
+        }
 
-            var builder = new StringBuilder();
-            foreach (var item in Log)
-            {
-                builder.AppendLine($"[{item.FormattedTimestamp}] {item.Title}: {item.Message}");
-                if (!string.IsNullOrWhiteSpace(item.Detail))
-                {
-                    builder.AppendLine(item.Detail);
-                }
+        await File.WriteAllTextAsync(targetPath, builder.ToString(), Encoding.UTF8, token).ConfigureAwait(false);
+        StatusService.Info($"Protokol byl exportován do souboru '{targetPath}'.");
+    }
 
-                builder.AppendLine();
-            }
+    private async Task TryAutoExportLogAsync()
+    {
+        if (!AutoExportLog)
+        {
+            return;
+        }
 
-            await File.WriteAllTextAsync(targetPath, builder.ToString(), Encoding.UTF8, token).ConfigureAwait(false);
-            StatusService.Info($"Protokol byl exportován do souboru '{targetPath}'.");
-        }, "Exportuji protokol…");
+        try
+        {
+            await ExportLogInternalAsync(CancellationToken.None, notifyWhenEmpty: false).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var message = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Automatický export protokolu se nezdařil."
+                : $"Automatický export protokolu se nezdařil: {ex.Message}";
+            StatusService.Error(message);
+        }
     }
 
     private async Task RunImportAsync(CancellationToken cancellationToken)
@@ -469,6 +505,7 @@ public partial class ImportPageViewModel : ViewModelBase
                 StatusService.Info("Import dokončen.");
                 await SetActiveStatusAsync("Import dokončen", "Import dokončen.", InfoBarSeverity.Informational).ConfigureAwait(false);
                 await ClearDynamicStatusAsync().ConfigureAwait(false);
+                await TryAutoExportLogAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -852,6 +889,7 @@ public partial class ImportPageViewModel : ViewModelBase
         var severity = MapStatusToSeverity(aggregate.Status);
         await SetActiveStatusAsync("Stav importu", summary, severity).ConfigureAwait(false);
         await SetDynamicStatusAsync("Shrnutí importu", summary, severity).ConfigureAwait(false);
+        await TryAutoExportLogAsync().ConfigureAwait(false);
     }
 
     private async Task EnsureAggregateErrorsAsync(ImportAggregateResult aggregate)
@@ -995,6 +1033,7 @@ public partial class ImportPageViewModel : ViewModelBase
         var severity = MapStatusToSeverity(result.Status);
         await SetActiveStatusAsync("Stav importu", summary, severity).ConfigureAwait(false);
         await SetDynamicStatusAsync("Shrnutí importu", summary, severity).ConfigureAwait(false);
+        await TryAutoExportLogAsync().ConfigureAwait(false);
 
         return true;
     }
@@ -1308,6 +1347,7 @@ public partial class ImportPageViewModel : ViewModelBase
             : Environment.ProcessorCount;
         DefaultAuthor = _hotStateService.ImportDefaultAuthor;
         MaxFileSizeMegabytes = _hotStateService.ImportMaxFileSizeMegabytes ?? 0;
+        AutoExportLog = _hotStateService.ImportAutoExportLog;
     }
 
     private void PopulateDefaultAuthorFromCurrentUser()
@@ -1452,6 +1492,14 @@ public partial class ImportPageViewModel : ViewModelBase
 
         HasMaxFileSizeError = hasError;
         _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnAutoExportLogChanged(bool value)
+    {
+        if (_hotStateService is not null)
+        {
+            _hotStateService.ImportAutoExportLog = value;
+        }
     }
 
     partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)

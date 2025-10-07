@@ -22,5 +22,7 @@ public interface IHotStateService
 
     double? ImportMaxFileSizeMegabytes { get; set; }
 
+    bool ImportAutoExportLog { get; set; }
+
     Task InitializeAsync(CancellationToken cancellationToken = default);
 }
