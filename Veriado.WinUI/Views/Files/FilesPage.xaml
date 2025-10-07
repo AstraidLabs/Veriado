@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:views="using:Veriado.WinUI.Views.Files"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:contracts="using:Veriado.Contracts.Files"
     mc:Ignorable="d">
@@ -249,7 +250,7 @@
                                 BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 HorizontalContentAlignment="Stretch"
-                                Command="{x:Bind ElementName=PageRoot, Path=ViewModel.OpenDetailCommand}"
+                                Command="{x:Bind Path=ViewModel.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=views:FilesPage}}"
                                 CommandParameter="{x:Bind}">
                                 <StackPanel Spacing="4">
                                     <TextBlock
