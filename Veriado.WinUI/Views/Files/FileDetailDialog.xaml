@@ -81,8 +81,7 @@
                     <StackPanel Spacing="4">
                         <TextBlock Text="Platí od" />
                         <controls:DatePicker
-                            Date="{Binding ValidityIssuedDate, Mode=TwoWay}"
-                            PlaceholderText="Vyberte datum" />
+                            Date="{Binding ValidityIssuedDate, Mode=TwoWay}" />
                         <controls:TimePicker
                             Time="{Binding ValidityIssuedTime, Mode=TwoWay}"
                             ClockIdentifier="24HourClock" />
@@ -90,8 +89,7 @@
                     <StackPanel Spacing="4">
                         <TextBlock Text="Platí do" />
                         <controls:DatePicker
-                            Date="{Binding ValidityUntilDate, Mode=TwoWay}"
-                            PlaceholderText="Vyberte datum" />
+                            Date="{Binding ValidityUntilDate, Mode=TwoWay}" />
                         <controls:TimePicker
                             Time="{Binding ValidityUntilTime, Mode=TwoWay}"
                             ClockIdentifier="24HourClock" />

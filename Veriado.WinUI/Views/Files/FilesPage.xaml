@@ -1,5 +1,6 @@
 <Page
     x:Class="Veriado.WinUI.Views.Files.FilesPage"
+    x:Name="PageRoot"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -248,7 +249,7 @@
                                 BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 HorizontalContentAlignment="Stretch"
-                                Command="{x:Bind ViewModel.OpenDetailCommand}"
+                                Command="{x:Bind PageRoot.ViewModel.OpenDetailCommand}"
                                 CommandParameter="{x:Bind}">
                                 <StackPanel Spacing="4">
                                     <TextBlock
