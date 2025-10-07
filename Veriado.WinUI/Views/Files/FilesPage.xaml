@@ -249,7 +249,7 @@
                                 BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 HorizontalContentAlignment="Stretch"
-                                Command="{x:Bind PageRoot.ViewModel.OpenDetailCommand}"
+                                Command="{x:Bind ElementName=PageRoot, Path=ViewModel.OpenDetailCommand}"
                                 CommandParameter="{x:Bind}">
                                 <StackPanel Spacing="4">
                                     <TextBlock
