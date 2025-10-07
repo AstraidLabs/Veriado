@@ -48,4 +48,7 @@ public sealed class ImportPreferences
 
     public double? MaxFileSizeMegabytes { get; set; }
         = null;
+
+    public bool? AutoExportLog { get; set; }
+        = null;
 }
