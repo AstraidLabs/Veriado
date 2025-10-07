@@ -240,13 +240,16 @@
 
                     <controls:ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="contracts:FileSummaryDto">
-                            <Border
+                            <Button
                                 Margin="8"
                                 Padding="12"
                                 CornerRadius="6"
                                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                                 BorderThickness="1"
-                                HorizontalAlignment="Stretch">
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                HorizontalContentAlignment="Stretch"
+                                Command="{x:Bind ViewModel.OpenDetailCommand}"
+                                CommandParameter="{x:Bind}">
                                 <StackPanel Spacing="4">
                                     <TextBlock
                                         Text="{x:Bind Name}"
@@ -261,7 +264,7 @@
                                         Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
                                         FontSize="12" />
                                 </StackPanel>
-                            </Border>
+                            </Button>
                         </DataTemplate>
                     </controls:ItemsRepeater.ItemTemplate>
                 </controls:ItemsRepeater>

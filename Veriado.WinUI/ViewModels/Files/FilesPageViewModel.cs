@@ -12,6 +12,7 @@ using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.Views.Files;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -22,14 +23,19 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private readonly IFileQueryService _fileQueryService;
     private readonly IHotStateService _hotStateService;
+    private readonly IFileOperationsService _fileOperationsService;
     private readonly IHealthService _healthService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
+    private readonly IDialogService _dialogService;
+    private readonly IExceptionHandler _exceptionHandler;
+    
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
+    private readonly AsyncRelayCommand<FileSummaryDto?> _openDetailCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
     private bool _suppressTargetPageChange;
 
@@ -37,6 +43,8 @@ public partial class FilesPageViewModel : ViewModelBase
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
         IHealthService healthService,
+        IFileOperationsService fileOperationsService,
+        IDialogService dialogService,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -46,6 +54,9 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
+        _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
 
         Items = new ObservableCollection<FileSummaryDto>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
@@ -53,6 +64,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
+        _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync);
 
         _suppressTargetPageChange = true;
         TargetPage = 1;
@@ -71,6 +83,8 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand NextPageCommand => _nextPageCommand;
 
     public IAsyncRelayCommand PreviousPageCommand => _previousPageCommand;
+
+    public IAsyncRelayCommand<FileSummaryDto?> OpenDetailCommand => _openDetailCommand;
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
@@ -541,5 +555,43 @@ public partial class FilesPageViewModel : ViewModelBase
             : string.Empty;
 
         return $"Probíhá indexace. Nechte aplikaci spuštěnou, dokud se proces nedokončí{suffix}.";
+    }
+
+    private Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
+    {
+        if (summary is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.EnqueueAsync(async () =>
+        {
+            var detailViewModel = new FileDetailDialogViewModel(
+                summary,
+                _fileQueryService,
+                _fileOperationsService,
+                Messenger,
+                StatusService,
+                Dispatcher,
+                _exceptionHandler);
+
+            void OnChangesSaved(object? sender, EventArgs args)
+            {
+                _ = RefreshCommand.ExecuteAsync(null);
+            }
+
+            detailViewModel.ChangesSaved += OnChangesSaved;
+
+            var view = new FileDetailDialog
+            {
+                DataContext = detailViewModel,
+            };
+
+            _ = detailViewModel.InitializeAsync();
+
+            await _dialogService.ShowAsync("Detail souboru", view, "Zavřít").ConfigureAwait(false);
+
+            detailViewModel.ChangesSaved -= OnChangesSaved;
+        });
     }
 }
