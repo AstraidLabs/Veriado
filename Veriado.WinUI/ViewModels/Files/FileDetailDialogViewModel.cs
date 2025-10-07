@@ -42,6 +42,10 @@ public partial class FileDetailDialogViewModel : ViewModelBase
         _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
         _fileId = summary.Id;
 
+        _saveMetadataCommand = new AsyncRelayCommand(SaveMetadataAsync, CanSaveMetadata);
+        _saveValidityCommand = new AsyncRelayCommand(SaveValidityAsync, CanSaveValidity);
+        _clearValidityCommand = new AsyncRelayCommand(ClearValidityAsync, CanClearValidity);
+
         DisplayName = BuildDisplayName(summary);
         Title = summary.Title;
         Mime = summary.Mime;
@@ -56,10 +60,6 @@ public partial class FileDetailDialogViewModel : ViewModelBase
         IndexedTitle = summary.IndexedTitle;
         IndexSchemaVersion = summary.IndexSchemaVersion;
         IndexedContentHash = summary.IndexedContentHash;
-
-        _saveMetadataCommand = new AsyncRelayCommand(SaveMetadataAsync, CanSaveMetadata);
-        _saveValidityCommand = new AsyncRelayCommand(SaveValidityAsync, CanSaveValidity);
-        _clearValidityCommand = new AsyncRelayCommand(ClearValidityAsync, CanClearValidity);
     }
 
     public event EventHandler? ChangesSaved;
