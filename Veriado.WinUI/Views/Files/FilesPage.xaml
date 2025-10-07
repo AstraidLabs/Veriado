@@ -247,7 +247,7 @@
                                 BorderBrush="Transparent"
                                 BorderThickness="0"
                                 HorizontalAlignment="Stretch"
-                                Command="{x:Bind ViewModel.OpenDetailsCommand}"
+                                Command="{x:Bind RelativeSource={RelativeSource AncestorType=Page}, Path=ViewModel.OpenDetailsCommand}"
                                 CommandParameter="{x:Bind}">
                                 <Button.Content>
                                     <Border
