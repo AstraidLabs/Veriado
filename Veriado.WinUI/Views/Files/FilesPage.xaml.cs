@@ -35,11 +35,14 @@ public sealed partial class FilesPage : Page
         return ViewModel.RefreshCommand.ExecuteAsync(null);
     }
 
-    private async void OnOpenDetailClick(object sender, RoutedEventArgs e)
+    private void OnOpenDetailClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.DataContext is FileSummaryDto dto)
         {
-            await ViewModel.OpenDetailCommand.ExecuteAsync(dto);
+            if (ViewModel.OpenDetailCommand.CanExecute(dto))
+            {
+                ViewModel.OpenDetailCommand.Execute(dto);
+            }
         }
     }
 }
