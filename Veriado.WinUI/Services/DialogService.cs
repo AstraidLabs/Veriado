@@ -37,18 +37,19 @@ public sealed class DialogService : IDialogService
         return ConfirmAsync(title, message, "OK", string.Empty);
     }
 
-    public async Task ShowAsync(string title, FrameworkElement content, string primaryButtonText = "OK")
+    public async Task ShowAsync(string title, UIElement content, string primaryButtonText = "OK")
     {
         ArgumentNullException.ThrowIfNull(content);
 
         var window = _window.GetActiveWindow();
         var hwnd = _window.GetHwnd(window);
+        var xamlRoot = _window.GetXamlRoot(window);
         var dialog = new ContentDialog
         {
             Title = title,
             Content = content,
             PrimaryButtonText = primaryButtonText,
-            XamlRoot = _window.GetXamlRoot(window),
+            XamlRoot = xamlRoot,
         };
 
         WinRT.Interop.InitializeWithWindow.Initialize(dialog, hwnd);
