@@ -13,6 +13,7 @@
     <Page.Resources>
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
         <converters:NullableLongToDoubleConverter x:Key="NullableLongToDoubleConverter" />
+        <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="16" ColumnSpacing="24">
@@ -250,8 +251,7 @@
                                 BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 HorizontalContentAlignment="Stretch"
-                                Command="{x:Bind Path=ViewModel.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=views:FilesPage}}"
-                                CommandParameter="{x:Bind}">
+                                Click="OnOpenDetailClick">
                                 <StackPanel Spacing="4">
                                     <TextBlock
                                         Text="{x:Bind Name}"
