@@ -250,6 +250,7 @@
                                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch"
                                 Click="OnOpenDetailClick">
                                 <StackPanel Spacing="4">
