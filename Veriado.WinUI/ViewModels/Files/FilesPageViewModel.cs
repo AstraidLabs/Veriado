@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -36,8 +37,11 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly AsyncRelayCommand<FileSummaryDto?> _openDetailCommand;
+    private readonly AsyncRelayCommand<FileSummaryDto?> _selectFileCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
     private bool _suppressTargetPageChange;
+    private readonly object _detailLoadGate = new();
+    private CancellationTokenSource? _detailLoadSource;
 
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
@@ -65,6 +69,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
         _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync);
+        _selectFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteSelectFileAsync);
 
         _suppressTargetPageChange = true;
         TargetPage = 1;
@@ -85,6 +90,8 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand PreviousPageCommand => _previousPageCommand;
 
     public IAsyncRelayCommand<FileSummaryDto?> OpenDetailCommand => _openDetailCommand;
+
+    public IAsyncRelayCommand<FileSummaryDto?> SelectFileCommand => _selectFileCommand;
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
@@ -162,6 +169,21 @@ public partial class FilesPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? indexingWarningMessage;
+
+    [ObservableProperty]
+    private FileSummaryDto? selectedFile;
+
+    [ObservableProperty]
+    private FileDetailDto? selectedFileDetail;
+
+    [ObservableProperty]
+    private bool isDetailVisible;
+
+    [ObservableProperty]
+    private bool isDetailLoading;
+
+    [ObservableProperty]
+    private string? detailErrorMessage;
 
     public double TargetPageMaximum
     {
@@ -351,6 +373,7 @@ public partial class FilesPageViewModel : ViewModelBase
                     Items.Add(item);
                 }
 
+                UpdateSelection(result.Items);
                 UpdatePaginationState(result.Page, result.TotalPages, result.TotalCount, result.Items.Count);
             }).ConfigureAwait(false);
         });
@@ -593,5 +616,150 @@ public partial class FilesPageViewModel : ViewModelBase
 
             detailViewModel.ChangesSaved -= OnChangesSaved;
         });
+    }
+
+    private async Task ExecuteSelectFileAsync(FileSummaryDto? summary)
+    {
+        CancellationTokenSource? previous;
+        CancellationTokenSource? current = null;
+
+        lock (_detailLoadGate)
+        {
+            previous = _detailLoadSource;
+            _detailLoadSource = null;
+
+            if (summary is not null)
+            {
+                current = new CancellationTokenSource();
+                _detailLoadSource = current;
+            }
+        }
+
+        previous?.Cancel();
+        previous?.Dispose();
+
+        await Dispatcher.Enqueue(() =>
+        {
+            if (summary is null)
+            {
+                ClearDetailState();
+            }
+            else
+            {
+                SelectedFile = summary;
+                SelectedFileDetail = null;
+                DetailErrorMessage = null;
+                IsDetailVisible = true;
+                IsDetailLoading = true;
+            }
+        }).ConfigureAwait(false);
+
+        if (summary is null || current is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var detail = await _fileQueryService.GetDetailAsync(summary.Id, current.Token).ConfigureAwait(false);
+
+            await Dispatcher.Enqueue(() =>
+            {
+                if (ReferenceEquals(_detailLoadSource, current) && !current.IsCancellationRequested)
+                {
+                    if (detail is null)
+                    {
+                        SelectedFileDetail = null;
+                        DetailErrorMessage = "Soubor se nepodařilo načíst.";
+                    }
+                    else
+                    {
+                        SelectedFileDetail = detail;
+                        DetailErrorMessage = null;
+                    }
+                }
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Intentionally ignored.
+        }
+        catch (Exception ex)
+        {
+            var message = _exceptionHandler.Handle(ex);
+            await Dispatcher.Enqueue(() =>
+            {
+                if (ReferenceEquals(_detailLoadSource, current))
+                {
+                    DetailErrorMessage = string.IsNullOrWhiteSpace(message)
+                        ? "Nastala neočekávaná chyba při načítání detailu."
+                        : message;
+                }
+            }).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                StatusService.Error(message);
+            }
+        }
+        finally
+        {
+            await Dispatcher.Enqueue(() =>
+            {
+                if (ReferenceEquals(_detailLoadSource, current))
+                {
+                    IsDetailLoading = false;
+                }
+            }).ConfigureAwait(false);
+
+            lock (_detailLoadGate)
+            {
+                if (ReferenceEquals(_detailLoadSource, current))
+                {
+                    _detailLoadSource = null;
+                }
+            }
+
+            current.Dispose();
+        }
+    }
+
+    private void UpdateSelection(IReadOnlyCollection<FileSummaryDto> items)
+    {
+        if (SelectedFile is null)
+        {
+            return;
+        }
+
+        var updated = items.FirstOrDefault(item => item.Id == SelectedFile.Id);
+        if (updated is null)
+        {
+            ClearDetailState();
+            return;
+        }
+
+        if (!ReferenceEquals(updated, SelectedFile))
+        {
+            SelectedFile = updated;
+        }
+    }
+
+    private void ClearDetailState()
+    {
+        SelectedFile = null;
+        SelectedFileDetail = null;
+        DetailErrorMessage = null;
+        IsDetailVisible = false;
+        IsDetailLoading = false;
+
+        CancellationTokenSource? source;
+        lock (_detailLoadGate)
+        {
+            source = _detailLoadSource;
+            _detailLoadSource = null;
+        }
+
+        source?.Cancel();
+        source?.Dispose();
     }
 }
