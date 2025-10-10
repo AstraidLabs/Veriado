@@ -70,15 +70,10 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
         try
         {
-            var journalId = await helper
-                .IndexAsync(document, connection, transaction, beforeCommit, cancellationToken, enlistJournal: false)
+            await helper
+                .IndexAsync(document, connection, transaction, beforeCommit, cancellationToken)
                 .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            if (journalId.HasValue)
-            {
-                await _writeAhead.ClearAsync(connection, transaction: null, journalId.Value, cancellationToken)
-                    .ConfigureAwait(false);
-            }
         }
         catch
         {
@@ -112,15 +107,10 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
         try
         {
-            var journalId = await helper
-                .DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken, enlistJournal: false)
+            await helper
+                .DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken)
                 .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            if (journalId.HasValue)
-            {
-                await _writeAhead.ClearAsync(connection, transaction: null, journalId.Value, cancellationToken)
-                    .ConfigureAwait(false);
-            }
         }
         catch
         {
