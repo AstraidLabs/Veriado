@@ -42,6 +42,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
     private CancellationTokenSource? _detailLoadSource;
+    private bool _suppressFuzzyChange;
 
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
@@ -244,12 +245,32 @@ public partial class FilesPageViewModel : ViewModelBase
 
     partial void OnSearchTextChanged(string? value)
     {
+        if (string.IsNullOrWhiteSpace(value) && Fuzzy)
+        {
+            _suppressFuzzyChange = true;
+            Fuzzy = false;
+        }
+
         _hotStateService.LastQuery = value;
         DebounceRefresh();
     }
 
     partial void OnFuzzyChanged(bool value)
     {
+        if (_suppressFuzzyChange)
+        {
+            _suppressFuzzyChange = false;
+            return;
+        }
+
+        if (value && string.IsNullOrWhiteSpace(SearchText))
+        {
+            StatusService.Info("Pro rozšířené fuzzy vyhledávání je nutné zadat text.");
+            _suppressFuzzyChange = true;
+            Fuzzy = false;
+            return;
+        }
+
         DebounceRefresh();
     }
 
