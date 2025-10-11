@@ -69,7 +69,9 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, _logger, cancellationToken).ConfigureAwait(false);
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
@@ -106,7 +108,9 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, _logger, cancellationToken).ConfigureAwait(false);
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try

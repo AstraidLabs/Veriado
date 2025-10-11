@@ -111,7 +111,9 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
 
         providedOrder.AddRange(existing);
 
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         for (var index = 0; index < providedOrder.Count; index++)
         {
             await using var update = connection.CreateCommand();
