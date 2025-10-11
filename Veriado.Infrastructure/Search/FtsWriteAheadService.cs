@@ -14,9 +14,28 @@ using Veriado.Appl.Search;
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
+/// Provides access to dead-letter queue monitoring for the FTS write-ahead journal.
+/// </summary>
+internal interface IFtsDlqMonitor
+{
+    /// <summary>
+    /// Gets the number of entries currently present in the FTS dead-letter queue.
+    /// </summary>
+    Task<int> GetDlqCountAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Attempts to process a batch of dead-letter queue entries once.
+    /// </summary>
+    /// <param name="maxBatch">The maximum number of entries to process.</param>
+    /// <param name="cancellationToken">The cancellation token for the retry operation.</param>
+    /// <returns>The number of entries successfully removed from the queue.</returns>
+    Task<int> RetryOnceAsync(int maxBatch, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Provides write-ahead journalling support for FTS5 operations, including crash recovery on startup.
 /// </summary>
-internal sealed class FtsWriteAheadService
+internal sealed class FtsWriteAheadService : IFtsDlqMonitor
 {
     public const string OperationIndex = "index";
     public const string OperationDelete = "delete";
@@ -142,6 +161,80 @@ internal sealed class FtsWriteAheadService
         }
     }
 
+    public async Task<int> GetDlqCountAsync(CancellationToken cancellationToken)
+    {
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM fts_write_ahead_dlq;";
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (result is null || result == DBNull.Value)
+        {
+            return 0;
+        }
+
+        return Convert.ToInt32(result, CultureInfo.InvariantCulture);
+    }
+
+    public async Task<int> RetryOnceAsync(int maxBatch, CancellationToken cancellationToken)
+    {
+        if (maxBatch <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxBatch));
+        }
+
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var pending = await LoadDeadLetterAsync(connection, maxBatch, cancellationToken).ConfigureAwait(false);
+        if (pending.Count == 0)
+        {
+            return 0;
+        }
+
+        _logger.LogInformation("Retrying {Count} FTS write-ahead DLQ entries", pending.Count);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this);
+        var succeeded = 0;
+
+        foreach (var entry in pending)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!Guid.TryParse(entry.FileId, out var fileId))
+            {
+                _logger.LogWarning(
+                    "Unable to parse file identifier '{FileId}' for FTS DLQ entry {EntryId}.",
+                    entry.FileId,
+                    entry.Id);
+                await UpdateDeadLetterFailureAsync(connection, entry.Id, "Invalid file identifier", cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            var processed = entry.Operation switch
+            {
+                OperationIndex => await RetryDeadLetterIndexAsync(connection, helper, entry, fileId, cancellationToken)
+                    .ConfigureAwait(false),
+                OperationDelete => await RetryDeadLetterDeleteAsync(connection, helper, entry, fileId, cancellationToken)
+                    .ConfigureAwait(false),
+                _ => await HandleUnknownDeadLetterOperationAsync(connection, entry, cancellationToken)
+                    .ConfigureAwait(false),
+            };
+
+            if (processed)
+            {
+                succeeded++;
+            }
+        }
+
+        return succeeded;
+    }
+
     public async Task MoveToDeadLetterAsync(SqliteConnection connection, FtsWriteAheadEntry entry, string error, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(connection);
@@ -225,6 +318,87 @@ internal sealed class FtsWriteAheadService
         }
     }
 
+    private async Task<bool> RetryDeadLetterIndexAsync(
+        SqliteConnection connection,
+        SqliteFts5Transactional helper,
+        FtsDeadLetterEntry entry,
+        Guid fileId,
+        CancellationToken cancellationToken)
+    {
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var file = await context.Files
+            .AsNoTracking()
+            .Include(f => f.Content)
+            .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (file is null)
+        {
+            _logger.LogInformation(
+                "Discarding FTS DLQ entry {EntryId} because file {FileId} no longer exists.",
+                entry.Id,
+                entry.FileId);
+            await DeleteDeadLetterAsync(connection, entry.Id, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        var document = file.ToSearchDocument();
+
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+        try
+        {
+            using var scope = SuppressLogging();
+            await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+                .ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await DeleteDeadLetterAsync(connection, entry.Id, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogError(
+                ex,
+                "Failed to retry FTS index DLQ entry {EntryId} for file {FileId}.",
+                entry.Id,
+                entry.FileId);
+            await UpdateDeadLetterFailureAsync(connection, entry.Id, ex.Message, cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+    }
+
+    private async Task<bool> RetryDeadLetterDeleteAsync(
+        SqliteConnection connection,
+        SqliteFts5Transactional helper,
+        FtsDeadLetterEntry entry,
+        Guid fileId,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+        try
+        {
+            using var scope = SuppressLogging();
+            await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+                .ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await DeleteDeadLetterAsync(connection, entry.Id, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogError(
+                ex,
+                "Failed to retry FTS delete DLQ entry {EntryId} for file {FileId}.",
+                entry.Id,
+                entry.FileId);
+            await UpdateDeadLetterFailureAsync(connection, entry.Id, ex.Message, cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+    }
+
     private async Task<List<FtsWriteAheadEntry>> LoadPendingAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         var entries = new List<FtsWriteAheadEntry>();
@@ -243,6 +417,40 @@ internal sealed class FtsWriteAheadService
                 ? parsed
                 : DateTimeOffset.MinValue;
             entries.Add(new FtsWriteAheadEntry(id, fileId, operation, contentHash, titleHash, enqueuedUtc));
+        }
+
+        return entries;
+    }
+
+    private async Task<List<FtsDeadLetterEntry>> LoadDeadLetterAsync(
+        SqliteConnection connection,
+        int maxBatch,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<FtsDeadLetterEntry>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, original_id, file_id, op, content_hash, title_hash, enqueued_utc
+            FROM fts_write_ahead_dlq
+            ORDER BY id
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", maxBatch);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var id = reader.GetInt64(0);
+            var originalId = reader.GetInt64(1);
+            var fileId = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+            var operation = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+            var contentHash = reader.IsDBNull(4) ? null : reader.GetString(4);
+            var titleHash = reader.IsDBNull(5) ? null : reader.GetString(5);
+            var enqueuedText = reader.IsDBNull(6) ? null : reader.GetString(6);
+            var enqueuedUtc = DateTimeOffset.TryParse(enqueuedText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+                ? parsed
+                : DateTimeOffset.MinValue;
+            entries.Add(new FtsDeadLetterEntry(id, originalId, fileId, operation, contentHash, titleHash, enqueuedUtc));
         }
 
         return entries;
@@ -287,6 +495,51 @@ internal sealed class FtsWriteAheadService
         await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    private static async Task DeleteDeadLetterAsync(SqliteConnection connection, long id, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM fts_write_ahead_dlq WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task UpdateDeadLetterFailureAsync(
+        SqliteConnection connection,
+        long id,
+        string error,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE fts_write_ahead_dlq
+            SET dead_lettered_utc = $dead_lettered_utc,
+                error = $error
+            WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$dead_lettered_utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$error", error ?? string.Empty);
+        command.Parameters.AddWithValue("$id", id);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> HandleUnknownDeadLetterOperationAsync(
+        SqliteConnection connection,
+        FtsDeadLetterEntry entry,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogWarning(
+            "Unknown FTS write-ahead operation '{Operation}' for DLQ entry {EntryId}.",
+            entry.Operation,
+            entry.Id);
+        await UpdateDeadLetterFailureAsync(
+                connection,
+                entry.Id,
+                $"Unknown operation '{entry.Operation}'",
+                cancellationToken)
+            .ConfigureAwait(false);
+        return false;
+    }
+
     private static string? ComputeTitleHash(string? normalizedTitle)
     {
         if (string.IsNullOrWhiteSpace(normalizedTitle))
@@ -308,6 +561,15 @@ internal sealed class FtsWriteAheadService
 
 internal readonly record struct FtsWriteAheadEntry(
     long Id,
+    string FileId,
+    string Operation,
+    string? ContentHash,
+    string? TitleHash,
+    DateTimeOffset EnqueuedUtc);
+
+internal readonly record struct FtsDeadLetterEntry(
+    long Id,
+    long OriginalId,
     string FileId,
     string Operation,
     string? ContentHash,
