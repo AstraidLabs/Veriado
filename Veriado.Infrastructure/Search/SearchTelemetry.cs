@@ -15,6 +15,8 @@ internal sealed class SearchTelemetry : ISearchTelemetry
     private readonly Histogram<double> _overallHistogram = Meter.CreateHistogram<double>("search_latency_ms");
     private readonly Histogram<double> _verifyDurationHistogram = Meter.CreateHistogram<double>("fts_verify_duration_ms");
     private readonly Counter<long> _verifyDriftCounter = Meter.CreateCounter<long>("fts_verify_drift_total");
+    private readonly Counter<long> _repairBatchCounter = Meter.CreateCounter<long>("repair_batches_total");
+    private readonly Counter<long> _repairFailureCounter = Meter.CreateCounter<long>("repair_failures_total");
     private readonly ObservableGauge<long> _documentGauge;
     private readonly ObservableGauge<long> _indexSizeGauge;
     private long _documentCount;
@@ -56,6 +58,19 @@ internal sealed class SearchTelemetry : ISearchTelemetry
 
         _verifyDriftCounter.Add(driftCount);
     }
+
+    public void RecordRepairBatch(int batchSize)
+    {
+        if (batchSize <= 0)
+        {
+            return;
+        }
+
+        _repairBatchCounter.Add(1, new KeyValuePair<string, object?>("documents", batchSize));
+    }
+
+    public void RecordRepairFailure()
+        => _repairFailureCounter.Add(1);
 
     private IEnumerable<Measurement<long>> ObserveDocuments()
     {
