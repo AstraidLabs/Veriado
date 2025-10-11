@@ -336,4 +336,15 @@ public interface ISearchTelemetry
     /// </summary>
     /// <param name="driftCount">The number of entries detected as missing or drifted.</param>
     void RecordIndexDrift(int driftCount);
+
+    /// <summary>
+    /// Records completion of a repair batch.
+    /// </summary>
+    /// <param name="batchSize">The number of files scheduled in the batch.</param>
+    void RecordRepairBatch(int batchSize);
+
+    /// <summary>
+    /// Records a repair failure.
+    /// </summary>
+    void RecordRepairFailure();
 }

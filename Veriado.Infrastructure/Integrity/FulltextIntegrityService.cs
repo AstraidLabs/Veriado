@@ -10,6 +10,8 @@ namespace Veriado.Infrastructure.Integrity;
 internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 {
     private const string Fts5SchemaResourceName = "Veriado.Infrastructure.Persistence.Schema.Fts5.sql";
+    private const int RepairBatchSize = 250;
+    private const int RepairDegreeOfParallelism = 3;
 
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly IDbContextFactory<AppDbContext> _writeFactory;
@@ -19,6 +21,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private readonly ILogger<FulltextIntegrityService> _logger;
     private readonly IClock _clock;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
+    private readonly ISearchTelemetry _telemetry;
 
     public FulltextIntegrityService(
         IDbContextFactory<ReadOnlyDbContext> readFactory,
@@ -28,7 +31,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         InfrastructureOptions options,
         ILogger<FulltextIntegrityService> logger,
         IClock clock,
-        ISearchIndexSignatureCalculator signatureCalculator)
+        ISearchIndexSignatureCalculator signatureCalculator,
+        ISearchTelemetry telemetry)
     {
         _readFactory = readFactory;
         _writeFactory = writeFactory;
@@ -38,6 +42,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         _logger = logger;
         _clock = clock;
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
@@ -204,8 +209,6 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             await RecreateFulltextSchemaAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-
         if (!requiresFullRebuild)
         {
             foreach (var orphan in report.OrphanIndexIds)
@@ -216,39 +219,84 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 }
                 catch (Exception ex)
                 {
+                    _telemetry.RecordRepairFailure();
                     _logger.LogError(ex, "Failed to delete orphaned search index row for file {FileId}", orphan);
                 }
             }
         }
 
-        var processed = 0;
-        foreach (var fileId in targetFileIds)
+        var targetFileIdsArray = targetFileIds.ToArray();
+        if (targetFileIdsArray.Length == 0)
         {
+            return 0;
+        }
+
+        var batches = targetFileIdsArray.Chunk(RepairBatchSize).ToArray();
+        using var semaphore = new SemaphoreSlim(RepairDegreeOfParallelism);
+        var tasks = new List<Task<int>>(batches.Length);
+
+        foreach (var batch in batches)
+        {
+            tasks.Add(ProcessBatchAsync(batch, semaphore, cancellationToken));
+        }
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return results.Sum();
+
+        async Task<int> ProcessBatchAsync(Guid[] batch, SemaphoreSlim limiter, CancellationToken ct)
+        {
+            await limiter.WaitAsync(ct).ConfigureAwait(false);
+
             try
             {
-                if (await ReindexFileAsync(writeContext, fileId, cancellationToken).ConfigureAwait(false))
+                await using var writeContext = await _writeFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+                await using var transaction = await writeContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+                var processedCount = 0;
+
+                foreach (var fileId in batch)
                 {
-                    processed++;
+                    try
+                    {
+                        if (await ReindexFileAsync(writeContext, fileId, ct).ConfigureAwait(false))
+                        {
+                            processedCount++;
+                        }
+                    }
+                    catch (SearchIndexCorruptedException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _telemetry.RecordRepairFailure();
+                        _logger.LogError(ex, "Failed to repair search index for file {FileId}", fileId);
+                    }
                 }
+
+                await writeContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+
+                _telemetry.RecordRepairBatch(batch.Length);
+
+                return processedCount;
             }
             catch (SearchIndexCorruptedException)
             {
-                // Bubble the corruption signal back to the caller so that automated repair routines can
-                // escalate the failure instead of reporting a successful repair.
+                _telemetry.RecordRepairFailure();
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to repair search index for file {FileId}", fileId);
+                _telemetry.RecordRepairFailure();
+                _logger.LogError(ex, "Failed to commit repair batch of size {BatchSize}", batch.Length);
+                throw;
+            }
+            finally
+            {
+                limiter.Release();
             }
         }
-
-        if (processed > 0)
-        {
-            await writeContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        return processed;
     }
 
     private async Task<bool> ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
