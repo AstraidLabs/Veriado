@@ -10,6 +10,8 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
 {
+    private const string IndexingMode = "SameTransaction";
+
     private readonly InfrastructureOptions _options;
     private readonly ILogger<SqliteSearchIndexCoordinator> _logger;
     private readonly IAnalyzerFactory _analyzerFactory;
@@ -38,6 +40,14 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         {
             _logger.LogDebug("Skipping full-text indexing for file {FileId} because FTS5 support is unavailable.", file.Id);
             return false;
+        }
+
+        if (options.AllowDeferredIndexing)
+        {
+            _logger.LogWarning(
+                "Deferred indexing requested for file {FileId}, but FtsIndexingMode '{IndexingMode}' enforces synchronous processing.",
+                file.Id,
+                IndexingMode);
         }
 
         if (transaction is not SqliteTransaction sqliteTransaction)
