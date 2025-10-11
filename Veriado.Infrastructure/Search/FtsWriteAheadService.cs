@@ -276,13 +276,13 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.FileId,
             error);
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
         try
         {
-            await MoveToDeadLetterInternalAsync(connection, transaction, entry, error, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await MoveToDeadLetterInternalAsync(connection, sqliteTransaction, entry, error, cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "DLQ transaction {TransactionId} committed for entry {EntryId}",
                 transactionId,
@@ -290,7 +290,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogError(
                 ex,
                 "DLQ transaction {TransactionId} rolled back for entry {EntryId}",
@@ -336,14 +336,14 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
             using var scope = SuppressLogging();
-            await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+            await helper.IndexAsync(document, connection, sqliteTransaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "FTS replay transaction {TransactionId} committed for entry {EntryId}",
                 transactionId,
@@ -352,7 +352,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogWarning(
                 ex,
                 "FTS replay transaction {TransactionId} rolled back for entry {EntryId}",
@@ -381,14 +381,14 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
             using var scope = SuppressLogging();
-            await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+            await helper.DeleteAsync(fileId, connection, sqliteTransaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "FTS replay transaction {TransactionId} committed for delete entry {EntryId}",
                 transactionId,
@@ -397,7 +397,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogWarning(
                 ex,
                 "FTS replay transaction {TransactionId} rolled back for delete entry {EntryId}",
@@ -445,14 +445,14 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
             using var scope = SuppressLogging();
-            await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+            await helper.IndexAsync(document, connection, sqliteTransaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "DLQ retry transaction {TransactionId} committed for index entry {EntryId}",
                 transactionId,
@@ -462,7 +462,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogWarning(
                 ex,
                 "DLQ retry transaction {TransactionId} rolled back for index entry {EntryId}",
@@ -492,14 +492,14 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
             using var scope = SuppressLogging();
-            await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
+            await helper.DeleteAsync(fileId, connection, sqliteTransaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "DLQ retry transaction {TransactionId} committed for delete entry {EntryId}",
                 transactionId,
@@ -509,7 +509,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogWarning(
                 ex,
                 "DLQ retry transaction {TransactionId} rolled back for delete entry {EntryId}",

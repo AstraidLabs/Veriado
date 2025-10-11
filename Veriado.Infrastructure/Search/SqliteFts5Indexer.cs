@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Search;
 
@@ -68,21 +69,20 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, _logger, cancellationToken).ConfigureAwait(false);
-        await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var transaction = (SqliteTransaction)dbTransaction;
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
         {
             _logger.LogInformation("Standalone FTS upsert for file {FileId}", document.FileId);
             await helper
-                .IndexAsync(document, connection, transaction, beforeCommit, cancellationToken)
+                .IndexAsync(document, connection, sqliteTransaction, beforeCommit, cancellationToken)
                 .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -106,21 +106,20 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, _logger, cancellationToken).ConfigureAwait(false);
-        await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var transaction = (SqliteTransaction)dbTransaction;
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
         {
             _logger.LogInformation("Standalone FTS delete for file {FileId}", fileId);
             await helper
-                .DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken)
+                .DeleteAsync(fileId, connection, sqliteTransaction, beforeCommit, cancellationToken)
                 .ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
     }

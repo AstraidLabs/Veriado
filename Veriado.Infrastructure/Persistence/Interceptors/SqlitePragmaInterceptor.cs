@@ -1,4 +1,6 @@
+using System;
 using System.Data.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +22,7 @@ public sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
     {
         if (connection is not SqliteConnection sqlite)
         {
-            return;
+            throw new InvalidOperationException($"SqlitePragmaInterceptor requires SqliteConnection but received {connection.GetType().FullName}.");
         }
 
         await SqlitePragmaHelper.ApplyAsync(sqlite, _logger, cancellationToken).ConfigureAwait(false);

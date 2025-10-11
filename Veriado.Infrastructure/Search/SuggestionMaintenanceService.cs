@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Veriado.Domain.Search;
 
 /// <summary>
@@ -49,11 +50,11 @@ internal sealed class SuggestionMaintenanceService
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             foreach (var entry in harvested)
             {
                 await using var command = connection.CreateCommand();
-                command.Transaction = (SqliteTransaction)transaction;
+                command.Transaction = sqliteTransaction;
                 command.CommandText = "INSERT INTO suggestions(term, weight, lang, source_field) VALUES($term, $weight, $lang, $source) " +
                     "ON CONFLICT(term, lang, source_field) DO UPDATE SET weight = weight + excluded.weight;";
                 command.Parameters.Add("$term", SqliteType.Text).Value = entry.Term;
@@ -63,7 +64,7 @@ internal sealed class SuggestionMaintenanceService
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (SqliteException ex)
         {

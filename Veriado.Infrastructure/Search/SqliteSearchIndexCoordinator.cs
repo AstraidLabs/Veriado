@@ -1,5 +1,5 @@
 using System;
-using System.Data.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Search;
 
@@ -32,9 +32,10 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
     }
 
-    public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken)
+    public async Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, SqliteTransaction transaction, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(transaction);
 
         if (!_options.IsFulltextAvailable)
         {
@@ -42,12 +43,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
             return false;
         }
 
-        if (transaction is not SqliteTransaction sqliteTransaction)
-        {
-            throw new InvalidOperationException("SQLite transaction is required for full-text indexing operations.");
-        }
-
-        var sqliteConnection = sqliteTransaction.Connection as SqliteConnection
+        var sqliteConnection = transaction.Connection as SqliteConnection
             ?? throw new InvalidOperationException("SQLite connection is unavailable for the active transaction.");
 
         var document = file.ToSearchDocument();
@@ -55,7 +51,7 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         _logger.LogInformation(
             "Coordinating FTS upsert for file {FileId} within ambient transaction",
             file.Id);
-        await helper.IndexAsync(document, sqliteConnection, sqliteTransaction, beforeCommit: null, cancellationToken)
+        await helper.IndexAsync(document, sqliteConnection, transaction, beforeCommit: null, cancellationToken)
             .ConfigureAwait(false);
         return true;
     }

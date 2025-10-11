@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Veriado.Contracts.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -19,12 +20,12 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var now = _clock.UtcNow.ToString("O");
 
         await using (var update = connection.CreateCommand())
         {
-            update.Transaction = (SqliteTransaction)transaction;
+            update.Transaction = sqliteTransaction;
             update.CommandText =
                 "UPDATE search_history " +
                 "SET query_text = $queryText, created_utc = $createdUtc, executions = executions + 1, last_total_hits = $hits, is_fuzzy = $isFuzzy " +
@@ -39,7 +40,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
             if (affected == 0)
             {
                 await using var insert = connection.CreateCommand();
-                insert.Transaction = (SqliteTransaction)transaction;
+                insert.Transaction = sqliteTransaction;
                 insert.CommandText =
                     "INSERT INTO search_history(id, query_text, match, created_utc, executions, last_total_hits, is_fuzzy) " +
                     "VALUES ($id, $queryText, $match, $createdUtc, 1, $hits, $isFuzzy);";
@@ -53,7 +54,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
             }
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<SearchHistoryEntry>> GetRecentAsync(int take, CancellationToken cancellationToken)

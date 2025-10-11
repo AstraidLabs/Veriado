@@ -1,4 +1,6 @@
+using System;
 using System.Data;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Veriado.Domain.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
@@ -20,6 +22,7 @@ public sealed class AppDbContext : DbContext
     {
         _options = infrastructureOptions;
         _logger = logger;
+        EnsureSqliteProvider();
     }
 
     public DbSet<FileEntity> Files => Set<FileEntity>();
@@ -84,14 +87,13 @@ public sealed class AppDbContext : DbContext
     /// <param name="cancellationToken">The cancellation token.</param>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (Database.IsSqlite())
-        {
-            await Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken).ConfigureAwait(false);
-        }
+        EnsureSqliteProvider();
+        await Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken).ConfigureAwait(false);
     }
 
     internal async Task EnsureSqliteMigrationsLockClearedAsync(CancellationToken cancellationToken)
     {
+        EnsureSqliteProvider();
         const string createTableSql = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsLock\"(\n  \"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY,\n  \"Timestamp\" TEXT NOT NULL\n);";
         const string deleteSql = "DELETE FROM \"__EFMigrationsLock\";";
 
@@ -105,12 +107,9 @@ public sealed class AppDbContext : DbContext
 
     internal async Task<bool> NeedsSqliteMigrationsHistoryBaselineAsync(CancellationToken cancellationToken)
     {
-        if (!Database.IsSqlite())
-        {
-            return false;
-        }
+        EnsureSqliteProvider();
 
-        var connection = Database.GetDbConnection();
+        var connection = (SqliteConnection)Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
 
         if (shouldClose)
@@ -154,17 +153,14 @@ public sealed class AppDbContext : DbContext
         {
             if (shouldClose)
             {
-                connection.Close();
+                await connection.CloseAsync().ConfigureAwait(false);
             }
         }
     }
 
     internal async Task EnsureSqliteMigrationsHistoryBaselinedAsync(CancellationToken cancellationToken)
     {
-        if (!Database.IsSqlite())
-        {
-            return;
-        }
+        EnsureSqliteProvider();
 
         const string createTableSql = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\n    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY,\n    \"ProductVersion\" TEXT NOT NULL\n);";
         var insertBaselineSql = $"INSERT OR IGNORE INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('{LegacyBaselineMigrationId}', '9.0.9');";
@@ -174,6 +170,15 @@ public sealed class AppDbContext : DbContext
         if (inserted > 0)
         {
             _logger.LogInformation("Baselined EF migrations history with initial migration for legacy SQLite database.");
+        }
+    }
+
+    private void EnsureSqliteProvider()
+    {
+        var providerName = Database.ProviderName;
+        if (string.IsNullOrWhiteSpace(providerName) || !providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("AppDbContext requires Microsoft.Data.Sqlite provider.");
         }
     }
 }
