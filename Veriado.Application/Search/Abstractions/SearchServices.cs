@@ -326,6 +326,12 @@ public interface ISearchTelemetry
     void UpdateIndexMetrics(long documentCount, long indexSizeBytes);
 
     /// <summary>
+    /// Updates gauges describing the current FTS dead-letter queue depth.
+    /// </summary>
+    /// <param name="entryCount">The number of entries currently in the dead-letter queue.</param>
+    void UpdateDeadLetterQueueSize(long entryCount);
+
+    /// <summary>
     /// Records the elapsed time of a full-text index verification pass.
     /// </summary>
     /// <param name="elapsed">The elapsed duration.</param>
@@ -347,4 +353,10 @@ public interface ISearchTelemetry
     /// Records a repair failure.
     /// </summary>
     void RecordRepairFailure();
+
+    /// <summary>
+    /// Records the number of SQLITE_BUSY retries encountered during an operation.
+    /// </summary>
+    /// <param name="retryCount">The number of retries to add to the counter.</param>
+    void RecordSqliteBusyRetry(int retryCount);
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Reflection;
 using Veriado.Infrastructure.Search;
 
@@ -47,6 +48,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
     {
+        var verificationWatch = Stopwatch.StartNew();
+        _logger.LogInformation("Starting full-text integrity verification");
         if (!_options.IsFulltextAvailable)
         {
             var reason = _options.FulltextAvailabilityError ?? "SQLite FTS5 support is unavailable.";
@@ -141,7 +144,16 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             .Distinct()
             .ToArray();
 
-        return new IntegrityReport(missing, orphans, requiresFullRebuild);
+        verificationWatch.Stop();
+        var report = new IntegrityReport(missing, orphans, requiresFullRebuild);
+        _logger.LogInformation(
+            "Full-text integrity verification completed in {ElapsedMs} ms (missing={MissingCount}, orphans={OrphanCount}, rebuildRequired={RebuildRequired})",
+            verificationWatch.Elapsed.TotalMilliseconds,
+            report.MissingCount,
+            report.OrphanCount,
+            report.RequiresFullRebuild);
+
+        return report;
     }
 
     public async Task<int> RepairAsync(bool reindexAll, CancellationToken cancellationToken = default)
@@ -153,6 +165,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return 0;
         }
 
+        _logger.LogInformation("Starting full-text repair (reindexAll={ReindexAll})", reindexAll);
         IntegrityReport report;
         var requiresFullRebuild = reindexAll;
 
@@ -241,7 +254,12 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
 
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-        return results.Sum();
+        var repaired = results.Sum();
+        _logger.LogInformation(
+            "Full-text repair finished: batches={BatchCount}, processed={ProcessedCount}",
+            batches.Length,
+            repaired);
+        return repaired;
 
         async Task<int> ProcessBatchAsync(Guid[] batch, SemaphoreSlim limiter, CancellationToken ct)
         {
@@ -251,6 +269,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             {
                 await using var writeContext = await _writeFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
                 await using var transaction = await writeContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+                var transactionId = Guid.NewGuid();
+                _logger.LogInformation(
+                    "Repair transaction {TransactionId} started for batch size {BatchSize}",
+                    transactionId,
+                    batch.Length);
 
                 var processedCount = 0;
 
@@ -274,8 +297,34 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     }
                 }
 
-                await writeContext.SaveChangesAsync(ct).ConfigureAwait(false);
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await writeContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await transaction.CommitAsync(ct).ConfigureAwait(false);
+                    _logger.LogInformation(
+                        "Repair transaction {TransactionId} committed ({ProcessedCount} files updated)",
+                        transactionId,
+                        processedCount);
+                }
+                catch
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        _logger.LogError(
+                            rollbackEx,
+                            "Failed to rollback repair transaction {TransactionId} after commit error",
+                            transactionId);
+                    }
+
+                    _logger.LogWarning(
+                        "Repair transaction {TransactionId} rolled back due to failure",
+                        transactionId);
+                    throw;
+                }
 
                 _telemetry.RecordRepairBatch(batch.Length);
 

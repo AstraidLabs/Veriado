@@ -34,6 +34,7 @@ public sealed class IndexAuditor : IIndexAuditor
     public async Task<AuditSummary> VerifyAsync(CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew();
+        _logger.LogInformation("Starting search index audit");
         var missing = new HashSet<Guid>();
         var drift = new HashSet<Guid>();
         var extra = new HashSet<Guid>();
@@ -96,6 +97,13 @@ public sealed class IndexAuditor : IIndexAuditor
             _telemetry.RecordIndexDrift(driftTotal);
         }
 
+        _logger.LogInformation(
+            "Index audit completed in {ElapsedMs} ms (missing={MissingCount}, drift={DriftCount}, extra={ExtraCount})",
+            stopwatch.Elapsed.TotalMilliseconds,
+            summary.Missing.Count,
+            summary.Drift.Count,
+            summary.Extra.Count);
+
         return summary;
     }
 
@@ -123,6 +131,12 @@ public sealed class IndexAuditor : IIndexAuditor
 
             _indexQueue.Enqueue(new IndexDocument(id));
         }
+
+        _logger.LogInformation(
+            "Scheduled re-index of {Count} files based on audit summary (missing={Missing}, drift={Drift})",
+            unique.Count,
+            missing.Count,
+            drift.Count);
 
         return Task.FromResult(unique.Count);
     }
