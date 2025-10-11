@@ -238,12 +238,17 @@ internal sealed class WriteWorker : BackgroundService
             await sqliteConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await using var sqliteTransaction = await sqliteConnection
+        await using var dbTransaction = await sqliteConnection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        if (dbTransaction is not SqliteTransaction sqliteTransaction)
+        {
+            throw new InvalidOperationException("SQLite transaction is required for write operations.");
+        }
+
         await using var transaction = await context.Database
-            .UseTransactionAsync(sqliteTransaction, cancellationToken)
+            .UseTransactionAsync(dbTransaction, cancellationToken)
             .ConfigureAwait(false);
 
         var transactionId = Guid.NewGuid();
