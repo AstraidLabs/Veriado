@@ -10,6 +10,7 @@ using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Maintenance;
+using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Repositories;
 using Veriado.Infrastructure.Search;
@@ -80,6 +81,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
+        services.AddHealthChecks().AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas");
 
         var searchOptions = services.AddOptions<SearchOptions>();
         if (configuration is not null)

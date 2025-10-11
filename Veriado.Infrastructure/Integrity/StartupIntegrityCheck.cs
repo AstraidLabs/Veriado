@@ -10,15 +10,19 @@ internal static class StartupIntegrityCheck
 {
     public static async Task EnsureConsistencyAsync(IServiceProvider provider, CancellationToken cancellationToken = default)
     {
+        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("FulltextIntegrity");
         var options = provider.GetRequiredService<InfrastructureOptions>();
-        options.RunIntegrityCheckOnStartup = true;
-        options.RepairIntegrityAutomatically = true;
+
+        var maintenance = provider.GetRequiredService<IDatabaseMaintenanceService>();
+        await maintenance.RehydrateWalAsync(cancellationToken).ConfigureAwait(false);
+        logger.LogInformation("SQLite WAL successfully rehydrated prior to integrity checks.");
+
         if (!options.RunIntegrityCheckOnStartup)
         {
+            logger.LogInformation("Startup integrity verification is disabled. Skipping full-text checks.");
             return;
         }
 
-        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("FulltextIntegrity");
         if (!options.IsFulltextAvailable)
         {
             var reason = options.FulltextAvailabilityError ?? "SQLite FTS5 support is unavailable.";
@@ -28,6 +32,7 @@ internal static class StartupIntegrityCheck
 
         var writeAhead = provider.GetRequiredService<FtsWriteAheadService>();
         await writeAhead.ReplayPendingAsync(cancellationToken).ConfigureAwait(false);
+        logger.LogInformation("Replayed any pending FTS write-ahead journal entries.");
 
         var integrity = provider.GetRequiredService<IFulltextIntegrityService>();
         var report = await integrity.VerifyAsync(cancellationToken).ConfigureAwait(false);
