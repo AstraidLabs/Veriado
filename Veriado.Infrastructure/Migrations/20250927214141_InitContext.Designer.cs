@@ -315,41 +315,6 @@ namespace Veriado.Infrastructure.Migrations
                     b.ToTable("idempotency_keys", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Infrastructure.Search.Outbox.OutboxEvent", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("id");
-
-                    b.Property<string>("CreatedUtc")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("created_utc");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("payload");
-
-                    b.Property<string>("ProcessedUtc")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("processed_utc");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("type");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProcessedUtc")
-                        .HasDatabaseName("idx_outbox_processed");
-
-                    b.ToTable("outbox_events", (string)null);
-                });
-
             modelBuilder.Entity("Veriado.Domain.Files.FileEntity", b =>
                 {
                     b.OwnsOne("Veriado.Domain.Search.SearchIndexState", "SearchIndex", b1 =>
