@@ -24,12 +24,10 @@ public interface IDiagnosticsRepository
 /// <param name="DatabasePath">The absolute database file path.</param>
 /// <param name="JournalMode">The configured journal mode.</param>
 /// <param name="IsWalEnabled">Indicates whether WAL journaling is enabled.</param>
-/// <param name="PendingOutboxEvents">Number of pending outbox events awaiting processing.</param>
 public sealed record DatabaseHealthSnapshot(
     string DatabasePath,
     string JournalMode,
-    bool IsWalEnabled,
-    int PendingOutboxEvents);
+    bool IsWalEnabled);
 
 /// <summary>
 /// Represents aggregate statistics about the search index.

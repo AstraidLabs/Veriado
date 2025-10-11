@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace Veriado.Infrastructure.Persistence.Interceptors;
 
@@ -8,6 +9,13 @@ namespace Veriado.Infrastructure.Persistence.Interceptors;
 /// </summary>
 public sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
 {
+    private readonly ILogger<SqlitePragmaInterceptor> _logger;
+
+    public SqlitePragmaInterceptor(ILogger<SqlitePragmaInterceptor> logger)
+    {
+        _logger = logger;
+    }
+
     public override async Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
     {
         if (connection is not SqliteConnection sqlite)
@@ -15,6 +23,6 @@ public sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
             return;
         }
 
-        await SqlitePragmaHelper.ApplyAsync(sqlite, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(sqlite, _logger, cancellationToken).ConfigureAwait(false);
     }
 }

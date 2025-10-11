@@ -30,10 +30,6 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<FileDocumentValidityAuditEntity> FileValidityAudits => Set<FileDocumentValidityAuditEntity>();
 
-    public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
-
-    public DbSet<OutboxDeadLetterEvent> OutboxDeadLetters => Set<OutboxDeadLetterEvent>();
-
     public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
 
     public DbSet<SearchFavoriteEntity> SearchFavorites => Set<SearchFavoriteEntity>();
@@ -80,11 +76,6 @@ public sealed class AppDbContext : DbContext
             entity.HasIndex(e => e.DeadLetteredUtc).HasDatabaseName("idx_fts_write_ahead_dlq_dead_lettered");
         });
 
-        if (_options.FtsIndexingMode != FtsIndexingMode.Outbox)
-        {
-            modelBuilder.Entity<OutboxEvent>().ToTable("outbox_events").Metadata.SetIsTableExcludedFromMigrations(true);
-            modelBuilder.Entity<OutboxDeadLetterEvent>().ToTable("outbox_dlq").Metadata.SetIsTableExcludedFromMigrations(true);
-        }
     }
 
     /// <summary>

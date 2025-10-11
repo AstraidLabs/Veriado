@@ -18,7 +18,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var now = _clock.UtcNow.ToString("O");
 
@@ -65,7 +65,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT id, query_text, match, created_utc, executions, last_total_hits, is_fuzzy " +
@@ -96,7 +96,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (!keepLastN.HasValue || keepLastN.Value <= 0)
         {

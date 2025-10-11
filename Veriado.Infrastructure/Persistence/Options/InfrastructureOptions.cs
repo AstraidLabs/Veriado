@@ -7,8 +7,6 @@ public sealed class InfrastructureOptions
 {
     private const int DefaultBatchSize = 300;
     private const int DefaultBatchWindowMs = 250;
-    private const int DefaultOutboxBatchSize = 50;
-    private const int DefaultRetryBudget = 5;
 
     /// <summary>
     /// Gets or sets the absolute path to the SQLite database file.
@@ -20,12 +18,6 @@ public sealed class InfrastructureOptions
     /// </summary>
     public int? MaxContentBytes { get; set; }
         = null;
-
-    /// <summary>
-    /// Gets or sets the indexing mode for the FTS5 subsystem.
-    /// </summary>
-    public FtsIndexingMode FtsIndexingMode { get; set; }
-        = FtsIndexingMode.SameTransaction;
 
     /// <summary>
     /// Gets a value indicating whether the runtime environment provides the required SQLite FTS5 features.
@@ -76,45 +68,9 @@ public sealed class InfrastructureOptions
     /// </summary>
     public TimeSpan IdempotencyCleanupInterval { get; set; } = TimeSpan.FromHours(1);
 
-    /// <summary>
-    /// Gets or sets the maximum number of outbox events fetched in a single drain operation.
-    /// </summary>
-    public int OutboxBatchSize
-    {
-        get => _outboxBatchSize;
-        set => _outboxBatchSize = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
-    }
-
-    /// <summary>
-    /// Gets or sets the maximum number of attempts allowed for a single outbox event before moving it to the dead-letter queue.
-    /// </summary>
-    public int RetryBudget
-    {
-        get => _retryBudget;
-        set => _retryBudget = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
-    }
-
     private int _batchSize = DefaultBatchSize;
     private int _batchWindowMs = DefaultBatchWindowMs;
-    private int _outboxBatchSize = DefaultOutboxBatchSize;
-    private int _retryBudget = DefaultRetryBudget;
 
     internal string? ConnectionString { get; set; }
         = null;
-}
-
-/// <summary>
-/// Enumerates the supported FTS5 indexing coordination strategies.
-/// </summary>
-public enum FtsIndexingMode
-{
-    /// <summary>
-    /// FTS changes are executed in the same database transaction as the EF Core persistence layer.
-    /// </summary>
-    SameTransaction,
-
-    /// <summary>
-    /// FTS changes are executed asynchronously using the outbox pattern.
-    /// </summary>
-    Outbox,
 }

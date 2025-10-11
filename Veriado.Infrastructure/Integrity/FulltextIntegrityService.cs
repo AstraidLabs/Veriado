@@ -61,7 +61,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await using (var connection = CreateConnection())
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+            await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
             searchTableExists = await TableExistsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
             trigramTableExists = await TableExistsAsync(connection, "file_trgm", cancellationToken).ConfigureAwait(false);
             searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
@@ -296,7 +296,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         var searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
         var trigramMapExists = await TableExistsAsync(connection, "file_trgm_map", cancellationToken).ConfigureAwait(false);
         return (searchMapExists, trigramMapExists);
@@ -320,7 +320,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Reset any outstanding WAL state before we drop and recreate the tables. A corrupted
         // or stale WAL file would otherwise continue to surface "database disk image is malformed"

@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.Logging;
 using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -9,6 +10,7 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5Indexer : ISearchIndexer
 {
     private readonly InfrastructureOptions _options;
+    private readonly ILogger<SqliteFts5Indexer> _logger;
     private readonly SuggestionMaintenanceService? _suggestionMaintenance;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
@@ -17,6 +19,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
 
     public SqliteFts5Indexer(
         InfrastructureOptions options,
+        ILogger<SqliteFts5Indexer> logger,
         IAnalyzerFactory analyzerFactory,
         ISqliteConnectionFactory connectionFactory,
         TrigramIndexOptions trigramOptions,
@@ -24,6 +27,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
@@ -63,13 +67,14 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, _logger, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
         {
+            _logger.LogInformation("Standalone FTS upsert for file {FileId}", document.FileId);
             await helper
                 .IndexAsync(document, connection, transaction, beforeCommit, cancellationToken)
                 .ConfigureAwait(false);
@@ -100,13 +105,14 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, _logger, cancellationToken).ConfigureAwait(false);
         await using var dbTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)dbTransaction;
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
 
         try
         {
+            _logger.LogInformation("Standalone FTS delete for file {FileId}", fileId);
             await helper
                 .DeleteAsync(fileId, connection, transaction, beforeCommit, cancellationToken)
                 .ConfigureAwait(false);

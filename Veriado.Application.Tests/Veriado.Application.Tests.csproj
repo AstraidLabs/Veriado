@@ -15,5 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
+    <ProjectReference Include="..\Veriado.Infrastructure\Veriado.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

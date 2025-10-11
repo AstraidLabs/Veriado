@@ -17,7 +17,7 @@ public sealed class GetHealthStatusHandler : IRequestHandler<GetHealthStatusQuer
         try
         {
             var snapshot = await _diagnosticsRepository.GetDatabaseHealthAsync(cancellationToken).ConfigureAwait(false);
-            var dto = new HealthStatusDto(snapshot.DatabasePath, snapshot.JournalMode, snapshot.IsWalEnabled, snapshot.PendingOutboxEvents);
+            var dto = new HealthStatusDto(snapshot.DatabasePath, snapshot.JournalMode, snapshot.IsWalEnabled);
             return AppResult<HealthStatusDto>.Success(dto);
         }
         catch (Exception ex)

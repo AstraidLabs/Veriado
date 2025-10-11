@@ -17,4 +17,3 @@ global using Veriado.Domain.Search;
 global using Veriado.Domain.ValueObjects;
 global using Veriado.Infrastructure.Persistence;
 global using Veriado.Infrastructure.Persistence.Options;
-global using Veriado.Infrastructure.Search.Outbox;

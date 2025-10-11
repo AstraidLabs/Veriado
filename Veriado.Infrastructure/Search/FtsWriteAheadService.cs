@@ -98,7 +98,7 @@ internal sealed class FtsWriteAheadService
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var pending = await LoadPendingAsync(connection, cancellationToken).ConfigureAwait(false);
         if (pending.Count == 0)

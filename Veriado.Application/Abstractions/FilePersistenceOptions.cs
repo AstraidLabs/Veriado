@@ -15,7 +15,7 @@ public readonly struct FilePersistenceOptions
     /// <summary>
     /// Gets a value indicating whether the search coordinator may defer indexing to the outbox pipeline.
     /// </summary>
-    public bool AllowDeferredIndexing { get; init; } = true;
+    public bool AllowDeferredIndexing { get; init; } = false;
 
     /// <summary>
     /// Gets the default persistence options.

@@ -21,7 +21,7 @@ internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceSer
 
         await using var connection = new SqliteConnection(_options.ConnectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var statements = new[] { "VACUUM;", "PRAGMA optimize;" };
         var executed = 0;

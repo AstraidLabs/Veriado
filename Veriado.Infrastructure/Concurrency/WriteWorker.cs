@@ -215,6 +215,21 @@ internal sealed class WriteWorker : BackgroundService
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+        if (transaction.GetDbTransaction() is not SqliteTransaction sqliteTransaction)
+        {
+            throw new InvalidOperationException("SQLite transaction is required for write operations.");
+        }
+
+        var sqliteConnection = sqliteTransaction.Connection
+            ?? throw new InvalidOperationException("SQLite connection is unavailable for the active transaction.");
+
+        var transactionId = Guid.NewGuid();
+
+        _logger.LogInformation(
+            "Write transaction {TransactionId} started for batch size {BatchSize}",
+            transactionId,
+            batch.Count);
+
         var results = new object?[batch.Count];
         Exception? failure = null;
         var trackedOptions = new Dictionary<FileEntity, FilePersistenceOptions>();
@@ -250,6 +265,12 @@ internal sealed class WriteWorker : BackgroundService
 
         if (failure is not null)
         {
+            _logger.LogWarning(
+                failure,
+                "Write transaction {TransactionId} rolling back due to {ErrorType}",
+                transactionId,
+                failure.GetType().Name);
+
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             foreach (var request in batch)
             {
@@ -282,6 +303,7 @@ internal sealed class WriteWorker : BackgroundService
                 }
             }
         }
+
         var filesToIndex = new List<(FileEntity File, FilePersistenceOptions Options)>();
         var filesToDelete = new List<Guid>();
         foreach (var entry in fileEntries)
@@ -309,36 +331,17 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
-        var reindexEvents = domainEvents.OfType<SearchReindexRequested>().ToList();
-
-        if (_options.FtsIndexingMode == FtsIndexingMode.Outbox && filesToIndex.Count > 0)
-        {
-            var reindexByFile = reindexEvents
-                .GroupBy(evt => evt.FileId)
-                .ToDictionary(group => group.Key, group => group.OrderBy(evt => evt.OccurredOnUtc).Last());
-
-            foreach (var (file, options) in filesToIndex)
-            {
-                if (!options.AllowDeferredIndexing)
-                {
-                    continue;
-                }
-
-                reindexByFile.TryGetValue(file.Id, out var reindexEvent);
-                var occurredUtc = reindexEvent?.OccurredOnUtc ?? _clock.UtcNow;
-                var reason = reindexEvent?.Reason.ToString() ?? ReindexReason.Manual.ToString();
-                var outbox = OutboxEvent.From(nameof(SearchReindexRequested), new
-                {
-                    FileId = file.Id,
-                    Reason = reason,
-                }, occurredUtc);
-                context.OutboxEvents.Add(outbox);
-            }
-        }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        var indexedNow = await ApplyFulltextUpdatesAsync(context, filesToIndex, filesToDelete, cancellationToken)
+        var indexedNow = await ApplyFulltextUpdatesAsync(
+                context,
+                sqliteConnection,
+                sqliteTransaction,
+                transactionId,
+                filesToIndex,
+                filesToDelete,
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (indexedNow)
@@ -348,6 +351,10 @@ internal sealed class WriteWorker : BackgroundService
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         batchStopwatch.Stop();
+
+        _logger.LogInformation(
+            "Write transaction {TransactionId} committed",
+            transactionId);
 
         foreach (var entry in fileEntries)
         {
@@ -373,14 +380,18 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         _logger.LogInformation(
-            "Processed write batch of {BatchSize} items in {ElapsedMilliseconds} ms (indexed {IndexedCount})",
+            "Processed write batch of {BatchSize} items in {ElapsedMilliseconds} ms (indexed {IndexedCount}) [Transaction: {TransactionId}]",
             batch.Count,
             batchStopwatch.Elapsed.TotalMilliseconds,
-            staleCount);
+            staleCount,
+            transactionId);
     }
 
     private async Task<bool> ApplyFulltextUpdatesAsync(
         AppDbContext context,
+        SqliteConnection sqliteConnection,
+        SqliteTransaction sqliteTransaction,
+        Guid transactionId,
         IReadOnlyList<(FileEntity File, FilePersistenceOptions Options)> filesToIndex,
         IReadOnlyList<Guid> filesToDelete,
         CancellationToken cancellationToken)
@@ -412,70 +423,45 @@ internal sealed class WriteWorker : BackgroundService
             return true;
         }
 
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
         var handled = false;
-        var dbTransaction = context.Database.CurrentTransaction?.GetDbTransaction();
-
-        if (_options.FtsIndexingMode == FtsIndexingMode.SameTransaction)
-        {
-            if (dbTransaction is not SqliteTransaction sqliteTransaction)
-            {
-                throw new InvalidOperationException("SQLite transaction is required for full-text updates.");
-            }
-
-            var sqliteConnection = (SqliteConnection)sqliteTransaction.Connection!;
-            var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
-
-            foreach (var id in filesToDelete)
-            {
-                await ExecuteWithRetryAsync(
-                    async ct =>
-                    {
-                        await helper
-                            .DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit: null, ct)
-                            .ConfigureAwait(false);
-                    },
-                    $"delete index for {id}",
-                    cancellationToken).ConfigureAwait(false);
-            }
-
-            foreach (var (file, options) in filesToIndex)
-            {
-                var indexed = false;
-                await ExecuteWithRetryAsync(
-                    async ct =>
-                    {
-                        indexed = await _searchCoordinator
-                            .IndexAsync(file, options, sqliteTransaction, ct)
-                            .ConfigureAwait(false);
-                    },
-                    $"index file {file.Id}",
-                    cancellationToken).ConfigureAwait(false);
-                if (indexed)
-                {
-                    var timestamp = UtcTimestamp.From(_clock.UtcNow);
-                    var signature = _signatureCalculator.Compute(file);
-                    file.ConfirmIndexed(
-                        file.SearchIndex.SchemaVersion,
-                        timestamp,
-                        signature.AnalyzerVersion,
-                        signature.TokenHash,
-                        signature.NormalizedTitle);
-                    handled = true;
-                }
-            }
-
-            return handled;
-        }
 
         foreach (var id in filesToDelete)
         {
-            await _searchIndexer.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+            await ExecuteWithRetryAsync(
+                async ct =>
+                {
+                    _logger.LogInformation(
+                        "FTS delete for file {FileId} in transaction {TransactionId}",
+                        id,
+                        transactionId);
+
+                    await helper
+                        .DeleteAsync(id, sqliteConnection, sqliteTransaction, beforeCommit: null, ct)
+                        .ConfigureAwait(false);
+                },
+                $"delete index for {id}",
+                cancellationToken).ConfigureAwait(false);
         }
 
         foreach (var (file, options) in filesToIndex)
         {
-            var indexed = await _searchCoordinator.IndexAsync(file, options, dbTransaction, cancellationToken)
-                .ConfigureAwait(false);
+            var indexed = false;
+            await ExecuteWithRetryAsync(
+                async ct =>
+                {
+                    _logger.LogInformation(
+                        "FTS upsert for file {FileId} in transaction {TransactionId}",
+                        file.Id,
+                        transactionId);
+
+                    indexed = await _searchCoordinator
+                        .IndexAsync(file, options, sqliteTransaction, ct)
+                        .ConfigureAwait(false);
+                },
+                $"index file {file.Id}",
+                cancellationToken).ConfigureAwait(false);
+
             if (indexed)
             {
                 var timestamp = UtcTimestamp.From(_clock.UtcNow);
@@ -505,6 +491,15 @@ internal sealed class WriteWorker : BackgroundService
             try
             {
                 await operation(cancellationToken).ConfigureAwait(false);
+                if (attempt > 1)
+                {
+                    _logger.LogInformation(
+                        "{Operation} succeeded on attempt {Attempt}/{MaxAttempts}",
+                        description,
+                        attempt,
+                        maxAttempts);
+                }
+
                 return;
             }
             catch (OperationCanceledException)
@@ -514,6 +509,24 @@ internal sealed class WriteWorker : BackgroundService
             catch (SearchIndexCorruptedException)
             {
                 throw;
+            }
+            catch (SqliteException sqliteEx) when (sqliteEx.IndicatesDatabaseCorruption())
+            {
+                throw new SearchIndexCorruptedException(
+                    "SQLite database corruption detected during full-text operation.",
+                    sqliteEx);
+            }
+            catch (SqliteException sqliteEx) when (attempt < maxAttempts && IsTransientSqliteError(sqliteEx))
+            {
+                lastError = sqliteEx;
+                _logger.LogWarning(
+                    sqliteEx,
+                    "{Operation} encountered transient SQLite error {ErrorCode} on attempt {Attempt}/{MaxAttempts}, retrying",
+                    description,
+                    sqliteEx.SqliteExtendedErrorCode,
+                    attempt,
+                    maxAttempts);
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (attempt < maxAttempts)
             {
@@ -534,6 +547,29 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         throw lastError ?? new InvalidOperationException($"Operation '{description}' failed without emitting an exception.");
+    }
+
+    private static bool IsTransientSqliteError(SqliteException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var primary = exception.SqliteErrorCode;
+        if (primary is 5 or 6 or 10)
+        {
+            return true;
+        }
+
+        var extended = exception.SqliteExtendedErrorCode;
+        if (extended != 0)
+        {
+            primary = extended & 0xFF;
+            if (primary is 5 or 6 or 10)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task AttemptIntegrityRepairAsync(CancellationToken cancellationToken)
