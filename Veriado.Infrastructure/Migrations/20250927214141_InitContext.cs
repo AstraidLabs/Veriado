@@ -99,27 +99,11 @@ namespace Veriado.Infrastructure.Migrations
                     table.PrimaryKey("PK_idempotency_keys", x => x.key);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "outbox_events",
-                columns: table => new
-                {
-                    id = table.Column<long>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    type = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    payload = table.Column<string>(type: "TEXT", nullable: false),
-                    created_utc = table.Column<string>(type: "TEXT", nullable: false),
-                    processed_utc = table.Column<string>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_outbox_events", x => x.id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "search_favorites",
-                columns: table => new
-                {
-                    id = table.Column<byte[]>(type: "BLOB", nullable: false),
+        migrationBuilder.CreateTable(
+            name: "search_favorites",
+            columns: table => new
+            {
+                id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     name = table.Column<string>(type: "TEXT", nullable: false),
                     query_text = table.Column<string>(type: "TEXT", nullable: true),
                     match = table.Column<string>(type: "TEXT", nullable: false),
@@ -205,15 +189,10 @@ namespace Veriado.Infrastructure.Migrations
                 column: "hash",
                 unique: true);
 
-            migrationBuilder.CreateIndex(
-                name: "idx_outbox_processed",
-                table: "outbox_events",
-                column: "processed_utc");
-
-            migrationBuilder.CreateIndex(
-                name: "idx_search_favorites_position",
-                table: "search_favorites",
-                column: "position");
+        migrationBuilder.CreateIndex(
+            name: "idx_search_favorites_position",
+            table: "search_favorites",
+            column: "position");
 
             migrationBuilder.CreateIndex(
                 name: "ux_search_favorites_name",
@@ -253,9 +232,6 @@ namespace Veriado.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "idempotency_keys");
-
-            migrationBuilder.DropTable(
-                name: "outbox_events");
 
             migrationBuilder.DropTable(
                 name: "search_favorites");
