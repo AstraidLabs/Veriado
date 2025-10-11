@@ -9,11 +9,13 @@ namespace Veriado.Infrastructure.Search;
 /// </summary>
 internal sealed class HybridSearchQueryService : ISearchQueryService
 {
+    #region TODO(SQLiteOnly): Replace dual-provider aggregation with SQLite FTS-only queries
     private readonly SqliteFts5QueryService _ftsService;
     private readonly TrigramQueryService _trigramService;
     private readonly ISearchTelemetry _telemetry;
     private readonly SearchScoreOptions _scoreOptions;
     private readonly SearchParseOptions _parseOptions;
+    #endregion
 
     public HybridSearchQueryService(
         SqliteFts5QueryService ftsService,

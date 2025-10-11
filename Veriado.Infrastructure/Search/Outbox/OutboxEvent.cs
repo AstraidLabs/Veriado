@@ -7,6 +7,7 @@ namespace Veriado.Infrastructure.Search.Outbox;
 /// </summary>
 public sealed class OutboxEvent
 {
+    #region TODO(SQLiteOnly): Remove legacy outbox storage once direct SQLite indexing is synchronous
     public long Id { get; set; }
         = 0;
 
@@ -37,4 +38,5 @@ public sealed class OutboxEvent
             Attempts = 0,
         };
     }
+    #endregion
 }

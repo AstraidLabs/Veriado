@@ -58,9 +58,11 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         return true;
     }
 
+    #region TODO(SQLiteOnly): Remove no-op deferred indexing hook when outbox is deleted
     public Task SearchIndexRefreshAsync(CancellationToken cancellationToken)
     {
         _logger.LogDebug("SearchIndexRefreshAsync invoked with no deferred indexing to process.");
         return Task.CompletedTask;
     }
+    #endregion
 }

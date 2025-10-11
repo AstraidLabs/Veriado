@@ -19,6 +19,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ILogger<WriteWorker> _logger;
     private readonly InfrastructureOptions _options;
+    #region TODO(SQLiteOnly): Streamline dependencies after removing deferred/outbox pipeline
     private readonly ISearchIndexCoordinator _searchCoordinator;
     private readonly ISearchIndexer _searchIndexer;
     private readonly IFulltextIntegrityService _integrityService;
@@ -29,6 +30,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly INeedsReindexEvaluator _needsReindexEvaluator;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly FtsWriteAheadService _writeAhead;
+    #endregion
 
     public WriteWorker(
         IWriteQueue writeQueue,
