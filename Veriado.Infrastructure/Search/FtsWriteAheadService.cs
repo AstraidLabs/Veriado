@@ -276,7 +276,8 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.FileId,
             error);
 
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
         try
@@ -336,7 +337,8 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
@@ -381,7 +383,8 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
@@ -445,7 +448,8 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
@@ -492,7 +496,8 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken)
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
         {
