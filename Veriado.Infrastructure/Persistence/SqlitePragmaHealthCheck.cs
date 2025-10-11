@@ -76,12 +76,12 @@ internal sealed class SqlitePragmaHealthCheck : IHealthCheck
         {
             return HealthCheckResult.Unhealthy(
                 "SQLite PRAGMA settings remain non-compliant after automatic remediation attempts.",
-                BuildData(repaired));
+                data: BuildData(repaired));
         }
 
         return HealthCheckResult.Degraded(
             "SQLite PRAGMA settings required corrective action. Values were updated automatically.",
-            BuildData(repaired));
+            data: BuildData(repaired));
     }
 
     private static IReadOnlyDictionary<string, object?> BuildData(SqlitePragmaHelper.SqlitePragmaState state)
