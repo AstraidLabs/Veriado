@@ -40,7 +40,7 @@ internal sealed class SuggestionService : ISearchSuggestionService
         {
             await using var connection = new SqliteConnection(_options.ConnectionString);
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+            await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             await using var command = connection.CreateCommand();
             var builder = new StringBuilder();

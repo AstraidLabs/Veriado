@@ -490,14 +490,7 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         try
         {
-            var pendingOutboxEvents = 0;
             var staleDocuments = 0;
-
-            var healthResult = await _healthService.GetAsync(cancellationToken).ConfigureAwait(false);
-            if (healthResult.TryGetValue(out var healthStatus))
-            {
-                pendingOutboxEvents = Math.Max(healthStatus.PendingOutboxEvents, 0);
-            }
 
             var indexResult = await _healthService.GetIndexStatisticsAsync(cancellationToken).ConfigureAwait(false);
             if (indexResult.TryGetValue(out var indexStatistics))
@@ -505,9 +498,9 @@ public partial class FilesPageViewModel : ViewModelBase
                 staleDocuments = Math.Max(indexStatistics.StaleDocuments, 0);
             }
 
-            var hasPendingIndexing = pendingOutboxEvents > 0 || staleDocuments > 0;
+            var hasPendingIndexing = staleDocuments > 0;
             var message = hasPendingIndexing
-                ? BuildIndexingWarningMessage(pendingOutboxEvents, staleDocuments)
+                ? BuildIndexingWarningMessage(staleDocuments)
                 : null;
 
             await Dispatcher.Enqueue(() =>
@@ -580,14 +573,9 @@ public partial class FilesPageViewModel : ViewModelBase
         _previousPageCommand.NotifyCanExecuteChanged();
     }
 
-    private static string BuildIndexingWarningMessage(int pendingOutboxEvents, int staleDocuments)
+    private static string BuildIndexingWarningMessage(int staleDocuments)
     {
         var details = new List<string>();
-
-        if (pendingOutboxEvents > 0)
-        {
-            details.Add($"{pendingOutboxEvents} čekajících událostí fronty");
-        }
 
         if (staleDocuments > 0)
         {

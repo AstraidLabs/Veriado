@@ -69,7 +69,6 @@ internal sealed class AppHost : IAsyncDisposable
                     var databasePath = infrastructureConfig.GetDatabasePath();
                     infrastructureConfig.EnsureStorageExists(databasePath);
                     options.DbPath = databasePath;
-                    options.FtsIndexingMode = FtsIndexingMode.Outbox;
                 });
                 services.AddApplication();
                 services.AddVeriadoServices();

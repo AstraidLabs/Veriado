@@ -22,12 +22,11 @@
 - There is no centralized `NeedsReindex` helper that compares canonical data to indexed state.
 
 ### Pillar B – Unified transaction DB + FTS
-- When configured for same-transaction indexing, write batches use the current SQLite transaction and `SqliteFts5Transactional` to apply delete-then-insert semantics, including `INSERT OR IGNORE` map rows to enforce idempotency.
-- Outbox processing reuses the same helper within its own transaction and marks files as indexed once the commit succeeds.
+- Write batches always use the current SQLite transaction and `SqliteFts5Transactional` to apply delete-then-insert semantics, včetně `INSERT OR IGNORE` do map tabulek pro idempotenci.
 
 ### Pillar C – Automatic runtime recovery
-- `SqliteFts5Transactional` converts SQLite corruption/schema exceptions into `SearchIndexCorruptedException`, which is caught by `WriteWorker`/`OutboxDrainService` to trigger full repair and retry once.
-- Failures not classified as corruption (e.g., invalid payloads) simply log errors and leave outbox rows unprocessed without a dead-letter sink or retry policy tracking.
+- `SqliteFts5Transactional` converts SQLite corruption/schema exceptions into `SearchIndexCorruptedException`, which is caught by `WriteWorker` to trigger full repair and retry once.
+- Failures not classified as corruption (e.g., invalid payloads) simply log errors and require manual intervention.
 
 ### Pillar D – Startup / periodic integrity
 - `StartupIntegrityCheck` forces a verification run during infrastructure initialization and optionally triggers `RepairAsync`.
@@ -40,31 +39,25 @@
 
 ## Gap List (highest risk first)
 1. **Missing canonical drift detection** – Without recomputing hashes/titles, stale FTS rows remain in sync status even if the FTS data differs; manual edits or analyzer changes silently break search relevance.
-2. **No dead-letter or retry throttling for outbox** – Poison messages or repeated functional failures will keep reprocessing indefinitely, blocking progress and hiding the failure.
-3. **Integrity verification limited to presence checks** – `VerifyAsync` cannot detect mismatch between indexed payload and canonical content or analyzer configuration.
-4. **Lack of analyzer/token signature** – Analyzer or trigram option changes are not recorded, so pipeline cannot force schema-wide reindex when analyzers update.
-5. **No dedicated WAL/journaling for FTS operations** – If a process crashes mid-batch, there is no persisted log to resume or audit outstanding operations before retry.
-6. **Missing automated health/alerting** – Telemetry exists but is not tied to health checks or alert thresholds; PRAGMA compliance is not validated after startup.
-7. **No standalone rebuild CLI/safe swap** – All repairs run in-process; long rebuilds block the service and risk timeouts.
+2. **Integrity verification limited to presence checks** – `VerifyAsync` cannot detect mismatch between indexed payload and canonical content or analyzer configuration.
+3. **Lack of analyzer/token signature** – Analyzer or trigram option changes are not recorded, so pipeline cannot force schema-wide reindex when analyzers update.
+4. **Missing automated health/alerting** – Telemetry exists but is not tied to health checks or alert thresholds; PRAGMA compliance is not validated after startup.
+5. **No standalone rebuild CLI/safe swap** – All repairs run in-process; long rebuilds block the service and risk timeouts.
 
 ## Action Plan
 1. **Implement hash-based `NeedsReindexAsync`** – Add service in infrastructure to compute `Content.Hash`/normalized title for candidates and compare with `SearchIndexState`, forcing reindex when mismatched. Integrate into write worker prior to queuing FTS operations.
-2. **Introduce outbox dead-letter with retry budget** – Track retry count per outbox entry; after threshold, move payload to `outbox_dlq` table and expose telemetry/alerts.
-3. **Extend `VerifyAsync` for drift detection** – Stream file corpus, recompute analyzer tokens and compare to FTS content, with selective reindex for mismatches; surface counts via telemetry.
-4. **Persist analyzer signature** – Store `AnalyzerVersion` and `TokenHash` in `SearchIndexState`; bump version when tokenizer configuration changes and mark items stale automatically.
-5. **Add FTS write-ahead journal** – Capture pending operations in `fts_write_ahead` table inside the same transaction and clear post-commit; replay journal on startup before normal indexing.
-6. **Health checks & PRAGMA monitoring** – Implement hosted integrity auditor to run `VerifyAsync`, emit metrics (stale, drift, WAL backlog), assert PRAGMA values, and trigger alerts when thresholds exceeded.
-7. **Standalone rebuild CLI** – Provide CLI command that snapshots canonical DB, rebuilds FTS in isolation, and swaps files atomically to reduce downtime risk.
+2. **Extend `VerifyAsync` for drift detection** – Stream file corpus, recompute analyzer tokens and compare to FTS content, with selective reindex for mismatches; surface counts via telemetry.
+3. **Persist analyzer signature** – Store `AnalyzerVersion` and `TokenHash` v `SearchIndexState`; bump version when tokenizer configuration changes and mark items stale automatically.
+4. **Health checks & PRAGMA monitoring** – Implement hosted integrity auditor to run `VerifyAsync`, emit metrics (stale, drift, WAL backlog), assert PRAGMA values, and trigger alerts when thresholds exceeded.
+5. **Standalone rebuild CLI** – Provide CLI command that snapshots canonical DB, rebuilds FTS in isolation, and swaps files atomically to reduce downtime risk.
 
 ## Suggested Snippets
 - `SearchIndexState` extension to include analyzer signature and central `NeedsReindex` logic comparing stored hashes/versions.
 - Schema addition for `fts_write_ahead` with columns `(id INTEGER PK, file_id BLOB, operation TEXT, payload TEXT, created_utc TEXT)` and startup replay routine.
-- Dead-letter entity `OutboxEventFailure` capturing payload, error, and retry count.
 
 ## Production Checklist
 - [ ] Hash/title comparison gating reindex completed and unit-tested.
 - [ ] Analyzer signature fields persisted and schema migration applied.
-- [ ] Dead-letter table deployed; monitoring dashboards cover DLQ size and retry exhaustion.
 - [ ] Integrity auditor scheduled (startup + periodic) with alerts on drift/missing/orphans.
 - [ ] FTS write-ahead journal + replay implemented and validated under crash simulations.
 - [ ] Dedicated rebuild CLI documented and tested with safe file swap.

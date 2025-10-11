@@ -138,7 +138,7 @@ public sealed class IndexAuditor : IIndexAuditor
         {
             await using var connection = new SqliteConnection(_options.ConnectionString);
             await connection.OpenAsync(ct).ConfigureAwait(false);
-            await SqlitePragmaHelper.ApplyAsync(connection, ct).ConfigureAwait(false);
+            await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: ct).ConfigureAwait(false);
 
             var searchMap = await LoadMapAsync(connection, "file_search_map", ct).ConfigureAwait(false);
             var trigramMap = await LoadMapAsync(connection, "file_trgm_map", ct).ConfigureAwait(false);

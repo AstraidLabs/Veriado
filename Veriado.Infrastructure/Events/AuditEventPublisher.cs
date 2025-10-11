@@ -13,16 +13,12 @@ internal sealed class AuditEventPublisher : IEventPublisher
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AuditEventPublisher> _logger;
-    private readonly InfrastructureOptions _options;
-
     public AuditEventPublisher(
         IServiceScopeFactory scopeFactory,
-        ILogger<AuditEventPublisher> logger,
-        InfrastructureOptions options)
+        ILogger<AuditEventPublisher> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _options = options;
     }
 
     public async Task PublishAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken)
@@ -80,13 +76,6 @@ internal sealed class AuditEventPublisher : IEventPublisher
                         validityChanged.HasElectronicCopy,
                         UtcTimestamp.From(validityChanged.OccurredOnUtc)));
                     hasChanges = true;
-                    break;
-
-                case SearchReindexRequested reindex when _options.FtsIndexingMode == FtsIndexingMode.Outbox:
-                    _logger.LogDebug(
-                        "Search reindex request {EventId} for file {FileId} acknowledged by audit publisher",
-                        reindex.EventId,
-                        reindex.FileId);
                     break;
 
                 case SearchReindexRequested reindex:

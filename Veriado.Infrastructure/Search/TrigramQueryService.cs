@@ -88,7 +88,7 @@ internal sealed class TrigramQueryService
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
         builder.Append(
@@ -195,7 +195,7 @@ internal sealed class TrigramQueryService
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
         builder.Append(

@@ -326,17 +326,6 @@ public interface ISearchTelemetry
     void UpdateIndexMetrics(long documentCount, long indexSizeBytes);
 
     /// <summary>
-    /// Records the number of attempts made to process an outbox event.
-    /// </summary>
-    /// <param name="attempts">The total number of attempts so far.</param>
-    void RecordOutboxAttempt(int attempts);
-
-    /// <summary>
-    /// Records that an outbox event was moved to the dead-letter queue.
-    /// </summary>
-    void RecordOutboxDeadLetter();
-
-    /// <summary>
     /// Records the elapsed time of a full-text index verification pass.
     /// </summary>
     /// <param name="elapsed">The elapsed duration.</param>

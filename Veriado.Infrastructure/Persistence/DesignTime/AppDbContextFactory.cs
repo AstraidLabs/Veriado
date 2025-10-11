@@ -13,7 +13,7 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     public AppDbContext CreateDbContext(string[] args)
     {
         var infrastructureOptions = BuildInfrastructureOptions();
-        var pragmaInterceptor = new SqlitePragmaInterceptor();
+        var pragmaInterceptor = new SqlitePragmaInterceptor(NullLogger<SqlitePragmaInterceptor>.Instance);
         var connectionString = infrastructureOptions.ConnectionString
             ?? throw new InvalidOperationException("The infrastructure connection string was not initialized.");
 
@@ -26,10 +26,7 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 
     private static InfrastructureOptions BuildInfrastructureOptions()
     {
-        var options = new InfrastructureOptions
-        {
-            FtsIndexingMode = FtsIndexingMode.Outbox,
-        };
+        var options = new InfrastructureOptions();
 
         if (string.IsNullOrWhiteSpace(options.DbPath))
         {
