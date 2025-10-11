@@ -32,6 +32,11 @@ internal sealed class WriteWorker : BackgroundService
     private readonly FtsWriteAheadService _writeAhead;
     #endregion
 
+    private static readonly FilePersistenceOptions SameTransactionOptions = new()
+    {
+        AllowDeferredIndexing = false,
+    };
+
     public WriteWorker(
         IWriteQueue writeQueue,
         IDbContextFactory<AppDbContext> dbContextFactory,
@@ -241,7 +246,7 @@ internal sealed class WriteWorker : BackgroundService
             {
                 foreach (var tracked in trackedFiles)
                 {
-                    trackedOptions[tracked.Entity] = tracked.Options;
+                    trackedOptions[tracked.Entity] = NormalizePersistenceOptions(tracked.Entity, tracked.Options);
                 }
             }
         }
@@ -320,7 +325,7 @@ internal sealed class WriteWorker : BackgroundService
                 {
                     var options = trackedOptions.TryGetValue(entry.Entity, out var value)
                         ? value
-                        : FilePersistenceOptions.Default;
+                        : SameTransactionOptions;
                     filesToIndex.Add((entry.Entity, options));
                 }
             }
@@ -387,6 +392,18 @@ internal sealed class WriteWorker : BackgroundService
             batchStopwatch.Elapsed.TotalMilliseconds,
             staleCount,
             transactionId);
+    }
+
+    private FilePersistenceOptions NormalizePersistenceOptions(FileEntity file, FilePersistenceOptions requestedOptions)
+    {
+        if (requestedOptions.AllowDeferredIndexing)
+        {
+            _logger.LogWarning(
+                "Deferred indexing requested for file {FileId}, but SameTransaction mode is enforced. Processing inline instead.",
+                file.Id);
+        }
+
+        return SameTransactionOptions;
     }
 
     private async Task<bool> ApplyFulltextUpdatesAsync(

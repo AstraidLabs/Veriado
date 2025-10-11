@@ -145,6 +145,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SqliteFts5Indexer>();
         services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
+#if NEVER
+        // Outbox pipeline registrations are disabled for the SQLite-only phase but kept for future providers.
+        services.AddSingleton<ISearchIndexOutbox, SqliteSearchIndexOutbox>();
+        services.AddHostedService<SearchIndexOutboxWorker>();
+#endif
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
 
         #region TODO(SQLiteOnly): Collapse query pipeline to SQLite-only implementation (remove hybrid + trigram)
@@ -200,10 +205,12 @@ public static class ServiceCollectionExtensions
             var scopedProvider = scope.ServiceProvider;
             var dbContext = scopedProvider.GetRequiredService<AppDbContext>();
 
-            if (!dbContext.Database.IsSqlite())
+            var providerName = dbContext.Database.ProviderName;
+            if (string.IsNullOrWhiteSpace(providerName)
+                || !providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    "Veriado infrastructure requires Microsoft.Data.Sqlite as the EF Core provider.");
+                    $"Veriado infrastructure requires Microsoft.Data.Sqlite as the EF Core provider but '{providerName ?? "<null>"}' was configured.");
             }
 
             if (dbContext.Database.IsSqlite())
