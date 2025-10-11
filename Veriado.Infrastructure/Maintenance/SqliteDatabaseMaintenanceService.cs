@@ -36,4 +36,20 @@ internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceSer
 
         return executed;
     }
+
+    public async Task RehydrateWalAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
+        {
+            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
+        }
+
+        await using var connection = new SqliteConnection(_options.ConnectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

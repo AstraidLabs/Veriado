@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Concurrent;
+using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Veriado.Infrastructure.Persistence;
 
 namespace Veriado.Infrastructure.Search;
 
@@ -116,11 +118,35 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
         if (_pool.TryTake(out var pooled))
         {
             Interlocked.Decrement(ref _poolCount);
+            PrepareConnection(pooled.Connection);
             return pooled;
         }
 
         var generation = Volatile.Read(ref _generation);
-        return new PooledConnection(new SqliteConnection(_options.ConnectionString), generation);
+        var connection = new SqliteConnection(_options.ConnectionString);
+        PrepareConnection(connection);
+        return new PooledConnection(connection, generation);
+    }
+
+    private static void PrepareConnection(SqliteConnection connection)
+    {
+        connection.StateChange -= ApplyPragmasOnOpen;
+        connection.StateChange += ApplyPragmasOnOpen;
+    }
+
+    private static void ApplyPragmasOnOpen(object? sender, StateChangeEventArgs e)
+    {
+        if (e.CurrentState != ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (sender is not SqliteConnection connection)
+        {
+            return;
+        }
+
+        SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
     }
 
     internal async ValueTask ReturnAsync(SqliteConnection connection, int generation)

@@ -8,7 +8,9 @@ namespace Veriado.Infrastructure.Persistence;
 /// </summary>
 internal static class SqlitePragmaHelper
 {
-    private const int DesiredBusyTimeoutMs = 8000;
+    internal const string RequiredJournalMode = "wal";
+    internal const string RequiredSynchronous = "normal";
+    internal const int RequiredBusyTimeoutMs = 8000;
 
     /// <summary>
     /// Applies the required PRAGMA statements to the specified SQLite connection.
@@ -40,7 +42,7 @@ internal static class SqlitePragmaHelper
     private static async Task EnsureJournalModeAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)
     {
         var current = await ExecuteScalarAsync(connection, "PRAGMA journal_mode;", cancellationToken).ConfigureAwait(false);
-        if (string.Equals(current, "wal", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(current, RequiredJournalMode, StringComparison.OrdinalIgnoreCase))
         {
             logger?.LogDebug("SQLite journal_mode already WAL for {DataSource}", connection.DataSource ?? "memory");
             return;
@@ -53,7 +55,7 @@ internal static class SqlitePragmaHelper
     private static async Task EnsureSynchronousAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)
     {
         var current = await ExecuteScalarAsync(connection, "PRAGMA synchronous;", cancellationToken).ConfigureAwait(false);
-        if (string.Equals(current, "1", StringComparison.OrdinalIgnoreCase) || string.Equals(current, "normal", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(current, "1", StringComparison.OrdinalIgnoreCase) || string.Equals(current, RequiredSynchronous, StringComparison.OrdinalIgnoreCase))
         {
             logger?.LogDebug("SQLite synchronous already NORMAL for {DataSource}", connection.DataSource ?? "memory");
             return;
@@ -66,14 +68,44 @@ internal static class SqlitePragmaHelper
     private static async Task EnsureBusyTimeoutAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)
     {
         var current = await ExecuteScalarAsync(connection, "PRAGMA busy_timeout;", cancellationToken).ConfigureAwait(false);
-        if (int.TryParse(current, out var currentTimeout) && currentTimeout == DesiredBusyTimeoutMs)
+        if (int.TryParse(current, out var currentTimeout) && currentTimeout == RequiredBusyTimeoutMs)
         {
-            logger?.LogDebug("SQLite busy_timeout already {Timeout}ms for {DataSource}", DesiredBusyTimeoutMs, connection.DataSource ?? "memory");
+            logger?.LogDebug("SQLite busy_timeout already {Timeout}ms for {DataSource}", RequiredBusyTimeoutMs, connection.DataSource ?? "memory");
             return;
         }
 
-        await ExecuteNonQueryAsync(connection, $"PRAGMA busy_timeout={DesiredBusyTimeoutMs};", cancellationToken).ConfigureAwait(false);
-        logger?.LogInformation("SQLite busy_timeout set to {Timeout}ms for {DataSource}", DesiredBusyTimeoutMs, connection.DataSource ?? "memory");
+        await ExecuteNonQueryAsync(connection, $"PRAGMA busy_timeout={RequiredBusyTimeoutMs};", cancellationToken).ConfigureAwait(false);
+        logger?.LogInformation("SQLite busy_timeout set to {Timeout}ms for {DataSource}", RequiredBusyTimeoutMs, connection.DataSource ?? "memory");
+    }
+
+    public static async Task<SqlitePragmaState> ReadStateAsync(SqliteConnection connection, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        var journalMode = await ExecuteScalarAsync(connection, "PRAGMA journal_mode;", cancellationToken).ConfigureAwait(false);
+        var synchronous = await ExecuteScalarAsync(connection, "PRAGMA synchronous;", cancellationToken).ConfigureAwait(false);
+        var busyTimeoutValue = await ExecuteScalarAsync(connection, "PRAGMA busy_timeout;", cancellationToken).ConfigureAwait(false);
+
+        var busyTimeout = int.TryParse(busyTimeoutValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
+
+        return new SqlitePragmaState(journalMode, synchronous, busyTimeout);
+    }
+
+    public static bool IsCompliant(SqlitePragmaState state)
+    {
+        if (!string.Equals(state.NormalizedJournalMode, RequiredJournalMode, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (state.NormalizedSynchronous is not (RequiredSynchronous or "1"))
+        {
+            return false;
+        }
+
+        return state.BusyTimeout == RequiredBusyTimeoutMs;
     }
 
     private static async Task<string> ExecuteScalarAsync(SqliteConnection connection, string commandText, CancellationToken cancellationToken)
@@ -89,5 +121,12 @@ internal static class SqlitePragmaHelper
         await using var command = connection.CreateCommand();
         command.CommandText = commandText;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    internal readonly record struct SqlitePragmaState(string JournalMode, string Synchronous, int BusyTimeout)
+    {
+        public string NormalizedJournalMode => (JournalMode ?? string.Empty).Trim().ToLowerInvariant();
+
+        public string NormalizedSynchronous => (Synchronous ?? string.Empty).Trim().ToLowerInvariant();
     }
 }

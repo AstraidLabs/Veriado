@@ -11,4 +11,10 @@ public interface IDatabaseMaintenanceService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The number of maintenance statements executed.</returns>
     Task<int> VacuumAndOptimizeAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Rehydrates the SQLite write-ahead log to ensure consistent startup state.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task RehydrateWalAsync(CancellationToken cancellationToken);
 }
