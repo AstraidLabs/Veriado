@@ -4,6 +4,9 @@ internal static class SqliteExceptionExtensions
 {
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
+    private const int SqliteCantOpen = 14;
+    private const int SqliteSchema = 17;
+    private const int PrimaryErrorMask = 0xFF;
 
     public static bool IndicatesDatabaseCorruption(this SqliteException exception)
     {
@@ -21,6 +24,31 @@ internal static class SqliteExceptionExtensions
 
         return exception.Message.Contains("database disk image is malformed", StringComparison.OrdinalIgnoreCase)
             || exception.Message.Contains("malformed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IndicatesFatalFulltextFailure(this SqliteException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        if (exception.IndicatesDatabaseCorruption() || exception.IndicatesFulltextSchemaMissing())
+        {
+            return true;
+        }
+
+        var primary = exception.GetPrimaryErrorCode();
+        return primary is SqliteCantOpen or SqliteSchema;
+    }
+
+    public static int GetPrimaryErrorCode(this SqliteException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        if (exception.SqliteExtendedErrorCode != 0)
+        {
+            return exception.SqliteExtendedErrorCode & PrimaryErrorMask;
+        }
+
+        return exception.SqliteErrorCode;
     }
 
     public static bool IndicatesFulltextSchemaMissing(this SqliteException exception)
