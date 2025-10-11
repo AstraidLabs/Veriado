@@ -81,7 +81,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
-        services.AddHealthChecks().AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas");
+        services.AddHealthChecks()
+            .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas")
+            .AddCheck<FtsDlqHealthCheck>("fts_write_ahead_dlq");
 
         var searchOptions = services.AddOptions<SearchOptions>();
         if (configuration is not null)
@@ -161,6 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
         #endregion
         services.AddSingleton<FtsWriteAheadService>();
+        services.AddSingleton<IFtsDlqMonitor>(sp => sp.GetRequiredService<FtsWriteAheadService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
         services.AddSingleton<ISynonymProvider, SynonymService>();
