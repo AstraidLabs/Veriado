@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Veriado.Contracts.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -110,18 +111,18 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
 
         providedOrder.AddRange(existing);
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var sqliteTransaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         for (var index = 0; index < providedOrder.Count; index++)
         {
             await using var update = connection.CreateCommand();
-            update.Transaction = (SqliteTransaction)transaction;
+            update.Transaction = sqliteTransaction;
             update.CommandText = "UPDATE search_favorites SET position = $position WHERE id = $id;";
             update.Parameters.Add("$position", SqliteType.Integer).Value = index;
             update.Parameters.Add("$id", SqliteType.Blob).Value = providedOrder[index].ToByteArray();
             await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RemoveAsync(Guid id, CancellationToken cancellationToken)

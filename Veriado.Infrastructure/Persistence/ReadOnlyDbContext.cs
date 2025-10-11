@@ -1,3 +1,4 @@
+using System;
 using Veriado.Domain.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
 
@@ -14,6 +15,7 @@ public sealed class ReadOnlyDbContext : DbContext
         : base(options)
     {
         _options = infrastructureOptions;
+        EnsureSqliteProvider();
         ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
         ChangeTracker.AutoDetectChangesEnabled = false;
         Database.SetCommandTimeout(30);
@@ -42,6 +44,15 @@ public sealed class ReadOnlyDbContext : DbContext
         using (InfrastructureModel.UseOptions(_options))
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        }
+    }
+
+    private void EnsureSqliteProvider()
+    {
+        var providerName = Database.ProviderName;
+        if (string.IsNullOrWhiteSpace(providerName) || !providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("ReadOnlyDbContext requires Microsoft.Data.Sqlite provider.");
         }
     }
 }

@@ -233,17 +233,12 @@ internal sealed class WriteWorker : BackgroundService
             await sqliteConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await using var dbTransaction = await sqliteConnection
+        await using var sqliteTransaction = await sqliteConnection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (dbTransaction is not SqliteTransaction sqliteTransaction)
-        {
-            throw new InvalidOperationException("SQLite transaction is required for write operations.");
-        }
-
-        await using var transaction = await context.Database
-            .UseTransactionAsync(dbTransaction, cancellationToken)
+        await using var efTransaction = await context.Database
+            .UseTransactionAsync(sqliteTransaction, cancellationToken)
             .ConfigureAwait(false);
 
         var transactionId = Guid.NewGuid();
@@ -294,7 +289,7 @@ internal sealed class WriteWorker : BackgroundService
                 transactionId,
                 failure.GetType().Name);
 
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await efTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             foreach (var request in batch)
             {
                 request.TrySetException(failure);
@@ -376,7 +371,7 @@ internal sealed class WriteWorker : BackgroundService
         }
         catch (SearchIndexCorruptedException)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await efTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
@@ -392,7 +387,7 @@ internal sealed class WriteWorker : BackgroundService
                 transactionId,
                 failure.GetType().Name);
 
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await efTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             foreach (var request in batch)
             {
                 request.TrySetException(failure);
@@ -403,7 +398,7 @@ internal sealed class WriteWorker : BackgroundService
 
         try
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await efTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -420,7 +415,7 @@ internal sealed class WriteWorker : BackgroundService
 
             try
             {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await efTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (Exception rollbackEx)
             {

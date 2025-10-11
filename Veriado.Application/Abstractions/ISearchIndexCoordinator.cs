@@ -1,4 +1,4 @@
-using System.Data.Common;
+using Microsoft.Data.Sqlite;
 
 namespace Veriado.Appl.Abstractions;
 
@@ -15,6 +15,6 @@ public interface ISearchIndexCoordinator
     /// <param name="transaction">The ambient database transaction, if any.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns><see langword="true"/> when the document was indexed immediately; otherwise <see langword="false"/>.</returns>
-    Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, DbTransaction? transaction, CancellationToken cancellationToken);
+    Task<bool> IndexAsync(FileEntity file, FilePersistenceOptions options, SqliteTransaction transaction, CancellationToken cancellationToken);
 
 }
