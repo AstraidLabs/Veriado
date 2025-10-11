@@ -10,6 +10,7 @@ using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Infrastructure.Search;
 using Veriado.Appl.Search;
+using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.Infrastructure.Concurrency;
 
@@ -33,6 +34,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly INeedsReindexEvaluator _needsReindexEvaluator;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly FtsWriteAheadService _writeAhead;
+    private readonly ISearchTelemetry _telemetry;
     #endregion
 
     private static readonly FilePersistenceOptions SameTransactionOptions = new()
@@ -54,7 +56,8 @@ internal sealed class WriteWorker : BackgroundService
         TrigramIndexOptions trigramOptions,
         INeedsReindexEvaluator needsReindexEvaluator,
         ISearchIndexSignatureCalculator signatureCalculator,
-        FtsWriteAheadService writeAhead)
+        FtsWriteAheadService writeAhead,
+        ISearchTelemetry telemetry)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -70,6 +73,7 @@ internal sealed class WriteWorker : BackgroundService
         _needsReindexEvaluator = needsReindexEvaluator ?? throw new ArgumentNullException(nameof(needsReindexEvaluator));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -610,6 +614,10 @@ internal sealed class WriteWorker : BackgroundService
                         busyRetries,
                         ioErrRetries,
                         otherRetries);
+                    if (busyRetries > 0)
+                    {
+                        _telemetry.RecordSqliteBusyRetry(busyRetries);
+                    }
                 }
 
                 return;
@@ -707,6 +715,10 @@ internal sealed class WriteWorker : BackgroundService
                 busyRetries,
                 ioErrRetries,
                 otherRetries);
+            if (busyRetries > 0)
+            {
+                _telemetry.RecordSqliteBusyRetry(busyRetries);
+            }
         }
 
         throw lastError ?? new InvalidOperationException($"Operation '{description}' failed without emitting an exception.");

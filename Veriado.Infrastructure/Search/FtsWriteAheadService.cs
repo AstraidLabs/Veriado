@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -10,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Appl.Search;
+using Veriado.Appl.Search.Abstractions;
 
 namespace Veriado.Infrastructure.Search;
 
@@ -47,19 +49,22 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly ISearchTelemetry _telemetry;
 
     public FtsWriteAheadService(
         ILogger<FtsWriteAheadService> logger,
         IDbContextFactory<AppDbContext> dbContextFactory,
         ISqliteConnectionFactory connectionFactory,
         IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions)
+        TrigramIndexOptions trigramOptions,
+        ISearchTelemetry telemetry)
     {
         _logger = logger;
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     }
 
     public bool IsLoggingEnabled => SuppressionCounter.Value == 0;
@@ -122,15 +127,24 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         var pending = await LoadPendingAsync(connection, cancellationToken).ConfigureAwait(false);
         if (pending.Count == 0)
         {
+            _logger.LogInformation("No pending FTS write-ahead entries detected during replay.");
             return;
         }
 
-        _logger.LogInformation("Replaying {Count} pending FTS write-ahead entries", pending.Count);
+        _logger.LogInformation(
+            "Replaying {Count} pending FTS write-ahead entries ({EntryIds})",
+            pending.Count,
+            string.Join(", ", pending.Select(entry => entry.Id)));
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this);
 
         foreach (var entry in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogInformation(
+                "Replaying FTS write-ahead entry {EntryId} ({Operation}) for file {FileId}",
+                entry.Id,
+                entry.Operation,
+                entry.FileId);
             if (!Guid.TryParse(entry.FileId, out var fileId))
             {
                 _logger.LogWarning(
@@ -171,12 +185,10 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM fts_write_ahead_dlq;";
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        if (result is null || result == DBNull.Value)
-        {
-            return 0;
-        }
-
-        return Convert.ToInt32(result, CultureInfo.InvariantCulture);
+        var count = ConvertToInt64(result);
+        _telemetry.UpdateDeadLetterQueueSize(count);
+        _logger.LogInformation("FTS DLQ currently contains {Count} entries", count);
+        return count >= int.MaxValue ? int.MaxValue : (int)count;
     }
 
     public async Task<int> RetryOnceAsync(int maxBatch, CancellationToken cancellationToken)
@@ -194,16 +206,26 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         var pending = await LoadDeadLetterAsync(connection, maxBatch, cancellationToken).ConfigureAwait(false);
         if (pending.Count == 0)
         {
+            var emptyCount = await UpdateDlqGaugeAsync(connection, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("FTS DLQ empty when retry attempted (remaining={Remaining})", emptyCount);
             return 0;
         }
 
-        _logger.LogInformation("Retrying {Count} FTS write-ahead DLQ entries", pending.Count);
+        _logger.LogInformation(
+            "Retrying {Count} FTS write-ahead DLQ entries ({EntryIds})",
+            pending.Count,
+            string.Join(", ", pending.Select(entry => entry.Id)));
         var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this);
         var succeeded = 0;
 
         foreach (var entry in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogInformation(
+                "Processing FTS DLQ entry {EntryId} ({Operation}) for file {FileId}",
+                entry.Id,
+                entry.Operation,
+                entry.FileId);
 
             if (!Guid.TryParse(entry.FileId, out var fileId))
             {
@@ -229,8 +251,16 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             if (processed)
             {
                 succeeded++;
+                _logger.LogInformation("FTS DLQ entry {EntryId} processed successfully", entry.Id);
             }
         }
+
+        var remaining = await UpdateDlqGaugeAsync(connection, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation(
+            "FTS DLQ retry completed: {Succeeded} of {Total} succeeded (remaining={Remaining})",
+            succeeded,
+            pending.Count,
+            remaining);
 
         return succeeded;
     }
@@ -238,9 +268,39 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
     public async Task MoveToDeadLetterAsync(SqliteConnection connection, FtsWriteAheadEntry entry, string error, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await MoveToDeadLetterInternalAsync(connection, transaction, entry, error, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var transactionId = Guid.NewGuid();
+        _logger.LogWarning(
+            "DLQ transaction {TransactionId} started for entry {EntryId} (file {FileId}) due to {Error}",
+            transactionId,
+            entry.Id,
+            entry.FileId,
+            error);
+
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await MoveToDeadLetterInternalAsync(connection, transaction, entry, error, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation(
+                "DLQ transaction {TransactionId} committed for entry {EntryId}",
+                transactionId,
+                entry.Id);
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogError(
+                ex,
+                "DLQ transaction {TransactionId} rolled back for entry {EntryId}",
+                transactionId,
+                entry.Id);
+            throw;
+        }
+
+        var remaining = await UpdateDlqGaugeAsync(connection, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("FTS DLQ size updated to {RemainingCount} entries", remaining);
     }
 
     private async Task ReplayIndexAsync(
@@ -269,18 +329,35 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
 
         var document = file.ToSearchDocument();
 
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var transactionId = Guid.NewGuid();
+        _logger.LogInformation(
+            "FTS replay transaction {TransactionId} started for index entry {EntryId} (file {FileId})",
+            transactionId,
+            entry.Id,
+            entry.FileId);
+
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             using var scope = SuppressLogging();
             await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation(
+                "FTS replay transaction {TransactionId} committed for entry {EntryId}",
+                transactionId,
+                entry.Id);
             await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogWarning(
+                ex,
+                "FTS replay transaction {TransactionId} rolled back for entry {EntryId}",
+                transactionId,
+                entry.Id);
             _logger.LogError(
                 ex,
                 "Failed to replay FTS index entry {EntryId} for file {FileId}. Moving to DLQ.",
@@ -297,18 +374,35 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         Guid fileId,
         CancellationToken cancellationToken)
     {
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var transactionId = Guid.NewGuid();
+        _logger.LogInformation(
+            "FTS replay transaction {TransactionId} started for delete entry {EntryId} (file {FileId})",
+            transactionId,
+            entry.Id,
+            entry.FileId);
+
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             using var scope = SuppressLogging();
             await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation(
+                "FTS replay transaction {TransactionId} committed for delete entry {EntryId}",
+                transactionId,
+                entry.Id);
             await ClearAsync(connection, transaction: null, entry.Id, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogWarning(
+                ex,
+                "FTS replay transaction {TransactionId} rolled back for delete entry {EntryId}",
+                transactionId,
+                entry.Id);
             _logger.LogError(
                 ex,
                 "Failed to replay FTS delete entry {EntryId} for file {FileId}. Moving to DLQ.",
@@ -344,6 +438,13 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
 
         var document = file.ToSearchDocument();
 
+        var transactionId = Guid.NewGuid();
+        _logger.LogInformation(
+            "DLQ retry transaction {TransactionId} started for index entry {EntryId} (file {FileId})",
+            transactionId,
+            entry.Id,
+            entry.FileId);
+
         await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
@@ -352,12 +453,21 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             await helper.IndexAsync(document, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation(
+                "DLQ retry transaction {TransactionId} committed for index entry {EntryId}",
+                transactionId,
+                entry.Id);
             await DeleteDeadLetterAsync(connection, entry.Id, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogWarning(
+                ex,
+                "DLQ retry transaction {TransactionId} rolled back for index entry {EntryId}",
+                transactionId,
+                entry.Id);
             _logger.LogError(
                 ex,
                 "Failed to retry FTS index DLQ entry {EntryId} for file {FileId}.",
@@ -375,6 +485,13 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         Guid fileId,
         CancellationToken cancellationToken)
     {
+        var transactionId = Guid.NewGuid();
+        _logger.LogInformation(
+            "DLQ retry transaction {TransactionId} started for delete entry {EntryId} (file {FileId})",
+            transactionId,
+            entry.Id,
+            entry.FileId);
+
         await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
@@ -383,12 +500,21 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             await helper.DeleteAsync(fileId, connection, transaction, beforeCommit: null, cancellationToken, enlistJournal: false)
                 .ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation(
+                "DLQ retry transaction {TransactionId} committed for delete entry {EntryId}",
+                transactionId,
+                entry.Id);
             await DeleteDeadLetterAsync(connection, entry.Id, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogWarning(
+                ex,
+                "DLQ retry transaction {TransactionId} rolled back for delete entry {EntryId}",
+                transactionId,
+                entry.Id);
             _logger.LogError(
                 ex,
                 "Failed to retry FTS delete DLQ entry {EntryId} for file {FileId}.",
@@ -538,6 +664,31 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
                 cancellationToken)
             .ConfigureAwait(false);
         return false;
+    }
+
+    private async Task<long> UpdateDlqGaugeAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM fts_write_ahead_dlq;";
+        var raw = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var count = ConvertToInt64(raw);
+        _telemetry.UpdateDeadLetterQueueSize(count);
+        return count;
+    }
+
+    private static long ConvertToInt64(object? value)
+    {
+        if (value is null || value is DBNull)
+        {
+            return 0;
+        }
+
+        return value switch
+        {
+            long l => l,
+            int i => i,
+            _ => Convert.ToInt64(value, CultureInfo.InvariantCulture),
+        };
     }
 
     private static string? ComputeTitleHash(string? normalizedTitle)
