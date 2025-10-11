@@ -1,3 +1,4 @@
+#if NEVER
 using System.Text.Json;
 
 namespace Veriado.Infrastructure.Search.Outbox;
@@ -40,3 +41,4 @@ public sealed class OutboxEvent
     }
     #endregion
 }
+#endif

@@ -23,7 +23,6 @@ internal sealed class WriteWorker : BackgroundService
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ILogger<WriteWorker> _logger;
     private readonly InfrastructureOptions _options;
-    #region TODO(SQLiteOnly): Streamline dependencies after removing deferred/outbox pipeline
     private readonly ISearchIndexCoordinator _searchCoordinator;
     private readonly ISearchIndexer _searchIndexer;
     private readonly IFulltextIntegrityService _integrityService;
@@ -35,12 +34,8 @@ internal sealed class WriteWorker : BackgroundService
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly FtsWriteAheadService _writeAhead;
     private readonly ISearchTelemetry _telemetry;
-    #endregion
 
-    private static readonly FilePersistenceOptions SameTransactionOptions = new()
-    {
-        AllowDeferredIndexing = false,
-    };
+    private static readonly FilePersistenceOptions SameTransactionOptions = FilePersistenceOptions.Default;
 
     public WriteWorker(
         IWriteQueue writeQueue,
@@ -267,7 +262,7 @@ internal sealed class WriteWorker : BackgroundService
             {
                 foreach (var tracked in trackedFiles)
                 {
-                    trackedOptions[tracked.Entity] = NormalizePersistenceOptions(tracked.Entity, tracked.Options);
+                    trackedOptions[tracked.Entity] = NormalizePersistenceOptions(tracked.Options);
                 }
             }
         }
@@ -480,15 +475,9 @@ internal sealed class WriteWorker : BackgroundService
             transactionId);
     }
 
-    private FilePersistenceOptions NormalizePersistenceOptions(FileEntity file, FilePersistenceOptions requestedOptions)
+    private static FilePersistenceOptions NormalizePersistenceOptions(FilePersistenceOptions requestedOptions)
     {
-        if (requestedOptions.AllowDeferredIndexing)
-        {
-            _logger.LogWarning(
-                "Deferred indexing requested for file {FileId}, but SameTransaction mode is enforced. Processing inline instead.",
-                file.Id);
-        }
-
+        _ = requestedOptions;
         return SameTransactionOptions;
     }
 

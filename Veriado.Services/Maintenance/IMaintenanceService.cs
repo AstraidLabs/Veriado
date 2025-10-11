@@ -11,5 +11,5 @@ public interface IMaintenanceService
 
     Task<AppResult<int>> RunVacuumAndOptimizeAsync(CancellationToken cancellationToken);
 
-    Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, bool allowDeferredIndexing, CancellationToken cancellationToken);
+    Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, CancellationToken cancellationToken);
 }

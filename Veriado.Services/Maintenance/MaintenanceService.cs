@@ -32,9 +32,9 @@ public sealed class MaintenanceService : IMaintenanceService
         return _mediator.Send(new VacuumAndOptimizeDatabaseCommand(), cancellationToken);
     }
 
-    public Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, bool allowDeferredIndexing, CancellationToken cancellationToken)
+    public Task<AppResult<int>> ReindexAfterSchemaUpgradeAsync(int targetSchemaVersion, CancellationToken cancellationToken)
     {
-        var command = new ReindexCorpusAfterSchemaUpgradeCommand(targetSchemaVersion, allowDeferredIndexing);
+        var command = new ReindexCorpusAfterSchemaUpgradeCommand(targetSchemaVersion);
         return _mediator.Send(command, cancellationToken);
     }
 }

@@ -25,16 +25,13 @@ public sealed class ReindexCorpusAfterSchemaUpgradeHandler : IRequestHandler<Rei
 
         try
         {
-            var options = new FilePersistenceOptions
-            {
-                AllowDeferredIndexing = request.AllowDeferredIndexing,
-            };
-
             await foreach (var file in _repository.StreamAllAsync(cancellationToken))
             {
                 var timestamp = UtcTimestamp.From(_clock.UtcNow);
                 file.BumpSchemaVersion(request.TargetSchemaVersion, timestamp);
-                await _repository.UpdateAsync(file, options, cancellationToken).ConfigureAwait(false);
+                await _repository
+                    .UpdateAsync(file, FilePersistenceOptions.Default, cancellationToken)
+                    .ConfigureAwait(false);
                 reindexed++;
             }
 

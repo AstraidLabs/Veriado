@@ -1,3 +1,4 @@
+#if NEVER
 namespace Veriado.Infrastructure.Search.Outbox;
 
 /// <summary>
@@ -31,3 +32,4 @@ public sealed class OutboxDeadLetterEvent
         = string.Empty;
     #endregion
 }
+#endif
