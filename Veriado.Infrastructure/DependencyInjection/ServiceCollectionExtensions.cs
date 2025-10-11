@@ -149,11 +149,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SqliteFts5Indexer>();
         services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
-#if NEVER
-        // Outbox pipeline registrations are disabled for the SQLite-only phase but kept for future providers.
-        services.AddSingleton<ISearchIndexOutbox, SqliteSearchIndexOutbox>();
-        services.AddHostedService<SearchIndexOutboxWorker>();
-#endif
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
 
         #region TODO(SQLiteOnly): Collapse query pipeline to SQLite-only implementation (remove hybrid + trigram)

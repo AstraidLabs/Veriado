@@ -42,14 +42,6 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
             return false;
         }
 
-        if (options.AllowDeferredIndexing)
-        {
-            _logger.LogWarning(
-                "Deferred indexing requested for file {FileId}, but FtsIndexingMode '{IndexingMode}' enforces synchronous processing.",
-                file.Id,
-                IndexingMode);
-        }
-
         if (transaction is not SqliteTransaction sqliteTransaction)
         {
             throw new InvalidOperationException("SQLite transaction is required for full-text indexing operations.");
@@ -68,11 +60,4 @@ internal sealed class SqliteSearchIndexCoordinator : ISearchIndexCoordinator
         return true;
     }
 
-    #region TODO(SQLiteOnly): Remove no-op deferred indexing hook when outbox is deleted
-    public Task SearchIndexRefreshAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("SearchIndexRefreshAsync invoked with no deferred indexing to process.");
-        return Task.CompletedTask;
-    }
-    #endregion
 }
