@@ -5,6 +5,7 @@ namespace Veriado.Infrastructure.Search.Outbox;
 /// </summary>
 public sealed class OutboxDeadLetterEvent
 {
+    #region TODO(SQLiteOnly): Remove dead-letter persistence once deferred pipeline is retired
     public long Id { get; set; }
         = 0;
 
@@ -28,4 +29,5 @@ public sealed class OutboxDeadLetterEvent
 
     public string Error { get; set; }
         = string.Empty;
+    #endregion
 }
