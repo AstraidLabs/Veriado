@@ -114,9 +114,9 @@ internal sealed class SqliteFts5Transactional
 
             return enlistJournal ? null : journalId;
         }
-        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
+        catch (SqliteException ex) when (ex.IndicatesFatalFulltextFailure())
         {
-            throw new SearchIndexCorruptedException("SQLite full-text index is corrupted and needs to be repaired.", ex);
+            throw new SearchIndexCorruptedException("SQLite full-text index became unavailable and needs to be repaired.", ex);
         }
     }
 
@@ -198,9 +198,9 @@ internal sealed class SqliteFts5Transactional
 
             return enlistJournal ? null : journalId;
         }
-        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption() || ex.IndicatesFulltextSchemaMissing())
+        catch (SqliteException ex) when (ex.IndicatesFatalFulltextFailure())
         {
-            throw new SearchIndexCorruptedException("SQLite full-text index is corrupted and needs to be repaired.", ex);
+            throw new SearchIndexCorruptedException("SQLite full-text index became unavailable and needs to be repaired.", ex);
         }
     }
 

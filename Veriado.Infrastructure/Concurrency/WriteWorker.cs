@@ -581,61 +581,112 @@ internal sealed class WriteWorker : BackgroundService
         Func<CancellationToken, Task> operation,
         string description,
         CancellationToken cancellationToken,
-        int maxAttempts = 3)
+        int maxAttempts = 5)
     {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var stopwatch = Stopwatch.StartNew();
         Exception? lastError = null;
+        var busyRetries = 0;
+        var ioErrRetries = 0;
+        var otherRetries = 0;
+        var attemptsUsed = 0;
+
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
+            attemptsUsed = attempt;
             try
             {
                 await operation(cancellationToken).ConfigureAwait(false);
-                if (attempt > 1)
+
+                stopwatch.Stop();
+                if (busyRetries + ioErrRetries + otherRetries > 0)
                 {
                     _logger.LogInformation(
-                        "{Operation} succeeded on attempt {Attempt}/{MaxAttempts}",
+                        "{Operation} succeeded after {Attempts} attempts in {ElapsedMilliseconds} ms (busy={BusyRetries}, ioerr={IoErrRetries}, other={OtherRetries})",
                         description,
-                        attempt,
-                        maxAttempts);
+                        attemptsUsed,
+                        stopwatch.Elapsed.TotalMilliseconds,
+                        busyRetries,
+                        ioErrRetries,
+                        otherRetries);
                 }
 
                 return;
             }
             catch (OperationCanceledException)
             {
+                stopwatch.Stop();
                 throw;
             }
             catch (SearchIndexCorruptedException)
             {
+                stopwatch.Stop();
                 throw;
             }
-            catch (SqliteException sqliteEx) when (sqliteEx.IndicatesDatabaseCorruption())
+            catch (SqliteException sqliteEx) when (sqliteEx.IndicatesFatalFulltextFailure())
             {
+                stopwatch.Stop();
                 throw new SearchIndexCorruptedException(
                     "SQLite database corruption detected during full-text operation.",
                     sqliteEx);
             }
-            catch (SqliteException sqliteEx) when (attempt < maxAttempts && IsTransientSqliteError(sqliteEx))
+            catch (SqliteException sqliteEx) when (attempt < maxAttempts && IsBusySqliteError(sqliteEx))
             {
+                busyRetries++;
                 lastError = sqliteEx;
+                var delay = CalculateBusyBackoff(attempt);
                 _logger.LogWarning(
                     sqliteEx,
-                    "{Operation} encountered transient SQLite error {ErrorCode} on attempt {Attempt}/{MaxAttempts}, retrying",
+                    "{Operation} encountered SQLITE_BUSY on attempt {Attempt}/{MaxAttempts}, waiting {Delay} before retry",
+                    description,
+                    attempt,
+                    maxAttempts,
+                    delay);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+            catch (SqliteException sqliteEx) when (attempt < maxAttempts && IsIoSqliteError(sqliteEx))
+            {
+                ioErrRetries++;
+                lastError = sqliteEx;
+                var delay = CalculateIoBackoff();
+                _logger.LogWarning(
+                    sqliteEx,
+                    "{Operation} encountered SQLITE_IOERR on attempt {Attempt}/{MaxAttempts}, waiting {Delay} before retry",
+                    description,
+                    attempt,
+                    maxAttempts,
+                    delay);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+            catch (SqliteException sqliteEx) when (attempt < maxAttempts && IsTransientSqliteError(sqliteEx))
+            {
+                otherRetries++;
+                lastError = sqliteEx;
+                var delay = CalculateGeneralBackoff(attempt);
+                _logger.LogWarning(
+                    sqliteEx,
+                    "{Operation} encountered transient SQLite error {ErrorCode} on attempt {Attempt}/{MaxAttempts}, waiting {Delay} before retry",
                     description,
                     sqliteEx.SqliteExtendedErrorCode,
                     attempt,
-                    maxAttempts);
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+                    maxAttempts,
+                    delay);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (attempt < maxAttempts)
             {
+                otherRetries++;
                 lastError = ex;
+                var delay = CalculateGeneralBackoff(attempt);
                 _logger.LogWarning(
                     ex,
-                    "{Operation} failed on attempt {Attempt}/{MaxAttempts}, retrying",
+                    "{Operation} failed on attempt {Attempt}/{MaxAttempts}, waiting {Delay} before retry",
                     description,
                     attempt,
-                    maxAttempts);
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+                    maxAttempts,
+                    delay);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -644,30 +695,58 @@ internal sealed class WriteWorker : BackgroundService
             }
         }
 
+        stopwatch.Stop();
+        if (lastError is not null)
+        {
+            _logger.LogError(
+                lastError,
+                "{Operation} failed after {Attempts} attempts in {ElapsedMilliseconds} ms (busy={BusyRetries}, ioerr={IoErrRetries}, other={OtherRetries})",
+                description,
+                attemptsUsed,
+                stopwatch.Elapsed.TotalMilliseconds,
+                busyRetries,
+                ioErrRetries,
+                otherRetries);
+        }
+
         throw lastError ?? new InvalidOperationException($"Operation '{description}' failed without emitting an exception.");
+    }
+
+    private static bool IsBusySqliteError(SqliteException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        var primary = exception.GetPrimaryErrorCode();
+        return primary is 5 or 6;
+    }
+
+    private static bool IsIoSqliteError(SqliteException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception.GetPrimaryErrorCode() == 10;
     }
 
     private static bool IsTransientSqliteError(SqliteException exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        var primary = exception.SqliteErrorCode;
-        if (primary is 5 or 6 or 10)
-        {
-            return true;
-        }
+        var primary = exception.GetPrimaryErrorCode();
+        return primary is 5 or 6 or 10;
+    }
 
-        var extended = exception.SqliteExtendedErrorCode;
-        if (extended != 0)
-        {
-            primary = extended & 0xFF;
-            if (primary is 5 or 6 or 10)
-            {
-                return true;
-            }
-        }
+    private static TimeSpan CalculateBusyBackoff(int attempt)
+    {
+        var delayMilliseconds = Math.Min(1000, 50 * Math.Pow(2, attempt - 1));
+        return TimeSpan.FromMilliseconds(delayMilliseconds);
+    }
 
-        return false;
+    private static TimeSpan CalculateIoBackoff()
+    {
+        return TimeSpan.FromMilliseconds(250);
+    }
+
+    private static TimeSpan CalculateGeneralBackoff(int attempt)
+    {
+        return TimeSpan.FromMilliseconds(Math.Min(1000, 100 * attempt));
     }
 
     private async Task AttemptIntegrityRepairAsync(CancellationToken cancellationToken)
