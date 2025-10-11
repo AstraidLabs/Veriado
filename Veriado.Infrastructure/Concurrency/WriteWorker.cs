@@ -1,5 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.Data;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
@@ -220,15 +223,24 @@ internal sealed class WriteWorker : BackgroundService
     {
         var batchStopwatch = Stopwatch.StartNew();
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        if (transaction.GetDbTransaction() is not SqliteTransaction sqliteTransaction)
+        if (context.Database.GetDbConnection() is not SqliteConnection sqliteConnection)
         {
-            throw new InvalidOperationException("SQLite transaction is required for write operations.");
+            throw new InvalidOperationException("SQLite connection is required for write operations.");
         }
 
-        var sqliteConnection = sqliteTransaction.Connection
-            ?? throw new InvalidOperationException("SQLite connection is unavailable for the active transaction.");
+        if (sqliteConnection.State != ConnectionState.Open)
+        {
+            await sqliteConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using var sqliteTransaction = await sqliteConnection
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await using var transaction = await context.Database
+            .UseTransactionAsync(sqliteTransaction, cancellationToken)
+            .ConfigureAwait(false);
 
         var transactionId = Guid.NewGuid();
 
@@ -339,24 +351,89 @@ internal sealed class WriteWorker : BackgroundService
 
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        var indexedNow = await ApplyFulltextUpdatesAsync(
-                context,
-                sqliteConnection,
-                sqliteTransaction,
-                transactionId,
-                filesToIndex,
-                filesToDelete,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (indexedNow)
+        try
         {
+            var indexedNow = await ApplyFulltextUpdatesAsync(
+                    context,
+                    sqliteTransaction,
+                    transactionId,
+                    filesToIndex,
+                    filesToDelete,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            _logger.LogDebug(
+                indexedNow
+                    ? "Full-text updates applied for transaction {TransactionId}"
+                    : "No full-text updates required for transaction {TransactionId}",
+                transactionId);
+
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
+        catch (SearchIndexCorruptedException)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        if (failure is not null)
+        {
+            _logger.LogWarning(
+                failure,
+                "Write transaction {TransactionId} rolling back due to {ErrorType}",
+                transactionId,
+                failure.GetType().Name);
+
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var request in batch)
+            {
+                request.TrySetException(failure);
+            }
+
+            return;
+        }
+
+        try
+        {
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+
+        if (failure is not null)
+        {
+            _logger.LogWarning(
+                failure,
+                "Write transaction {TransactionId} rolling back due to {ErrorType}",
+                transactionId,
+                failure.GetType().Name);
+
+            try
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception rollbackEx)
+            {
+                _logger.LogError(
+                    rollbackEx,
+                    "Failed to rollback write transaction {TransactionId} after commit error.",
+                    transactionId);
+            }
+
+            foreach (var request in batch)
+            {
+                request.TrySetException(failure);
+            }
+
+            return;
+        }
+
         batchStopwatch.Stop();
 
         _logger.LogInformation(
@@ -408,7 +485,6 @@ internal sealed class WriteWorker : BackgroundService
 
     private async Task<bool> ApplyFulltextUpdatesAsync(
         AppDbContext context,
-        SqliteConnection sqliteConnection,
         SqliteTransaction sqliteTransaction,
         Guid transactionId,
         IReadOnlyList<(FileEntity File, FilePersistenceOptions Options)> filesToIndex,
@@ -419,6 +495,9 @@ internal sealed class WriteWorker : BackgroundService
         {
             return false;
         }
+
+        var sqliteConnection = sqliteTransaction.Connection
+            ?? throw new InvalidOperationException("SQLite connection is unavailable for the active transaction.");
 
         if (!_options.IsFulltextAvailable)
         {
