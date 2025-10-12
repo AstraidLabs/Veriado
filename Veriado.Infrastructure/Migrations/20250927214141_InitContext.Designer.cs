@@ -214,12 +214,6 @@ namespace Veriado.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_utc");
 
-                    b.Property<bool>("IsFuzzy")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_fuzzy");
-
                     b.Property<string>("Match")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -266,12 +260,6 @@ namespace Veriado.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(1)
                         .HasColumnName("executions");
-
-                    b.Property<bool>("IsFuzzy")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_fuzzy");
 
                     b.Property<int?>("LastTotalHits")
                         .HasColumnType("INTEGER")
