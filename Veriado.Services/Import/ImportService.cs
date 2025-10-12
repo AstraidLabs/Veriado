@@ -1,9 +1,12 @@
+using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Linq;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Veriado.Mapping.AC;
@@ -136,6 +139,7 @@ public sealed class ImportService : IImportService
         int skipped,
         bool fatalEncountered,
         bool cancellationEncountered,
+        bool enumerationIssuesEncountered,
         IReadOnlyCollection<ImportError> errors)
     {
         if (fatalEncountered)
@@ -161,6 +165,11 @@ public sealed class ImportService : IImportService
 
         if (failed == 0)
         {
+            if (enumerationIssuesEncountered && errors.Count > 0)
+            {
+                return ImportBatchStatus.PartialSuccess;
+            }
+
             return ImportBatchStatus.Success;
         }
 
@@ -177,6 +186,21 @@ public sealed class ImportService : IImportService
         NormalizedImportOptions options,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        _logger.LogInformation(
+            "Starting import for {FolderPath} with options {@Options}",
+            folderPath,
+            new
+            {
+                options.SearchPattern,
+                options.Recursive,
+                options.DefaultAuthor,
+                options.KeepFileSystemMetadata,
+                options.SetReadOnly,
+                options.MaxFileSizeBytes,
+                options.MaxDegreeOfParallelism,
+                options.BufferSize,
+            });
+
         if (!Directory.Exists(folderPath))
         {
             var missingError = new ImportError(
@@ -213,22 +237,9 @@ public sealed class ImportService : IImportService
             yield break;
         }
 
-        var searchOption = options.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        string[] files;
-        ImportProgressEvent[]? enumerationFailureEvents = null;
-        try
+        var enumerationResult = EnumerateFilesWithDiagnostics(folderPath, options);
+        if (enumerationResult.FatalError is not null)
         {
-            files = Directory.EnumerateFiles(folderPath, options.SearchPattern, searchOption).ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or PathTooLongException)
-        {
-            _logger.LogError(ex, "Failed to enumerate files for {FolderPath} using pattern {SearchPattern}", folderPath, options.SearchPattern);
-
-            var enumerationError = CreateValidationError(
-                folderPath,
-                "enumeration_failed",
-                $"Failed to enumerate files in '{folderPath}' using pattern '{options.SearchPattern}'. {ex.Message}",
-                "Verify that the folder is accessible and that the search pattern is valid.");
             var fatalAggregate = new ImportAggregateResult(
                 ImportBatchStatus.FatalError,
                 0,
@@ -236,32 +247,49 @@ public sealed class ImportService : IImportService
                 0,
                 0,
                 0,
-                new[] { enumerationError });
+                new[] { enumerationResult.FatalError });
 
-            enumerationFailureEvents = new[]
-            {
-                ImportProgressEvent.BatchStarted(0, enumerationError.Timestamp),
-                ImportProgressEvent.ErrorOccurred(enumerationError, 0, 0, 0, 0, 0),
-                ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow),
-            };
-
-            files = Array.Empty<string>();
+            yield return ImportProgressEvent.BatchStarted(0, enumerationResult.FatalError.Timestamp);
+            yield return ImportProgressEvent.ErrorOccurred(enumerationResult.FatalError, 0, 0, 0, 0, 0, enumerationResult.FatalError.Timestamp);
+            yield return ImportProgressEvent.BatchCompleted(fatalAggregate, _clock.UtcNow);
+            yield break;
         }
 
-        if (enumerationFailureEvents is not null)
-        {
-            foreach (var progressEvent in enumerationFailureEvents)
-            {
-                yield return progressEvent;
-            }
+        var files = enumerationResult.Files;
+        var enumerationErrors = enumerationResult.Errors;
 
-            yield break;
+        if (enumerationErrors.Count > 0)
+        {
+            _logger.LogWarning(
+                "Encountered {ErrorCount} issues while enumerating files in {FolderPath}.",
+                enumerationErrors.Count,
+                folderPath);
         }
 
         var total = files.Length;
         var batchStart = _clock.UtcNow;
 
+        _logger.LogInformation(
+            "Discovered {Total} candidate files for import in {FolderPath}.",
+            total,
+            folderPath);
+
         yield return ImportProgressEvent.BatchStarted(total, batchStart);
+
+        if (enumerationErrors.Count > 0)
+        {
+            foreach (var enumerationError in enumerationErrors)
+            {
+                yield return ImportProgressEvent.ErrorOccurred(
+                    enumerationError,
+                    0,
+                    total,
+                    0,
+                    0,
+                    0,
+                    enumerationError.Timestamp);
+            }
+        }
 
         if (options.SearchPatternSanitized && !string.IsNullOrWhiteSpace(options.SearchPatternWarningMessage))
         {
@@ -286,6 +314,10 @@ public sealed class ImportService : IImportService
 
         if (total == 0)
         {
+            _logger.LogInformation(
+                "No files matched pattern {SearchPattern} in {FolderPath}.",
+                options.SearchPattern,
+                folderPath);
             yield return ImportProgressEvent.BatchCompleted(ImportAggregateResult.EmptySuccess, _clock.UtcNow);
             yield break;
         }
@@ -299,6 +331,10 @@ public sealed class ImportService : IImportService
         });
 
         var errors = new ConcurrentBag<ImportError>();
+        foreach (var enumerationError in enumerationErrors)
+        {
+            errors.Add(enumerationError);
+        }
         var processed = 0;
         var succeeded = 0;
         var failed = 0;
@@ -632,6 +668,7 @@ public sealed class ImportService : IImportService
         var failedFinal = Volatile.Read(ref failed);
         var skippedFinal = Volatile.Read(ref skipped);
         var errorArray = errors.ToArray();
+        var enumerationIssuesEncountered = enumerationErrors.Count > 0;
         var status = DetermineStatus(
             total,
             processedFinal,
@@ -640,10 +677,171 @@ public sealed class ImportService : IImportService
             skippedFinal,
             fatalEncountered,
             cancellationEncountered,
+            enumerationIssuesEncountered,
             errorArray);
         var aggregate = new ImportAggregateResult(status, total, processedFinal, succeededFinal, failedFinal, skippedFinal, errorArray);
 
+        _logger.LogInformation(
+            "Import for {FolderPath} completed with status {Status}. Processed {Processed}/{Total} files (Succeeded: {Succeeded}, Failed: {Failed}, Skipped: {Skipped}). Errors: {ErrorCount}.",
+            folderPath,
+            aggregate.Status,
+            aggregate.Processed,
+            aggregate.Total,
+            aggregate.Succeeded,
+            aggregate.Failed,
+            aggregate.Skipped,
+            aggregate.Errors.Count);
+
         yield return ImportProgressEvent.BatchCompleted(aggregate, _clock.UtcNow);
+    }
+
+    private FileEnumerationResult EnumerateFilesWithDiagnostics(string folderPath, NormalizedImportOptions options)
+    {
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var visited = new HashSet<string>(comparer);
+        var stack = new Stack<string>();
+        var files = new List<string>();
+        var errors = new List<ImportError>();
+        var rootFullPath = NormalizePathSafe(folderPath);
+        stack.Push(rootFullPath);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (!visited.Add(current))
+            {
+                continue;
+            }
+
+            var isRoot = comparer.Equals(current, rootFullPath);
+
+            if (!TryEnumerateFiles(current, options, isRoot, errors, out var currentFiles, out var fatalError))
+            {
+                if (fatalError is not null)
+                {
+                    return new FileEnumerationResult(Array.Empty<string>(), errors.ToArray(), fatalError);
+                }
+
+                continue;
+            }
+
+            files.AddRange(currentFiles);
+
+            if (!options.Recursive)
+            {
+                continue;
+            }
+
+            if (!TryEnumerateDirectories(current, isRoot, errors, out var subdirectories, out fatalError))
+            {
+                if (fatalError is not null)
+                {
+                    return new FileEnumerationResult(files.ToArray(), errors.ToArray(), fatalError);
+                }
+
+                continue;
+            }
+
+            foreach (var directory in subdirectories)
+            {
+                if (ShouldSkipDirectory(directory))
+                {
+                    continue;
+                }
+
+                stack.Push(NormalizePathSafe(directory));
+            }
+        }
+
+        return new FileEnumerationResult(files.ToArray(), errors.ToArray(), null);
+    }
+
+    private bool TryEnumerateFiles(
+        string directory,
+        NormalizedImportOptions options,
+        bool isRoot,
+        List<ImportError> errors,
+        out string[] files,
+        out ImportError? fatalError)
+    {
+        try
+        {
+            files = Directory.EnumerateFiles(directory, options.SearchPattern, SearchOption.TopDirectoryOnly).ToArray();
+            fatalError = null;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            var error = CreateEnumerationError(directory, options.SearchPattern, ex, isDirectoryEnumeration: false);
+            errors.Add(error);
+            var level = isRoot ? LogLevel.Error : LogLevel.Warning;
+            _logger.Log(level, ex, "Failed to enumerate files in {Directory} using pattern {Pattern}.", directory, options.SearchPattern);
+
+            files = Array.Empty<string>();
+            fatalError = isRoot ? error : null;
+            return false;
+        }
+    }
+
+    private bool TryEnumerateDirectories(
+        string directory,
+        bool isRoot,
+        List<ImportError> errors,
+        out string[] subdirectories,
+        out ImportError? fatalError)
+    {
+        try
+        {
+            subdirectories = Directory.EnumerateDirectories(directory).ToArray();
+            fatalError = null;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            var error = CreateEnumerationError(directory, pattern: null, ex, isDirectoryEnumeration: true);
+            errors.Add(error);
+            var level = isRoot ? LogLevel.Error : LogLevel.Warning;
+            _logger.Log(level, ex, "Failed to enumerate subdirectories in {Directory}.", directory);
+
+            subdirectories = Array.Empty<string>();
+            fatalError = isRoot ? error : null;
+            return false;
+        }
+    }
+
+    private ImportError CreateEnumerationError(string scope, string? pattern, Exception exception, bool isDirectoryEnumeration)
+    {
+        var code = isDirectoryEnumeration ? "directory_enumeration_failed" : "enumeration_failed";
+        var message = isDirectoryEnumeration
+            ? $"Failed to enumerate subdirectories in '{scope}'. {exception.Message}"
+            : $"Failed to enumerate files in '{scope}' using pattern '{pattern}'. {exception.Message}";
+        var suggestion = "Verify that the application has access to the folder and retry.";
+        return new ImportError(scope, code, message, suggestion, exception.ToString(), _clock.UtcNow);
+    }
+
+    private static string NormalizePathSafe(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception)
+        {
+            return path;
+        }
+    }
+
+    private static bool ShouldSkipDirectory(string directory)
+    {
+        try
+        {
+            var attributes = File.GetAttributes(directory);
+            return (attributes & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private async Task<ApiResponse<Guid>> ImportFileInternalAsync(
@@ -1155,6 +1353,8 @@ public sealed class ImportService : IImportService
     }
 
     private sealed record CreateFileImport(CreateFileRequest Request, string ContentHash);
+
+    private sealed record FileEnumerationResult(string[] Files, IReadOnlyList<ImportError> Errors, ImportError? FatalError);
 
     private sealed record FileContentReadResult(byte[] Content, string Hash);
 
