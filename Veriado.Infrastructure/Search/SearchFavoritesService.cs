@@ -50,26 +50,42 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        long maxPosition;
-        await using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "SELECT COALESCE(MAX(position), -1) FROM search_favorites;";
-            var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            maxPosition = result is long value ? value : -1;
-        }
+        await using var sqliteTransaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
 
-        await using var insert = connection.CreateCommand();
-        insert.CommandText =
-            "INSERT INTO search_favorites(id, name, query_text, match, position, created_utc, is_fuzzy) " +
-            "VALUES ($id, $name, $queryText, $match, $position, $createdUtc, $isFuzzy);";
-        insert.Parameters.Add("$id", SqliteType.Blob).Value = Guid.NewGuid().ToByteArray();
-        insert.Parameters.Add("$name", SqliteType.Text).Value = name;
-        insert.Parameters.Add("$queryText", SqliteType.Text).Value = (object?)queryText ?? DBNull.Value;
-        insert.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
-        insert.Parameters.Add("$position", SqliteType.Integer).Value = maxPosition + 1;
-        insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = _clock.UtcNow.ToString("O");
-        insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = isFuzzy ? 1 : 0;
-        await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            long maxPosition;
+            await using (var command = connection.CreateCommand())
+            {
+                command.Transaction = sqliteTransaction;
+                command.CommandText = "SELECT COALESCE(MAX(position), -1) FROM search_favorites;";
+                var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                maxPosition = result is long value ? value : -1;
+            }
+
+            await using var insert = connection.CreateCommand();
+            insert.Transaction = sqliteTransaction;
+            insert.CommandText =
+                "INSERT INTO search_favorites(id, name, query_text, match, position, created_utc, is_fuzzy) " +
+                "VALUES ($id, $name, $queryText, $match, $position, $createdUtc, $isFuzzy);";
+            insert.Parameters.Add("$id", SqliteType.Blob).Value = Guid.NewGuid().ToByteArray();
+            insert.Parameters.Add("$name", SqliteType.Text).Value = name;
+            insert.Parameters.Add("$queryText", SqliteType.Text).Value = (object?)queryText ?? DBNull.Value;
+            insert.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
+            insert.Parameters.Add("$position", SqliteType.Integer).Value = maxPosition + 1;
+            insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = _clock.UtcNow.ToString("O");
+            insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = isFuzzy ? 1 : 0;
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await sqliteTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task RenameAsync(Guid id, string newName, CancellationToken cancellationToken)
