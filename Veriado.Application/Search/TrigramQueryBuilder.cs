@@ -32,7 +32,6 @@ public sealed class TrigramQueryBuilder : ITrigramQueryBuilder
     {
     }
 
-    [ActivatorUtilitiesConstructor]
     public TrigramQueryBuilder(SearchOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
