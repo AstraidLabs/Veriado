@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Veriado.Application.Tests.Search;
@@ -10,7 +11,7 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void BuildTrigramMatch_QuotesReservedKeywords()
     {
-        var builder = new TrigramQueryBuilder(new SearchOptions());
+        var builder = new TrigramQueryBuilder(Options.Create(new SearchOptions()));
         var result = builder.BuildTrigramMatch("and or not", requireAllTerms: false);
 
         Assert.Equal("\"and\" OR \"not\" OR \"or\"", result);
@@ -19,7 +20,7 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void TryBuild_ReturnsQuotedExpressionForReservedKeyword()
     {
-        var builder = new TrigramQueryBuilder(new SearchOptions());
+        var builder = new TrigramQueryBuilder(Options.Create(new SearchOptions()));
         var built = builder.TryBuild("AND", requireAllTerms: false, out var match);
 
         Assert.True(built);
@@ -29,7 +30,7 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void BuildIndexEntry_DoesNotIncludeQuotes()
     {
-        var builder = new TrigramQueryBuilder(new SearchOptions());
+        var builder = new TrigramQueryBuilder(Options.Create(new SearchOptions()));
         var entry = builder.BuildIndexEntry("and", "or", "not");
 
         Assert.DoesNotContain('"', entry);
@@ -48,7 +49,7 @@ public static class TrigramQueryBuilderTests
             await create.ExecuteNonQueryAsync();
         }
 
-        var builder = new TrigramQueryBuilder(new SearchOptions());
+        var builder = new TrigramQueryBuilder(Options.Create(new SearchOptions()));
         var indexEntry = builder.BuildIndexEntry("andromeda");
         await using (var insert = connection.CreateCommand())
         {

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Options;
 using Veriado.Appl.Search.Abstractions;
 
 /// <summary>
@@ -98,7 +99,8 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         _language = string.IsNullOrWhiteSpace(language)
             ? "en"
             : language!.Trim().ToLowerInvariant();
-        _trigramBuilder = trigramBuilder ?? new TrigramQueryBuilder(new SearchOptions());
+        _trigramBuilder = trigramBuilder
+            ?? new TrigramQueryBuilder(Options.Create(new SearchOptions()));
     }
 
     private void ApplyScoreOptions(SearchScoreOptions? options)

@@ -28,16 +28,15 @@ public sealed class TrigramQueryBuilder : ITrigramQueryBuilder
 
     private readonly SearchOptions _options;
 
-    public TrigramQueryBuilder(SearchOptions options)
-    {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-    }
-
     [ActivatorUtilitiesConstructor]
     public TrigramQueryBuilder(IOptions<SearchOptions> options)
-        : this((options ?? throw new ArgumentNullException(nameof(options))).Value
-            ?? throw new ArgumentNullException(nameof(options)))
     {
+        if (options is null)
+        {
+            throw new ArgumentNullException(nameof(options));
+        }
+
+        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     /// <summary>
