@@ -1165,9 +1165,9 @@ public sealed class ImportService : IImportService
 
             var error = repairResult.Error;
             string? details = null;
-            if (error.Details is { Count: > 0 })
+            if (error.Details is { Count: > 0 } detailsCollection)
             {
-                var flattened = error.Details.SelectMany(static pair => pair.Value)
+                var flattened = detailsCollection
                     .Where(static value => !string.IsNullOrWhiteSpace(value))
                     .ToArray();
                 if (flattened.Length > 0)
