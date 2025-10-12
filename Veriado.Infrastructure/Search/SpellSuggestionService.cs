@@ -15,12 +15,18 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, IReadOnlyList<DictionaryEntry>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
-    public SpellSuggestionService(InfrastructureOptions options, ILogger<SpellSuggestionService> logger, IAnalyzerFactory analyzerFactory)
+    public SpellSuggestionService(
+        InfrastructureOptions options,
+        ILogger<SpellSuggestionService> logger,
+        IAnalyzerFactory analyzerFactory,
+        ITrigramQueryBuilder trigramBuilder)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     public async Task<IReadOnlyList<SpellSuggestion>> SuggestAsync(
@@ -70,7 +76,7 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
             return Array.Empty<SpellSuggestion>();
         }
 
-        var queryTrigrams = TrigramQueryBuilder.BuildTrigrams(normalizedToken)
+        var queryTrigrams = _trigramBuilder.BuildTrigrams(normalizedToken)
             .Select(static t => t)
             .ToHashSet(StringComparer.Ordinal);
         if (queryTrigrams.Count == 0)
@@ -128,7 +134,7 @@ internal sealed class SpellSuggestionService : ISpellSuggestionService
                     continue;
                 }
 
-                var trigrams = TrigramQueryBuilder.BuildTrigrams(normalizedTerm)
+                var trigrams = _trigramBuilder.BuildTrigrams(normalizedTerm)
                     .Select(static t => t)
                     .ToHashSet(StringComparer.Ordinal);
                 if (trigrams.Count == 0)

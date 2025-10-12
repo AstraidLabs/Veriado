@@ -14,15 +14,18 @@ internal sealed class SqliteFts5Transactional
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
     private readonly FtsWriteAheadService _writeAhead;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     public SqliteFts5Transactional(
         IAnalyzerFactory analyzerFactory,
         TrigramIndexOptions trigramOptions,
-        FtsWriteAheadService writeAhead)
+        FtsWriteAheadService writeAhead,
+        ITrigramQueryBuilder trigramBuilder)
     {
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     public async Task<long?> IndexAsync(
@@ -79,11 +82,7 @@ internal sealed class SqliteFts5Transactional
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var trigramSegments = BuildTrigramSegments(document);
-
-            var trigramText = trigramSegments.Count == 0
-                ? string.Empty
-                : TrigramQueryBuilder.BuildIndexEntry(trigramSegments.ToArray());
+            var trigramText = BuildTrigramText(document);
 
             await using (var deleteTrgm = connection.CreateCommand())
             {
@@ -255,49 +254,19 @@ internal sealed class SqliteFts5Transactional
             : TextNormalization.NormalizeText(value, _analyzerFactory);
     }
 
-    private List<string> BuildTrigramSegments(SearchDocument document)
+    private string BuildTrigramText(SearchDocument document)
     {
-        var segments = new List<string>();
-        var maxTokens = Math.Max(1, _trigramOptions.MaxTokens);
-        var totalTokens = 0;
+        var values = EnumerateTrigramValues(document)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value!)
+            .ToArray();
 
-        foreach (var candidate in EnumerateTrigramValues(document))
+        if (values.Length == 0)
         {
-            if (string.IsNullOrWhiteSpace(candidate))
-            {
-                continue;
-            }
-
-            var tokens = TextNormalization
-                .Tokenize(candidate, _analyzerFactory)
-                .Where(static token => !string.IsNullOrWhiteSpace(token))
-                .ToArray();
-            if (tokens.Length == 0)
-            {
-                continue;
-            }
-
-            var remaining = maxTokens - totalTokens;
-            if (remaining <= 0)
-            {
-                break;
-            }
-
-            if (tokens.Length > remaining)
-            {
-                tokens = tokens.Take(remaining).ToArray();
-            }
-
-            segments.Add(string.Join(' ', tokens));
-            totalTokens += tokens.Length;
-
-            if (totalTokens >= maxTokens)
-            {
-                break;
-            }
+            return string.Empty;
         }
 
-        return segments;
+        return _trigramBuilder.BuildIndexEntry(values);
     }
 
     private IEnumerable<string?> EnumerateTrigramValues(SearchDocument document)

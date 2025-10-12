@@ -34,6 +34,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly FtsWriteAheadService _writeAhead;
     private readonly ISearchTelemetry _telemetry;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     private static readonly FilePersistenceOptions SameTransactionOptions = FilePersistenceOptions.Default;
 
@@ -52,7 +53,8 @@ internal sealed class WriteWorker : BackgroundService
         INeedsReindexEvaluator needsReindexEvaluator,
         ISearchIndexSignatureCalculator signatureCalculator,
         FtsWriteAheadService writeAhead,
-        ISearchTelemetry telemetry)
+        ISearchTelemetry telemetry,
+        ITrigramQueryBuilder trigramBuilder)
     {
         _writeQueue = writeQueue;
         _dbContextFactory = dbContextFactory;
@@ -69,6 +71,7 @@ internal sealed class WriteWorker : BackgroundService
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -514,7 +517,7 @@ internal sealed class WriteWorker : BackgroundService
             return true;
         }
 
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead, _trigramBuilder);
         var handled = false;
 
         foreach (var id in filesToDelete)

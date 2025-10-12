@@ -1,64 +1,72 @@
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.Search;
 
 internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalculator
 {
-    private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
+    private readonly SearchOptions _searchOptions;
 
-    public SearchIndexSignatureCalculator(IAnalyzerFactory analyzerFactory, TrigramIndexOptions trigramOptions)
+    public SearchIndexSignatureCalculator(
+        TrigramIndexOptions trigramOptions,
+        ITrigramQueryBuilder trigramBuilder,
+        IOptions<SearchOptions> searchOptions)
     {
-        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
+        ArgumentNullException.ThrowIfNull(searchOptions);
+        _searchOptions = searchOptions.Value ?? throw new ArgumentNullException(nameof(searchOptions));
     }
 
     public SearchIndexSignature Compute(FileEntity file)
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        var analyzer = _analyzerFactory.Create();
-        var tokens = new List<string>();
-        var maxTokens = Math.Max(1, _trigramOptions.MaxTokens);
-        var totalTokens = 0;
-        var fields = _trigramOptions.Fields ?? Array.Empty<string>();
         var document = file.ToSearchDocument();
-
-        foreach (var field in fields)
-        {
-            if (string.IsNullOrWhiteSpace(field))
-            {
-                continue;
-            }
-
-            var candidate = ResolveFieldValue(field, document);
-            if (string.IsNullOrWhiteSpace(candidate))
-            {
-                continue;
-            }
-
-            foreach (var token in analyzer.Tokenize(candidate))
-            {
-                if (string.IsNullOrWhiteSpace(token))
-                {
-                    continue;
-                }
-
-                tokens.Add(token);
-                totalTokens++;
-                if (totalTokens >= maxTokens)
-                {
-                    goto LimitReached;
-                }
-            }
-        }
-
-    LimitReached:
-        var tokenHash = tokens.Count == 0 ? null : ComputeHash(tokens);
+        var trigramEntry = BuildTrigramEntry(document);
+        var tokens = string.IsNullOrWhiteSpace(trigramEntry)
+            ? Array.Empty<string>()
+            : trigramEntry.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var tokenHash = tokens.Length == 0 ? null : ComputeHash(tokens);
         var normalizedTitle = string.IsNullOrWhiteSpace(file.Title) ? file.Name.Value : file.Title!;
-        return new SearchIndexSignature(SearchIndexState.DefaultAnalyzerVersion, tokenHash, normalizedTitle);
+        return new SearchIndexSignature(GetAnalyzerVersion(), tokenHash, normalizedTitle);
+    }
+
+    public string GetAnalyzerVersion()
+    {
+        var analyzerOptions = _searchOptions.Analyzer ?? new AnalyzerOptions();
+        var trigramOptions = _searchOptions.Trigram ?? new TrigramIndexOptions();
+        var snapshot = new
+        {
+            Analyzer = new
+            {
+                analyzerOptions.Lowercase,
+                analyzerOptions.RemoveDiacritics,
+                analyzerOptions.Stemmer,
+                Stopwords = analyzerOptions.Stopwords
+            },
+            Trigram = new
+            {
+                trigramOptions.MaxTokens,
+                trigramOptions.Fields
+            }
+        };
+
+        var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
+
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(bytes);
     }
 
     private static string? ResolveFieldValue(string field, SearchDocument document)
@@ -79,6 +87,39 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(joined));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private string BuildTrigramEntry(SearchDocument document)
+    {
+        var fields = _trigramOptions.Fields ?? Array.Empty<string>();
+        if (fields.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var values = new List<string>(fields.Length);
+        foreach (var field in fields)
+        {
+            if (string.IsNullOrWhiteSpace(field))
+            {
+                continue;
+            }
+
+            var candidate = ResolveFieldValue(field, document);
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            values.Add(candidate!);
+        }
+
+        if (values.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return _trigramBuilder.BuildIndexEntry(values.ToArray());
     }
 }
 

@@ -58,6 +58,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private readonly SearchScorePlan _scorePlan;
     private readonly ISynonymProvider _synonymProvider;
     private readonly string _language;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     private int _parameterIndex;
 
@@ -65,7 +66,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class using the default configuration.
     /// </summary>
     public SearchQueryBuilder()
-        : this(null, null, null)
+        : this(null, null, null, null)
     {
     }
 
@@ -75,7 +76,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
     /// <param name="language">Optional language identifier used when querying synonyms.</param>
     public SearchQueryBuilder(ISynonymProvider? synonymProvider, string? language)
-        : this(null, synonymProvider, language)
+        : this(null, synonymProvider, language, null)
     {
     }
 
@@ -85,7 +86,11 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// <param name="scoreOptions">Optional scoring options applied to the resulting <see cref="SearchScorePlan"/>.</param>
     /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
     /// <param name="language">Optional language identifier used when querying synonyms.</param>
-    public SearchQueryBuilder(SearchScoreOptions? scoreOptions, ISynonymProvider? synonymProvider, string? language)
+    public SearchQueryBuilder(
+        SearchScoreOptions? scoreOptions,
+        ISynonymProvider? synonymProvider,
+        string? language,
+        ITrigramQueryBuilder? trigramBuilder = null)
     {
         _scorePlan = new SearchScorePlan();
         ApplyScoreOptions(scoreOptions);
@@ -93,6 +98,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         _language = string.IsNullOrWhiteSpace(language)
             ? "en"
             : language!.Trim().ToLowerInvariant();
+        _trigramBuilder = trigramBuilder ?? new TrigramQueryBuilder();
     }
 
     private void ApplyScoreOptions(SearchScoreOptions? options)
@@ -189,7 +195,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             return null;
         }
 
-        var expression = TrigramQueryBuilder.BuildTrigramMatch(term ?? string.Empty, requireAllTerms);
+        var expression = _trigramBuilder.BuildTrigramMatch(term ?? string.Empty, requireAllTerms);
         if (string.IsNullOrWhiteSpace(expression))
         {
             return token;
@@ -688,18 +694,18 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         };
     }
 
-    private static string? BuildTextTrigram(string value, bool requireAllTerms)
+    private string? BuildTextTrigram(string value, bool requireAllTerms)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             return null;
         }
 
-        var expression = TrigramQueryBuilder.BuildTrigramMatch(value, requireAllTerms);
+        var expression = _trigramBuilder.BuildTrigramMatch(value, requireAllTerms);
         return string.IsNullOrWhiteSpace(expression) ? null : expression;
     }
 
-    private static string? BuildPrefixTrigram(string value)
+    private string? BuildPrefixTrigram(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -715,7 +721,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         return BuildTextTrigram(core, requireAllTerms: true);
     }
 
-    private static string? BuildWildcardTrigram(string value)
+    private string? BuildWildcardTrigram(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

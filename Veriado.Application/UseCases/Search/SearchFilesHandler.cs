@@ -18,6 +18,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly SearchOptions _searchOptions;
     private readonly SearchParseOptions _parseOptions;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SearchFilesHandler"/> class.
@@ -26,20 +27,22 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
         ISearchQueryService searchQueryService,
         IMapper mapper,
         IAnalyzerFactory analyzerFactory,
-        SearchOptions searchOptions)
+        SearchOptions searchOptions,
+        ITrigramQueryBuilder trigramBuilder)
     {
         _searchQueryService = searchQueryService;
         _mapper = mapper;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _searchOptions = searchOptions ?? throw new ArgumentNullException(nameof(searchOptions));
         _parseOptions = _searchOptions.Parse ?? new SearchParseOptions();
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SearchHitDto>> Handle(SearchFilesQuery request, CancellationToken cancellationToken)
     {
         Guard.AgainstNullOrWhiteSpace(request.Text, nameof(request.Text));
-        var builder = new SearchQueryBuilder(_searchOptions.Score, null, _searchOptions.Analyzer.DefaultProfile);
+        var builder = new SearchQueryBuilder(_searchOptions.Score, null, _searchOptions.Analyzer.DefaultProfile, _trigramBuilder);
         var expression = BuildQueryExpression(request.Text, builder);
         if (expression is null)
         {

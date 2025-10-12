@@ -10,7 +10,8 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void BuildTrigramMatch_QuotesReservedKeywords()
     {
-        var result = TrigramQueryBuilder.BuildTrigramMatch("and or not", requireAllTerms: false);
+        var builder = new TrigramQueryBuilder();
+        var result = builder.BuildTrigramMatch("and or not", requireAllTerms: false);
 
         Assert.Equal("\"and\" OR \"not\" OR \"or\"", result);
     }
@@ -18,7 +19,8 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void TryBuild_ReturnsQuotedExpressionForReservedKeyword()
     {
-        var built = TrigramQueryBuilder.TryBuild("AND", requireAllTerms: false, out var match);
+        var builder = new TrigramQueryBuilder();
+        var built = builder.TryBuild("AND", requireAllTerms: false, out var match);
 
         Assert.True(built);
         Assert.Equal("\"and\"", match);
@@ -27,7 +29,8 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void BuildIndexEntry_DoesNotIncludeQuotes()
     {
-        var entry = TrigramQueryBuilder.BuildIndexEntry("and", "or", "not");
+        var builder = new TrigramQueryBuilder();
+        var entry = builder.BuildIndexEntry("and", "or", "not");
 
         Assert.DoesNotContain('"', entry);
         Assert.False(string.IsNullOrWhiteSpace(entry));
@@ -45,7 +48,8 @@ public static class TrigramQueryBuilderTests
             await create.ExecuteNonQueryAsync();
         }
 
-        var indexEntry = TrigramQueryBuilder.BuildIndexEntry("andromeda");
+        var builder = new TrigramQueryBuilder();
+        var indexEntry = builder.BuildIndexEntry("andromeda");
         await using (var insert = connection.CreateCommand())
         {
             insert.CommandText = "INSERT INTO trigram(token) VALUES ($value);";
@@ -61,7 +65,7 @@ public static class TrigramQueryBuilderTests
             await Assert.ThrowsAsync<SqliteException>(() => failing.ExecuteScalarAsync());
         }
 
-        var sanitizedQuery = TrigramQueryBuilder.BuildTrigramMatch("and", requireAllTerms: false);
+        var sanitizedQuery = builder.BuildTrigramMatch("and", requireAllTerms: false);
 
         await using (var passing = connection.CreateCommand())
         {

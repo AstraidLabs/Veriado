@@ -119,6 +119,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOptions<TrigramIndexOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Trigram));
 
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
+        services.AddSingleton<ITrigramQueryBuilder, TrigramQueryBuilder>();
 
         services.AddDbContextPool<AppDbContext>((sp, builder) =>
         {
