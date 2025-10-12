@@ -448,7 +448,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             "DROP TABLE IF EXISTS file_trgm_docsize;",
             "DROP TABLE IF EXISTS file_trgm_config;",
             "DROP TABLE IF EXISTS file_search_map;",
-            "DROP TABLE IF EXISTS file_trgm_map;"
+            "DROP TABLE IF EXISTS file_trgm_map;",
+            "DROP TABLE IF EXISTS fts_write_ahead;",
+            "DROP TABLE IF EXISTS fts_write_ahead_dlq;"
         };
 
         foreach (var statement in dropStatements)
