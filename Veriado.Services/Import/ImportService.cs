@@ -1126,7 +1126,7 @@ public sealed class ImportService : IImportService
         [NotNullWhen(false)] out ImportError? validationError)
     {
         var pattern = options.SearchPattern;
-        if (string.IsNullOrWhiteSpace(pattern))
+        if (pattern is null)
         {
             validationError = CreateValidationError(
                 folderPath,
@@ -1136,32 +1136,46 @@ public sealed class ImportService : IImportService
             return false;
         }
 
-        if (pattern.IndexOfAny(SearchPatternPathSeparators) >= 0)
+        var result = NormalizeAndValidatePattern(pattern);
+        if (!result.IsValid)
         {
-            validationError = CreateValidationError(
-                folderPath,
-                "invalid_search_pattern",
-                "Search pattern must not contain directory separators.",
-                "Remove '/' or '\\' characters from the search pattern.");
-            return false;
-        }
+            if (string.IsNullOrWhiteSpace(pattern))
+            {
+                validationError = CreateValidationError(
+                    folderPath,
+                    "invalid_search_pattern",
+                    "Search pattern cannot be empty.",
+                    "Provide a value such as '*' or '*.txt'.");
+                return false;
+            }
 
-        var invalidCharacters = pattern
-            .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
-            .Distinct()
-            .ToArray();
-        if (invalidCharacters.Length > 0)
-        {
-            var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
-            var message = invalidCharacters.Length == 1
-                ? $"Search pattern contains an invalid character: '{joined}'."
-                : $"Search pattern contains invalid characters: '{joined}'.";
-            validationError = CreateValidationError(
-                folderPath,
-                "invalid_search_pattern",
-                message,
-                "Remove the invalid characters or replace them with '*' or '?' wildcards.");
-            return false;
+            if (pattern.IndexOfAny(SearchPatternPathSeparators) >= 0)
+            {
+                validationError = CreateValidationError(
+                    folderPath,
+                    "invalid_search_pattern",
+                    "Search pattern must not contain directory separators.",
+                    "Remove '/' or '\\' characters from the search pattern.");
+                return false;
+            }
+
+            var invalidCharacters = pattern
+                .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
+                .Distinct()
+                .ToArray();
+            if (invalidCharacters.Length > 0)
+            {
+                var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
+                var message = invalidCharacters.Length == 1
+                    ? $"Search pattern contains an invalid character: '{joined}'."
+                    : $"Search pattern contains invalid characters: '{joined}'.";
+                validationError = CreateValidationError(
+                    folderPath,
+                    "invalid_search_pattern",
+                    message,
+                    "Remove the invalid characters or replace them with '*' or '?' wildcards.");
+                return false;
+            }
         }
 
         validationError = null;
@@ -1235,43 +1249,61 @@ public sealed class ImportService : IImportService
             return new SearchPatternNormalizationResult("*", null, false, null);
         }
 
+        var result = NormalizeAndValidatePattern(pattern);
         var trimmed = pattern.Trim();
+        var warning = result.Warnings.FirstOrDefault();
+
         if (trimmed.Length == 0)
         {
-            return new SearchPatternNormalizationResult(
-                "*",
-                pattern,
-                true,
-                "Search pattern was empty. Using '*' instead.");
+            return new SearchPatternNormalizationResult(result.Normalized, pattern, true, warning);
         }
 
-        if (trimmed.IndexOfAny(SearchPatternPathSeparators) >= 0)
+        var wasSanitized = !string.Equals(result.Normalized, trimmed, StringComparison.Ordinal);
+        return new SearchPatternNormalizationResult(result.Normalized, trimmed, wasSanitized, warning);
+    }
+
+    private static SearchPatternResult NormalizeAndValidatePattern(string raw)
+    {
+        var trimmed = raw.Trim();
+        var warnings = new List<string>();
+        var normalized = trimmed;
+        var isValid = true;
+
+        if (string.IsNullOrWhiteSpace(raw))
         {
-            return new SearchPatternNormalizationResult(
-                "*",
-                trimmed,
-                true,
-                $"Search pattern '{trimmed}' cannot contain directory separators. Using '*' instead.");
+            normalized = "*";
+            warnings.Add("Search pattern was empty. Using '*' instead.");
+            isValid = false;
         }
-
-        var invalidCharacters = trimmed
-            .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
-            .Distinct()
-            .ToArray();
-        if (invalidCharacters.Length > 0)
+        else if (trimmed.IndexOfAny(SearchPatternPathSeparators) >= 0)
         {
-            var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
-            var descriptor = invalidCharacters.Length == 1
-                ? $"an invalid character '{joined}'"
-                : $"invalid characters '{joined}'";
-            return new SearchPatternNormalizationResult(
-                "*",
-                trimmed,
-                true,
-                $"Search pattern '{trimmed}' contains {descriptor}. Using '*' instead.");
+            normalized = "*";
+            warnings.Add($"Search pattern '{trimmed}' cannot contain directory separators. Using '*' instead.");
+            isValid = false;
+        }
+        else
+        {
+            var invalidCharacters = trimmed
+                .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
+                .Distinct()
+                .ToArray();
+
+            if (invalidCharacters.Length > 0)
+            {
+                var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
+                var descriptor = invalidCharacters.Length == 1
+                    ? $"an invalid character '{joined}'"
+                    : $"invalid characters '{joined}'";
+                normalized = "*";
+                warnings.Add($"Search pattern '{trimmed}' contains {descriptor}. Using '*' instead.");
+                isValid = false;
+            }
         }
 
-        return new SearchPatternNormalizationResult(trimmed, trimmed, false, null);
+        return new SearchPatternResult(
+            normalized,
+            isValid,
+            warnings.Count == 0 ? Array.Empty<string>() : warnings.ToArray());
     }
 
     private void LogApiErrors(string? descriptor, IReadOnlyList<ApiError> errors)
@@ -1387,6 +1419,11 @@ public sealed class ImportService : IImportService
         string? OriginalSearchPattern,
         bool SearchPatternSanitized,
         string? SearchPatternWarningMessage);
+
+    private readonly record struct SearchPatternResult(
+        string Normalized,
+        bool IsValid,
+        string[] Warnings);
 
     private readonly record struct SearchPatternNormalizationResult(
         string Value,
