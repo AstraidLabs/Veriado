@@ -9,12 +9,10 @@ namespace Veriado.Contracts.Search;
 /// <param name="MatchQuery">The generated FTS match query.</param>
 /// <param name="Position">The ordering position.</param>
 /// <param name="CreatedUtc">The creation timestamp.</param>
-/// <param name="IsFuzzy">Indicates whether the favourite uses fuzzy search.</param>
 public sealed record SearchFavoriteItem(
     Guid Id,
     string Name,
     string? QueryText,
     string MatchQuery,
     int Position,
-    DateTimeOffset CreatedUtc,
-    bool IsFuzzy);
+    DateTimeOffset CreatedUtc);

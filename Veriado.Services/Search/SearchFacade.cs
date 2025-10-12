@@ -73,11 +73,6 @@ public sealed class SearchFacade : ISearchFacade
         }
 
         var matchQuery = favorite.MatchQuery;
-        if (favorite.IsFuzzy)
-        {
-            matchQuery = TryBuildMatchFromText(favorite.QueryText) ?? matchQuery;
-        }
-
         if (string.IsNullOrWhiteSpace(matchQuery))
         {
             return;
@@ -86,7 +81,7 @@ public sealed class SearchFacade : ISearchFacade
         var plan = SearchQueryPlanFactory.FromMatch(matchQuery, favorite.QueryText);
         var totalCount = await _searchQueryService.CountAsync(plan, ct).ConfigureAwait(false);
         await _historyService
-            .AddAsync(favorite.QueryText, matchQuery, totalCount, false, ct)
+            .AddAsync(favorite.QueryText, matchQuery, totalCount, ct)
             .ConfigureAwait(false);
     }
 
@@ -100,7 +95,7 @@ public sealed class SearchFacade : ISearchFacade
 
         var plan = SearchQueryPlanFactory.FromMatch(matchQuery, query);
         var totalCount = await _searchQueryService.CountAsync(plan, ct).ConfigureAwait(false);
-        await _historyService.AddAsync(query, matchQuery, totalCount, false, ct).ConfigureAwait(false);
+        await _historyService.AddAsync(query, matchQuery, totalCount, ct).ConfigureAwait(false);
     }
 
     private string? TryBuildMatchFromText(string? text)

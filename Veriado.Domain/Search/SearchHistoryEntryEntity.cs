@@ -16,6 +16,4 @@ public sealed class SearchHistoryEntryEntity
     public int Executions { get; set; }
 
     public int? LastTotalHits { get; set; }
-
-    public bool IsFuzzy { get; set; }
 }

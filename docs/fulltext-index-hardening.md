@@ -26,7 +26,7 @@ Tento dokument shrnuje existující ochranné mechanismy a doporučuje rozšíř
 
 1. **Write-ahead žurnál pro index** – při `ApplyFulltextUpdatesAsync` uložte popis operací do pomocné tabulky (např. `fts_write_ahead`). Po potvrzení transakce tabulku vyčistěte. Pokud aplikace spadne uprostřed zápisu, při dalším startu lze žurnál přehrát nebo vyvolat cílený reindex.
 2. **Pravidelný end-to-end audit** – naplánujte background job, který 1× denně zavolá `VerifyAsync`. Pokud se objeví neshoda, spustí se automatický reindex pouze chybějících dokumentů, nikoli celého úložiště.
-3. **Validace analyzovaných tokenů** – uložte do `SearchIndexState` hash generovaného trigramového řetězce. Při indexaci pak můžete rychle zkontrolovat, jestli došlo ke změně konfigurace analyzeru nebo `TrigramIndexOptions` a případně vyvolat reindex.
+3. **Validace analyzovaných tokenů** – uložte do `SearchIndexState` hash generovaného textového souhrnu (`metadata_text`). Při indexaci pak můžete rychle zkontrolovat, jestli došlo ke změně konfigurace analyzeru (`SearchOptions.Analyzer`) a případně vyvolat reindex.
 4. **Oddělený proces pro rebuild** – u rozsáhlých instalací je vhodné rebuild spouštět mimo hlavní proces (např. CLI nástroj), aby se zabránilo vyčerpání zdrojů produkční instance.
 5. **Sledování sqlite pragmat** – pravidelně logujte nastavení `page_size`, `journal_mode` a `foreign_keys`. Nekonzistentní konfigurace může být prvotní příčinou korupce indexu; jejich automatické vynucení přes `SqlitePragmaHelper.ApplyAsync` je dobré ještě doplnit o health check.
 

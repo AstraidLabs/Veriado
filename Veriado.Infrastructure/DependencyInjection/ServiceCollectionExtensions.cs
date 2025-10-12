@@ -108,7 +108,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Analyzer);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Score);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Parse);
-        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Trigram);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Facets);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Synonyms);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Suggestions);
@@ -116,10 +115,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOptions<AnalyzerOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Analyzer));
         services.AddSingleton<IOptions<SearchScoreOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Score));
         services.AddSingleton<IOptions<SearchParseOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Parse));
-        services.AddSingleton<IOptions<TrigramIndexOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Trigram));
 
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
-        services.AddSingleton<ITrigramQueryBuilder, TrigramQueryBuilder>();
 
         services.AddDbContextPool<AppDbContext>((sp, builder) =>
         {

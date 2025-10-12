@@ -9,12 +9,10 @@ namespace Veriado.Contracts.Search;
 /// <param name="LastQueriedUtc">The timestamp of the most recent execution.</param>
 /// <param name="Executions">The number of times the query was executed.</param>
 /// <param name="LastTotalHits">The last observed hit count.</param>
-/// <param name="IsFuzzy">Indicates whether the query used fuzzy matching.</param>
 public sealed record SearchHistoryEntry(
     Guid Id,
     string? QueryText,
     string MatchQuery,
     DateTimeOffset LastQueriedUtc,
     int Executions,
-    int? LastTotalHits,
-    bool IsFuzzy);
+    int? LastTotalHits);

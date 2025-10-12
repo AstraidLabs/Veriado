@@ -17,8 +17,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     private readonly IMapper _mapper;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly SearchOptions _searchOptions;
-    private readonly SearchParseOptions _parseOptions;
-    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SearchFilesHandler"/> class.
@@ -27,22 +25,19 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
         ISearchQueryService searchQueryService,
         IMapper mapper,
         IAnalyzerFactory analyzerFactory,
-        SearchOptions searchOptions,
-        ITrigramQueryBuilder trigramBuilder)
+        SearchOptions searchOptions)
     {
         _searchQueryService = searchQueryService;
         _mapper = mapper;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _searchOptions = searchOptions ?? throw new ArgumentNullException(nameof(searchOptions));
-        _parseOptions = _searchOptions.Parse ?? new SearchParseOptions();
-        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SearchHitDto>> Handle(SearchFilesQuery request, CancellationToken cancellationToken)
     {
         Guard.AgainstNullOrWhiteSpace(request.Text, nameof(request.Text));
-        var builder = new SearchQueryBuilder(_searchOptions.Score, null, _searchOptions.Analyzer.DefaultProfile, _trigramBuilder);
+        var builder = new SearchQueryBuilder(_searchOptions.Score, null, _searchOptions.Analyzer.DefaultProfile);
         var expression = BuildQueryExpression(request.Text, builder);
         if (expression is null)
         {
@@ -305,27 +300,13 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
                 continue;
             }
 
-            var tokenType = descriptor.Classification == QueryTokenType.Fuzzy
-                ? QueryTokenType.Fuzzy
-                : QueryTokenType.Term;
-
-            var maxEdits = descriptor.ExplicitFuzzy ? descriptor.FuzzyMaxEdits ?? 1 : (int?)null;
-            var isHeuristic = false;
-
-            if (tokenType == QueryTokenType.Term && IsReservedWord(token))
+            if (IsReservedWord(token))
             {
                 yield return new TokenNode(field, escaped, QueryTokenType.Phrase);
                 continue;
             }
 
-            if (tokenType == QueryTokenType.Term && _parseOptions.EnableHeuristicFuzzy && ShouldApplyHeuristicFuzzy(token))
-            {
-                tokenType = QueryTokenType.Fuzzy;
-                maxEdits = 1;
-                isHeuristic = true;
-            }
-
-            yield return new TokenNode(field, escaped, tokenType, null, false, maxEdits, isHeuristic);
+            yield return new TokenNode(field, escaped, QueryTokenType.Term);
         }
     }
 
@@ -468,25 +449,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     private TokenDescriptor AnalyzeToken(string raw)
     {
         var trimmed = raw?.Trim() ?? string.Empty;
-        var descriptor = new TokenDescriptor(trimmed, trimmed, QueryTokenType.Term, false, null);
-        if (trimmed.Length == 0)
-        {
-            return descriptor;
-        }
-
-        if (TryStripExplicitFuzzy(trimmed, out var withoutFuzzy, out var maxEdits))
-        {
-            descriptor = descriptor with
-            {
-                Sanitized = withoutFuzzy,
-                Classification = QueryTokenType.Fuzzy,
-                ExplicitFuzzy = true,
-                FuzzyMaxEdits = maxEdits,
-            };
-
-            trimmed = withoutFuzzy;
-        }
-
+        var descriptor = new TokenDescriptor(trimmed, trimmed, QueryTokenType.Term);
         if (trimmed.Length == 0)
         {
             return descriptor;
@@ -504,8 +467,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
                 {
                     Sanitized = trimmed[..^1],
                     Classification = QueryTokenType.Prefix,
-                    ExplicitFuzzy = false,
-                    FuzzyMaxEdits = null,
                 };
             }
             else
@@ -514,8 +475,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
                 {
                     Sanitized = trimmed,
                     Classification = QueryTokenType.Wildcard,
-                    ExplicitFuzzy = false,
-                    FuzzyMaxEdits = null,
                 };
             }
 
@@ -528,8 +487,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
             {
                 Sanitized = trimmed,
                 Classification = QueryTokenType.Wildcard,
-                ExplicitFuzzy = false,
-                FuzzyMaxEdits = null,
             };
         }
 
@@ -668,37 +625,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
         return true;
     }
 
-    private static bool TryStripExplicitFuzzy(string token, out string withoutSuffix, out int? maxEdits)
-    {
-        withoutSuffix = token;
-        maxEdits = null;
-
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            return false;
-        }
-
-        if (token.EndsWith('~'))
-        {
-            withoutSuffix = token[..^1];
-            maxEdits = 1;
-            return true;
-        }
-
-        if (token.Length > 2 && token[^2] == '~')
-        {
-            var last = token[^1];
-            if (last is '1' or '2')
-            {
-                withoutSuffix = token[..^2];
-                maxEdits = last - '0';
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static int GetPrecedence(ParseTokenType type)
         => type switch
         {
@@ -707,72 +633,6 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
             ParseTokenType.Or => 1,
             _ => 0,
         };
-
-    private bool ShouldApplyHeuristicFuzzy(string token)
-    {
-        if (string.IsNullOrWhiteSpace(token) || token.Length < 5)
-        {
-            return false;
-        }
-
-        var lower = token.ToLowerInvariant();
-        return HasRepeatedCharacter(lower) || HasRepeatedBigram(lower) || HasAdjacentSwap(lower);
-    }
-
-    private static bool HasRepeatedCharacter(string text)
-    {
-        for (var index = 1; index < text.Length; index++)
-        {
-            if (text[index] == text[index - 1])
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool HasRepeatedBigram(string text)
-    {
-        if (text.Length < 4)
-        {
-            return false;
-        }
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < text.Length - 1; index++)
-        {
-            var bigram = text.Substring(index, 2);
-            if (!seen.Add(bigram))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool HasAdjacentSwap(string text)
-    {
-        for (var index = 0; index < text.Length - 3; index++)
-        {
-            if (text[index] == text[index + 3] && text[index + 1] == text[index + 2])
-            {
-                return true;
-            }
-        }
-
-        for (var index = 0; index < text.Length - 2; index++)
-        {
-            if (text[index] == text[index + 2] && text[index] != text[index + 1])
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static bool IsReservedWord(string token)
         => ReservedWords.Contains(token);
 
@@ -851,7 +711,5 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     private readonly record struct TokenDescriptor(
         string Original,
         string Sanitized,
-        QueryTokenType Classification,
-        bool ExplicitFuzzy,
-        int? FuzzyMaxEdits);
+        QueryTokenType Classification);
 }

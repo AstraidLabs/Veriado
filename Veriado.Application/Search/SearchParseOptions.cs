@@ -7,21 +7,25 @@ public sealed class SearchParseOptions
 {
     /// <summary>
     /// Gets or sets a value indicating whether heuristic fuzzy detection is enabled.
+    /// The flag is currently unused because only FTS5 queries are generated.
     /// </summary>
-    public bool EnableHeuristicFuzzy { get; set; } = true;
+    public bool EnableHeuristicFuzzy { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets the minimum number of FTS hits required for prefix queries to avoid trigram fallback.
+    /// Retained for backwards compatibility. No longer influences query planning because
+    /// trigram fallbacks have been removed.
     /// </summary>
     public int PrefixMinResults { get; set; } = 3;
 
     /// <summary>
-    /// Gets or sets the minimum number of FTS hits required for fuzzy queries to avoid trigram fallback.
+    /// Retained for backwards compatibility. No longer influences query planning because
+    /// trigram fallbacks have been removed.
     /// </summary>
     public int FuzzyMinResults { get; set; } = 5;
 
     /// <summary>
-    /// Gets or sets the minimum top normalized score required for fuzzy queries to avoid trigram fallback.
+    /// Retained for backwards compatibility. No longer influences query planning because
+    /// trigram fallbacks have been removed.
     /// </summary>
     public double FuzzyScoreThreshold { get; set; } = 0.45d;
 }

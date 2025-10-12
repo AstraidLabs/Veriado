@@ -11,17 +11,10 @@ namespace Veriado.Infrastructure.Search;
 
 internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalculator
 {
-    private readonly TrigramIndexOptions _trigramOptions;
-    private readonly ITrigramQueryBuilder _trigramBuilder;
     private readonly SearchOptions _searchOptions;
 
-    public SearchIndexSignatureCalculator(
-        TrigramIndexOptions trigramOptions,
-        ITrigramQueryBuilder trigramBuilder,
-        IOptions<SearchOptions> searchOptions)
+    public SearchIndexSignatureCalculator(IOptions<SearchOptions> searchOptions)
     {
-        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
-        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
         ArgumentNullException.ThrowIfNull(searchOptions);
         _searchOptions = searchOptions.Value ?? throw new ArgumentNullException(nameof(searchOptions));
     }
@@ -30,20 +23,13 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        var document = file.ToSearchDocument();
-        var trigramEntry = BuildTrigramEntry(document);
-        var tokens = string.IsNullOrWhiteSpace(trigramEntry)
-            ? Array.Empty<string>()
-            : trigramEntry.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var tokenHash = tokens.Length == 0 ? null : ComputeHash(tokens);
         var normalizedTitle = string.IsNullOrWhiteSpace(file.Title) ? file.Name.Value : file.Title!;
-        return new SearchIndexSignature(GetAnalyzerVersion(), tokenHash, normalizedTitle);
+        return new SearchIndexSignature(GetAnalyzerVersion(), tokenHash: null, normalizedTitle);
     }
 
     public string GetAnalyzerVersion()
     {
         var analyzerOptions = _searchOptions.Analyzer ?? new AnalyzerOptions();
-        var trigramOptions = _searchOptions.Trigram ?? new TrigramIndexOptions();
 
         var analyzerProfiles = analyzerOptions.Profiles
             ?? new Dictionary<string, AnalyzerProfile>(StringComparer.OrdinalIgnoreCase);
@@ -77,21 +63,12 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
             })
             .ToArray();
 
-        var trigramFields = (trigramOptions.Fields ?? Array.Empty<string>())
-            .OrderBy(field => field, StringComparer.Ordinal)
-            .ToArray();
-
         var snapshot = new
         {
             Analyzer = new
             {
                 analyzerOptions.DefaultProfile,
                 Profiles = profileSnapshots
-            },
-            Trigram = new
-            {
-                trigramOptions.MaxTokens,
-                Fields = trigramFields
             }
         };
 
@@ -105,58 +82,6 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
         return Convert.ToHexString(bytes);
     }
 
-    private static string? ResolveFieldValue(string field, SearchDocument document)
-    {
-        return field.Trim().ToLowerInvariant() switch
-        {
-            "title" => document.Title,
-            "author" => document.Author,
-            "filename" => document.FileName,
-            "metadata_text" => document.MetadataText,
-            _ => null,
-        };
-    }
-
-    private static string ComputeHash(IReadOnlyList<string> tokens)
-    {
-        var joined = string.Join("\n", tokens);
-        using var sha = SHA256.Create();
-        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(joined));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
-    }
-
-    private string BuildTrigramEntry(SearchDocument document)
-    {
-        var fields = _trigramOptions.Fields ?? Array.Empty<string>();
-        if (fields.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var values = new List<string>(fields.Length);
-        foreach (var field in fields)
-        {
-            if (string.IsNullOrWhiteSpace(field))
-            {
-                continue;
-            }
-
-            var candidate = ResolveFieldValue(field, document);
-            if (string.IsNullOrWhiteSpace(candidate))
-            {
-                continue;
-            }
-
-            values.Add(candidate!);
-        }
-
-        if (values.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        return _trigramBuilder.BuildIndexEntry(values.ToArray());
-    }
 }
 
 public readonly record struct SearchIndexSignature(

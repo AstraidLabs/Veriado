@@ -33,15 +33,6 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         return _ftsService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
     }
 
-    public Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
-        SearchQueryPlan plan,
-        int skip,
-        int take,
-        CancellationToken cancellationToken)
-    {
-        return _ftsService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
-    }
-
     public Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)
     {
         return _ftsService.CountAsync(plan, cancellationToken);

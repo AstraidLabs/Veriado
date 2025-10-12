@@ -57,7 +57,7 @@ public sealed class FileQueryService : IFileQueryService
     public Task AddFavoriteAsync(SearchFavoriteDefinition favorite, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(favorite);
-        return _favoritesService.AddAsync(favorite.Name, favorite.MatchQuery, favorite.QueryText, false, cancellationToken);
+        return _favoritesService.AddAsync(favorite.Name, favorite.MatchQuery, favorite.QueryText, cancellationToken);
     }
 
     public Task RemoveFavoriteAsync(Guid favoriteId, CancellationToken cancellationToken)

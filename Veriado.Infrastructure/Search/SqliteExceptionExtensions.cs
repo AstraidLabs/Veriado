@@ -62,15 +62,13 @@ internal static class SqliteExceptionExtensions
 
         if (exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
         {
-            return exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("file_trgm", StringComparison.OrdinalIgnoreCase);
+            return exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase);
         }
 
         if (exception.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase))
         {
             return exception.Message.Contains("fts", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("file_trgm", StringComparison.OrdinalIgnoreCase);
+                || exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase);
         }
 
         return false;

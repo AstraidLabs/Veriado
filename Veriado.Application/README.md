@@ -17,4 +17,4 @@ Aplikační projekt vystavuje veřejné API výhradně prostřednictvím MediatR
 
 Každý command má odpovídající validátor v `UseCases.Files.Validation`, který dědí z `FluentValidation.AbstractValidator` a zároveň implementuje `IRequestValidator<T>`, takže se automaticky zapojuje do pipeline. Spotřebitelé by měli pracovat výhradně s `IMediator.Send` a těmito UseCases.
 
-Dotazovací část je sjednocena v `UseCases.Queries` – například `FileGridQueryHandler` využívá `QueryableFilters`, `FtsQueryBuilder` a `TrigramQueryBuilder` pro pokročilé filtrování, řazení a fulltextové vyhledávání.
+Dotazovací část je sjednocena v `UseCases.Queries` – například `FileGridQueryHandler` využívá `QueryableFilters`, `FtsQueryBuilder` a `SearchQueryBuilder` pro pokročilé filtrování, řazení a fulltextové vyhledávání.

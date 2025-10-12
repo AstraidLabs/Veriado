@@ -71,12 +71,6 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         queryText ??= dto.Text;
 
         string? matchQuery = favorite?.MatchQuery;
-        if (favorite?.IsFuzzy == true)
-        {
-            matchQuery = TryBuildMatchFromText(dto.Text, dto.TextPrefix, dto.TextAllTerms)
-                ?? TryBuildMatchFromText(favorite.QueryText, dto.TextPrefix, dto.TextAllTerms);
-        }
-
         if (string.IsNullOrWhiteSpace(matchQuery))
         {
             matchQuery = TryBuildMatchFromText(dto.Text, dto.TextPrefix, dto.TextAllTerms)
@@ -102,7 +96,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
             if (candidates.Count == 0)
             {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
+                await _historyService.AddAsync(queryText, match, 0, cancellationToken).ConfigureAwait(false);
                 return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
             }
 
@@ -118,7 +112,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
             if (matchingIds.Count == 0)
             {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
+                await _historyService.AddAsync(queryText, match, 0, cancellationToken).ConfigureAwait(false);
                 return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
             }
 
@@ -139,7 +133,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
 
                 if (pageIds.Length == 0)
                 {
-                    await _historyService.AddAsync(queryText, match, totalCount, false, cancellationToken).ConfigureAwait(false);
+                    await _historyService.AddAsync(queryText, match, totalCount, cancellationToken).ConfigureAwait(false);
                     return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, totalCount);
                 }
 
@@ -161,7 +155,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                     }
                 }
 
-                await _historyService.AddAsync(queryText, match, totalCount, false, cancellationToken).ConfigureAwait(false);
+                await _historyService.AddAsync(queryText, match, totalCount, cancellationToken).ConfigureAwait(false);
                 return new PageResult<FileSummaryDto>(items, pageNumber, pageSize, totalCount);
             }
 
@@ -169,7 +163,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
                 .ConfigureAwait(false);
             if (summaryMap.Count == 0)
             {
-                await _historyService.AddAsync(queryText, match, 0, false, cancellationToken).ConfigureAwait(false);
+                await _historyService.AddAsync(queryText, match, 0, cancellationToken).ConfigureAwait(false);
                 return new PageResult<FileSummaryDto>(Array.Empty<FileSummaryDto>(), pageNumber, pageSize, 0);
             }
 
@@ -191,7 +185,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
             var skipCount = (pageNumber - 1) * pageSize;
             var pageItems = orderedItems.Skip(skipCount).Take(pageSize).ToList();
 
-            await _historyService.AddAsync(queryText, match, totalCountNonScore, false, cancellationToken).ConfigureAwait(false);
+            await _historyService.AddAsync(queryText, match, totalCountNonScore, cancellationToken).ConfigureAwait(false);
             return new PageResult<FileSummaryDto>(pageItems, pageNumber, pageSize, totalCountNonScore);
         }
 
