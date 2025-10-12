@@ -72,12 +72,21 @@ public sealed class SearchFacade : ISearchFacade
             return;
         }
 
-        var plan = favorite.IsFuzzy
-            ? SearchQueryPlanFactory.FromTrigram(favorite.MatchQuery, favorite.QueryText)
-            : SearchQueryPlanFactory.FromMatch(favorite.MatchQuery, favorite.QueryText);
+        var matchQuery = favorite.MatchQuery;
+        if (favorite.IsFuzzy)
+        {
+            matchQuery = TryBuildMatchFromText(favorite.QueryText) ?? matchQuery;
+        }
+
+        if (string.IsNullOrWhiteSpace(matchQuery))
+        {
+            return;
+        }
+
+        var plan = SearchQueryPlanFactory.FromMatch(matchQuery, favorite.QueryText);
         var totalCount = await _searchQueryService.CountAsync(plan, ct).ConfigureAwait(false);
         await _historyService
-            .AddAsync(favorite.QueryText, favorite.MatchQuery, totalCount, favorite.IsFuzzy, ct)
+            .AddAsync(favorite.QueryText, matchQuery, totalCount, false, ct)
             .ConfigureAwait(false);
     }
 
@@ -92,5 +101,17 @@ public sealed class SearchFacade : ISearchFacade
         var plan = SearchQueryPlanFactory.FromMatch(matchQuery, query);
         var totalCount = await _searchQueryService.CountAsync(plan, ct).ConfigureAwait(false);
         await _historyService.AddAsync(query, matchQuery, totalCount, false, ct).ConfigureAwait(false);
+    }
+
+    private string? TryBuildMatchFromText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        return FtsQueryBuilder.TryBuild(text!, prefix: false, allTerms: false, _analyzerFactory, out var match)
+            ? match
+            : null;
     }
 }

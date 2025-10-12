@@ -33,23 +33,11 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid x:Uid="FilesPage_SearchRow" Grid.Row="0" ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
+            <Grid x:Uid="FilesPage_SearchRow" Grid.Row="0">
                 <AutoSuggestBox
                     x:Uid="FilesPage_SearchBox"
-                    Grid.Column="0"
                     PlaceholderText="Hledat soubory"
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <ToggleSwitch
-                    x:Uid="FilesPage_FuzzyToggle"
-                    Grid.Column="1"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Center"
-                    IsOn="{x:Bind ViewModel.Fuzzy, Mode=TwoWay}" />
             </Grid>
 
             <ScrollViewer

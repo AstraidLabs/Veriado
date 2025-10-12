@@ -1,5 +1,7 @@
 # Analýza indexace, vyhledávání a filtrace
 
+> **Poznámka:** Funkce fuzzy vyhledávání a trigramové fallbacky byly z aplikace odstraněny. Dokument popisuje původní architekturu a je zachován pro historickou referenci.
+
 Tento dokument shrnuje, jak Veriado promítá soubory do fulltextových struktur SQLite, jak vyhodnocuje dotazy (včetně fuzzy fallbacku) a jak nad výsledky aplikuje filtry mřížky.
 
 ## Přehled architektury

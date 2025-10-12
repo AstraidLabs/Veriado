@@ -1,5 +1,7 @@
 # Analýza fulltextového vyhledávání
 
+> **Poznámka:** Funkce fuzzy vyhledávání a trigramové dotazy byly odstraněny. Následující informace popisují historickou architekturu a slouží pouze jako referenční dokumentace.
+
 ## Architektura a tok dat
 - **FTS5 vrstva.** Schéma SQLite vytváří virtuální tabulky `file_search` (title, mime, author, metadata_text, metadata) a `file_trgm` (trigramy) doplněné o mapovací tabulky pro převod `rowid` ↔︎ `file_id`. Tokenizer `unicode61` běží bez diakritiky a s prázdným `content`, takže aplikace kompletně řídí synchronizaci dat.【F:Veriado.Infrastructure/Persistence/Schema/Fts5.sql†L1-L30】
 - **Pipeline indexace.** `FileEntity.ToSearchDocument()` promění doménový agregát na `SearchDocument`, který kromě serializovaného JSONu nese i předrenderovaný textový souhrn metadat. `SqliteFts5Transactional` zapisuje titul, autora, MIME, `metadata_text` i JSON a paralelně buduje trigramy. Celá operace probíhá synchronně v rámci jedné SQLite transakce – žádná odkládací fronta (outbox) se již nepoužívá.【F:Veriado.Domain/Files/FileEntity.cs†L365-L396】【F:Veriado.Domain/Search/SearchDocument.cs†L11-L58】【F:Veriado.Infrastructure/Search/SqliteFts5Transactional.cs†L10-L187】

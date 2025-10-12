@@ -24,12 +24,6 @@ public sealed record FileGridQueryDto
         = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether trigram fuzzy search should be used.
-    /// </summary>
-    public bool Fuzzy { get; init; }
-        = false;
-
-    /// <summary>
     /// Gets or sets the optional saved query key to reuse a stored match expression.
     /// </summary>
     public string? SavedQueryKey { get; init; }
