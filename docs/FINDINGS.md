@@ -60,7 +60,6 @@
 - Dokumentace a README popisují pouze SQLite/FTS5. Nebyly nalezeny žádné odkazy na jiné databáze ani postupy.
 
 ## Risky areas & False positives
-- **Legacy Outbox kód** (`Veriado.Infrastructure/Search/Outbox/*.cs`) je obalen `#if NEVER` – jde o archivované části, které se nekompilují. Nevyžadují okamžitý zásah, ale stojí za to je odstranit v pozdějším refaktoringu.
 - **HybridSearchQueryService** stále kombinuje FTS a trigramy, ale vše běží nad SQLite tabulkami – nejde o porušení požadavku, pouze o TODO pro budoucí zjednodušení.
 
 ## Top 10 patch proposals (high impact)
