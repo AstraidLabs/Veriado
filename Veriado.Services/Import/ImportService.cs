@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Veriado.Mapping.AC;
 using Veriado.Services.Import.Internal;
+using Veriado.Services.Maintenance;
 using Veriado.Contracts.Import;
 using Veriado.Appl.UseCases.Files.CheckFileHash;
 
@@ -37,19 +38,25 @@ public sealed class ImportService : IImportService
     private readonly IClock _clock;
     private readonly IRequestContext _requestContext;
     private readonly ILogger<ImportService> _logger;
+    private readonly IMaintenanceService _maintenanceService;
+    private readonly SemaphoreSlim _fulltextRepairSemaphore = new(1, 1);
+    private bool _fulltextRepairAttempted;
+    private bool _fulltextRepairSucceeded;
 
     public ImportService(
         IMediator mediator,
         WriteMappingPipeline mappingPipeline,
         IClock clock,
         IRequestContext requestContext,
-        ILogger<ImportService> logger)
+        ILogger<ImportService> logger,
+        IMaintenanceService maintenanceService)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _mappingPipeline = mappingPipeline ?? throw new ArgumentNullException(nameof(mappingPipeline));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _requestContext = requestContext ?? throw new ArgumentNullException(nameof(requestContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _maintenanceService = maintenanceService ?? throw new ArgumentNullException(nameof(maintenanceService));
     }
 
     /// <inheritdoc />
@@ -428,6 +435,17 @@ public sealed class ImportService : IImportService
                         }
 
                         var response = await ImportFileInternalAsync(createRequest.Request, filePath, token).ConfigureAwait(false);
+
+                        if (!response.IsSuccess
+                            && ShouldAttemptFulltextRepair(response.Errors)
+                            && await TryRepairFulltextIndexAsync(token).ConfigureAwait(false))
+                        {
+                            _logger.LogInformation(
+                                "Retrying import for {FilePath} after repairing the full-text index.",
+                                filePath);
+                            response = await ImportFileInternalAsync(createRequest.Request, filePath, token)
+                                .ConfigureAwait(false);
+                        }
 
                         if (response.IsSuccess)
                         {
@@ -1111,6 +1129,155 @@ public sealed class ImportService : IImportService
     {
         var suggestion = BuildSuggestion(error);
         return new ImportError(filePath, error.Code, error.Message, suggestion, null, _clock.UtcNow);
+    }
+
+    private async Task<bool> TryRepairFulltextIndexAsync(CancellationToken cancellationToken)
+    {
+        await _fulltextRepairSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            if (_fulltextRepairSucceeded)
+            {
+                return false;
+            }
+
+            if (_fulltextRepairAttempted)
+            {
+                return _fulltextRepairSucceeded;
+            }
+
+            _fulltextRepairAttempted = true;
+            _logger.LogWarning("Detected SQLite corruption during import; attempting full-text repair.");
+
+            var repairResult = await _maintenanceService
+                .VerifyAndRepairAsync(forceRepair: true, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (repairResult.IsSuccess)
+            {
+                _fulltextRepairSucceeded = true;
+                _logger.LogInformation(
+                    "Full-text repair completed while recovering from import failure ({RepairedCount} entries).",
+                    repairResult.Value);
+                return true;
+            }
+
+            var error = repairResult.Error;
+            string? details = null;
+            if (error.Details is { Count: > 0 })
+            {
+                var flattened = error.Details.SelectMany(static pair => pair.Value)
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .ToArray();
+                if (flattened.Length > 0)
+                {
+                    details = string.Join("; ", flattened);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(details))
+            {
+                _logger.LogError(
+                    "Full-text repair failed while recovering from import failure: {Message}",
+                    error.Message);
+            }
+            else
+            {
+                _logger.LogError(
+                    "Full-text repair failed while recovering from import failure: {Message} ({Details})",
+                    error.Message,
+                    details);
+            }
+
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error while attempting full-text repair during import recovery.");
+            return false;
+        }
+        finally
+        {
+            _fulltextRepairSemaphore.Release();
+        }
+    }
+
+    private static bool ShouldAttemptFulltextRepair(IReadOnlyList<ApiError> errors)
+    {
+        if (errors is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        foreach (var error in errors)
+        {
+            if (!string.Equals(error.Code, "database_error", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (ContainsCorruptionIndicator(error.Message))
+            {
+                return true;
+            }
+
+            if (error.Details is { Count: > 0 })
+            {
+                foreach (var detail in error.Details.Values.SelectMany(static values => values))
+                {
+                    if (ContainsCorruptionIndicator(detail))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsCorruptionIndicator(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var normalized = text.ToLowerInvariant();
+        if (normalized.Contains("malformed", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (normalized.Contains("sqlite error 11", StringComparison.Ordinal)
+            || normalized.Contains("sqlite_error 11", StringComparison.Ordinal)
+            || normalized.Contains("sqlite_corrupt", StringComparison.Ordinal)
+            || normalized.Contains("sqlite-corrupt", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (normalized.Contains("no such table", StringComparison.Ordinal)
+            && (normalized.Contains("file_search", StringComparison.Ordinal)
+                || normalized.Contains("file_trgm", StringComparison.Ordinal)
+                || normalized.Contains("fts", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        if (normalized.Contains("fts5", StringComparison.Ordinal)
+            && (normalized.Contains("error", StringComparison.Ordinal)
+                || normalized.Contains("corrupt", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static string? BuildSuggestion(ApiError error)
