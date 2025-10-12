@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using Veriado.Infrastructure.Search;
 
@@ -469,12 +470,54 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             await vacuum.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        // Explicitly close the connection so we can safely remove any lingering WAL/SHM files that
+        // may keep corrupted pages alive even after a rebuild. Without clearing these files, SQLite
+        // can continue surfacing "database disk image is malformed" errors for newly created tables.
+        connection.Close();
+        await DeleteWalCheckpointFilesAsync(cancellationToken).ConfigureAwait(false);
+
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         var schemaSql = ReadEmbeddedSql(Fts5SchemaResourceName);
         foreach (var statement in SplitSqlStatements(schemaSql))
         {
             await using var createCommand = connection.CreateCommand();
             createCommand.CommandText = statement;
             await createCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task DeleteWalCheckpointFilesAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(_options.DbPath))
+        {
+            return;
+        }
+
+        var walPath = _options.DbPath + "-wal";
+        var shmPath = _options.DbPath + "-shm";
+
+        foreach (var path in new[] { walPath, shmPath })
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(path);
+                _logger.LogInformation("Removed stale SQLite checkpoint file {Path} during full-text rebuild.", path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to remove SQLite checkpoint file {Path} during full-text rebuild.", path);
+            }
         }
     }
 
