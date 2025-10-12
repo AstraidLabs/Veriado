@@ -77,13 +77,7 @@ public sealed class TrigramIndexOptions
 {
     public int MaxTokens { get; set; } = 2048;
 
-    public string[] Fields { get; set; } =
-    {
-        "title",
-        "author",
-        "filename",
-        "metadata_text",
-    };
+    public string[] Fields { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>

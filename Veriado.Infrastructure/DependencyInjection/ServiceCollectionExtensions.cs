@@ -152,12 +152,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
 
-        #region TODO(SQLiteOnly): Collapse query pipeline to SQLite-only implementation (remove hybrid + trigram)
         services.AddSingleton<SqliteFts5QueryService>();
-        services.AddSingleton<TrigramQueryService>();
         services.AddSingleton<HybridSearchQueryService>();
         services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
-        #endregion
         services.AddSingleton<FtsWriteAheadService>();
         services.AddSingleton<IFtsDlqMonitor>(sp => sp.GetRequiredService<FtsWriteAheadService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
