@@ -22,6 +22,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
     private readonly FileGridQueryOptions _options;
     private readonly IMapper _mapper;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileGridQueryHandler"/> class.
@@ -34,7 +35,8 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         IClock clock,
         FileGridQueryOptions options,
         IMapper mapper,
-        IAnalyzerFactory analyzerFactory)
+        IAnalyzerFactory analyzerFactory,
+        ITrigramQueryBuilder trigramBuilder)
     {
         _contextFactory = contextFactory;
         _searchQueryService = searchQueryService;
@@ -44,6 +46,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         _options = options;
         _mapper = mapper;
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     /// <inheritdoc />
@@ -78,7 +81,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         if (dto.Fuzzy && !string.IsNullOrWhiteSpace(dto.Text))
         {
             var normalizedFuzzy = NormalizeForTrigram(dto.Text!);
-            if (TrigramQueryBuilder.TryBuild(normalizedFuzzy, dto.TextAllTerms, out var builtFuzzy))
+            if (_trigramBuilder.TryBuild(normalizedFuzzy, dto.TextAllTerms, out var builtFuzzy))
             {
                 fuzzyMatchQuery = builtFuzzy;
                 fuzzyRequestedByDto = true;

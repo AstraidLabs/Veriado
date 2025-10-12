@@ -50,6 +50,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly TrigramIndexOptions _trigramOptions;
     private readonly ISearchTelemetry _telemetry;
+    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     public FtsWriteAheadService(
         ILogger<FtsWriteAheadService> logger,
@@ -57,7 +58,8 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         ISqliteConnectionFactory connectionFactory,
         IAnalyzerFactory analyzerFactory,
         TrigramIndexOptions trigramOptions,
-        ISearchTelemetry telemetry)
+        ISearchTelemetry telemetry,
+        ITrigramQueryBuilder trigramBuilder)
     {
         _logger = logger;
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
@@ -65,6 +67,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     public bool IsLoggingEnabled => SuppressionCounter.Value == 0;
@@ -135,7 +138,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             "Replaying {Count} pending FTS write-ahead entries ({EntryIds})",
             pending.Count,
             string.Join(", ", pending.Select(entry => entry.Id)));
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this, _trigramBuilder);
 
         foreach (var entry in pending)
         {
@@ -215,7 +218,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             "Retrying {Count} FTS write-ahead DLQ entries ({EntryIds})",
             pending.Count,
             string.Join(", ", pending.Select(entry => entry.Id)));
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this, _trigramBuilder);
         var succeeded = 0;
 
         foreach (var entry in pending)

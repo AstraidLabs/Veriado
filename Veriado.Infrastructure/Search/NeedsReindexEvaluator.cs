@@ -17,7 +17,7 @@ public sealed class NeedsReindexEvaluator : INeedsReindexEvaluator
 
         var signature = _signatureCalculator.Compute(file);
         var normalizedTitle = signature.NormalizedTitle;
-        var analyzerVersion = signature.AnalyzerVersion;
+        var analyzerVersion = _signatureCalculator.GetAnalyzerVersion();
         var tokenHash = signature.TokenHash;
         var contentHash = file.Content.Hash.Value;
 

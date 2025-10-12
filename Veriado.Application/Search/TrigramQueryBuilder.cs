@@ -1,36 +1,82 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using Microsoft.Extensions.Options;
+
 namespace Veriado.Appl.Search;
+
+public interface ITrigramQueryBuilder
+{
+    IReadOnlyList<string> BuildTrigrams(string text, int? maxTokens = null);
+
+    string BuildTrigramMatch(string text, bool requireAllTerms);
+
+    bool TryBuild(string? text, bool requireAllTerms, out string match);
+
+    string BuildIndexEntry(params string?[] values);
+}
 
 /// <summary>
 /// Provides helpers for constructing trigram match expressions compatible with SQLite FTS5.
 /// </summary>
-public static class TrigramQueryBuilder
+public sealed class TrigramQueryBuilder : ITrigramQueryBuilder
 {
-    /// <summary>
-    /// Defines the maximum number of tokens that will be emitted when building a trigram index entry.
-    /// Keeping the limit reasonably low prevents pathological documents from bloating the FTS index
-    /// while still capturing enough context for fuzzy matching.
-    /// </summary>
-    private const int MaxIndexTokens = 2048;
+    internal const int DefaultMaxIndexTokens = 2048;
+
+    private readonly SearchOptions? _options;
+
+    public TrigramQueryBuilder()
+    {
+    }
+
+    public TrigramQueryBuilder(SearchOptions options)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    public TrigramQueryBuilder(IOptions<SearchOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+    }
 
     /// <summary>
-    /// Builds a unique set of trigrams from the supplied text.
+    /// Builds a unique set of trigram tokens from the supplied text.
     /// </summary>
-    /// <param name="text">The source text.</param>
-    /// <returns>The distinct trigram tokens.</returns>
-    public static IEnumerable<string> BuildTrigrams(string text)
+    public IReadOnlyList<string> BuildTrigrams(string text, int? maxTokens = null)
     {
-        return CollectUniqueTrigramTokens(text);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Array.Empty<string>();
+        }
+
+        var limit = ResolveLimit(maxTokens);
+        var sink = new HashSet<string>(StringComparer.Ordinal);
+        CollectUniqueTrigramTokens(text, sink, limit);
+        if (sink.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var ordered = sink.ToList();
+        ordered.Sort(StringComparer.Ordinal);
+        if (ordered.Count > limit)
+        {
+            ordered = ordered.Take(limit).ToList();
+        }
+
+        return ordered;
     }
 
     /// <summary>
     /// Builds a trigram match expression using the provided text.
     /// </summary>
-    /// <param name="text">The raw user input.</param>
-    /// <param name="requireAllTerms">Whether all tokens must match.</param>
-    /// <returns>The constructed match clause or an empty string.</returns>
-    public static string BuildTrigramMatch(string text, bool requireAllTerms)
+    public string BuildTrigramMatch(string text, bool requireAllTerms)
     {
-        var tokens = CollectUniqueTrigrams(text);
+        var limit = ResolveLimit(null);
+        var tokens = CollectUniqueTrigrams(text, limit);
         if (tokens.Count == 0)
         {
             return string.Empty;
@@ -43,11 +89,7 @@ public static class TrigramQueryBuilder
     /// <summary>
     /// Attempts to build a trigram match expression from the provided text.
     /// </summary>
-    /// <param name="text">The raw input.</param>
-    /// <param name="requireAllTerms">Whether all tokens must match.</param>
-    /// <param name="match">When successful, contains the generated match expression.</param>
-    /// <returns><see langword="true"/> when a match expression was produced; otherwise <see langword="false"/>.</returns>
-    public static bool TryBuild(string? text, bool requireAllTerms, out string match)
+    public bool TryBuild(string? text, bool requireAllTerms, out string match)
     {
         match = BuildTrigramMatch(text ?? string.Empty, requireAllTerms);
         return !string.IsNullOrWhiteSpace(match);
@@ -56,15 +98,14 @@ public static class TrigramQueryBuilder
     /// <summary>
     /// Builds a normalised trigram index value from the provided fields.
     /// </summary>
-    /// <param name="values">The candidate text fields.</param>
-    /// <returns>The content stored within the trigram index.</returns>
-    public static string BuildIndexEntry(params string?[] values)
+    public string BuildIndexEntry(params string?[] values)
     {
         if (values is null || values.Length == 0)
         {
             return string.Empty;
         }
 
+        var limit = ResolveLimit(null);
         var accumulator = new HashSet<string>(StringComparer.Ordinal);
         foreach (var value in values)
         {
@@ -73,8 +114,8 @@ public static class TrigramQueryBuilder
                 continue;
             }
 
-            CollectUniqueTrigramTokens(value!, accumulator, MaxIndexTokens);
-            if (accumulator.Count >= MaxIndexTokens)
+            CollectUniqueTrigramTokens(value!, accumulator, limit);
+            if (accumulator.Count >= limit)
             {
                 break;
             }
@@ -87,20 +128,25 @@ public static class TrigramQueryBuilder
 
         var ordered = accumulator.ToList();
         ordered.Sort(StringComparer.Ordinal);
-        if (ordered.Count > MaxIndexTokens)
+        if (ordered.Count > limit)
         {
-            ordered = ordered.Take(MaxIndexTokens).ToList();
+            ordered = ordered.Take(limit).ToList();
         }
 
         return string.Join(' ', ordered);
     }
 
-    private static List<string> CollectUniqueTrigrams(string text)
+    private List<string> CollectUniqueTrigrams(string text, int limit)
     {
-        var tokens = CollectUniqueTrigramTokens(text);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new List<string>();
+        }
+
+        var tokens = BuildTrigrams(text, limit);
         if (tokens.Count == 0)
         {
-            return tokens;
+            return new List<string>();
         }
 
         var formatted = new List<string>(tokens.Count);
@@ -118,56 +164,7 @@ public static class TrigramQueryBuilder
         return formatted;
     }
 
-    private static List<string> CollectUniqueTrigramTokens(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return new List<string>();
-        }
-
-        var set = new HashSet<string>(StringComparer.Ordinal);
-        CollectUniqueTrigramTokens(text, set, int.MaxValue);
-        if (set.Count == 0)
-        {
-            return new List<string>();
-        }
-
-        var ordered = set.ToList();
-        ordered.Sort(StringComparer.Ordinal);
-        return ordered;
-    }
-
-    private static string FormatMatchToken(string token)
-    {
-        var escaped = TextNormalization.EscapeMatchToken(token);
-        if (string.IsNullOrEmpty(escaped))
-        {
-            return string.Empty;
-        }
-
-        return RequiresLiteralQuoting(token)
-            ? $"\"{escaped}\""
-            : escaped;
-    }
-
-    private static bool RequiresLiteralQuoting(string token)
-    {
-        if (token.Length == 0)
-        {
-            return true;
-        }
-
-        if (token.Contains(' '))
-        {
-            return true;
-        }
-
-        return string.Equals(token, "and", StringComparison.Ordinal)
-            || string.Equals(token, "or", StringComparison.Ordinal)
-            || string.Equals(token, "not", StringComparison.Ordinal);
-    }
-
-    private static void CollectUniqueTrigramTokens(string text, HashSet<string> sink, int limit)
+    private void CollectUniqueTrigramTokens(string text, HashSet<string> sink, int limit)
     {
         if (string.IsNullOrWhiteSpace(text) || sink.Count >= limit)
         {
@@ -238,5 +235,46 @@ public static class TrigramQueryBuilder
         }
 
         return builder.ToString().Trim();
+    }
+
+    private static string FormatMatchToken(string token)
+    {
+        var escaped = TextNormalization.EscapeMatchToken(token);
+        if (string.IsNullOrEmpty(escaped))
+        {
+            return string.Empty;
+        }
+
+        return RequiresLiteralQuoting(token)
+            ? $"\"{escaped}\""
+            : escaped;
+    }
+
+    private static bool RequiresLiteralQuoting(string token)
+    {
+        if (token.Length == 0)
+        {
+            return true;
+        }
+
+        if (token.Contains(' '))
+        {
+            return true;
+        }
+
+        return string.Equals(token, "and", StringComparison.Ordinal)
+            || string.Equals(token, "or", StringComparison.Ordinal)
+            || string.Equals(token, "not", StringComparison.Ordinal);
+    }
+
+    private int ResolveLimit(int? overrideLimit)
+    {
+        var limit = overrideLimit ?? _options?.Trigram?.MaxTokens ?? DefaultMaxIndexTokens;
+        if (limit <= 0)
+        {
+            return DefaultMaxIndexTokens;
+        }
+
+        return limit;
     }
 }
