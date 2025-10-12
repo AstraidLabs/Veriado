@@ -263,6 +263,27 @@ public sealed class ImportService : IImportService
 
         yield return ImportProgressEvent.BatchStarted(total, batchStart);
 
+        if (options.SearchPatternSanitized && !string.IsNullOrWhiteSpace(options.SearchPatternWarningMessage))
+        {
+            var originalDisplay = string.IsNullOrWhiteSpace(options.OriginalSearchPattern)
+                ? "(empty)"
+                : options.OriginalSearchPattern;
+            _logger.LogWarning(
+                "Search pattern {OriginalPattern} for folder {FolderPath} was invalid. Falling back to {FallbackPattern}.",
+                originalDisplay,
+                folderPath,
+                options.SearchPattern);
+
+            yield return ImportProgressEvent.Progress(
+                processed: 0,
+                total: total,
+                succeeded: 0,
+                failed: 0,
+                skipped: 0,
+                message: options.SearchPatternWarningMessage,
+                timestamp: _clock.UtcNow);
+        }
+
         if (total == 0)
         {
             yield return ImportProgressEvent.BatchCompleted(ImportAggregateResult.EmptySuccess, _clock.UtcNow);
@@ -956,6 +977,8 @@ public sealed class ImportService : IImportService
 
     private static NormalizedImportOptions NormalizeOptions(ImportOptions? options)
     {
+        var searchPatternResult = NormalizeSearchPattern(options?.SearchPattern);
+
         var maxFileSize = options?.MaxFileSizeBytes;
         if (maxFileSize.HasValue && maxFileSize.Value <= 0)
         {
@@ -974,27 +997,23 @@ public sealed class ImportService : IImportService
             bufferSize = 4096;
         }
 
-        var searchPattern = string.IsNullOrWhiteSpace(options?.SearchPattern)
-            ? "*"
-            : options!.SearchPattern!.Trim();
-        if (string.IsNullOrEmpty(searchPattern))
-        {
-            searchPattern = "*";
-        }
         var recursive = options?.Recursive ?? true;
         var defaultAuthor = (options?.DefaultAuthor ?? string.Empty).Trim();
         var keepMetadata = options?.KeepFileSystemMetadata ?? true;
         var setReadOnly = options?.SetReadOnly ?? false;
 
         return new NormalizedImportOptions(
-            searchPattern,
+            searchPatternResult.Value,
             recursive,
             defaultAuthor,
             keepMetadata,
             setReadOnly,
             maxFileSize,
             maxDegree,
-            bufferSize);
+            bufferSize,
+            searchPatternResult.Original,
+            searchPatternResult.WasSanitized,
+            searchPatternResult.WarningMessage);
     }
 
     private static NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
@@ -1009,6 +1028,52 @@ public sealed class ImportService : IImportService
             SearchPattern = request.SearchPattern,
             Recursive = request.Recursive,
         });
+    }
+
+    private static SearchPatternNormalizationResult NormalizeSearchPattern(string? pattern)
+    {
+        if (pattern is null)
+        {
+            return new SearchPatternNormalizationResult("*", null, false, null);
+        }
+
+        var trimmed = pattern.Trim();
+        if (trimmed.Length == 0)
+        {
+            return new SearchPatternNormalizationResult(
+                "*",
+                pattern,
+                true,
+                "Search pattern was empty. Using '*' instead.");
+        }
+
+        if (trimmed.IndexOfAny(SearchPatternPathSeparators) >= 0)
+        {
+            return new SearchPatternNormalizationResult(
+                "*",
+                trimmed,
+                true,
+                $"Search pattern '{trimmed}' cannot contain directory separators. Using '*' instead.");
+        }
+
+        var invalidCharacters = trimmed
+            .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
+            .Distinct()
+            .ToArray();
+        if (invalidCharacters.Length > 0)
+        {
+            var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
+            var descriptor = invalidCharacters.Length == 1
+                ? $"an invalid character '{joined}'"
+                : $"invalid characters '{joined}'";
+            return new SearchPatternNormalizationResult(
+                "*",
+                trimmed,
+                true,
+                $"Search pattern '{trimmed}' contains {descriptor}. Using '*' instead.");
+        }
+
+        return new SearchPatternNormalizationResult(trimmed, trimmed, false, null);
     }
 
     private void LogApiErrors(string? descriptor, IReadOnlyList<ApiError> errors)
@@ -1118,5 +1183,14 @@ public sealed class ImportService : IImportService
         bool SetReadOnly,
         long? MaxFileSizeBytes,
         int MaxDegreeOfParallelism,
-        int BufferSize);
+        int BufferSize,
+        string? OriginalSearchPattern,
+        bool SearchPatternSanitized,
+        string? SearchPatternWarningMessage);
+
+    private readonly record struct SearchPatternNormalizationResult(
+        string Value,
+        string? Original,
+        bool WasSanitized,
+        string? WarningMessage);
 }
