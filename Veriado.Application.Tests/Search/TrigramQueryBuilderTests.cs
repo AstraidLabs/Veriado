@@ -10,7 +10,7 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void BuildTrigramMatch_QuotesReservedKeywords()
     {
-        var builder = new TrigramQueryBuilder();
+        var builder = new TrigramQueryBuilder(new SearchOptions());
         var result = builder.BuildTrigramMatch("and or not", requireAllTerms: false);
 
         Assert.Equal("\"and\" OR \"not\" OR \"or\"", result);
@@ -19,7 +19,7 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void TryBuild_ReturnsQuotedExpressionForReservedKeyword()
     {
-        var builder = new TrigramQueryBuilder();
+        var builder = new TrigramQueryBuilder(new SearchOptions());
         var built = builder.TryBuild("AND", requireAllTerms: false, out var match);
 
         Assert.True(built);
@@ -29,7 +29,7 @@ public static class TrigramQueryBuilderTests
     [Fact]
     public static void BuildIndexEntry_DoesNotIncludeQuotes()
     {
-        var builder = new TrigramQueryBuilder();
+        var builder = new TrigramQueryBuilder(new SearchOptions());
         var entry = builder.BuildIndexEntry("and", "or", "not");
 
         Assert.DoesNotContain('"', entry);
@@ -48,7 +48,7 @@ public static class TrigramQueryBuilderTests
             await create.ExecuteNonQueryAsync();
         }
 
-        var builder = new TrigramQueryBuilder();
+        var builder = new TrigramQueryBuilder(new SearchOptions());
         var indexEntry = builder.BuildIndexEntry("andromeda");
         await using (var insert = connection.CreateCommand())
         {

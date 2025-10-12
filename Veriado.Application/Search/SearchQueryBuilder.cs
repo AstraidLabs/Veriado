@@ -98,7 +98,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
         _language = string.IsNullOrWhiteSpace(language)
             ? "en"
             : language!.Trim().ToLowerInvariant();
-        _trigramBuilder = trigramBuilder ?? new TrigramQueryBuilder();
+        _trigramBuilder = trigramBuilder ?? new TrigramQueryBuilder(new SearchOptions());
     }
 
     private void ApplyScoreOptions(SearchScoreOptions? options)
