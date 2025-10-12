@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -43,19 +44,54 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
     {
         var analyzerOptions = _searchOptions.Analyzer ?? new AnalyzerOptions();
         var trigramOptions = _searchOptions.Trigram ?? new TrigramIndexOptions();
+
+        var analyzerProfiles = analyzerOptions.Profiles
+            ?? new Dictionary<string, AnalyzerProfile>(StringComparer.OrdinalIgnoreCase);
+
+        var profileSnapshots = analyzerProfiles
+            .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kvp =>
+            {
+                var profile = kvp.Value ?? new AnalyzerProfile();
+                var stopwords = (profile.Stopwords ?? Array.Empty<string>())
+                    .OrderBy(word => word, StringComparer.Ordinal)
+                    .ToArray();
+                var customFilters = (profile.CustomFilters ?? Array.Empty<string>())
+                    .OrderBy(filter => filter, StringComparer.Ordinal)
+                    .ToArray();
+
+                return new
+                {
+                    Key = kvp.Key,
+                    Profile = new
+                    {
+                        profile.Name,
+                        profile.EnableStemming,
+                        profile.KeepNumbers,
+                        profile.SplitFilenames,
+                        profile.CustomTokenizer,
+                        Stopwords = stopwords,
+                        CustomFilters = customFilters,
+                    }
+                };
+            })
+            .ToArray();
+
+        var trigramFields = (trigramOptions.Fields ?? Array.Empty<string>())
+            .OrderBy(field => field, StringComparer.Ordinal)
+            .ToArray();
+
         var snapshot = new
         {
             Analyzer = new
             {
-                analyzerOptions.Lowercase,
-                analyzerOptions.RemoveDiacritics,
-                analyzerOptions.Stemmer,
-                Stopwords = analyzerOptions.Stopwords
+                analyzerOptions.DefaultProfile,
+                Profiles = profileSnapshots
             },
             Trigram = new
             {
                 trigramOptions.MaxTokens,
-                trigramOptions.Fields
+                Fields = trigramFields
             }
         };
 
