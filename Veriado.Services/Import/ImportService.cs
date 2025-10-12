@@ -1133,10 +1133,13 @@ public sealed class ImportService : IImportService
 
     private async Task<bool> TryRepairFulltextIndexAsync(CancellationToken cancellationToken)
     {
-        await _fulltextRepairSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var semaphoreAcquired = false;
 
         try
         {
+            await _fulltextRepairSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            semaphoreAcquired = true;
+
             if (_fulltextRepairSucceeded)
             {
                 return false;
@@ -1203,7 +1206,10 @@ public sealed class ImportService : IImportService
         }
         finally
         {
-            _fulltextRepairSemaphore.Release();
+            if (semaphoreAcquired)
+            {
+                _fulltextRepairSemaphore.Release();
+            }
         }
     }
 
