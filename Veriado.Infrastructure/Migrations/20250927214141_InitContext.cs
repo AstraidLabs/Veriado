@@ -108,8 +108,7 @@ namespace Veriado.Infrastructure.Migrations
                     query_text = table.Column<string>(type: "TEXT", nullable: true),
                     match = table.Column<string>(type: "TEXT", nullable: false),
                     position = table.Column<int>(type: "INTEGER", nullable: false),
-                    created_utc = table.Column<string>(type: "TEXT", nullable: false),
-                    is_fuzzy = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false)
+                    created_utc = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -125,8 +124,7 @@ namespace Veriado.Infrastructure.Migrations
                     match = table.Column<string>(type: "TEXT", nullable: false),
                     created_utc = table.Column<string>(type: "TEXT", nullable: false),
                     executions = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 1),
-                    last_total_hits = table.Column<int>(type: "INTEGER", nullable: true),
-                    is_fuzzy = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false)
+                    last_total_hits = table.Column<int>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {
