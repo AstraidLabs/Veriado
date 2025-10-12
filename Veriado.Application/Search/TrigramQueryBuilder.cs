@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Veriado.Appl.Search;
@@ -31,6 +32,7 @@ public sealed class TrigramQueryBuilder : ITrigramQueryBuilder
     {
     }
 
+    [ActivatorUtilitiesConstructor]
     public TrigramQueryBuilder(SearchOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
