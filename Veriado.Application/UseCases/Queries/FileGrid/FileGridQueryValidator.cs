@@ -32,11 +32,6 @@ public sealed class FileGridQueryValidator : AbstractValidator<FileGridQueryDto>
         RuleFor(dto => dto.PageSize)
             .InclusiveBetween(1, options.MaxPageSize);
 
-        RuleFor(dto => dto.Text)
-            .Must(text => !string.IsNullOrWhiteSpace(text))
-            .When(dto => dto.Fuzzy && string.IsNullOrWhiteSpace(dto.SavedQueryKey))
-            .WithMessage("Text is required when fuzzy search is enabled.");
-
         RuleFor(dto => dto.Extension)
             .Must(extension => extension is null || extension.Length <= 16)
             .WithMessage("Extension must be at most 16 characters long.");

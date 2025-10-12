@@ -11,7 +11,7 @@ Veriado je moderní desktopová aplikace pro Windows, která firmám i profesion
 ## Jak Veriado funguje
 1. **Import dokumentů** – Uživatel zvolí soubory nebo složky a Veriado je paralelně zpracuje, uloží binární obsah i metadata a připraví je k vyhledávání.
 2. **Automatické obohacení** – Textové extraktory převádějí PDF, Office či OpenDocument formáty na čitelné náhledy, které se cacheují a zpřístupňují bez externích služeb.
-3. **Fulltextový index** – Aplikace buduje vysoce výkonný FTS5 index v SQLite a doplňuje ho trigramovou analýzou pro fuzzy i přesné dotazy.
+3. **Fulltextový index** – Aplikace buduje vysoce výkonný FTS5 index v SQLite, který poskytuje přesné dotazy s bohatým skórováním.
 4. **Práce s obsahem** – WinUI rozhraní nabízí rychlé náhledy, aktualizaci metadat, export obsahu a sdílení snippetů.
 5. **Pravidelná údržba** – Vestavěné rutiny kontrolují integritu indexu, umožňují reindexaci a optimalizaci úložiště.
 
@@ -23,7 +23,7 @@ Veriado je moderní desktopová aplikace pro Windows, která firmám i profesion
 
 ## Klíčové funkce
 - **Správa životního cyklu** – Tvorba, přejmenování, aktualizace metadat, režimy platnosti i jen pro čtení v několika krocích.
-- **Vyhledávání nové generace** – Kombinace přesných dotazů, fuzzy hledání a historie výsledků pomáhá zachytit kontext.
+- **Vyhledávání nové generace** – Přesné fulltextové dotazy doplněné historií a chytrými filtry pomáhají zachytit kontext.
 - **Inteligentní náhledy** – Textové výtahy i fallback popisy informují o obsahu souborů ještě před jejich otevřením.
 - **Import a automatizace** – Dávkové zpracování složek, limity velikosti souborů a následné workflow po importu.
 - **Údržba a monitoring** – Kontrolní nástroje pro ověření konzistence indexu, optimalizaci databáze a audit aktivit.

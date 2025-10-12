@@ -34,8 +34,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
             var match = reader.GetString(3);
             var position = reader.GetInt32(4);
             var createdUtc = DateTimeOffset.Parse(reader.GetString(5), null, DateTimeStyles.RoundtripKind);
-            var isFuzzy = !reader.IsDBNull(6) && reader.GetBoolean(6);
-            favorites.Add(new SearchFavoriteItem(id, name, queryText, match, position, createdUtc, isFuzzy));
+            favorites.Add(new SearchFavoriteItem(id, name, queryText, match, position, createdUtc, false));
         }
 
         return favorites;
@@ -76,7 +75,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
             insert.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
             insert.Parameters.Add("$position", SqliteType.Integer).Value = maxPosition + 1;
             insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = _clock.UtcNow.ToString("O");
-            insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = isFuzzy ? 1 : 0;
+            insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = 0;
             await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -178,8 +177,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         var match = reader.GetString(3);
         var position = reader.GetInt32(4);
         var createdUtc = DateTimeOffset.Parse(reader.GetString(5), null, DateTimeStyles.RoundtripKind);
-        var isFuzzy = !reader.IsDBNull(6) && reader.GetBoolean(6);
-        return new SearchFavoriteItem(id, name, queryText, match, position, createdUtc, isFuzzy);
+        return new SearchFavoriteItem(id, name, queryText, match, position, createdUtc, false);
     }
 
     private SqliteConnection CreateConnection()
