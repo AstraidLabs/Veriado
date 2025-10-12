@@ -2,7 +2,6 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -219,8 +218,30 @@ public sealed class ImportService : IImportService
             yield break;
         }
 
-        if (!TryValidateSearchPattern(folderPath, options, out var validationError))
+        var searchPatternResult = options.SearchPatternResult;
+        if (!searchPatternResult.IsValid)
         {
+            if (options.SearchPatternSanitized && !string.IsNullOrWhiteSpace(options.SearchPatternWarningMessage))
+            {
+                var originalDisplay = string.IsNullOrWhiteSpace(options.OriginalSearchPattern)
+                    ? "(empty)"
+                    : options.OriginalSearchPattern;
+                _logger.LogWarning(
+                    "Search pattern {OriginalPattern} for folder {FolderPath} was invalid. Falling back to {FallbackPattern}.",
+                    originalDisplay,
+                    folderPath,
+                    options.SearchPattern);
+            }
+
+            var errorDetails = searchPatternResult.ValidationError ??
+                new SearchPatternValidationError(
+                    "Search pattern is invalid.",
+                    "Provide a value such as '*' or '*.txt'.");
+            var validationError = CreateValidationError(
+                folderPath,
+                "invalid_search_pattern",
+                errorDetails.Message,
+                errorDetails.Suggestion);
             var fatalAggregate = new ImportAggregateResult(
                 ImportBatchStatus.FatalError,
                 0,
@@ -1120,76 +1141,38 @@ public sealed class ImportService : IImportService
     }
 
 
-    private bool TryValidateSearchPattern(
-        string folderPath,
-        NormalizedImportOptions options,
-        [NotNullWhen(false)] out ImportError? validationError)
-    {
-        var pattern = options.SearchPattern;
-        if (pattern is null)
-        {
-            validationError = CreateValidationError(
-                folderPath,
-                "invalid_search_pattern",
-                "Search pattern cannot be empty.",
-                "Provide a value such as '*' or '*.txt'.");
-            return false;
-        }
-
-        var result = NormalizeAndValidatePattern(pattern);
-        if (!result.IsValid)
-        {
-            if (string.IsNullOrWhiteSpace(pattern))
-            {
-                validationError = CreateValidationError(
-                    folderPath,
-                    "invalid_search_pattern",
-                    "Search pattern cannot be empty.",
-                    "Provide a value such as '*' or '*.txt'.");
-                return false;
-            }
-
-            if (pattern.IndexOfAny(SearchPatternPathSeparators) >= 0)
-            {
-                validationError = CreateValidationError(
-                    folderPath,
-                    "invalid_search_pattern",
-                    "Search pattern must not contain directory separators.",
-                    "Remove '/' or '\\' characters from the search pattern.");
-                return false;
-            }
-
-            var invalidCharacters = pattern
-                .Where(static c => Array.IndexOf(InvalidSearchPatternCharacters, c) >= 0)
-                .Distinct()
-                .ToArray();
-            if (invalidCharacters.Length > 0)
-            {
-                var joined = string.Join("', '", invalidCharacters.Select(static c => c.ToString()));
-                var message = invalidCharacters.Length == 1
-                    ? $"Search pattern contains an invalid character: '{joined}'."
-                    : $"Search pattern contains invalid characters: '{joined}'.";
-                validationError = CreateValidationError(
-                    folderPath,
-                    "invalid_search_pattern",
-                    message,
-                    "Remove the invalid characters or replace them with '*' or '?' wildcards.");
-                return false;
-            }
-        }
-
-        validationError = null;
-        return true;
-    }
-
-
     private ImportError CreateValidationError(string filePath, string code, string message, string? suggestion)
         => new(filePath, code, message, suggestion, null, _clock.UtcNow);
 
 
     private static NormalizedImportOptions NormalizeOptions(ImportOptions? options)
     {
-        var searchPatternResult = NormalizeSearchPattern(options?.SearchPattern);
+        var rawSearchPattern = options?.SearchPattern;
+        var searchPatternResult = rawSearchPattern is null
+            ? new SearchPatternResult("*", true, Array.Empty<string>(), null)
+            : NormalizeAndValidatePattern(rawSearchPattern);
+        var normalizedSearchPattern = searchPatternResult.Normalized;
+
+        string? originalPattern = null;
+        var searchPatternSanitized = false;
+        string? warningMessage = null;
+
+        if (rawSearchPattern is not null)
+        {
+            var trimmed = rawSearchPattern.Trim();
+            warningMessage = searchPatternResult.Warnings.FirstOrDefault();
+
+            if (trimmed.Length == 0)
+            {
+                originalPattern = rawSearchPattern;
+                searchPatternSanitized = true;
+            }
+            else
+            {
+                originalPattern = trimmed;
+                searchPatternSanitized = !string.Equals(normalizedSearchPattern, trimmed, StringComparison.Ordinal);
+            }
+        }
 
         var maxFileSize = options?.MaxFileSizeBytes;
         if (maxFileSize.HasValue && maxFileSize.Value <= 0)
@@ -1215,7 +1198,7 @@ public sealed class ImportService : IImportService
         var setReadOnly = options?.SetReadOnly ?? false;
 
         return new NormalizedImportOptions(
-            searchPatternResult.Value,
+            normalizedSearchPattern,
             recursive,
             defaultAuthor,
             keepMetadata,
@@ -1223,9 +1206,10 @@ public sealed class ImportService : IImportService
             maxFileSize,
             maxDegree,
             bufferSize,
-            searchPatternResult.Original,
-            searchPatternResult.WasSanitized,
-            searchPatternResult.WarningMessage);
+            originalPattern,
+            searchPatternSanitized,
+            warningMessage,
+            searchPatternResult);
     }
 
     private static NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
@@ -1242,44 +1226,31 @@ public sealed class ImportService : IImportService
         });
     }
 
-    private static SearchPatternNormalizationResult NormalizeSearchPattern(string? pattern)
-    {
-        if (pattern is null)
-        {
-            return new SearchPatternNormalizationResult("*", null, false, null);
-        }
-
-        var result = NormalizeAndValidatePattern(pattern);
-        var trimmed = pattern.Trim();
-        var warning = result.Warnings.FirstOrDefault();
-
-        if (trimmed.Length == 0)
-        {
-            return new SearchPatternNormalizationResult(result.Normalized, pattern, true, warning);
-        }
-
-        var wasSanitized = !string.Equals(result.Normalized, trimmed, StringComparison.Ordinal);
-        return new SearchPatternNormalizationResult(result.Normalized, trimmed, wasSanitized, warning);
-    }
-
     private static SearchPatternResult NormalizeAndValidatePattern(string raw)
     {
         var trimmed = raw.Trim();
         var warnings = new List<string>();
         var normalized = trimmed;
         var isValid = true;
+        SearchPatternValidationError? validationError = null;
 
         if (string.IsNullOrWhiteSpace(raw))
         {
             normalized = "*";
             warnings.Add("Search pattern was empty. Using '*' instead.");
             isValid = false;
+            validationError = new SearchPatternValidationError(
+                "Search pattern cannot be empty.",
+                "Provide a value such as '*' or '*.txt'.");
         }
         else if (trimmed.IndexOfAny(SearchPatternPathSeparators) >= 0)
         {
             normalized = "*";
             warnings.Add($"Search pattern '{trimmed}' cannot contain directory separators. Using '*' instead.");
             isValid = false;
+            validationError = new SearchPatternValidationError(
+                "Search pattern must not contain directory separators.",
+                "Remove '/' or '\\' characters from the search pattern.");
         }
         else
         {
@@ -1297,13 +1268,20 @@ public sealed class ImportService : IImportService
                 normalized = "*";
                 warnings.Add($"Search pattern '{trimmed}' contains {descriptor}. Using '*' instead.");
                 isValid = false;
+                var message = invalidCharacters.Length == 1
+                    ? $"Search pattern contains an invalid character: '{joined}'."
+                    : $"Search pattern contains invalid characters: '{joined}'.";
+                validationError = new SearchPatternValidationError(
+                    message,
+                    "Remove the invalid characters or replace them with '*' or '?' wildcards.");
             }
         }
 
         return new SearchPatternResult(
             normalized,
             isValid,
-            warnings.Count == 0 ? Array.Empty<string>() : warnings.ToArray());
+            warnings.Count == 0 ? Array.Empty<string>() : warnings.ToArray(),
+            validationError);
     }
 
     private void LogApiErrors(string? descriptor, IReadOnlyList<ApiError> errors)
@@ -1418,16 +1396,14 @@ public sealed class ImportService : IImportService
         int BufferSize,
         string? OriginalSearchPattern,
         bool SearchPatternSanitized,
-        string? SearchPatternWarningMessage);
+        string? SearchPatternWarningMessage,
+        SearchPatternResult SearchPatternResult);
 
     private readonly record struct SearchPatternResult(
         string Normalized,
         bool IsValid,
-        string[] Warnings);
+        string[] Warnings,
+        SearchPatternValidationError? ValidationError);
 
-    private readonly record struct SearchPatternNormalizationResult(
-        string Value,
-        string? Original,
-        bool WasSanitized,
-        string? WarningMessage);
+    private readonly record struct SearchPatternValidationError(string Message, string? Suggestion);
 }
