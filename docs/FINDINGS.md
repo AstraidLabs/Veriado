@@ -47,7 +47,7 @@
    - Návrh řešení: Ukládat návratovou hodnotu `BeginTransactionAsync` přímo do proměnné `SqliteTransaction` a následně ji předávat příkazům; tím odpadnou ruční casty.
    - Dopad: Vysoký
 ## FTS5 inconsistencies
-- Žádné konfliktní odkazy na jiné vyhledávací backendy. FTS logika využívá výhradně SQLite FTS5 (`file_search`, `file_trgm`, DLQ) a běží v jediné transakci.
+- Žádné konfliktní odkazy na jiné vyhledávací backendy. FTS logika využívá výhradně SQLite FTS5 (`file_search` plus mapovací tabulky a DLQ) a běží v jediné transakci.
 
 ## DI/Startup multi-provider branches
 - Registrace v `ServiceCollectionExtensions` již používají pouze `UseSqlite`. Při inicializaci se navíc kontroluje `providerName.Contains("Sqlite")`; další guard z AppDbContextu výše problém ještě zkrátí.
@@ -60,7 +60,7 @@
 - Dokumentace a README popisují pouze SQLite/FTS5. Nebyly nalezeny žádné odkazy na jiné databáze ani postupy.
 
 ## Risky areas & False positives
-- **HybridSearchQueryService** stále kombinuje FTS a trigramy, ale vše běží nad SQLite tabulkami – nejde o porušení požadavku, pouze o TODO pro budoucí zjednodušení.
+- Nebyly nalezeny žádné vazby na jiné než FTS5 mechanizmy. Současná implementace dotazovací služby využívá výhradně BM25 z FTS5.
 
 ## Top 10 patch proposals (high impact)
 ```diff

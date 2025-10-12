@@ -39,7 +39,7 @@ public sealed class IndexAuditor : IIndexAuditor
         var drift = new HashSet<Guid>();
         var extra = new HashSet<Guid>();
 
-        var (indexAvailable, searchMap, trigramMap) = await LoadIndexMapsAsync(ct).ConfigureAwait(false);
+        var (indexAvailable, searchMap) = await LoadIndexMapsAsync(ct).ConfigureAwait(false);
 
         await using var context = await _readFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         var files = context.Files
@@ -54,7 +54,7 @@ public sealed class IndexAuditor : IIndexAuditor
 
             var fileId = file.Id;
             var isMissing = false;
-            if (indexAvailable && (!searchMap.Remove(fileId) || !trigramMap.Remove(fileId)))
+            if (indexAvailable && !searchMap.Remove(fileId))
             {
                 missing.Add(fileId);
                 isMissing = true;
@@ -81,7 +81,6 @@ public sealed class IndexAuditor : IIndexAuditor
         if (indexAvailable)
         {
             extra.UnionWith(searchMap);
-            extra.UnionWith(trigramMap);
         }
 
         var summary = new AuditSummary(
@@ -141,11 +140,11 @@ public sealed class IndexAuditor : IIndexAuditor
         return Task.FromResult(unique.Count);
     }
 
-    private async Task<(bool IndexAvailable, HashSet<Guid> SearchMap, HashSet<Guid> TrigramMap)> LoadIndexMapsAsync(CancellationToken ct)
+    private async Task<(bool IndexAvailable, HashSet<Guid> SearchMap)> LoadIndexMapsAsync(CancellationToken ct)
     {
         if (!_options.IsFulltextAvailable || string.IsNullOrWhiteSpace(_options.ConnectionString))
         {
-            return (false, new HashSet<Guid>(), new HashSet<Guid>());
+            return (false, new HashSet<Guid>());
         }
 
         try
@@ -155,8 +154,7 @@ public sealed class IndexAuditor : IIndexAuditor
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: ct).ConfigureAwait(false);
 
             var searchMap = await LoadMapAsync(connection, "file_search_map", ct).ConfigureAwait(false);
-            var trigramMap = await LoadMapAsync(connection, "file_trgm_map", ct).ConfigureAwait(false);
-            return (true, searchMap, trigramMap);
+            return (true, searchMap);
         }
         catch (OperationCanceledException)
         {
@@ -165,7 +163,7 @@ public sealed class IndexAuditor : IIndexAuditor
         catch (Exception ex) when (ex is SqliteException || ex is InvalidOperationException)
         {
             _logger.LogWarning(ex, "Full-text index metadata could not be read during verification.");
-            return (false, new HashSet<Guid>(), new HashSet<Guid>());
+            return (false, new HashSet<Guid>());
         }
     }
 

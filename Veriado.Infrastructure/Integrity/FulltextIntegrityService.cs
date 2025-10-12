@@ -62,19 +62,14 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         var fileIds = await readContext.Files.Select(f => f.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
 
         var searchIndexIds = new HashSet<Guid>();
-        var trigramIndexIds = new HashSet<Guid>();
         var searchTableExists = false;
-        var trigramTableExists = false;
         var searchMapExists = false;
-        var trigramMapExists = false;
         await using (var connection = CreateConnection())
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
             searchTableExists = await TableExistsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
-            trigramTableExists = await TableExistsAsync(connection, "file_trgm", cancellationToken).ConfigureAwait(false);
             searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
-            trigramMapExists = await TableExistsAsync(connection, "file_trgm_map", cancellationToken).ConfigureAwait(false);
 
             if (searchMapExists)
             {
@@ -88,23 +83,10 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 }
             }
 
-            if (trigramMapExists)
-            {
-                await using var trigramCommand = connection.CreateCommand();
-                trigramCommand.CommandText = "SELECT file_id FROM file_trgm_map;";
-                await using var reader = await trigramCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    var blob = (byte[])reader[0];
-                    trigramIndexIds.Add(new Guid(blob));
-                }
-            }
         }
 
         var requiresFullRebuild = !searchTableExists
-            || !trigramTableExists
-            || !searchMapExists
-            || !trigramMapExists;
+            || !searchMapExists;
 
         if (requiresFullRebuild)
         {
@@ -114,19 +96,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 missingTables.Add("file_search");
             }
 
-            if (!trigramTableExists)
-            {
-                missingTables.Add("file_trgm");
-            }
-
             if (!searchMapExists)
             {
                 missingTables.Add("file_search_map");
-            }
-
-            if (!trigramMapExists)
-            {
-                missingTables.Add("file_trgm_map");
             }
 
             _logger.LogWarning(
@@ -136,13 +108,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         var missing = fileIds
             .Except(searchIndexIds)
-            .Union(fileIds.Except(trigramIndexIds))
-            .Distinct()
             .ToArray();
         var orphans = searchIndexIds
             .Except(fileIds)
-            .Union(trigramIndexIds.Except(fileIds))
-            .Distinct()
             .ToArray();
 
         verificationWatch.Stop();
@@ -189,8 +157,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         if (!requiresFullRebuild)
         {
-            var (searchMapExists, trigramMapExists) = await GetFulltextTableStateAsync(cancellationToken).ConfigureAwait(false);
-            if (!searchMapExists || !trigramMapExists)
+            var searchMapExists = await GetFulltextTableStateAsync(cancellationToken).ConfigureAwait(false);
+            if (!searchMapExists)
             {
                 requiresFullRebuild = true;
                 _logger.LogInformation("Full-text metadata tables missing; forcing full rebuild before repair.");
@@ -390,14 +358,13 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return new SqliteConnection(_options.ConnectionString);
     }
 
-    private async Task<(bool SearchMapExists, bool TrigramMapExists)> GetFulltextTableStateAsync(CancellationToken cancellationToken)
+    private async Task<bool> GetFulltextTableStateAsync(CancellationToken cancellationToken)
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         var searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
-        var trigramMapExists = await TableExistsAsync(connection, "file_trgm_map", cancellationToken).ConfigureAwait(false);
-        return (searchMapExists, trigramMapExists);
+        return searchMapExists;
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
@@ -431,25 +398,13 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         var dropStatements = new[]
         {
-            // Drop the virtual tables first so that any healthy shadow tables are removed with
-            // them. When the database is already corrupted SQLite may fail to cascade the drop
-            // and the shadow tables will need to be removed explicitly.
             "DROP TABLE IF EXISTS file_search;",
-            "DROP TABLE IF EXISTS file_trgm;",
-            // Explicitly drop the FTS5 shadow tables to ensure we start from a clean slate even if
-            // the catalog is in an inconsistent state.
             "DROP TABLE IF EXISTS file_search_data;",
             "DROP TABLE IF EXISTS file_search_idx;",
             "DROP TABLE IF EXISTS file_search_content;",
             "DROP TABLE IF EXISTS file_search_docsize;",
             "DROP TABLE IF EXISTS file_search_config;",
-            "DROP TABLE IF EXISTS file_trgm_data;",
-            "DROP TABLE IF EXISTS file_trgm_idx;",
-            "DROP TABLE IF EXISTS file_trgm_content;",
-            "DROP TABLE IF EXISTS file_trgm_docsize;",
-            "DROP TABLE IF EXISTS file_trgm_config;",
             "DROP TABLE IF EXISTS file_search_map;",
-            "DROP TABLE IF EXISTS file_trgm_map;",
             "DROP TABLE IF EXISTS fts_write_ahead;",
             "DROP TABLE IF EXISTS fts_write_ahead_dlq;"
         };

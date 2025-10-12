@@ -39,8 +39,6 @@ internal sealed class SearchHistoryConfiguration : IEntityTypeConfiguration<Sear
             .HasColumnName("last_total_hits")
             .HasColumnType("INTEGER");
 
-        builder.Ignore(entry => entry.IsFuzzy);
-
         builder.HasIndex(entry => entry.CreatedUtc)
             .HasDatabaseName("idx_search_history_created")
             .IsDescending();

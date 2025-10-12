@@ -43,15 +43,6 @@ public interface ISearchQueryBuilder
     QueryNode? Prefix(string? field, string prefix);
 
     /// <summary>
-    /// Signals that the provided token should be resolved using trigram similarity instead of FTS5.
-    /// </summary>
-    /// <param name="field">The optional column restriction used for diagnostics.</param>
-    /// <param name="term">The fuzzy term.</param>
-    /// <param name="requireAllTerms">Indicates whether all trigram terms should match.</param>
-    /// <returns>An optional FTS node to combine with other clauses.</returns>
-    QueryNode? Fuzzy(string? field, string term, bool requireAllTerms = false);
-
-    /// <summary>
     /// Combines the supplied nodes using the logical AND operator.
     /// </summary>
     /// <param name="nodes">The child nodes.</param>

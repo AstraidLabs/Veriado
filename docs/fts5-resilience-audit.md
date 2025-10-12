@@ -40,7 +40,7 @@
 ## Gap List (highest risk first)
 1. **Missing canonical drift detection** – Without recomputing hashes/titles, stale FTS rows remain in sync status even if the FTS data differs; manual edits or analyzer changes silently break search relevance.
 2. **Integrity verification limited to presence checks** – `VerifyAsync` cannot detect mismatch between indexed payload and canonical content or analyzer configuration.
-3. **Lack of analyzer/token signature** – Analyzer or trigram option changes are not recorded, so pipeline cannot force schema-wide reindex when analyzers update.
+3. **Lack of analyzer/token signature** – Analyzer configuration changes are not recorded, so pipeline cannot force schema-wide reindex when tokenization rules update.
 4. **Missing automated health/alerting** – Telemetry exists but is not tied to health checks or alert thresholds; PRAGMA compliance is not validated after startup.
 5. **No standalone rebuild CLI/safe swap** – All repairs run in-process; long rebuilds block the service and risk timeouts.
 

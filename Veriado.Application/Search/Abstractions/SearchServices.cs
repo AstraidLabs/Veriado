@@ -23,20 +23,6 @@ public interface ISearchQueryService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Executes a trigram-based fuzzy match query and returns matching identifiers with scores.
-    /// </summary>
-    /// <param name="plan">The structured query plan.</param>
-    /// <param name="skip">The number of results to skip.</param>
-    /// <param name="take">The maximum number of results to return.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The matching identifiers ordered by relevance.</returns>
-    Task<IReadOnlyList<(Guid Id, double Score)>> SearchFuzzyWithScoresAsync(
-        SearchQueryPlan plan,
-        int skip,
-        int take,
-        CancellationToken cancellationToken);
-
-    /// <summary>
     /// Counts the number of hits returned by the specified search query.
     /// </summary>
     /// <param name="plan">The structured query plan.</param>
@@ -65,9 +51,8 @@ public interface ISearchHistoryService
     /// <param name="queryText">The user-supplied query text, if any.</param>
     /// <param name="matchQuery">The generated FTS5 match query.</param>
     /// <param name="totalCount">The number of hits returned by the query.</param>
-    /// <param name="isFuzzy">Indicates whether the query was executed using trigram fuzzy search.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task AddAsync(string? queryText, string matchQuery, int totalCount, bool isFuzzy, CancellationToken cancellationToken);
+    Task AddAsync(string? queryText, string matchQuery, int totalCount, CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets the most recent history entries ordered by recency.
@@ -102,9 +87,8 @@ public interface ISearchFavoritesService
     /// <param name="name">The unique display name and key.</param>
     /// <param name="matchQuery">The generated match query.</param>
     /// <param name="queryText">The original query text.</param>
-    /// <param name="isFuzzy">Indicates whether the favourite represents a trigram query.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task AddAsync(string name, string matchQuery, string? queryText, bool isFuzzy, CancellationToken cancellationToken);
+    Task AddAsync(string name, string matchQuery, string? queryText, CancellationToken cancellationToken);
 
     /// <summary>
     /// Renames an existing favourite.
@@ -299,12 +283,6 @@ public interface ISearchTelemetry
     /// </summary>
     /// <param name="elapsed">The elapsed duration.</param>
     void RecordFtsQuery(TimeSpan elapsed);
-
-    /// <summary>
-    /// Records the elapsed time for a trigram query.
-    /// </summary>
-    /// <param name="elapsed">The elapsed duration.</param>
-    void RecordTrigramQuery(TimeSpan elapsed);
 
     /// <summary>
     /// Records the elapsed time for a facet computation.

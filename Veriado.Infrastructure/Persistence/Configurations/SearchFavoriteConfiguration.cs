@@ -38,8 +38,6 @@ internal sealed class SearchFavoriteConfiguration : IEntityTypeConfiguration<Sea
             .HasConversion(Converters.DateTimeOffsetToString)
             .IsRequired();
 
-        builder.Ignore(favorite => favorite.IsFuzzy);
-
         builder.HasIndex(favorite => favorite.Position)
             .HasDatabaseName("idx_search_favorites_position");
 

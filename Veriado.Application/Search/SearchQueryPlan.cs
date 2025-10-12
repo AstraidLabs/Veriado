@@ -10,25 +10,13 @@ using Microsoft.Data.Sqlite;
 /// <param name="WhereClauses">Additional SQL <c>WHERE</c> fragments joined using <c>AND</c>.</param>
 /// <param name="Parameters">The parameters required by <see cref="WhereClauses"/>.</param>
 /// <param name="ScorePlan">The scoring configuration.</param>
-/// <param name="RequiresTrigramFallback">Indicates whether the query needs trigram evaluation.</param>
-/// <param name="TrigramExpression">The optional trigram query expression.</param>
 /// <param name="RawQueryText">The user supplied raw text for diagnostics.</param>
-/// <param name="RequiresTrigramForWildcard">Indicates whether wildcard terms require trigram evaluation.</param>
-/// <param name="HasPrefix">Indicates whether the query contains prefix tokens.</param>
-/// <param name="HasExplicitFuzzy">Indicates whether the query contains explicit fuzzy tokens.</param>
-/// <param name="HasHeuristicFuzzy">Indicates whether the query contains heuristic fuzzy tokens.</param>
 public sealed record SearchQueryPlan(
     string MatchExpression,
     IReadOnlyList<string> WhereClauses,
     IReadOnlyList<SqliteParameterDefinition> Parameters,
     SearchScorePlan ScorePlan,
-    bool RequiresTrigramFallback,
-    string? TrigramExpression,
-    string? RawQueryText = null,
-    bool RequiresTrigramForWildcard = false,
-    bool HasPrefix = false,
-    bool HasExplicitFuzzy = false,
-    bool HasHeuristicFuzzy = false);
+    string? RawQueryText = null);
 
 /// <summary>
 /// Provides factory helpers for creating simple search plans.
@@ -46,33 +34,7 @@ public static class SearchQueryPlanFactory
             Array.Empty<string>(),
             Array.Empty<SqliteParameterDefinition>(),
             new SearchScorePlan(),
-            false,
-            null,
-            rawQueryText ?? matchExpression,
-            false,
-            false,
-            false,
-            false);
-    }
-
-    /// <summary>
-    /// Creates a plan that executes only a trigram query.
-    /// </summary>
-    public static SearchQueryPlan FromTrigram(string trigramExpression, string? rawQueryText = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(trigramExpression);
-        return new SearchQueryPlan(
-            string.Empty,
-            Array.Empty<string>(),
-            Array.Empty<SqliteParameterDefinition>(),
-            new SearchScorePlan(),
-            true,
-            trigramExpression,
-            rawQueryText ?? trigramExpression,
-            false,
-            false,
-            false,
-            false);
+            rawQueryText ?? matchExpression);
     }
 }
 

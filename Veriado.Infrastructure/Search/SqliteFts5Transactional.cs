@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
 
@@ -12,23 +10,15 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5Transactional
 {
     private readonly IAnalyzerFactory _analyzerFactory;
-    private readonly TrigramIndexOptions _trigramOptions;
     private readonly FtsWriteAheadService _writeAhead;
-    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     public SqliteFts5Transactional(
         IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions,
-        FtsWriteAheadService writeAhead,
-        ITrigramQueryBuilder trigramBuilder)
+        FtsWriteAheadService writeAhead)
     {
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
-        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
-        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
-
-    private bool IsTrigramIndexEnabled => _trigramOptions.Fields is { Length: > 0 } fields && fields.Length > 0;
 
     public async Task<long?> IndexAsync(
         SearchDocument document,
@@ -61,12 +51,6 @@ internal sealed class SqliteFts5Transactional
                     cancellationToken)
                 .ConfigureAwait(false);
             var searchRowId = await EnsureMapRowIdAsync("file_search_map", document.FileId, connection, transaction, cancellationToken).ConfigureAwait(false);
-            long? trigramRowId = null;
-            if (IsTrigramIndexEnabled)
-            {
-                trigramRowId = await EnsureMapRowIdAsync("file_trgm_map", document.FileId, connection, transaction, cancellationToken)
-                    .ConfigureAwait(false);
-            }
 
             await using (var delete = connection.CreateCommand())
             {
@@ -87,28 +71,6 @@ internal sealed class SqliteFts5Transactional
                 insert.Parameters.AddWithValue("$metadata_text", (object?)normalizedMetadataText ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$metadata", (object?)document.MetadataJson ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            if (trigramRowId.HasValue)
-            {
-                var trigramText = BuildTrigramText(document);
-
-                await using (var deleteTrgm = connection.CreateCommand())
-                {
-                    deleteTrgm.Transaction = transaction;
-                    deleteTrgm.CommandText = "INSERT INTO file_trgm(file_trgm, rowid) VALUES ('delete', $rowid);";
-                    deleteTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId.Value;
-                    await deleteTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                }
-
-                await using (var insertTrgm = connection.CreateCommand())
-                {
-                    insertTrgm.Transaction = transaction;
-                    insertTrgm.CommandText = "INSERT INTO file_trgm(rowid, trgm) VALUES ($rowid, $trgm);";
-                    insertTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId.Value;
-                    insertTrgm.Parameters.AddWithValue("$trgm", trigramText);
-                    await insertTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                }
             }
 
             if (enlistJournal && journalId.HasValue)
@@ -169,35 +131,12 @@ internal sealed class SqliteFts5Transactional
                 await deleteFts.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            if (IsTrigramIndexEnabled)
-            {
-                var trigramRowId = await TryGetRowIdAsync("file_trgm_map", fileId, connection, transaction, cancellationToken)
-                    .ConfigureAwait(false);
-                if (trigramRowId.HasValue)
-                {
-                    await using var deleteTrgm = connection.CreateCommand();
-                    deleteTrgm.Transaction = transaction;
-                    deleteTrgm.CommandText = "INSERT INTO file_trgm(file_trgm, rowid) VALUES ('delete', $rowid);";
-                    deleteTrgm.Parameters.Add("$rowid", SqliteType.Integer).Value = trigramRowId.Value;
-                    await deleteTrgm.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                }
-            }
-
             await using (var deleteSearchMap = connection.CreateCommand())
             {
                 deleteSearchMap.Transaction = transaction;
                 deleteSearchMap.CommandText = "DELETE FROM file_search_map WHERE file_id = $fileId;";
                 deleteSearchMap.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
                 await deleteSearchMap.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            if (IsTrigramIndexEnabled)
-            {
-                await using var deleteTrgmMap = connection.CreateCommand();
-                deleteTrgmMap.Transaction = transaction;
-                deleteTrgmMap.CommandText = "DELETE FROM file_trgm_map WHERE file_id = $fileId;";
-                deleteTrgmMap.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
-                await deleteTrgmMap.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
             if (enlistJournal && journalId.HasValue)
@@ -269,50 +208,4 @@ internal sealed class SqliteFts5Transactional
             : TextNormalization.NormalizeText(value, _analyzerFactory);
     }
 
-    private string BuildTrigramText(SearchDocument document)
-    {
-        var values = EnumerateTrigramValues(document)
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .Select(static value => value!)
-            .ToArray();
-
-        if (values.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        return _trigramBuilder.BuildIndexEntry(values);
-    }
-
-    private IEnumerable<string?> EnumerateTrigramValues(SearchDocument document)
-    {
-        if (_trigramOptions.Fields is null || _trigramOptions.Fields.Length == 0)
-        {
-            yield break;
-        }
-
-        foreach (var field in _trigramOptions.Fields)
-        {
-            if (string.IsNullOrWhiteSpace(field))
-            {
-                continue;
-            }
-
-            switch (field.Trim().ToLowerInvariant())
-            {
-                case "title":
-                    yield return document.Title;
-                    break;
-                case "author":
-                    yield return document.Author;
-                    break;
-                case "filename":
-                    yield return document.FileName;
-                    break;
-                case "metadata_text":
-                    yield return document.MetadataText;
-                    break;
-            }
-        }
-    }
 }

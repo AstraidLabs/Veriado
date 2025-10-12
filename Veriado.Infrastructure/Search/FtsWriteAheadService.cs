@@ -48,26 +48,20 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly IAnalyzerFactory _analyzerFactory;
-    private readonly TrigramIndexOptions _trigramOptions;
     private readonly ISearchTelemetry _telemetry;
-    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     public FtsWriteAheadService(
         ILogger<FtsWriteAheadService> logger,
         IDbContextFactory<AppDbContext> dbContextFactory,
         ISqliteConnectionFactory connectionFactory,
         IAnalyzerFactory analyzerFactory,
-        TrigramIndexOptions trigramOptions,
-        ISearchTelemetry telemetry,
-        ITrigramQueryBuilder trigramBuilder)
+        ISearchTelemetry telemetry)
     {
         _logger = logger;
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
-        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
-        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
     }
 
     public bool IsLoggingEnabled => SuppressionCounter.Value == 0;
@@ -138,7 +132,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             "Replaying {Count} pending FTS write-ahead entries ({EntryIds})",
             pending.Count,
             string.Join(", ", pending.Select(entry => entry.Id)));
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this, _trigramBuilder);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, this);
 
         foreach (var entry in pending)
         {
@@ -218,7 +212,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             "Retrying {Count} FTS write-ahead DLQ entries ({EntryIds})",
             pending.Count,
             string.Join(", ", pending.Select(entry => entry.Id)));
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, this, _trigramBuilder);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, this);
         var succeeded = 0;
 
         foreach (var entry in pending)

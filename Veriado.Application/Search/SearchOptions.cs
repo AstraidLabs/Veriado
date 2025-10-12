@@ -17,11 +17,6 @@ public sealed class SearchOptions
     public AnalyzerOptions Analyzer { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets trigram index related settings.
-    /// </summary>
-    public TrigramIndexOptions Trigram { get; set; } = new();
-
-    /// <summary>
     /// Gets or sets parser configuration options.
     /// </summary>
     public SearchParseOptions Parse { get; set; } = new();
@@ -63,21 +58,6 @@ public sealed class SearchScoreOptions
     public bool UseTfIdfAlternative { get; set; }
         = false;
     public double TfIdfDampingFactor { get; set; } = 0.5d;
-    public int OversampleMultiplier { get; set; } = 3;
-    public double DefaultTrigramScale { get; set; } = 0.45d;
-    public double TrigramFloor { get; set; } = 0.30d;
-    public string MergeMode { get; set; } = "max";
-    public double WeightedFts { get; set; } = 0.7d;
-}
-
-/// <summary>
-/// Configures trigram index generation.
-/// </summary>
-public sealed class TrigramIndexOptions
-{
-    public int MaxTokens { get; set; } = 2048;
-
-    public string[] Fields { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -125,9 +105,9 @@ public sealed class SuggesterOptions
     public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(5);
 }
 
-/// <summary>
-/// Provides parameters for the trigram based spell-check feature.
-/// </summary>
+    /// <summary>
+    /// Provides parameters for the optional spell-check placeholder.
+    /// </summary>
 public sealed class SpellOptions
 {
     public int MaxSuggestions { get; set; } = 5;

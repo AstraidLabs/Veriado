@@ -21,7 +21,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT id, name, query_text, match, position, created_utc, is_fuzzy " +
+            "SELECT id, name, query_text, match, position, created_utc " +
             "FROM search_favorites ORDER BY position ASC;";
 
         var favorites = new List<SearchFavoriteItem>();
@@ -34,13 +34,13 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
             var match = reader.GetString(3);
             var position = reader.GetInt32(4);
             var createdUtc = DateTimeOffset.Parse(reader.GetString(5), null, DateTimeStyles.RoundtripKind);
-            favorites.Add(new SearchFavoriteItem(id, name, queryText, match, position, createdUtc, false));
+            favorites.Add(new SearchFavoriteItem(id, name, queryText, match, position, createdUtc));
         }
 
         return favorites;
     }
 
-    public async Task AddAsync(string name, string matchQuery, string? queryText, bool isFuzzy, CancellationToken cancellationToken)
+    public async Task AddAsync(string name, string matchQuery, string? queryText, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
@@ -67,15 +67,14 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
             await using var insert = connection.CreateCommand();
             insert.Transaction = sqliteTransaction;
             insert.CommandText =
-                "INSERT INTO search_favorites(id, name, query_text, match, position, created_utc, is_fuzzy) " +
-                "VALUES ($id, $name, $queryText, $match, $position, $createdUtc, $isFuzzy);";
+                "INSERT INTO search_favorites(id, name, query_text, match, position, created_utc) " +
+                "VALUES ($id, $name, $queryText, $match, $position, $createdUtc);";
             insert.Parameters.Add("$id", SqliteType.Blob).Value = Guid.NewGuid().ToByteArray();
             insert.Parameters.Add("$name", SqliteType.Text).Value = name;
             insert.Parameters.Add("$queryText", SqliteType.Text).Value = (object?)queryText ?? DBNull.Value;
             insert.Parameters.Add("$match", SqliteType.Text).Value = matchQuery;
             insert.Parameters.Add("$position", SqliteType.Integer).Value = maxPosition + 1;
             insert.Parameters.Add("$createdUtc", SqliteType.Text).Value = _clock.UtcNow.ToString("O");
-            insert.Parameters.Add("$isFuzzy", SqliteType.Integer).Value = 0;
             await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -161,7 +160,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT id, name, query_text, match, position, created_utc, is_fuzzy " +
+            "SELECT id, name, query_text, match, position, created_utc " +
             "FROM search_favorites WHERE name = $name LIMIT 1;";
         command.Parameters.Add("$name", SqliteType.Text).Value = key;
 
@@ -177,7 +176,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         var match = reader.GetString(3);
         var position = reader.GetInt32(4);
         var createdUtc = DateTimeOffset.Parse(reader.GetString(5), null, DateTimeStyles.RoundtripKind);
-        return new SearchFavoriteItem(id, name, queryText, match, position, createdUtc, false);
+        return new SearchFavoriteItem(id, name, queryText, match, position, createdUtc);
     }
 
     private SqliteConnection CreateConnection()

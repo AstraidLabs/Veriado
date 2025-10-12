@@ -15,27 +15,21 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     private readonly SuggestionMaintenanceService? _suggestionMaintenance;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
-    private readonly TrigramIndexOptions _trigramOptions;
     private readonly FtsWriteAheadService _writeAhead;
-    private readonly ITrigramQueryBuilder _trigramBuilder;
 
     public SqliteFts5Indexer(
         InfrastructureOptions options,
         ILogger<SqliteFts5Indexer> logger,
         IAnalyzerFactory analyzerFactory,
         ISqliteConnectionFactory connectionFactory,
-        TrigramIndexOptions trigramOptions,
         FtsWriteAheadService writeAhead,
-        ITrigramQueryBuilder trigramBuilder,
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
         _options = options;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-        _trigramOptions = trigramOptions ?? throw new ArgumentNullException(nameof(trigramOptions));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
-        _trigramBuilder = trigramBuilder ?? throw new ArgumentNullException(nameof(trigramBuilder));
         _suggestionMaintenance = suggestionMaintenance;
     }
 
@@ -75,7 +69,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await using var sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead, _trigramBuilder);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _writeAhead);
 
         try
         {
@@ -114,7 +108,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await using var sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _trigramOptions, _writeAhead, _trigramBuilder);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _writeAhead);
 
         try
         {
