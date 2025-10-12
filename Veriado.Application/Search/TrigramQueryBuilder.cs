@@ -26,22 +26,18 @@ public sealed class TrigramQueryBuilder : ITrigramQueryBuilder
 {
     internal const int DefaultMaxIndexTokens = 2048;
 
-    private readonly SearchOptions? _options;
+    private readonly SearchOptions _options;
 
-    public TrigramQueryBuilder()
-    {
-    }
-
-    [ActivatorUtilitiesConstructor]
     public TrigramQueryBuilder(SearchOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
+    [ActivatorUtilitiesConstructor]
     public TrigramQueryBuilder(IOptions<SearchOptions> options)
+        : this((options ?? throw new ArgumentNullException(nameof(options))).Value
+            ?? throw new ArgumentNullException(nameof(options)))
     {
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     /// <summary>
@@ -271,7 +267,7 @@ public sealed class TrigramQueryBuilder : ITrigramQueryBuilder
 
     private int ResolveLimit(int? overrideLimit)
     {
-        var limit = overrideLimit ?? _options?.Trigram?.MaxTokens ?? DefaultMaxIndexTokens;
+        var limit = overrideLimit ?? _options.Trigram?.MaxTokens ?? DefaultMaxIndexTokens;
         if (limit <= 0)
         {
             return DefaultMaxIndexTokens;
