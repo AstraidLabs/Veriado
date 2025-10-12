@@ -1,17 +1,17 @@
 # Veriado FTS5 Resilience Audit
 
 ## Executive Summary
-- SQLite FTS5 indexing is tightly integrated with the EF Core unit of work and surfaces corruption via `SearchIndexCorruptedException`, allowing automatic repair attempts from the write worker and outbox drainers.
+- SQLite FTS5 indexing is tightly integrated with the EF Core unit of work and surfaces corruption via `SearchIndexCorruptedException`, allowing automatic repair attempts from the write worker.
 - Canonical metadata (`SearchIndexState`) is persisted with schema version, hash, title and timestamps, but there is no central idempotency/staleness check that recomputes hashes prior to indexing, so silent drift is undetected.
 - Integrity verification only checks for missing/orphaned entries and performs brute-force rebuilds; there is no selective verification against analyzer changes, token hashes or WAL-style journaling of pending operations.
-- Telemetry reports index size and query latency, yet there is no alerting/health check pipeline or dead-letter queue to isolate repeatedly failing outbox items.
+- Telemetry reports index size and query latency, yet there is no alerting/health check pipeline to isolate repeatedly failing items.
 
 ## Pillars A–E
 | Pillar | Status | Notes |
 | --- | --- | --- |
 | A. Canonical data & idempotence | Partial | `SearchIndexState` stores schema/hash/title/time but pipeline only consults `IsStale`, lacking recomputation from canonical content. |
 | B. Unified transaction DB + FTS | Achieved | Write worker executes EF + FTS mutations inside one SQLite transaction via `SqliteFts5Transactional`; idempotent delete+insert semantics applied. |
-| C. Automatic runtime recovery | Partial | Corruption escalates consistently and triggers automatic rebuild, yet no dead-letter mechanism exists for repeated outbox failures. |
+| C. Automatic runtime recovery | Partial | Corruption escalates consistently and triggers automatic rebuild, yet repeated payload failures still rely on manual intervention. |
 | D. Start/periodic integrity | Partial | Startup check invokes `VerifyAsync` and optional repair, telemetry captures counts but no scheduled audits or alert thresholds. |
 | E. Recommended extensions | Missing | No WAL journal, analyzer signature, drift verification or standalone rebuild tooling beyond in-process repair. |
 
