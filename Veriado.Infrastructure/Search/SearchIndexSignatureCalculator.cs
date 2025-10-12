@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -43,14 +45,32 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
     {
         var analyzerOptions = _searchOptions.Analyzer ?? new AnalyzerOptions();
         var trigramOptions = _searchOptions.Trigram ?? new TrigramIndexOptions();
+        var profiles = analyzerOptions.Profiles
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => new
+            {
+                Key = pair.Key,
+                Value = pair.Value is null
+                    ? null
+                    : new
+                    {
+                        pair.Value.Name,
+                        pair.Value.EnableStemming,
+                        pair.Value.KeepNumbers,
+                        Stopwords = pair.Value.Stopwords ?? Array.Empty<string>(),
+                        pair.Value.SplitFilenames,
+                        pair.Value.CustomTokenizer,
+                        CustomFilters = pair.Value.CustomFilters ?? Array.Empty<string>(),
+                    }
+            })
+            .ToArray();
+
         var snapshot = new
         {
             Analyzer = new
             {
-                analyzerOptions.Lowercase,
-                analyzerOptions.RemoveDiacritics,
-                analyzerOptions.Stemmer,
-                Stopwords = analyzerOptions.Stopwords
+                analyzerOptions.DefaultProfile,
+                Profiles = profiles
             },
             Trigram = new
             {
