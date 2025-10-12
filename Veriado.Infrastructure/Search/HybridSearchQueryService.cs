@@ -1,34 +1,27 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using Veriado.Appl.Search;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
 
 /// <summary>
-/// Aggregates FTS5 and trigram search providers into a unified result set.
+/// Provides FTS5-backed search capabilities without trigram fallbacks.
 /// </summary>
 internal sealed class HybridSearchQueryService : ISearchQueryService
 {
-    #region TODO(SQLiteOnly): Replace dual-provider aggregation with SQLite FTS-only queries
     private readonly SqliteFts5QueryService _ftsService;
-    private readonly TrigramQueryService _trigramService;
     private readonly ISearchTelemetry _telemetry;
-    private readonly SearchScoreOptions _scoreOptions;
-    private readonly SearchParseOptions _parseOptions;
-    #endregion
 
     public HybridSearchQueryService(
         SqliteFts5QueryService ftsService,
-        TrigramQueryService trigramService,
-        ISearchTelemetry telemetry,
-        SearchScoreOptions scoreOptions,
-        SearchParseOptions parseOptions)
+        ISearchTelemetry telemetry)
     {
         _ftsService = ftsService ?? throw new ArgumentNullException(nameof(ftsService));
-        _trigramService = trigramService ?? throw new ArgumentNullException(nameof(trigramService));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
-        _scoreOptions = scoreOptions ?? throw new ArgumentNullException(nameof(scoreOptions));
-        _parseOptions = parseOptions ?? throw new ArgumentNullException(nameof(parseOptions));
     }
 
     public Task<IReadOnlyList<(Guid Id, double Score)>> SearchWithScoresAsync(
@@ -46,7 +39,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         int take,
         CancellationToken cancellationToken)
     {
-        return _trigramService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
+        return _ftsService.SearchWithScoresAsync(plan, skip, take, cancellationToken);
     }
 
     public Task<int> CountAsync(SearchQueryPlan plan, CancellationToken cancellationToken)
@@ -60,6 +53,7 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(plan);
+
         var stopwatch = Stopwatch.StartNew();
         var take = limit.GetValueOrDefault(10);
         if (take <= 0)
@@ -69,301 +63,11 @@ internal sealed class HybridSearchQueryService : ISearchQueryService
             return Array.Empty<SearchHit>();
         }
 
-        var oversampleMultiplier = Math.Max(1, _scoreOptions.OversampleMultiplier);
-        var oversample = Math.Max(take * oversampleMultiplier, take);
-        var ftsResult = FtsSearchResult.Empty;
-        IReadOnlyList<SearchHit> ftsHits = Array.Empty<SearchHit>();
-        if (!string.IsNullOrWhiteSpace(plan.MatchExpression))
-        {
-            ftsResult = await _ftsService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
-            ftsHits = ftsResult.Hits;
-        }
-
-        IReadOnlyList<SearchHit> trigramHits = Array.Empty<SearchHit>();
-        if (ShouldRunTrigram(plan, ftsResult))
-        {
-            trigramHits = await _trigramService.SearchAsync(plan, oversample, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (ftsHits.Count == 0 && trigramHits.Count == 0)
-        {
-            stopwatch.Stop();
-            _telemetry.RecordSearchLatency(stopwatch.Elapsed);
-            return Array.Empty<SearchHit>();
-        }
-
-        var combined = new Dictionary<Guid, CombinedHit>();
-        var normalizedScores = new List<double>(ftsHits.Count);
-        var queryText = plan.RawQueryText ?? plan.MatchExpression;
-
-        foreach (var hit in ftsHits)
-        {
-            var normalized = ExtractNormalizedScore(hit.SortValues) ?? NormalizeScore(hit.Score);
-            normalizedScores.Add(normalized);
-            var lastModified = ExtractLastModified(hit.SortValues);
-            combined[hit.Id] = new CombinedHit(hit, normalized, lastModified, HasExactTitle(hit, queryText));
-        }
-
-        var scale = ComputeScale(normalizedScores);
-        foreach (var hit in trigramHits)
-        {
-            var normalized = ExtractNormalizedScore(hit.SortValues) ?? Math.Clamp(hit.Score, 0d, 1d);
-            var scaled = Math.Clamp(normalized * scale, 0d, 1d);
-            var floor = Math.Clamp(_scoreOptions.TrigramFloor, 0d, 1d);
-            if (scaled < floor)
-            {
-                scaled = floor;
-            }
-            var lastModified = ExtractLastModified(hit.SortValues);
-
-            if (combined.TryGetValue(hit.Id, out var existing))
-            {
-                var merged = MergeHits(existing.Hit, hit);
-                var rankingScore = CombineScores(existing.RankingScore, scaled);
-                var mergedSort = MergeSortValues(existing.Hit.SortValues, hit.SortValues, rankingScore, existing.Hit.Score, hit.Score, lastModified, existing.LastModified);
-                combined[hit.Id] = existing with
-                {
-                    Hit = merged with { SortValues = mergedSort },
-                    RankingScore = rankingScore,
-                    LastModified = mergedSort?.LastModifiedUtc ?? existing.LastModified,
-                    HasExactTitle = existing.HasExactTitle || HasExactTitle(hit, queryText),
-                };
-            }
-            else
-            {
-                var sort = MergeSortValues(null, hit.SortValues, scaled, 0d, hit.Score, lastModified, null);
-                combined[hit.Id] = new CombinedHit(hit with { SortValues = sort }, scaled, sort?.LastModifiedUtc ?? lastModified, HasExactTitle(hit, queryText));
-            }
-        }
-
-        var ordered = combined.Values
-            .OrderByDescending(static item => item.RankingScore)
-            .ThenByDescending(static item => item.LastModified ?? DateTimeOffset.MinValue)
-            .ThenBy(static item => item.HasExactTitle ? 0 : 1)
-            .ThenBy(static item => item.Hit.Id)
-            .Select(static item => item.Hit)
-            .Take(take)
-            .ToList();
+        var result = await _ftsService.SearchAsync(plan, take, cancellationToken).ConfigureAwait(false);
 
         stopwatch.Stop();
         _telemetry.RecordSearchLatency(stopwatch.Elapsed);
 
-        return ordered;
+        return result.Hits;
     }
-
-    private bool ShouldRunTrigram(SearchQueryPlan plan, FtsSearchResult ftsResult)
-    {
-        if (plan.RequiresTrigramFallback)
-        {
-            return true;
-        }
-
-        if (plan.RequiresTrigramForWildcard)
-        {
-            return true;
-        }
-
-        var hitCount = ftsResult.HitCount;
-        if (hitCount == 0)
-        {
-            return true;
-        }
-
-        if (plan.HasPrefix)
-        {
-            var prefixMin = Math.Max(0, _parseOptions.PrefixMinResults);
-            if (hitCount < prefixMin)
-            {
-                return true;
-            }
-        }
-
-        if (plan.HasExplicitFuzzy || plan.HasHeuristicFuzzy)
-        {
-            var fuzzyMin = Math.Max(0, _parseOptions.FuzzyMinResults);
-            if (hitCount < fuzzyMin)
-            {
-                return true;
-            }
-
-            var threshold = Math.Clamp(_parseOptions.FuzzyScoreThreshold, 0d, 1d);
-            var topScore = ftsResult.TopNormalizedScore ?? 0d;
-            if (topScore < threshold)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static SearchHit MergeHits(SearchHit primary, SearchHit secondary)
-    {
-        var primaryField = string.IsNullOrWhiteSpace(primary.PrimaryField) ? secondary.PrimaryField : primary.PrimaryField;
-        var snippet = string.IsNullOrWhiteSpace(primary.SnippetText) ? secondary.SnippetText : primary.SnippetText;
-        var highlights = MergeHighlights(primary.Highlights, secondary.Highlights);
-        var fields = MergeFields(primary.Fields, secondary.Fields);
-        return primary with
-        {
-            PrimaryField = primaryField,
-            SnippetText = snippet,
-            Highlights = highlights,
-            Fields = fields,
-        };
-    }
-
-    private static List<HighlightSpan> MergeHighlights(
-        IReadOnlyList<HighlightSpan> primary,
-        IReadOnlyList<HighlightSpan> secondary)
-    {
-        if (primary.Count == 0)
-        {
-            return secondary.Count == 0
-                ? new List<HighlightSpan>()
-                : new List<HighlightSpan>(secondary);
-        }
-
-        if (secondary.Count == 0)
-        {
-            return new List<HighlightSpan>(primary);
-        }
-
-        var set = new HashSet<HighlightSpan>(primary);
-        var merged = new List<HighlightSpan>(primary);
-        foreach (var span in secondary)
-        {
-            if (set.Add(span))
-            {
-                merged.Add(span);
-            }
-        }
-
-        return merged;
-    }
-
-    private static Dictionary<string, string?> MergeFields(
-        IReadOnlyDictionary<string, string?> primary,
-        IReadOnlyDictionary<string, string?> secondary)
-    {
-        var merged = new Dictionary<string, string?>(primary, StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in secondary)
-        {
-            if (!merged.ContainsKey(key) || string.IsNullOrWhiteSpace(merged[key]))
-            {
-                merged[key] = value;
-            }
-        }
-
-        return merged;
-    }
-
-    private double ComputeScale(IReadOnlyList<double> scores)
-    {
-        if (scores.Count == 0)
-        {
-            return Math.Clamp(_scoreOptions.DefaultTrigramScale, 0d, 1d);
-        }
-
-        var ordered = scores.OrderBy(static value => value).ToArray();
-        var midpoint = ordered.Length / 2;
-        double median;
-        if (ordered.Length % 2 == 0)
-        {
-            median = (ordered[midpoint - 1] + ordered[midpoint]) / 2d;
-        }
-        else
-        {
-            median = ordered[midpoint];
-        }
-
-        if (!double.IsFinite(median) || median <= 0d)
-        {
-            return Math.Clamp(_scoreOptions.DefaultTrigramScale, 0d, 1d);
-        }
-
-        return Math.Clamp(median, 0d, 1d);
-    }
-
-    private static SearchHitSortValues? MergeSortValues(
-        object? primary,
-        object? secondary,
-        double rankingScore,
-        double primaryRaw,
-        double secondaryRaw,
-        DateTimeOffset? secondaryLastModified,
-        DateTimeOffset? primaryLastModified)
-    {
-        var primarySort = primary as SearchHitSortValues;
-        var secondarySort = secondary as SearchHitSortValues;
-
-        var lastModified = primaryLastModified ?? primarySort?.LastModifiedUtc ?? secondaryLastModified ?? secondarySort?.LastModifiedUtc;
-        if (primarySort is not null && secondarySort is not null)
-        {
-            lastModified = primarySort.LastModifiedUtc >= secondarySort.LastModifiedUtc
-                ? primarySort.LastModifiedUtc
-                : secondarySort.LastModifiedUtc;
-        }
-
-        double raw;
-        if (primarySort is not null)
-        {
-            raw = primarySort.RawScore;
-        }
-        else if (secondarySort is not null)
-        {
-            raw = secondarySort.RawScore;
-        }
-        else
-        {
-            raw = primaryRaw != 0d ? primaryRaw : secondaryRaw;
-        }
-
-        var secondaryScore = secondarySort?.NormalizedScore ?? secondaryRaw;
-        return new SearchHitSortValues(lastModified ?? DateTimeOffset.MinValue, rankingScore, raw, secondaryScore);
-    }
-
-    private double CombineScores(double primary, double secondary)
-    {
-        if (string.Equals(_scoreOptions.MergeMode, "weighted", StringComparison.OrdinalIgnoreCase))
-        {
-            var weight = Math.Clamp(_scoreOptions.WeightedFts, 0d, 1d);
-            var inverse = 1d - weight;
-            return Math.Clamp((primary * weight) + (secondary * inverse), 0d, 1d);
-        }
-
-        return Math.Max(primary, secondary);
-    }
-
-    private static double NormalizeScore(double rawScore)
-    {
-        if (double.IsNaN(rawScore) || double.IsInfinity(rawScore))
-        {
-            return 0d;
-        }
-
-        var clamped = Math.Max(0d, rawScore);
-        return 1d / (1d + clamped);
-    }
-
-    private static double? ExtractNormalizedScore(object? sortValues)
-    {
-        return sortValues is SearchHitSortValues values ? values.NormalizedScore : null;
-    }
-
-    private static DateTimeOffset? ExtractLastModified(object? sortValues)
-    {
-        return sortValues is SearchHitSortValues values ? values.LastModifiedUtc : null;
-    }
-
-    private static bool HasExactTitle(SearchHit hit, string query)
-    {
-        if (!hit.Fields.TryGetValue("title", out var title) || string.IsNullOrWhiteSpace(title))
-        {
-            return false;
-        }
-
-        return string.Equals(title, query, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed record CombinedHit(SearchHit Hit, double RankingScore, DateTimeOffset? LastModified, bool HasExactTitle);
 }
