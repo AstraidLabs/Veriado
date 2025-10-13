@@ -12,23 +12,18 @@ using Veriado.Domain.Search;
 /// </summary>
 internal sealed class SuggestionMaintenanceService
 {
-    private readonly InfrastructureOptions _options;
+    private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ILogger<SuggestionMaintenanceService> _logger;
 
-    public SuggestionMaintenanceService(InfrastructureOptions options, ILogger<SuggestionMaintenanceService> logger)
+    public SuggestionMaintenanceService(ISqliteConnectionFactory connectionFactory, ILogger<SuggestionMaintenanceService> logger)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task UpsertAsync(SearchDocument document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            return;
-        }
-
         var harvested = Harvest(document)
             .GroupBy(entry => (entry.Term, entry.Source), TermSourceComparer.Instance)
             .Select(group => new
@@ -46,11 +41,12 @@ internal sealed class SuggestionMaintenanceService
 
         try
         {
-            await using var connection = new SqliteConnection(_options.ConnectionString);
+            await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+            var connection = lease.Connection;
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await using var sqliteTransaction = (SqliteTransaction)await connection
+            await using var sqliteTransaction = await connection
                 .BeginTransactionAsync(cancellationToken)
                 .ConfigureAwait(false);
             foreach (var entry in harvested)

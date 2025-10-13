@@ -5,22 +5,23 @@ namespace Veriado.Infrastructure.Search;
 
 internal sealed class SearchHistoryService : ISearchHistoryService
 {
-    private readonly InfrastructureOptions _options;
+    private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly IClock _clock;
 
-    public SearchHistoryService(InfrastructureOptions options, IClock clock)
+    public SearchHistoryService(ISqliteConnectionFactory connectionFactory, IClock clock)
     {
-        _options = options;
-        _clock = clock;
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     public async Task AddAsync(string? queryText, string matchQuery, int totalCount, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await using var sqliteTransaction = (SqliteTransaction)await connection
+        await using var sqliteTransaction = await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         var now = _clock.UtcNow.ToString("O");
@@ -64,7 +65,8 @@ internal sealed class SearchHistoryService : ISearchHistoryService
             take = 10;
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -94,7 +96,8 @@ internal sealed class SearchHistoryService : ISearchHistoryService
 
     public async Task ClearAsync(int? keepLastN, CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -115,13 +118,4 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
-    }
 }
