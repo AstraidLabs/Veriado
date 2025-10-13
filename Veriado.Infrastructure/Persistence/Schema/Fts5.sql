@@ -16,8 +16,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS file_search USING fts5(
     mime,
     metadata_text,
     metadata,
-    content='DocumentContent',
-    content_rowid='DocId',
     tokenize='unicode61 remove_diacritics 2'
 );
 
@@ -27,15 +25,15 @@ CREATE TRIGGER IF NOT EXISTS dc_ai AFTER INSERT ON DocumentContent BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS dc_au AFTER UPDATE ON DocumentContent BEGIN
-  INSERT INTO file_search(file_search, rowid, title, author, mime, metadata_text, metadata)
-  VALUES('delete', old.DocId, old.Title, old.Author, old.Mime, old.MetadataText, old.Metadata);
+  INSERT INTO file_search(file_search, rowid)
+  VALUES('delete', old.DocId);
   INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
   VALUES(new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
 END;
 
 CREATE TRIGGER IF NOT EXISTS dc_ad AFTER DELETE ON DocumentContent BEGIN
-  INSERT INTO file_search(file_search, rowid, title, author, mime, metadata_text, metadata)
-  VALUES('delete', old.DocId, old.Title, old.Author, old.Mime, old.MetadataText, old.Metadata);
+  INSERT INTO file_search(file_search, rowid)
+  VALUES('delete', old.DocId);
 END;
 
 CREATE TABLE IF NOT EXISTS fts_write_ahead (
@@ -62,3 +60,15 @@ CREATE TABLE IF NOT EXISTS fts_write_ahead_dlq (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fts_write_ahead_dlq_dead_lettered ON fts_write_ahead_dlq(dead_lettered_utc);
+
+-- Variant B (content-linked FTS) reference:
+-- CREATE VIRTUAL TABLE file_search USING fts5(
+--     title,
+--     author,
+--     mime,
+--     metadata_text,
+--     metadata,
+--     content='DocumentContent',
+--     content_rowid='DocId',
+--     tokenize='unicode61 remove_diacritics 2'
+-- );
