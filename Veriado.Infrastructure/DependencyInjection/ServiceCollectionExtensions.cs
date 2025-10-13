@@ -198,8 +198,9 @@ public static class ServiceCollectionExtensions
 
         for (var worker = 0; worker < options.Workers; worker++)
         {
+            var partitionId = worker;
             services.AddSingleton<IHostedService>(sp =>
-                ActivatorUtilities.CreateInstance<WriteWorker>(sp, worker));
+                ActivatorUtilities.CreateInstance<WriteWorker>(sp, partitionId));
         }
         services.AddHostedService<OutboxDispatcherHostedService>();
         services.AddHostedService<IdempotencyCleanupWorker>();
