@@ -78,25 +78,26 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
             if (contentTableExists && searchTableExists)
             {
-                timedOut = await CollectMissingIdsAsync(
-                    connection,
-                    batchSize,
-                    missing,
-                    verificationWatch,
-                    timeSliceMs,
-                    cancellationToken,
-                    ref maxMemoryBytes).ConfigureAwait(false);
+                (timedOut, maxMemoryBytes) = await CollectMissingIdsAsync(
+                        connection,
+                        batchSize,
+                        missing,
+                        verificationWatch,
+                        timeSliceMs,
+                        cancellationToken,
+                        maxMemoryBytes)
+                    .ConfigureAwait(false);
 
                 if (!timedOut)
                 {
-                    timedOut = await CollectOrphanIdsAsync(
+                    (timedOut, maxMemoryBytes) = await CollectOrphanIdsAsync(
                             connection,
                             batchSize,
                             orphans,
                             verificationWatch,
                             timeSliceMs,
                             cancellationToken,
-                            ref maxMemoryBytes)
+                            maxMemoryBytes)
                         .ConfigureAwait(false);
                 }
             }
@@ -391,16 +392,17 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return result is not null;
     }
 
-    private async Task<bool> CollectMissingIdsAsync(
+    private async Task<(bool TimedOut, long MaxMemoryBytes)> CollectMissingIdsAsync(
         SqliteConnection connection,
         int batchSize,
         List<Guid> destination,
         Stopwatch stopwatch,
         int timeSliceMs,
         CancellationToken cancellationToken,
-        ref long maxMemoryBytes)
+        long maxMemoryBytes)
     {
         var lastRowId = 0L;
+        var currentMaxMemoryBytes = maxMemoryBytes;
 
         while (true)
         {
@@ -428,10 +430,10 @@ LIMIT $batchSize;";
 
             if (fetched == 0)
             {
-                return false;
+                return (false, currentMaxMemoryBytes);
             }
 
-            maxMemoryBytes = Math.Max(maxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
+            currentMaxMemoryBytes = Math.Max(currentMaxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
             _logger.LogDebug(
                 "Integrity verification queued {BatchCount} missing candidates (total={Total})",
                 fetched,
@@ -443,21 +445,22 @@ LIMIT $batchSize;";
                     "Integrity verification paused after collecting {Missing} missing ids in {ElapsedMs} ms.",
                     destination.Count,
                     stopwatch.Elapsed.TotalMilliseconds);
-                return true;
+                return (true, currentMaxMemoryBytes);
             }
         }
     }
 
-    private async Task<bool> CollectOrphanIdsAsync(
+    private async Task<(bool TimedOut, long MaxMemoryBytes)> CollectOrphanIdsAsync(
         SqliteConnection connection,
         int batchSize,
         List<Guid> destination,
         Stopwatch stopwatch,
         int timeSliceMs,
         CancellationToken cancellationToken,
-        ref long maxMemoryBytes)
+        long maxMemoryBytes)
     {
         var lastRowId = 0L;
+        var currentMaxMemoryBytes = maxMemoryBytes;
 
         while (true)
         {
@@ -486,10 +489,10 @@ LIMIT $batchSize;";
 
             if (fetched == 0)
             {
-                return false;
+                return (false, currentMaxMemoryBytes);
             }
 
-            maxMemoryBytes = Math.Max(maxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
+            currentMaxMemoryBytes = Math.Max(currentMaxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
             _logger.LogDebug(
                 "Integrity verification queued {BatchCount} orphan candidates (total={Total})",
                 fetched,
@@ -501,7 +504,7 @@ LIMIT $batchSize;";
                     "Integrity verification paused after collecting {Orphans} orphan ids in {ElapsedMs} ms.",
                     destination.Count,
                     stopwatch.Elapsed.TotalMilliseconds);
-                return true;
+                return (true, currentMaxMemoryBytes);
             }
         }
     }
