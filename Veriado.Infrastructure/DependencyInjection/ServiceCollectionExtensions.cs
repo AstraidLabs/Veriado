@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
@@ -77,14 +78,18 @@ public static class ServiceCollectionExtensions
         SqliteFulltextSupportDetector.Detect(options);
 
         services.AddSingleton(options);
+        services.AddSingleton<IOptions<InfrastructureOptions>>(Options.Create(options));
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         services.AddSingleton<ISearchWriteTelemetry, SearchWriteTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
+        services.AddSingleton<WritePipelineState>(_ => new WritePipelineState(options.Workers));
+        services.AddSingleton<IWritePipelineTelemetry, WritePipelineTelemetry>();
         services.AddHealthChecks()
             .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas")
-            .AddCheck<FtsDlqHealthCheck>("fts_write_ahead_dlq");
+            .AddCheck<FtsDlqHealthCheck>("fts_write_ahead_dlq")
+            .AddCheck<WritePipelineHealthCheck>("write_pipeline");
 
         var searchOptions = services.AddOptions<SearchOptions>();
         if (configuration is not null)
@@ -191,7 +196,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileReadRepository, FileReadRepository>();
         services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();
 
-        services.AddHostedService<WriteWorker>();
+        for (var worker = 0; worker < options.Workers; worker++)
+        {
+            services.AddSingleton<IHostedService>(sp =>
+                ActivatorUtilities.CreateInstance<WriteWorker>(sp, worker));
+        }
+        services.AddHostedService<OutboxDispatcherHostedService>();
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
 

@@ -1,4 +1,8 @@
+using System;
+using System.Globalization;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
+using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Idempotency;
 
@@ -9,15 +13,18 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 {
     private readonly InfrastructureOptions _options;
     private readonly IClock _clock;
+    private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ILogger<IdempotencyCleanupWorker> _logger;
 
     public IdempotencyCleanupWorker(
         InfrastructureOptions options,
         IClock clock,
+        ISqliteConnectionFactory connectionFactory,
         ILogger<IdempotencyCleanupWorker> logger)
     {
         _options = options;
         _clock = clock;
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _logger = logger;
     }
 
@@ -67,9 +74,9 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
             return;
         }
 
-        await using var connection = new SqliteConnection(_options.ConnectionString);
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await using var existsCommand = connection.CreateCommand();
         existsCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'idempotency_keys' LIMIT 1;";

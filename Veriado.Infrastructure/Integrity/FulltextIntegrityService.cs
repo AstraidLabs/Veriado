@@ -59,34 +59,50 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
 
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var fileIds = await readContext.Files.Select(f => f.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var searchIndexIds = new HashSet<Guid>();
+        var batchSize = _options.IntegrityBatchSize > 0 ? _options.IntegrityBatchSize : 2000;
+        var timeSliceMs = _options.IntegrityTimeSliceMs;
+        var maxMemoryBytes = GC.GetTotalMemory(forceFullCollection: false);
+        var missing = new List<Guid>();
+        var orphans = new List<Guid>();
+        var timedOut = false;
         var searchTableExists = false;
         var contentTableExists = false;
-        await using (var connection = CreateConnection())
+
+        await using (var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false))
         {
+            var connection = lease.Connection;
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
             searchTableExists = await TableExistsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
             contentTableExists = await TableExistsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
 
-            if (contentTableExists)
+            if (contentTableExists && searchTableExists)
             {
-                await using var command = connection.CreateCommand();
-                command.CommandText = "SELECT FileId FROM DocumentContent;";
-                await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                timedOut = await CollectMissingIdsAsync(
+                    connection,
+                    batchSize,
+                    missing,
+                    verificationWatch,
+                    timeSliceMs,
+                    cancellationToken,
+                    ref maxMemoryBytes).ConfigureAwait(false);
+
+                if (!timedOut)
                 {
-                    var blob = (byte[])reader[0];
-                    searchIndexIds.Add(new Guid(blob));
+                    timedOut = await CollectOrphanIdsAsync(
+                            connection,
+                            batchSize,
+                            orphans,
+                            verificationWatch,
+                            timeSliceMs,
+                            cancellationToken,
+                            ref maxMemoryBytes)
+                        .ConfigureAwait(false);
                 }
             }
-
         }
 
-        var requiresFullRebuild = !searchTableExists
-            || !contentTableExists;
+        var requiresFullRebuild = !searchTableExists || !contentTableExists;
 
         if (requiresFullRebuild)
         {
@@ -104,23 +120,32 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             _logger.LogWarning(
                 "Full-text index metadata tables are missing; a rebuild will be required when repairs run. Missing: {MissingTables}",
                 string.Join(", ", missingTables));
+
+            await foreach (var fileId in readContext.Files
+                .AsNoTracking()
+                .Select(file => file.Id)
+                .AsAsyncEnumerable()
+                .WithCancellation(cancellationToken))
+            {
+                missing.Add(fileId);
+            }
+
+            maxMemoryBytes = Math.Max(maxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
         }
 
-        var missing = fileIds
-            .Except(searchIndexIds)
-            .ToArray();
-        var orphans = searchIndexIds
-            .Except(fileIds)
-            .ToArray();
-
         verificationWatch.Stop();
+        maxMemoryBytes = Math.Max(maxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
+        var peakMemoryMb = maxMemoryBytes / (1024d * 1024d);
+
         var report = new IntegrityReport(missing, orphans, requiresFullRebuild);
         _logger.LogInformation(
-            "Full-text integrity verification completed in {ElapsedMs} ms (missing={MissingCount}, orphans={OrphanCount}, rebuildRequired={RebuildRequired})",
+            "Full-text integrity verification completed in {ElapsedMs} ms (missing={MissingCount}, orphans={OrphanCount}, rebuildRequired={RebuildRequired}, timedOut={TimedOut}, peakMemoryMb={PeakMemoryMb:F2})",
             verificationWatch.Elapsed.TotalMilliseconds,
             report.MissingCount,
             report.OrphanCount,
-            report.RequiresFullRebuild);
+            report.RequiresFullRebuild,
+            timedOut,
+            peakMemoryMb);
 
         return report;
     }
@@ -348,21 +373,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return false;
     }
 
-    private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure options missing connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
-    }
-
     private async Task<bool> GetFulltextTableStateAsync(CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         var contentTableExists = await TableExistsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
         return contentTableExists;
     }
@@ -376,6 +391,121 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         return result is not null;
     }
 
+    private async Task<bool> CollectMissingIdsAsync(
+        SqliteConnection connection,
+        int batchSize,
+        List<Guid> destination,
+        Stopwatch stopwatch,
+        int timeSliceMs,
+        CancellationToken cancellationToken,
+        ref long maxMemoryBytes)
+    {
+        var lastRowId = 0L;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+SELECT f.rowid, f.id
+FROM files f
+WHERE NOT EXISTS (SELECT 1 FROM DocumentContent dc WHERE dc.FileId = f.id)
+  AND f.rowid > $lastRowId
+ORDER BY f.rowid
+LIMIT $batchSize;";
+            command.Parameters.Add("$lastRowId", SqliteType.Integer).Value = lastRowId;
+            command.Parameters.Add("$batchSize", SqliteType.Integer).Value = batchSize;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            var fetched = 0;
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                lastRowId = reader.GetInt64(0);
+                var blob = (byte[])reader[1];
+                destination.Add(new Guid(blob));
+                fetched++;
+            }
+
+            if (fetched == 0)
+            {
+                return false;
+            }
+
+            maxMemoryBytes = Math.Max(maxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
+            _logger.LogDebug(
+                "Integrity verification queued {BatchCount} missing candidates (total={Total})",
+                fetched,
+                destination.Count);
+
+            if (timeSliceMs > 0 && stopwatch.ElapsedMilliseconds > timeSliceMs)
+            {
+                _logger.LogWarning(
+                    "Integrity verification paused after collecting {Missing} missing ids in {ElapsedMs} ms.",
+                    destination.Count,
+                    stopwatch.Elapsed.TotalMilliseconds);
+                return true;
+            }
+        }
+    }
+
+    private async Task<bool> CollectOrphanIdsAsync(
+        SqliteConnection connection,
+        int batchSize,
+        List<Guid> destination,
+        Stopwatch stopwatch,
+        int timeSliceMs,
+        CancellationToken cancellationToken,
+        ref long maxMemoryBytes)
+    {
+        var lastRowId = 0L;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+SELECT dc.rowid, dc.FileId
+FROM DocumentContent dc
+LEFT JOIN files f ON f.id = dc.FileId
+WHERE f.id IS NULL
+  AND dc.rowid > $lastRowId
+ORDER BY dc.rowid
+LIMIT $batchSize;";
+            command.Parameters.Add("$lastRowId", SqliteType.Integer).Value = lastRowId;
+            command.Parameters.Add("$batchSize", SqliteType.Integer).Value = batchSize;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            var fetched = 0;
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                lastRowId = reader.GetInt64(0);
+                var blob = (byte[])reader[1];
+                destination.Add(new Guid(blob));
+                fetched++;
+            }
+
+            if (fetched == 0)
+            {
+                return false;
+            }
+
+            maxMemoryBytes = Math.Max(maxMemoryBytes, GC.GetTotalMemory(forceFullCollection: false));
+            _logger.LogDebug(
+                "Integrity verification queued {BatchCount} orphan candidates (total={Total})",
+                fetched,
+                destination.Count);
+
+            if (timeSliceMs > 0 && stopwatch.ElapsedMilliseconds > timeSliceMs)
+            {
+                _logger.LogWarning(
+                    "Integrity verification paused after collecting {Orphans} orphan ids in {ElapsedMs} ms.",
+                    destination.Count,
+                    stopwatch.Elapsed.TotalMilliseconds);
+                return true;
+            }
+        }
+    }
+
     private async Task RecreateFulltextSchemaAsync(CancellationToken cancellationToken)
     {
         if (!_options.IsFulltextAvailable)
@@ -383,9 +513,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return;
         }
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Reset any outstanding WAL state before we drop and recreate the tables. A corrupted
         // or stale WAL file would otherwise continue to surface "database disk image is malformed"
@@ -436,7 +566,6 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await DeleteWalCheckpointFilesAsync(cancellationToken).ConfigureAwait(false);
 
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var schemaSql = ReadEmbeddedSql(Fts5SchemaResourceName);
         foreach (var statement in SplitSqlStatements(schemaSql))

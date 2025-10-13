@@ -8,11 +8,12 @@ internal interface IWriteQueue
     Task<T> EnqueueAsync<T>(
         Func<AppDbContext, CancellationToken, Task<T>> work,
         IReadOnlyList<QueuedFileWrite>? trackedFiles,
+        Guid? partitionKey = null,
         CancellationToken cancellationToken = default);
 
-    ValueTask<WriteRequest?> DequeueAsync(CancellationToken cancellationToken);
+    ValueTask<WriteRequest?> DequeueAsync(int partitionId, CancellationToken cancellationToken);
 
-    bool TryDequeue(out WriteRequest? request);
+    bool TryDequeue(int partitionId, out WriteRequest? request);
 
     void Complete(Exception? error = null);
 }

@@ -24,7 +24,7 @@ Tento dokument shrnuje, jak je ve Veriado řešená koordinace Entity Framework 
 ## 4. Doporučení pro hladký provoz
 
 1. **Ověření providera** – `InitializeInfrastructureAsync` fail-fast ověřuje, že aplikace běží na `Microsoft.Data.Sqlite`. Pokud dojde k nechtěné změně providera, inicializace skončí výjimkou ještě před spuštěním workerů.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L210-L240】
-2. **Monitoring retry logů** – varovné logy z `ExecuteWithRetryAsync` signalizují transientní problémy. Pokud se jejich počet zvyšuje, zvažte úpravu `BatchWindowMs` nebo velikosti poolu připojení.
+2. **Monitoring retry logů** – varovné logy z `ExecuteWithRetryAsync` signalizují transientní problémy. Pokud se jejich počet zvyšuje, zvažte úpravu `BatchMaxWindowMs` nebo velikosti poolu připojení.
 3. **Pravidelný reset poolu po údržbě** – po ručních zásazích do FTS tabulek zavolejte `ISqliteConnectionFactory.ResetAsync`, aby žádné připojení nezůstalo na starém schématu.
 4. **Zdravotní kontrola žurnálu** – sledujte velikost tabulky `fts_journal`. Přerůstající žurnál může indikovat, že některé `ClearAsync` volání nedobíhají kvůli výpadkům.
 

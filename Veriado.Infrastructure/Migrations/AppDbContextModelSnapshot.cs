@@ -371,6 +371,49 @@ namespace Veriado.Infrastructure.Migrations
                     b.ToTable("idempotency_keys", (string)null);
                 });
 
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.Outbox.OutboxEventEntity", b =>
+                {
+                    b.Property<byte[]>("Id")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempts")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("CreatedUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_utc");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payload_json");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Attempts")
+                        .HasDatabaseName("idx_outbox_attempts");
+
+                    b.HasIndex("CreatedUtc")
+                        .HasDatabaseName("idx_outbox_created");
+
+                    b.ToTable("outbox_events", (string)null);
+                });
+
             modelBuilder.Entity("Veriado.Infrastructure.Persistence.WriteAhead.FtsWriteAheadDeadLetterRecord", b =>
                 {
                     b.Property<long>("Id")

@@ -35,7 +35,7 @@ public sealed class WriteWorkerIntegrationTests
         var provider = await BuildProviderAsync(databasePath);
         try
         {
-            var worker = ActivatorUtilities.CreateInstance<WriteWorker>(provider);
+            var worker = ActivatorUtilities.CreateInstance<WriteWorker>(provider, 0);
             var request = CreateWriteRequest((context, token) =>
             {
                 var file = CreateTestFile();
@@ -70,7 +70,7 @@ public sealed class WriteWorkerIntegrationTests
         var provider = await BuildProviderAsync(databasePath);
         try
         {
-            var worker = ActivatorUtilities.CreateInstance<WriteWorker>(provider);
+            var worker = ActivatorUtilities.CreateInstance<WriteWorker>(provider, 0);
             var request = CreateWriteRequest((context, token) =>
             {
                 var file = CreateTestFile();
@@ -102,7 +102,7 @@ public sealed class WriteWorkerIntegrationTests
         var provider = await BuildProviderAsync(databasePath);
         try
         {
-            var worker = ActivatorUtilities.CreateInstance<WriteWorker>(provider);
+            var worker = ActivatorUtilities.CreateInstance<WriteWorker>(provider, 0);
             var request = CreateWriteRequest((context, token) =>
             {
                 var file = CreateTestFile();
@@ -169,8 +169,8 @@ public sealed class WriteWorkerIntegrationTests
         services.AddInfrastructure(options =>
         {
             options.DbPath = databasePath;
-            options.BatchSize = 8;
-            options.BatchWindowMs = 25;
+            options.BatchMaxItems = 8;
+            options.BatchMaxWindowMs = 25;
         });
 
         var provider = services.BuildServiceProvider();
@@ -193,7 +193,8 @@ public sealed class WriteWorkerIntegrationTests
             work,
             completion,
             null,
-            CancellationToken.None)!;
+            CancellationToken.None,
+            null)!;
         return (request, completion.Task);
     }
 
