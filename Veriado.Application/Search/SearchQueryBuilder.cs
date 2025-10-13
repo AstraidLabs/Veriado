@@ -550,26 +550,14 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
         foreach (var ch in trimmed)
         {
-            if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch))
+            if (char.IsWhiteSpace(ch))
             {
                 continue;
             }
 
-            switch (ch)
+            if (char.IsControl(ch))
             {
-                case '_':
-                case '(':
-                case ')':
-                case '+':
-                case '-':
-                case '*':
-                case '/':
-                case '.':
-                case ',':
-                case ':':
-                    continue;
-                default:
-                    throw new ArgumentException("SQL fragment contains unsupported characters.", parameterName);
+                throw new ArgumentException("SQL fragment contains control characters.", parameterName);
             }
         }
 
