@@ -5,7 +5,7 @@ namespace Veriado.Infrastructure.Persistence.Outbox;
 /// <summary>
 /// Represents a pending domain event stored for reliable delivery via the outbox pattern.
 /// </summary>
-internal sealed class OutboxEventEntity
+public sealed class OutboxEventEntity
 {
     public Guid Id { get; set; }
 
