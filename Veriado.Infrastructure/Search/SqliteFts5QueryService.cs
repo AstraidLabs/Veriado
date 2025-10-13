@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Search;
+using Veriado.Appl.Search.Abstractions;
 using Veriado.Domain.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -11,7 +15,7 @@ namespace Veriado.Infrastructure.Search;
 /// <summary>
 /// Provides query access to the SQLite FTS5 virtual table.
 /// </summary>
-internal sealed class SqliteFts5QueryService
+internal sealed class SqliteFts5QueryService : ISearchQueryService
 {
     private const char Ellipsis = '…';
     private const string SearchTableName = "file_search";
@@ -171,6 +175,23 @@ internal sealed class SqliteFts5QueryService
         return result is long value ? (int)value : 0;
     }
 
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(
+        SearchQueryPlan plan,
+        int? limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var take = limit.GetValueOrDefault(10);
+        if (take <= 0)
+        {
+            return Array.Empty<SearchHit>();
+        }
+
+        var result = await SearchAsync(plan, take, cancellationToken).ConfigureAwait(false);
+        return result.Hits;
+    }
+
     public async Task<FtsSearchResult> SearchAsync(
         SearchQueryPlan plan,
         int take,
@@ -299,12 +320,11 @@ internal sealed class SqliteFts5QueryService
             normalizedScore = Math.Clamp(adjusted, 0d, 1d);
         }
 
-        var sort = new SearchHitSortValues(modifiedUtc, normalizedScore, rawScore, customSimilarity);
+        var sort = new SearchHitSortValues(modifiedUtc, normalizedScore, rawScore);
 
         return new SearchHit(
             id,
             rawScore,
-            "FTS",
             primaryField,
             snippetText,
             highlights,
