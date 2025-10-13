@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Veriado.Infrastructure.Persistence.Options;
 
 /// <summary>
@@ -71,6 +73,7 @@ public sealed class InfrastructureOptions
     /// <summary>
     /// Gets or sets the number of worker partitions processing the write queue.
     /// </summary>
+    [Range(1, int.MaxValue)]
     public int Workers
     {
         get => _workers;

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Configuration;
@@ -6,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
@@ -45,46 +49,73 @@ public static class ServiceCollectionExtensions
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        var options = new InfrastructureOptions();
-        configure?.Invoke(options);
-
-        if (string.IsNullOrWhiteSpace(options.DbPath))
+        var optionsBuilder = services.AddOptions<InfrastructureOptions>();
+        if (configuration is not null)
         {
-            var dataDirectory = ResolveDefaultDataDirectory();
-            options.DbPath = Path.Combine(dataDirectory, "veriado.db");
+            optionsBuilder.Bind(configuration.GetSection("Infrastructure"));
         }
 
-        var directory = Path.GetDirectoryName(options.DbPath);
-        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+        if (configure is not null)
         {
-            Directory.CreateDirectory(directory);
+            optionsBuilder.Configure(configure);
         }
 
-        var connectionStringBuilder = new SqliteConnectionStringBuilder
+        optionsBuilder.PostConfigure(options =>
         {
-            DataSource = options.DbPath,
-            Cache = SqliteCacheMode.Shared,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-        };
-        options.ConnectionString = connectionStringBuilder.ConnectionString;
+            if (string.IsNullOrWhiteSpace(options.DbPath))
+            {
+                var dataDirectory = ResolveDefaultDataDirectory();
+                options.DbPath = Path.Combine(dataDirectory, "veriado.db");
+            }
 
-        if (!File.Exists(options.DbPath))
+            var directory = Path.GetDirectoryName(options.DbPath);
+            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var connectionStringBuilder = new SqliteConnectionStringBuilder
+            {
+                DataSource = options.DbPath,
+                Cache = SqliteCacheMode.Shared,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+            };
+            options.ConnectionString = connectionStringBuilder.ConnectionString;
+
+            if (!File.Exists(options.DbPath))
+            {
+                using var connection = new SqliteConnection(options.ConnectionString);
+                connection.Open();
+                SqlitePragmaHelper.ApplyAsync(connection, CancellationToken.None).GetAwaiter().GetResult();
+            }
+
+            SqliteFulltextSupportDetector.Detect(options);
+        });
+
+        optionsBuilder.PostConfigure<ILoggerFactory>((opts, loggerFactory) =>
         {
-            using var connection = new SqliteConnection(options.ConnectionString);
-            connection.Open();
-            SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
-        }
+            var logger = loggerFactory.CreateLogger(nameof(InfrastructureOptions));
+            logger.LogInformation(
+                "Infrastructure configured with {Workers} workers and write queue capacity {Capacity}.",
+                opts.Workers,
+                opts.WriteQueueCapacity);
+        });
 
-        SqliteFulltextSupportDetector.Detect(options);
+        optionsBuilder.ValidateDataAnnotations();
+        optionsBuilder.ValidateOnStart();
 
-        services.AddSingleton(options);
-        services.AddSingleton<IOptions<InfrastructureOptions>>(Options.Create(options));
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<InfrastructureOptions>>().Value);
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         services.AddSingleton<ISearchWriteTelemetry, SearchWriteTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
-        services.AddSingleton<WritePipelineState>(_ => new WritePipelineState(options.Workers));
+        services.AddSingleton<WritePipelineState>(sp =>
+        {
+            var opts = sp.GetRequiredService<InfrastructureOptions>();
+            var workers = Math.Max(1, opts.Workers);
+            return new WritePipelineState(workers);
+        });
         services.AddSingleton<IWritePipelineTelemetry, WritePipelineTelemetry>();
         services.AddHealthChecks()
             .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas")
@@ -147,23 +178,27 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContextPool<AppDbContext>((sp, builder) =>
         {
-            builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
+            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         }, poolSize: 128);
         services.AddDbContextFactory<AppDbContext>((sp, builder) =>
         {
-            builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
+            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         });
 
         services.AddDbContextPool<ReadOnlyDbContext>((sp, builder) =>
         {
-            builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
+            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         }, poolSize: 256);
         services.AddDbContextFactory<ReadOnlyDbContext>((sp, builder) =>
         {
-            builder.UseSqlite(options.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
+            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         });
 
@@ -196,11 +231,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileReadRepository, FileReadRepository>();
         services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();
 
-        for (var worker = 0; worker < options.Workers; worker++)
+        services.AddHostedService(sp =>
         {
-            services.AddSingleton<IHostedService>(sp =>
-                ActivatorUtilities.CreateInstance<WriteWorker>(sp, worker));
-        }
+            var opts = sp.GetRequiredService<InfrastructureOptions>();
+            var workers = Math.Max(1, opts.Workers);
+            var servicesToRun = Enumerable.Range(0, workers)
+                .Select(index => (IHostedService)ActivatorUtilities.CreateInstance<WriteWorker>(sp, index))
+                .ToArray();
+            return new CompositeHostedService(servicesToRun);
+        });
         services.AddHostedService<OutboxDispatcherHostedService>();
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();

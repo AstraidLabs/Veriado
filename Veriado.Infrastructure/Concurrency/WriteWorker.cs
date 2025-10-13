@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Veriado.Domain.Primitives;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Persistence.Outbox;
@@ -57,22 +58,28 @@ internal sealed class WriteWorker : BackgroundService
         FtsWriteAheadService writeAhead,
         ISearchTelemetry telemetry)
     {
-        if (partitionId < 0)
+        if (options is null)
         {
-            throw new ArgumentOutOfRangeException(nameof(partitionId));
+            throw new ArgumentNullException(nameof(options));
+        }
+
+        if (options.Workers < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options.Workers), options.Workers, "Workers must be >= 1.");
+        }
+
+        if ((uint)partitionId >= (uint)options.Workers)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionId), partitionId, $"Partition id must be 0..{options.Workers - 1}.");
         }
 
         _partitionId = partitionId;
         _writeQueue = writeQueue ?? throw new ArgumentNullException(nameof(writeQueue));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options = options;
         _state = state ?? throw new ArgumentNullException(nameof(state));
         _pipelineTelemetry = pipelineTelemetry ?? throw new ArgumentNullException(nameof(pipelineTelemetry));
-        if (_partitionId >= _options.Workers)
-        {
-            throw new ArgumentOutOfRangeException(nameof(partitionId));
-        }
 
         if (_state.PartitionCount != _options.Workers)
         {
@@ -89,6 +96,11 @@ internal sealed class WriteWorker : BackgroundService
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+
+        _logger.LogDebug(
+            "Write worker created for partition {PartitionId} of {WorkerCount} workers.",
+            _partitionId,
+            _options.Workers);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
