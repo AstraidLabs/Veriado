@@ -79,6 +79,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
+        services.AddSingleton<ISearchWriteTelemetry, SearchWriteTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
         services.AddHealthChecks()
@@ -111,6 +112,31 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Suggestions);
         services.AddSingleton<IOptions<AnalyzerOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Analyzer));
         services.AddSingleton<IOptions<SearchScoreOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Score));
+
+        var searchWriteOptions = services.AddOptions<SearchWriteOptions>();
+        if (configuration is not null)
+        {
+            searchWriteOptions.Bind(configuration.GetSection("Search:Write"));
+        }
+        else
+        {
+            searchWriteOptions.Configure(_ => { });
+        }
+
+        searchWriteOptions.PostConfigure(options =>
+        {
+            if (options.Workers < 1)
+            {
+                options.Workers = 1;
+            }
+
+            if (options.MaxBatchSize < 1)
+            {
+                options.MaxBatchSize = 1;
+            }
+        });
+
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<SearchWriteOptions>>().Value);
 
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
 
