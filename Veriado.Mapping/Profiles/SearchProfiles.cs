@@ -18,7 +18,6 @@ public sealed class SearchProfiles : Profile
         CreateMap<SearchHit, SearchHitDto>()
             .ForCtorParam(nameof(SearchHitDto.Id), opt => opt.MapFrom(static src => src.Id))
             .ForCtorParam(nameof(SearchHitDto.Score), opt => opt.MapFrom(static src => src.Score))
-            .ForCtorParam(nameof(SearchHitDto.Source), opt => opt.MapFrom(static src => src.Source))
             .ForCtorParam(nameof(SearchHitDto.PrimaryField), opt => opt.MapFrom(static src => src.PrimaryField))
             .ForCtorParam(nameof(SearchHitDto.SnippetText), opt => opt.MapFrom(static src => src.SnippetText))
             .ForCtorParam(nameof(SearchHitDto.Highlights), opt => opt.MapFrom(static src => src.Highlights))

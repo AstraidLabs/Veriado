@@ -12,7 +12,7 @@ V aktuální verzi aplikace probíhá indexace i dotazování výhradně nad SQL
 
 ## Generování dotazů a výsledků
 - `SearchQueryBuilder` kombinuje boolovské, frázové, proximní, prefixové a rozsahové operátory, aplikuje synonyma a produkuje `SearchQueryPlan` s čistým FTS MATCH výrazem a doplňkovými filtry. Žádný fallback ani heuristika pro fuzzy vyhledávání není přítomna.【F:Veriado.Application/Search/SearchQueryBuilder.cs†L1-L240】
-- `SqliteFts5QueryService` vykonává dotazy, počítá `bm25` podle konfigurovaných vah a vrací `SearchHit` se snippety z `metadata_text`. `HybridSearchQueryService` funguje jako tenká obálka kvůli telemetrii a směřuje všechny požadavky na FTS službu.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L21-L229】【F:Veriado.Infrastructure/Search/HybridSearchQueryService.cs†L11-L61】
+- `SqliteFts5QueryService` vykonává dotazy, počítá `bm25` podle konfigurovaných vah, vrací `SearchHit` se snippety z `metadata_text` a přímo publikuje telemetrii latence.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L1-L312】
 
 ## Dopady odstranění trigramů
 - Služby historie (`SearchHistoryService`) a oblíbených dotazů (`SearchFavoritesService`) již nepracují s příznakem fuzzy vyhledávání a operují pouze s reálnými sloupci svých tabulek.【F:Veriado.Infrastructure/Search/SearchHistoryService.cs†L16-L87】【F:Veriado.Infrastructure/Search/SearchFavoritesService.cs†L15-L118】

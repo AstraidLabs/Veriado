@@ -12,7 +12,6 @@ internal sealed class SearchTelemetry : ISearchTelemetry
 
     private readonly Histogram<double> _ftsQueryHistogram = Meter.CreateHistogram<double>("search_fts_query_ms");
     private readonly Histogram<double> _facetHistogram = Meter.CreateHistogram<double>("search_facet_ms");
-    private readonly Histogram<double> _overallHistogram = Meter.CreateHistogram<double>("search_latency_ms");
     private readonly Histogram<double> _verifyDurationHistogram = Meter.CreateHistogram<double>("fts_verify_duration_ms");
     private readonly Counter<long> _indexDriftCounter = Meter.CreateCounter<long>("index_drift_count");
     private readonly Counter<long> _repairBatchCounter = Meter.CreateCounter<long>("repair_batches_total");
@@ -37,9 +36,6 @@ internal sealed class SearchTelemetry : ISearchTelemetry
 
     public void RecordFacetComputation(TimeSpan elapsed)
         => _facetHistogram.Record(elapsed.TotalMilliseconds);
-
-    public void RecordSearchLatency(TimeSpan elapsed)
-        => _overallHistogram.Record(elapsed.TotalMilliseconds);
 
     public void UpdateIndexMetrics(long documentCount, long indexSizeBytes)
     {

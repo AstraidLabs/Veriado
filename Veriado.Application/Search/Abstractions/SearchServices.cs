@@ -263,12 +263,6 @@ public interface ISearchTelemetry
     void RecordFacetComputation(TimeSpan elapsed);
 
     /// <summary>
-    /// Records the elapsed time for a composite search (overall latency perceived by callers).
-    /// </summary>
-    /// <param name="elapsed">The elapsed duration.</param>
-    void RecordSearchLatency(TimeSpan elapsed);
-
-    /// <summary>
     /// Updates gauges describing the current index size and document counts.
     /// </summary>
     /// <param name="documentCount">The total number of indexed documents.</param>

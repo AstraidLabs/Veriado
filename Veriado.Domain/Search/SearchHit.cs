@@ -16,7 +16,6 @@ public sealed record HighlightSpan(string Field, int Start, int Length, string? 
 /// </summary>
 /// <param name="Id">The unique identifier of the matching document.</param>
 /// <param name="Score">The relevance score for the hit.</param>
-/// <param name="Source">The origin of the hit (e.g. FTS or TRIGRAM).</param>
 /// <param name="PrimaryField">The primary field used to generate the snippet.</param>
 /// <param name="SnippetText">The snippet presented to the caller.</param>
 /// <param name="Highlights">The highlight spans contained within the snippet.</param>
@@ -25,7 +24,6 @@ public sealed record HighlightSpan(string Field, int Start, int Length, string? 
 public sealed record SearchHit(
     Guid Id,
     double Score,
-    string Source,
     string? PrimaryField,
     string SnippetText,
     List<HighlightSpan> Highlights,
@@ -38,9 +36,7 @@ public sealed record SearchHit(
 /// <param name="LastModifiedUtc">The last modification timestamp of the document.</param>
 /// <param name="NormalizedScore">A score normalised to the range &lt;0,1&gt; for ordering.</param>
 /// <param name="RawScore">The raw score produced by the underlying search provider.</param>
-/// <param name="SecondaryScore">An optional secondary score when combining providers.</param>
 public sealed record SearchHitSortValues(
     DateTimeOffset LastModifiedUtc,
     double NormalizedScore,
-    double RawScore,
-    double? SecondaryScore = null);
+    double RawScore);

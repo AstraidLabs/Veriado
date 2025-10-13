@@ -146,9 +146,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
 
-        services.AddSingleton<SqliteFts5QueryService>();
-        services.AddSingleton<HybridSearchQueryService>();
-        services.AddSingleton<ISearchQueryService>(sp => sp.GetRequiredService<HybridSearchQueryService>());
+        services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<FtsWriteAheadService>();
         services.AddSingleton<IFtsDlqMonitor>(sp => sp.GetRequiredService<FtsWriteAheadService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();

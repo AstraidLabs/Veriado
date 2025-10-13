@@ -13,7 +13,7 @@ Tento dokument shrnuje aktuální podobu fulltextového vyhledávání po odstra
 
 ## Klíčové služby
 - **SearchQueryBuilder.** Generuje FTS5 výrazy, aplikuje synonyma, prefixy, rozsahy a buduje `SearchQueryPlan` bez jakýchkoli fallbacků.【F:Veriado.Application/Search/SearchQueryBuilder.cs†L1-L240】
-- **HybridSearchQueryService.** Předává dotazy přímo na `SqliteFts5QueryService`, sleduje latence a neobsahuje žádnou fuzzy logiku.【F:Veriado.Infrastructure/Search/HybridSearchQueryService.cs†L11-L61】
+- **SqliteFts5QueryService.** Zajišťuje kompletní dotazování včetně telemetrie latence bez dalších obálek.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L1-L312】
 - **SearchHistoryService / SearchFavoritesService.** Evidují pouze FTS dotazy. Metadata již neobsahují příznak fuzzy hledání a SQL příkazy pracují jen s reálnými sloupci tabulek `search_history` a `search_favorites`.【F:Veriado.Infrastructure/Search/SearchHistoryService.cs†L16-L87】【F:Veriado.Infrastructure/Search/SearchFavoritesService.cs†L15-L118】
 
 ## Integrace a konfigurace
