@@ -143,6 +143,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SqliteFts5Indexer>();
         services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
+        services.AddSingleton<IIndexQueue, IndexQueue>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
 
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
