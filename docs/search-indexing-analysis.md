@@ -7,7 +7,7 @@ V aktuální verzi aplikace probíhá indexace i dotazování výhradně nad SQL
 - Write-ahead úložiště (`fts_write_ahead`, `fts_write_ahead_dlq`) uchovává neprovedené operace a `FtsWriteAheadService` je přehrává při startu nebo po chybě. Formát zůstává nezměněn, pouze odstranil trigramové payloady.【F:Veriado.Infrastructure/Search/FtsWriteAheadService.cs†L17-L170】
 
 ## Konfigurace
-- `SearchOptions` a `SearchScoreOptions` definují váhy BM25, nastavení parseru, facety, synonyma a návrhy. Žádné trigramové sekce už neexistují; konfigurace se zaměřuje na čisté FTS a doprovodné služby (facety, suggestions, spell placeholder).【F:Veriado.Application/Search/SearchOptions.cs†L5-L76】
+- `SearchOptions` a `SearchScoreOptions` definují váhy BM25, analyzéry, facety, synonyma a návrhy. Konfigurace je zjednodušená na čisté FTS5 bez pomocných sekcí pro fuzzy nebo spell-check funkce.【F:Veriado.Application/Search/SearchOptions.cs†L5-L74】
 - `ServiceCollectionExtensions` registruje pouze FTS komponenty – indexer, koordinátor, write-ahead servis, query builder, historii a oblíbené položky. Fuzzy služby byly odstraněny a DI graf je jednodušší.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L56-L151】
 
 ## Generování dotazů a výsledků
@@ -17,7 +17,7 @@ V aktuální verzi aplikace probíhá indexace i dotazování výhradně nad SQL
 ## Dopady odstranění trigramů
 - Služby historie (`SearchHistoryService`) a oblíbených dotazů (`SearchFavoritesService`) již nepracují s příznakem fuzzy vyhledávání a operují pouze s reálnými sloupci svých tabulek.【F:Veriado.Infrastructure/Search/SearchHistoryService.cs†L16-L87】【F:Veriado.Infrastructure/Search/SearchFavoritesService.cs†L15-L118】
 - Integritní nástroje (`IndexAuditor`, `FulltextIntegrityService`) kontrolují pouze FTS mapy a nezpracovávají žádná trigramová metadata. To zkracuje audit i případnou opravu indexu.【F:Veriado.Infrastructure/Integrity/IndexAuditor.cs†L34-L120】【F:Veriado.Infrastructure/Integrity/FulltextIntegrityService.cs†L43-L232】
-- Spellchecker (`SpellSuggestionService`) je nyní no-op implementace, protože bez trigramového slovníku není k dispozici zdroj dat. Nadále však poskytuje logování pro transparentnost.【F:Veriado.Infrastructure/Search/SpellSuggestionService.cs†L8-L46】
+- Spellchecker placeholder byl odstraněn; k dispozici zůstává pouze FTS5 indexace, synonyma a prefixové návrhy. Tím se minimalizuje mrtvý kód a vazby na neexistující trigramová data.【F:Veriado.Application/Search/Abstractions/SearchServices.cs†L1-L212】【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L1-L210】
 
 ## Další doporučení
 - Zaměřit testy na koncové scénáře indexace a dotazování s čistým FTS, aby se zachytily případné regresní chyby po odstranění fuzzy větví.

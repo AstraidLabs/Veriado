@@ -17,11 +17,6 @@ public sealed class SearchOptions
     public AnalyzerOptions Analyzer { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets parser configuration options.
-    /// </summary>
-    public SearchParseOptions Parse { get; set; } = new();
-
-    /// <summary>
     /// Gets or sets facet aggregation options.
     /// </summary>
     public FacetOptions Facets { get; set; } = new();
@@ -36,10 +31,6 @@ public sealed class SearchOptions
     /// </summary>
     public SuggesterOptions Suggestions { get; set; } = new();
 
-    /// <summary>
-    /// Gets or sets spell suggestion options.
-    /// </summary>
-    public SpellOptions Spell { get; set; } = new();
 }
 
 /// <summary>
@@ -105,13 +96,3 @@ public sealed class SuggesterOptions
     public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(5);
 }
 
-    /// <summary>
-    /// Provides parameters for the optional spell-check placeholder.
-    /// </summary>
-public sealed class SpellOptions
-{
-    public int MaxSuggestions { get; set; } = 5;
-    public double SimilarityThreshold { get; set; } = 0.5d;
-    public bool EnableWhenResultsFound { get; set; }
-        = false;
-}

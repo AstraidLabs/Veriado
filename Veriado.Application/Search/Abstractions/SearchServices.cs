@@ -218,34 +218,6 @@ public interface ISynonymProvider
 }
 
 /// <summary>
-/// Represents a spell-correction suggestion.
-/// </summary>
-/// <param name="Term">The suggested correction.</param>
-/// <param name="Score">The similarity score normalised to &lt;0,1&gt;.</param>
-public sealed record SpellSuggestion(string Term, double Score);
-
-/// <summary>
-/// Provides approximate spell suggestions using trigram similarity.
-/// </summary>
-public interface ISpellSuggestionService
-{
-    /// <summary>
-    /// Suggests the closest matching terms for the provided token.
-    /// </summary>
-    /// <param name="token">The misspelt token.</param>
-    /// <param name="language">The optional language code.</param>
-    /// <param name="limit">The maximum number of suggestions.</param>
-    /// <param name="threshold">The minimum similarity threshold.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    Task<IReadOnlyList<SpellSuggestion>> SuggestAsync(
-        string token,
-        string? language,
-        int limit,
-        double threshold,
-        CancellationToken cancellationToken);
-}
-
-/// <summary>
 /// Represents an autocomplete suggestion entry.
 /// </summary>
 /// <param name="Term">The suggested term.</param>
@@ -300,7 +272,7 @@ public interface ISearchTelemetry
     /// Updates gauges describing the current index size and document counts.
     /// </summary>
     /// <param name="documentCount">The total number of indexed documents.</param>
-    /// <param name="indexSizeBytes">The combined size of FTS and trigram indices, when known.</param>
+    /// <param name="indexSizeBytes">The current size of the SQLite FTS5 index, when known.</param>
     void UpdateIndexMetrics(long documentCount, long indexSizeBytes);
 
     /// <summary>
