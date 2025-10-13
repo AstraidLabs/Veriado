@@ -46,7 +46,7 @@ internal sealed class SuggestionMaintenanceService
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await using SqliteTransaction sqliteTransaction = await connection
+            await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
                 .BeginTransactionAsync(cancellationToken)
                 .ConfigureAwait(false);
             foreach (var entry in harvested)

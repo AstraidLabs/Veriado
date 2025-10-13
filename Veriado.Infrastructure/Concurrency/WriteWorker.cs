@@ -281,7 +281,7 @@ internal sealed class WriteWorker : BackgroundService
             await sqliteConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await using SqliteTransaction sqliteTransaction = await sqliteConnection
+        await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await sqliteConnection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 

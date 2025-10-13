@@ -273,7 +273,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.FileId,
             error);
 
-        await using SqliteTransaction sqliteTransaction = await connection
+        await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -334,7 +334,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using SqliteTransaction sqliteTransaction = await connection
+        await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
@@ -380,7 +380,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using SqliteTransaction sqliteTransaction = await connection
+        await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
@@ -445,7 +445,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using SqliteTransaction sqliteTransaction = await connection
+        await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
@@ -493,7 +493,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             entry.Id,
             entry.FileId);
 
-        await using SqliteTransaction sqliteTransaction = await connection
+        await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         try
