@@ -63,18 +63,18 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         var searchIndexIds = new HashSet<Guid>();
         var searchTableExists = false;
-        var searchMapExists = false;
+        var contentTableExists = false;
         await using (var connection = CreateConnection())
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
             searchTableExists = await TableExistsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
-            searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
+            contentTableExists = await TableExistsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
 
-            if (searchMapExists)
+            if (contentTableExists)
             {
                 await using var command = connection.CreateCommand();
-                command.CommandText = "SELECT file_id FROM file_search_map;";
+                command.CommandText = "SELECT FileId FROM DocumentContent;";
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -86,7 +86,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
 
         var requiresFullRebuild = !searchTableExists
-            || !searchMapExists;
+            || !contentTableExists;
 
         if (requiresFullRebuild)
         {
@@ -96,9 +96,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 missingTables.Add("file_search");
             }
 
-            if (!searchMapExists)
+            if (!contentTableExists)
             {
-                missingTables.Add("file_search_map");
+                missingTables.Add("DocumentContent");
             }
 
             _logger.LogWarning(
@@ -157,8 +157,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         if (!requiresFullRebuild)
         {
-            var searchMapExists = await GetFulltextTableStateAsync(cancellationToken).ConfigureAwait(false);
-            if (!searchMapExists)
+            var contentTableExists = await GetFulltextTableStateAsync(cancellationToken).ConfigureAwait(false);
+            if (!contentTableExists)
             {
                 requiresFullRebuild = true;
                 _logger.LogInformation("Full-text metadata tables missing; forcing full rebuild before repair.");
@@ -363,8 +363,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var searchMapExists = await TableExistsAsync(connection, "file_search_map", cancellationToken).ConfigureAwait(false);
-        return searchMapExists;
+        var contentTableExists = await TableExistsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
+        return contentTableExists;
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
@@ -398,13 +398,17 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
         var dropStatements = new[]
         {
+            "DROP TRIGGER IF EXISTS dc_ai;",
+            "DROP TRIGGER IF EXISTS dc_au;",
+            "DROP TRIGGER IF EXISTS dc_ad;",
             "DROP TABLE IF EXISTS file_search;",
             "DROP TABLE IF EXISTS file_search_data;",
             "DROP TABLE IF EXISTS file_search_idx;",
             "DROP TABLE IF EXISTS file_search_content;",
             "DROP TABLE IF EXISTS file_search_docsize;",
             "DROP TABLE IF EXISTS file_search_config;",
-            "DROP TABLE IF EXISTS file_search_map;",
+            "DROP TABLE IF EXISTS file_trgm;",
+            "DROP TABLE IF EXISTS DocumentContent;",
             "DROP TABLE IF EXISTS fts_write_ahead;",
             "DROP TABLE IF EXISTS fts_write_ahead_dlq;"
         };
@@ -441,6 +445,14 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             createCommand.CommandText = statement;
             await createCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
+
+        await using (var rebuildCommand = connection.CreateCommand())
+        {
+            rebuildCommand.CommandText = "INSERT INTO file_search(file_search) VALUES('rebuild');";
+            await rebuildCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation("Full-text schema recreated successfully.");
     }
 
     private async Task DeleteWalCheckpointFilesAsync(CancellationToken cancellationToken)

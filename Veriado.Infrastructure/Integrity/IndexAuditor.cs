@@ -39,7 +39,7 @@ public sealed class IndexAuditor : IIndexAuditor
         var drift = new HashSet<Guid>();
         var extra = new HashSet<Guid>();
 
-        var (indexAvailable, searchMap) = await LoadIndexMapsAsync(ct).ConfigureAwait(false);
+        var (indexAvailable, searchMap) = await LoadIndexSnapshotAsync(ct).ConfigureAwait(false);
 
         await using var context = await _readFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         var files = context.Files
@@ -140,7 +140,7 @@ public sealed class IndexAuditor : IIndexAuditor
         return Task.FromResult(unique.Count);
     }
 
-    private async Task<(bool IndexAvailable, HashSet<Guid> SearchMap)> LoadIndexMapsAsync(CancellationToken ct)
+    private async Task<(bool IndexAvailable, HashSet<Guid> SearchMap)> LoadIndexSnapshotAsync(CancellationToken ct)
     {
         if (!_options.IsFulltextAvailable || string.IsNullOrWhiteSpace(_options.ConnectionString))
         {
@@ -153,7 +153,7 @@ public sealed class IndexAuditor : IIndexAuditor
             await connection.OpenAsync(ct).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: ct).ConfigureAwait(false);
 
-            var searchMap = await LoadMapAsync(connection, "file_search_map", ct).ConfigureAwait(false);
+            var searchMap = await LoadDocumentIdsAsync(connection, ct).ConfigureAwait(false);
             return (true, searchMap);
         }
         catch (OperationCanceledException)
@@ -167,11 +167,11 @@ public sealed class IndexAuditor : IIndexAuditor
         }
     }
 
-    private static async Task<HashSet<Guid>> LoadMapAsync(SqliteConnection connection, string table, CancellationToken ct)
+    private static async Task<HashSet<Guid>> LoadDocumentIdsAsync(SqliteConnection connection, CancellationToken ct)
     {
         var ids = new HashSet<Guid>();
         await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT file_id FROM {table};";
+        command.CommandText = "SELECT FileId FROM DocumentContent;";
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {

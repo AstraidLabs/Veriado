@@ -155,6 +155,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFacetService, FacetService>();
         services.AddSingleton<ISearchSuggestionService, SuggestionService>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();
+        services.AddSingleton<IIndexAuditor, IndexAuditor>();
         services.AddSingleton<ISearchIndexSignatureCalculator, SearchIndexSignatureCalculator>();
         services.AddSingleton<INeedsReindexEvaluator, NeedsReindexEvaluator>();
         services.AddSingleton<IEventPublisher, AuditEventPublisher>();
@@ -167,6 +168,7 @@ public static class ServiceCollectionExtensions
 
         services.AddHostedService<WriteWorker>();
         services.AddHostedService<IdempotencyCleanupWorker>();
+        services.AddHostedService<IndexAuditBackgroundService>();
 
         return services;
     }
