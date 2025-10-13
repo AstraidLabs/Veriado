@@ -16,6 +16,7 @@ internal sealed class WriteQueue : IWriteQueue
     private readonly ILogger<WriteQueue> _logger;
     private readonly Channel<WriteRequest>[] _partitions;
     private readonly int _partitionCount;
+    private readonly int _perPartitionCapacity;
     private int _roundRobinIndex;
 
     public WriteQueue(
@@ -31,18 +32,20 @@ internal sealed class WriteQueue : IWriteQueue
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _partitionCount = Math.Max(1, options.Workers);
+        var workers = Math.Max(1, options.Workers);
+        _partitionCount = workers;
+        _perPartitionCapacity = Math.Max(1, options.WriteQueueCapacity / workers);
+
         if (_state.PartitionCount != _partitionCount)
         {
             throw new InvalidOperationException(
                 "Write pipeline state partition count does not match configured worker count.");
         }
 
-        var capacities = AllocatePartitionCapacities(options.WriteQueueCapacity, _partitionCount);
         _partitions = new Channel<WriteRequest>[_partitionCount];
         for (var index = 0; index < _partitionCount; index++)
         {
-            var channelOptions = new BoundedChannelOptions(capacities[index])
+            var channelOptions = new BoundedChannelOptions(_perPartitionCapacity)
             {
                 SingleReader = true,
                 SingleWriter = false,
@@ -50,6 +53,12 @@ internal sealed class WriteQueue : IWriteQueue
             };
             _partitions[index] = Channel.CreateBounded<WriteRequest>(channelOptions);
         }
+
+        _logger.LogDebug(
+            "Write queue configured with {WorkerCount} workers, {PartitionCount} partitions, {Capacity} capacity per partition.",
+            workers,
+            _partitionCount,
+            _perPartitionCapacity);
     }
 
     public async Task<T> EnqueueAsync<T>(
@@ -80,6 +89,10 @@ internal sealed class WriteQueue : IWriteQueue
             inferredKey);
 
         var partitionId = SelectPartition(inferredKey);
+        if ((uint)partitionId >= (uint)_partitions.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionId), partitionId, "Partition index out of range.");
+        }
         try
         {
             request.MarkEnqueued(_clock.UtcNow);
@@ -134,29 +147,6 @@ internal sealed class WriteQueue : IWriteQueue
         }
     }
 
-    private static int[] AllocatePartitionCapacities(int totalCapacity, int partitionCount)
-    {
-        if (partitionCount <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(partitionCount));
-        }
-
-        if (totalCapacity < partitionCount)
-        {
-            totalCapacity = partitionCount;
-        }
-
-        var baseCapacity = Math.Max(1, totalCapacity / partitionCount);
-        var remainder = totalCapacity % partitionCount;
-        var capacities = new int[partitionCount];
-        for (var index = 0; index < partitionCount; index++)
-        {
-            capacities[index] = baseCapacity + (index < remainder ? 1 : 0);
-        }
-
-        return capacities;
-    }
-
     private Guid? ResolvePartitionKey(Guid? requested, IReadOnlyList<QueuedFileWrite>? trackedFiles)
     {
         if (requested.HasValue)
@@ -188,24 +178,22 @@ internal sealed class WriteQueue : IWriteQueue
     {
         if (partitionKey.HasValue)
         {
-            return GetPartitionFromGuid(partitionKey.Value);
+            return GetPartitionIndex(partitionKey.Value, _partitions.Length);
         }
 
-        var next = Interlocked.Increment(ref _roundRobinIndex);
-        var positive = next & int.MaxValue;
-        return positive % _partitionCount;
+        var next = (uint)Interlocked.Increment(ref _roundRobinIndex);
+        return (int)(next % (uint)_partitions.Length);
     }
 
-    private int GetPartitionFromGuid(Guid partitionKey)
+    private static int GetPartitionIndex(Guid key, int workers)
     {
-        var hash = partitionKey.GetHashCode();
-        if (hash == int.MinValue)
+        if (workers <= 0)
         {
-            hash = int.MaxValue;
+            throw new ArgumentOutOfRangeException(nameof(workers));
         }
 
-        var positive = Math.Abs(hash);
-        return positive % _partitionCount;
+        var hash = unchecked((uint)key.GetHashCode());
+        return (int)(hash % (uint)workers);
     }
 
     private void RecordDequeueMetrics(int partitionId, WriteRequest request)
@@ -226,7 +214,7 @@ internal sealed class WriteQueue : IWriteQueue
 
     private void ValidatePartition(int partitionId)
     {
-        if (partitionId < 0 || partitionId >= _partitionCount)
+        if ((uint)partitionId >= (uint)_partitionCount)
         {
             throw new ArgumentOutOfRangeException(nameof(partitionId));
         }
