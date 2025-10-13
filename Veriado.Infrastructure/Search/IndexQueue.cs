@@ -108,6 +108,7 @@ internal sealed class IndexQueue : IIndexQueue, IAsyncDisposable
         await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var tracked = await writeContext.Files
             .Include(f => f.SearchIndex)
+            .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
             .ConfigureAwait(false);
         if (tracked is null)

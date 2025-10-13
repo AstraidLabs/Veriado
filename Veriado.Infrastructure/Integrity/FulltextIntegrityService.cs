@@ -357,7 +357,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         var document = file.ToSearchDocument();
         await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
 
-        var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
+        var tracked = await writeContext.Files
+            .Include(f => f.SearchIndex)
+            .Include(f => f.Content)
+            .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
+            .ConfigureAwait(false);
         if (tracked is not null)
         {
             var signature = _signatureCalculator.Compute(tracked);
