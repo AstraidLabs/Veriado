@@ -5,18 +5,19 @@ namespace Veriado.Infrastructure.Search;
 
 internal sealed class SearchFavoritesService : ISearchFavoritesService
 {
-    private readonly InfrastructureOptions _options;
+    private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly IClock _clock;
 
-    public SearchFavoritesService(InfrastructureOptions options, IClock clock)
+    public SearchFavoritesService(ISqliteConnectionFactory connectionFactory, IClock clock)
     {
-        _options = options;
-        _clock = clock;
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     public async Task<IReadOnlyList<SearchFavoriteItem>> GetAllAsync(CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -45,11 +46,12 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(matchQuery);
 
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await using var sqliteTransaction = (SqliteTransaction)await connection
+        await using var sqliteTransaction = await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -89,7 +91,8 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
     public async Task RenameAsync(Guid id, string newName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -101,7 +104,8 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
 
     public async Task ReorderAsync(IReadOnlyList<Guid> orderedIds, CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -125,7 +129,7 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
 
         providedOrder.AddRange(existing);
 
-        await using var sqliteTransaction = (SqliteTransaction)await connection
+        await using var sqliteTransaction = await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         for (var index = 0; index < providedOrder.Count; index++)
@@ -143,7 +147,8 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
 
     public async Task RemoveAsync(Guid id, CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -155,7 +160,8 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
     public async Task<SearchFavoriteItem?> TryGetByKeyAsync(string key, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        await using var connection = CreateConnection();
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -179,13 +185,4 @@ internal sealed class SearchFavoritesService : ISearchFavoritesService
         return new SearchFavoriteItem(id, name, queryText, match, position, createdUtc);
     }
 
-    private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
-    }
 }
