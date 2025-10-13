@@ -56,8 +56,6 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     private readonly List<string> _whereClauses = new();
     private readonly List<SqliteParameterDefinition> _parameters = new();
     private readonly SearchScorePlan _scorePlan;
-    private readonly ISynonymProvider _synonymProvider;
-    private readonly string _language;
 
     private int _parameterIndex;
 
@@ -65,17 +63,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class using the default configuration.
     /// </summary>
     public SearchQueryBuilder()
-        : this(null, null, null)
-    {
-    }
-
-    /// <summary>
-    /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class with a custom synonym provider.
-    /// </summary>
-    /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
-    /// <param name="language">Optional language identifier used when querying synonyms.</param>
-    public SearchQueryBuilder(ISynonymProvider? synonymProvider, string? language)
-        : this(null, synonymProvider, language)
+        : this(null)
     {
     }
 
@@ -83,19 +71,10 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// Initialises a new instance of the <see cref="SearchQueryBuilder"/> class with scoring options and custom services.
     /// </summary>
     /// <param name="scoreOptions">Optional scoring options applied to the resulting <see cref="SearchScorePlan"/>.</param>
-    /// <param name="synonymProvider">The synonym provider responsible for expanding terms.</param>
-    /// <param name="language">Optional language identifier used when querying synonyms.</param>
-    public SearchQueryBuilder(
-        SearchScoreOptions? scoreOptions,
-        ISynonymProvider? synonymProvider,
-        string? language)
+    public SearchQueryBuilder(SearchScoreOptions? scoreOptions)
     {
         _scorePlan = new SearchScorePlan();
         ApplyScoreOptions(scoreOptions);
-        _synonymProvider = synonymProvider ?? EmptySynonymProvider.Instance;
-        _language = string.IsNullOrWhiteSpace(language)
-            ? "en"
-            : language!.Trim().ToLowerInvariant();
     }
 
     private void ApplyScoreOptions(SearchScoreOptions? options)
@@ -417,42 +396,7 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
     private string FormatTerm(string fieldPrefix, string tokenValue)
     {
-        var expansions = ExpandSynonyms(tokenValue);
-        if (expansions.Count == 0)
-        {
-            return fieldPrefix + tokenValue;
-        }
-
-        if (expansions.Count == 1)
-        {
-            var single = expansions[0];
-            return fieldPrefix + (single.Contains(' ', StringComparison.Ordinal)
-                ? '"' + EscapeQuotes(single) + '"'
-                : single);
-        }
-
-        var builder = new StringBuilder();
-        builder.Append(fieldPrefix).Append('(');
-        for (var index = 0; index < expansions.Count; index++)
-        {
-            if (index > 0)
-            {
-                builder.Append(" OR ");
-            }
-
-            var expansion = expansions[index];
-            if (expansion.Contains(' ', StringComparison.Ordinal))
-            {
-                builder.Append('"').Append(EscapeQuotes(expansion)).Append('"');
-            }
-            else
-            {
-                builder.Append(expansion);
-            }
-        }
-
-        builder.Append(')');
-        return builder.ToString();
+        return fieldPrefix + tokenValue;
     }
 
     private static string? NormalizeField(string? field)
@@ -480,47 +424,6 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
         var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return tokens.Length == 0 ? null : tokens[0];
-    }
-
-    private IReadOnlyList<string> ExpandSynonyms(string term)
-    {
-        if (string.IsNullOrWhiteSpace(term))
-        {
-            return Array.Empty<string>();
-        }
-
-        var expanded = _synonymProvider.Expand(_language, term);
-        if (expanded.Count == 0)
-        {
-            return Array.Empty<string>();
-        }
-
-        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ordered = new List<string>(expanded.Count);
-        foreach (var candidate in expanded)
-        {
-            var normalised = NormalizeText(candidate);
-            if (string.IsNullOrWhiteSpace(normalised))
-            {
-                continue;
-            }
-
-            if (unique.Add(normalised))
-            {
-                ordered.Add(normalised);
-            }
-        }
-
-        if (ordered.Count == 0)
-        {
-            var fallback = NormalizeText(term);
-            if (!string.IsNullOrWhiteSpace(fallback))
-            {
-                ordered.Add(fallback);
-            }
-        }
-
-        return ordered.Count == 0 ? Array.Empty<string>() : ordered;
     }
 
     private static string NormalizeText(string text)
@@ -597,29 +500,4 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
 
     private readonly record struct RangeTarget(string Column, SqliteType Type, Func<object, object?> Converter);
 
-    private sealed class EmptySynonymProvider : ISynonymProvider
-    {
-        public static readonly EmptySynonymProvider Instance = new();
-
-        public IReadOnlyList<string> Expand(string language, string term)
-        {
-            if (string.IsNullOrWhiteSpace(term))
-            {
-                return Array.Empty<string>();
-            }
-
-            return new[] { Normalize(term) };
-
-            static string Normalize(string value)
-            {
-                var builder = new StringBuilder(value.Length);
-                foreach (var ch in value)
-                {
-                    builder.Append(char.ToLowerInvariant(ch));
-                }
-
-                return builder.ToString();
-            }
-        }
-    }
 }

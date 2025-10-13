@@ -204,20 +204,6 @@ public interface IFacetService
 }
 
 /// <summary>
-/// Provides synonym expansion for FTS queries.
-/// </summary>
-public interface ISynonymProvider
-{
-    /// <summary>
-    /// Expands the supplied token into known synonym variants for the specified language.
-    /// </summary>
-    /// <param name="language">The ISO language code.</param>
-    /// <param name="term">The canonical token.</param>
-    /// <returns>A collection containing the canonical term followed by zero or more variants.</returns>
-    IReadOnlyList<string> Expand(string language, string term);
-}
-
-/// <summary>
 /// Represents an autocomplete suggestion entry.
 /// </summary>
 /// <param name="Term">The suggested term.</param>

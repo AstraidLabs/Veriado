@@ -11,12 +11,12 @@ Tento dokument shrnuje aktuální podobu fulltextového vyhledávání po odstra
 - **Výsledky dotazů.** `SqliteFts5QueryService` provádí `MATCH` dotazy, počítá `bm25` s váhami odpovídajícími pořadí content-linked sloupců a vrací `SearchHit` s fragmenty ze `metadata_text`. Zvýraznění zajišťuje funkce `snippet` a výsledky se řadí čistě podle BM25 nebo volitelného vlastního skóre.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L21-L336】
 
 ## Klíčové služby
-- **SearchQueryBuilder.** Generuje FTS5 výrazy, aplikuje synonyma, prefixy, rozsahy a buduje `SearchQueryPlan` bez jakýchkoli fallbacků.【F:Veriado.Application/Search/SearchQueryBuilder.cs†L1-L240】
+- **SearchQueryBuilder.** Generuje FTS5 výrazy s boolovskými operátory, prefixy a rozsahy a buduje `SearchQueryPlan` bez jakýchkoli fallbacků.【F:Veriado.Application/Search/SearchQueryBuilder.cs†L1-L240】
 - **SqliteFts5QueryService.** Zajišťuje kompletní dotazování včetně telemetrie latence bez dalších obálek.【F:Veriado.Infrastructure/Search/SqliteFts5QueryService.cs†L1-L312】
 - **SearchHistoryService / SearchFavoritesService.** Evidují pouze FTS dotazy. Metadata již neobsahují příznak fuzzy hledání a SQL příkazy pracují jen s reálnými sloupci tabulek `search_history` a `search_favorites`.【F:Veriado.Infrastructure/Search/SearchHistoryService.cs†L16-L87】【F:Veriado.Infrastructure/Search/SearchFavoritesService.cs†L15-L118】
 
 ## Integrace a konfigurace
-- `SearchOptions` poskytují váhy pro BM25, nastavení parseru, facety, synonyma a návrhy. Sekce pro trigramy byla odstraněna, zůstávají pouze relevantní části pro FTS a nápovědu.【F:Veriado.Application/Search/SearchOptions.cs†L5-L76】
+- `SearchOptions` poskytují váhy pro BM25, nastavení parseru, facety a návrhy. Sekce pro trigramy byla odstraněna, zůstávají pouze relevantní části pro FTS a nápovědu.【F:Veriado.Application/Search/SearchOptions.cs†L5-L82】
 - DI registrace v `ServiceCollectionExtensions` vytváří pouze FTS služby: indexer, koordinátor, write-ahead servis, dotazování, historii a oblíbené položky. Neprobíhá žádná registrace trigram komponent a nově se spouští periodický audit jako hosted service.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L56-L214】
 
 ## Doporučené kontroly

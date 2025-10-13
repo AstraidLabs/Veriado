@@ -108,7 +108,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Analyzer);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Score);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Facets);
-        services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Synonyms);
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Suggestions);
         services.AddSingleton<IOptions<AnalyzerOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Analyzer));
         services.AddSingleton<IOptions<SearchScoreOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Score));
@@ -151,7 +150,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFtsDlqMonitor>(sp => sp.GetRequiredService<FtsWriteAheadService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
-        services.AddSingleton<ISynonymProvider, SynonymService>();
         services.AddSingleton<IFacetService, FacetService>();
         services.AddSingleton<ISearchSuggestionService, SuggestionService>();
         services.AddSingleton<IFulltextIntegrityService, FulltextIntegrityService>();

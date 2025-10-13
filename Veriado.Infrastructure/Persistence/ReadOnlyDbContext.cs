@@ -33,8 +33,6 @@ public sealed class ReadOnlyDbContext : DbContext
 
     public DbSet<SearchFavoriteEntity> SearchFavorites => Set<SearchFavoriteEntity>();
 
-    public DbSet<SynonymEntry> Synonyms => Set<SynonymEntry>();
-
     public DbSet<SuggestionEntry> Suggestions => Set<SuggestionEntry>();
 
     public DbSet<DocumentLocationEntity> DocumentLocations => Set<DocumentLocationEntity>();

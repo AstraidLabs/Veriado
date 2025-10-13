@@ -354,39 +354,6 @@ namespace Veriado.Infrastructure.Migrations
                     b.ToTable("suggestions", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Domain.Search.SynonymEntry", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Language")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("lang");
-
-                    b.Property<string>("Term")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("term");
-
-                    b.Property<string>("Variant")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("variant");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Language", "Term")
-                        .HasDatabaseName("idx_synonyms_term");
-
-                    b.ToTable("synonyms", (string)null);
-                });
-
             modelBuilder.Entity("Veriado.Infrastructure.Idempotency.Entities.IdempotencyKeyEntity", b =>
                 {
                     b.Property<string>("Key")
