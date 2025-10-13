@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Veriado.Appl.Abstractions;
@@ -90,12 +92,23 @@ internal sealed class OutboxDispatcherHostedService : BackgroundService
         var batchSize = Math.Max(1, _options.OutboxMaxBatchSize);
         var now = _clock.UtcNow;
 
-        var candidates = await context.OutboxEvents
-            .Where(entry => entry.Attempts < _options.OutboxMaxAttempts)
-            .OrderBy(entry => entry.CreatedUtc)
-            .Take(batchSize * 4)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        List<OutboxEventEntity> candidates;
+        try
+        {
+            candidates = await context.OutboxEvents
+                .Where(entry => entry.Attempts < _options.OutboxMaxAttempts)
+                .OrderBy(entry => entry.CreatedUtc)
+                .Take(batchSize * 4)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (SqliteException ex) when (IsMissingOutboxTable(ex))
+        {
+            _logger.LogDebug(
+                ex,
+                "Outbox dispatcher skipping iteration because the outbox table is not yet available.");
+            return false;
+        }
 
         if (candidates.Count == 0)
         {
@@ -202,5 +215,16 @@ internal sealed class OutboxDispatcherHostedService : BackgroundService
         var factor = Math.Pow(2, attempts) - 1d;
         var delayMs = Math.Min(maxDelayMs, baseDelayMs * factor);
         return TimeSpan.FromMilliseconds(Math.Max(delayMs, baseDelayMs));
+    }
+
+    private static bool IsMissingOutboxTable(SqliteException exception)
+    {
+        if (exception is null)
+        {
+            return false;
+        }
+
+        return exception.SqliteErrorCode == SQLitePCL.raw.SQLITE_ERROR
+            && exception.Message?.Contains("no such table: outbox_events", StringComparison.OrdinalIgnoreCase) == true;
     }
 }
