@@ -12,19 +12,26 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalculator
 {
     private readonly SearchOptions _searchOptions;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
-    public SearchIndexSignatureCalculator(IOptions<SearchOptions> searchOptions)
+    public SearchIndexSignatureCalculator(IOptions<SearchOptions> searchOptions, IAnalyzerFactory analyzerFactory)
     {
         ArgumentNullException.ThrowIfNull(searchOptions);
+        ArgumentNullException.ThrowIfNull(analyzerFactory);
         _searchOptions = searchOptions.Value ?? throw new ArgumentNullException(nameof(searchOptions));
+        _analyzerFactory = analyzerFactory;
     }
 
     public SearchIndexSignature Compute(FileEntity file)
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        var normalizedTitle = string.IsNullOrWhiteSpace(file.Title) ? file.Name.Value : file.Title!;
-        return new SearchIndexSignature(GetAnalyzerVersion(), tokenHash: null, normalizedTitle);
+        var document = file.ToSearchDocument();
+        var analyzer = _analyzerFactory.Create();
+        var normalizedTitle = NormalizeTitle(document.Title, analyzer);
+        var tokenHash = ComputeTokenHash(document, analyzer);
+
+        return new SearchIndexSignature(GetAnalyzerVersion(), tokenHash, normalizedTitle);
     }
 
     public string GetAnalyzerVersion()
@@ -82,6 +89,47 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
         return Convert.ToHexString(bytes);
     }
 
+    private static string NormalizeTitle(string title, ITextAnalyzer analyzer)
+    {
+        var normalized = analyzer.Normalize(title, profileOrLang: null);
+        return string.IsNullOrWhiteSpace(normalized) ? string.Empty : normalized;
+    }
+
+    private static string? ComputeTokenHash(SearchDocument document, ITextAnalyzer analyzer)
+    {
+        var tokens = new List<string>();
+
+        void Collect(string? source)
+        {
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                return;
+            }
+
+            foreach (var token in analyzer.Tokenize(source, profileOrLang: null))
+            {
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    tokens.Add(token);
+                }
+            }
+        }
+
+        Collect(document.Title);
+        Collect(document.Author);
+        Collect(document.Mime);
+        Collect(document.MetadataText);
+
+        if (tokens.Count == 0)
+        {
+            return null;
+        }
+
+        using var sha = SHA256.Create();
+        var payload = string.Join('\n', tokens);
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(bytes);
+    }
 }
 
 public readonly record struct SearchIndexSignature(
