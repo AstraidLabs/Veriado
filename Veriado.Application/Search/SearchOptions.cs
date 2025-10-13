@@ -7,7 +7,7 @@ namespace Veriado.Appl.Search;
 public sealed class SearchOptions
 {
     /// <summary>
-    /// Gets or sets the scoring configuration applied to FTS and hybrid queries.
+    /// Gets or sets the scoring configuration applied to FTS queries.
     /// </summary>
     public SearchScoreOptions Score { get; set; } = new();
 
