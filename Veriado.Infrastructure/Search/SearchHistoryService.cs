@@ -21,7 +21,7 @@ internal sealed class SearchHistoryService : ISearchHistoryService
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await using var sqliteTransaction = await connection
+        await using SqliteTransaction sqliteTransaction = await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         var now = _clock.UtcNow.ToString("O");
