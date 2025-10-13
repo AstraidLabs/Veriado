@@ -2,6 +2,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
+using System.Linq;
+using Microsoft.Data.Sqlite;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
@@ -523,11 +526,7 @@ LIMIT $batchSize;";
         // Reset any outstanding WAL state before we drop and recreate the tables. A corrupted
         // or stale WAL file would otherwise continue to surface "database disk image is malformed"
         // errors even after the schema is rebuilt.
-        await using (var checkpoint = connection.CreateCommand())
-        {
-            checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-            await checkpoint.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
+        await ExecutePragmaAsync(connection, "wal_checkpoint(TRUNCATE)", cancellationToken).ConfigureAwait(false);
 
         var dropStatements = new[]
         {
@@ -546,12 +545,7 @@ LIMIT $batchSize;";
             "DROP TABLE IF EXISTS fts_write_ahead_dlq;"
         };
 
-        foreach (var statement in dropStatements)
-        {
-            await using var dropCommand = connection.CreateCommand();
-            dropCommand.CommandText = statement;
-            await dropCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
+        await ExecuteStatementsAsync(connection, dropStatements, "drop", cancellationToken).ConfigureAwait(false);
 
         // Rebuild the database pages after removing the corrupted tables. This helps clear out any
         // lingering corrupted pages that would otherwise continue to surface "database disk image is
@@ -562,62 +556,22 @@ LIMIT $batchSize;";
             await vacuum.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        // Explicitly close the connection so we can safely remove any lingering WAL/SHM files that
-        // may keep corrupted pages alive even after a rebuild. Without clearing these files, SQLite
-        // can continue surfacing "database disk image is malformed" errors for newly created tables.
-        connection.Close();
-        await DeleteWalCheckpointFilesAsync(cancellationToken).ConfigureAwait(false);
-
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        // Take an explicit checkpoint after VACUUM to truncate any WAL pages produced by the rebuild
+        // before creating the new schema objects.
+        await ExecutePragmaAsync(connection, "wal_checkpoint(TRUNCATE)", cancellationToken).ConfigureAwait(false);
 
         var schemaSql = ReadEmbeddedSql(Fts5SchemaResourceName);
-        foreach (var statement in SplitSqlStatements(schemaSql))
-        {
-            await using var createCommand = connection.CreateCommand();
-            createCommand.CommandText = statement;
-            await createCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
+        var schemaStatements = SplitSqlStatements(schemaSql).ToArray();
+        await ExecuteStatementsAsync(connection, schemaStatements, "create", cancellationToken).ConfigureAwait(false);
 
         await using (var rebuildCommand = connection.CreateCommand())
         {
             rebuildCommand.CommandText = "INSERT INTO file_search(file_search) VALUES('rebuild');";
+            LogSchemaStatement("rebuild", 1, 1, rebuildCommand.CommandText);
             await rebuildCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
         _logger.LogInformation("Full-text schema recreated successfully.");
-    }
-
-    private async Task DeleteWalCheckpointFilesAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (string.IsNullOrWhiteSpace(_options.DbPath))
-        {
-            return;
-        }
-
-        var walPath = _options.DbPath + "-wal";
-        var shmPath = _options.DbPath + "-shm";
-
-        foreach (var path in new[] { walPath, shmPath })
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!File.Exists(path))
-            {
-                continue;
-            }
-
-            try
-            {
-                File.Delete(path);
-                _logger.LogInformation("Removed stale SQLite checkpoint file {Path} during full-text rebuild.", path);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to remove SQLite checkpoint file {Path} during full-text rebuild.", path);
-            }
-        }
     }
 
     private static string ReadEmbeddedSql(string resourceName)
@@ -635,15 +589,211 @@ LIMIT $batchSize;";
         return reader.ReadToEnd();
     }
 
+    private async Task ExecuteStatementsAsync(
+        SqliteConnection connection,
+        IReadOnlyList<string> statements,
+        string phase,
+        CancellationToken cancellationToken)
+    {
+        if (statements.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < statements.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var statement = statements[i];
+            LogSchemaStatement(phase, i + 1, statements.Count, statement);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = statement;
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private void LogSchemaStatement(string phase, int index, int total, string statement)
+    {
+        if (!_logger.IsEnabled(LogLevel.Debug))
+        {
+            return;
+        }
+
+        var normalized = statement.Trim();
+        if (normalized.Length == 0)
+        {
+            return;
+        }
+
+        var length = normalized.Length;
+        var tailLength = Math.Min(100, length);
+        var tail = normalized.Substring(length - tailLength, tailLength);
+
+        _logger.LogDebug(
+            "Executing full-text schema statement {Phase} {Index}/{Total} (length={Length}, tail={Tail}):\n{Statement}",
+            phase,
+            index,
+            total,
+            length,
+            tail,
+            normalized);
+    }
+
+    private async Task ExecutePragmaAsync(
+        SqliteConnection connection,
+        string pragma,
+        CancellationToken cancellationToken)
+    {
+        await using var pragmaCommand = connection.CreateCommand();
+        pragmaCommand.CommandText = $"PRAGMA {pragma};";
+        LogSchemaStatement("pragma", 1, 1, pragmaCommand.CommandText);
+        await pragmaCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private static IEnumerable<string> SplitSqlStatements(string script)
     {
-        foreach (var statement in script.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        if (string.IsNullOrWhiteSpace(script))
         {
-            var trimmed = statement.Trim();
-            if (!string.IsNullOrEmpty(trimmed))
+            yield break;
+        }
+
+        var builder = new StringBuilder();
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
+        var inBracketIdentifier = false;
+        var inLineComment = false;
+        var inBlockComment = false;
+        var blockDepth = 0;
+
+        for (var i = 0; i < script.Length; i++)
+        {
+            var current = script[i];
+            var next = i + 1 < script.Length ? script[i + 1] : '\0';
+
+            if (inLineComment)
             {
-                yield return trimmed + ';';
+                if (current == '\n')
+                {
+                    inLineComment = false;
+                }
+
+                continue;
             }
+
+            if (inBlockComment)
+            {
+                if (current == '*' && next == '/')
+                {
+                    inBlockComment = false;
+                    i++;
+                }
+
+                continue;
+            }
+
+            if (!inSingleQuote && !inDoubleQuote && !inBracketIdentifier)
+            {
+                if (current == '-' && next == '-')
+                {
+                    inLineComment = true;
+                    i++;
+                    continue;
+                }
+
+                if (current == '/' && next == '*')
+                {
+                    inBlockComment = true;
+                    i++;
+                    continue;
+                }
+            }
+
+            builder.Append(current);
+
+            if (!inDoubleQuote && !inBracketIdentifier && current == '\'')
+            {
+                if (inSingleQuote && next == '\'')
+                {
+                    builder.Append(next);
+                    i++;
+                    continue;
+                }
+
+                inSingleQuote = !inSingleQuote;
+                continue;
+            }
+
+            if (!inSingleQuote && !inBracketIdentifier && current == '"')
+            {
+                if (inDoubleQuote && next == '"')
+                {
+                    builder.Append(next);
+                    i++;
+                    continue;
+                }
+
+                inDoubleQuote = !inDoubleQuote;
+                continue;
+            }
+
+            if (!inSingleQuote && !inDoubleQuote)
+            {
+                if (current == '[')
+                {
+                    inBracketIdentifier = true;
+                    continue;
+                }
+
+                if (current == ']')
+                {
+                    inBracketIdentifier = false;
+                    continue;
+                }
+            }
+
+            if (inSingleQuote || inDoubleQuote || inBracketIdentifier)
+            {
+                continue;
+            }
+
+            if (char.IsLetter(current))
+            {
+                var tokenStart = i;
+                while (i + 1 < script.Length && char.IsLetter(script[i + 1]))
+                {
+                    i++;
+                    builder.Append(script[i]);
+                }
+
+                var token = script[tokenStart..(i + 1)];
+                if (string.Equals(token, "BEGIN", StringComparison.OrdinalIgnoreCase))
+                {
+                    blockDepth++;
+                }
+                else if (string.Equals(token, "END", StringComparison.OrdinalIgnoreCase) && blockDepth > 0)
+                {
+                    blockDepth--;
+                }
+
+                continue;
+            }
+
+            if (current == ';' && blockDepth == 0)
+            {
+                var statement = builder.ToString().Trim();
+                if (statement.Length > 0)
+                {
+                    yield return statement;
+                }
+
+                builder.Clear();
+            }
+        }
+
+        var trailing = builder.ToString().Trim();
+        if (trailing.Length > 0)
+        {
+            yield return trailing;
         }
     }
 }

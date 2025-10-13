@@ -44,8 +44,6 @@ JOIN file_search s ON s.rowid = m.rowid;");
     mime,
     metadata_text,
     metadata,
-    content='DocumentContent',
-    content_rowid='DocId',
     tokenize='unicode61 remove_diacritics 2'
 );");
 
@@ -55,15 +53,15 @@ JOIN file_search s ON s.rowid = m.rowid;");
 END;");
 
             migrationBuilder.Sql(@"CREATE TRIGGER IF NOT EXISTS dc_au AFTER UPDATE ON DocumentContent BEGIN
-  INSERT INTO file_search(file_search, rowid, title, author, mime, metadata_text, metadata)
-  VALUES('delete', old.DocId, old.Title, old.Author, old.Mime, old.MetadataText, old.Metadata);
+  INSERT INTO file_search(file_search, rowid)
+  VALUES('delete', old.DocId);
   INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
   VALUES(new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
 END;");
 
             migrationBuilder.Sql(@"CREATE TRIGGER IF NOT EXISTS dc_ad AFTER DELETE ON DocumentContent BEGIN
-  INSERT INTO file_search(file_search, rowid, title, author, mime, metadata_text, metadata)
-  VALUES('delete', old.DocId, old.Title, old.Author, old.Mime, old.MetadataText, old.Metadata);
+  INSERT INTO file_search(file_search, rowid)
+  VALUES('delete', old.DocId);
 END;");
 
             migrationBuilder.Sql("DROP TABLE IF EXISTS file_search_map;");
