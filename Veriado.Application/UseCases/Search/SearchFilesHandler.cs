@@ -650,6 +650,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
         "author",
         "mime",
         "metadata_text",
+        "metadata",
     };
 
     private enum LexTokenType
