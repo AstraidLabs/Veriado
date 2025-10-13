@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
 using Veriado.Domain.Primitives;
-using Veriado.Domain.Search.Events;
+using Veriado.Infrastructure.Events;
+using Veriado.Infrastructure.Persistence.Outbox;
 using Veriado.Infrastructure.Search;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
@@ -19,14 +20,16 @@ namespace Veriado.Infrastructure.Concurrency;
 /// </summary>
 internal sealed class WriteWorker : BackgroundService
 {
+    private readonly int _partitionId;
     private readonly IWriteQueue _writeQueue;
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ILogger<WriteWorker> _logger;
     private readonly InfrastructureOptions _options;
+    private readonly WritePipelineState _state;
+    private readonly IWritePipelineTelemetry _pipelineTelemetry;
     private readonly ISearchIndexCoordinator _searchCoordinator;
     private readonly ISearchIndexer _searchIndexer;
     private readonly IFulltextIntegrityService _integrityService;
-    private readonly IEventPublisher _eventPublisher;
     private readonly IClock _clock;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly INeedsReindexEvaluator _needsReindexEvaluator;
@@ -37,14 +40,16 @@ internal sealed class WriteWorker : BackgroundService
     private static readonly FilePersistenceOptions SameTransactionOptions = FilePersistenceOptions.Default;
 
     public WriteWorker(
+        int partitionId,
         IWriteQueue writeQueue,
         IDbContextFactory<AppDbContext> dbContextFactory,
         ILogger<WriteWorker> logger,
         InfrastructureOptions options,
+        WritePipelineState state,
+        IWritePipelineTelemetry pipelineTelemetry,
         ISearchIndexCoordinator searchCoordinator,
         ISearchIndexer searchIndexer,
         IFulltextIntegrityService integrityService,
-        IEventPublisher eventPublisher,
         IClock clock,
         IAnalyzerFactory analyzerFactory,
         INeedsReindexEvaluator needsReindexEvaluator,
@@ -52,15 +57,33 @@ internal sealed class WriteWorker : BackgroundService
         FtsWriteAheadService writeAhead,
         ISearchTelemetry telemetry)
     {
-        _writeQueue = writeQueue;
-        _dbContextFactory = dbContextFactory;
-        _logger = logger;
-        _options = options;
-        _searchCoordinator = searchCoordinator;
-        _searchIndexer = searchIndexer;
-        _integrityService = integrityService;
-        _eventPublisher = eventPublisher;
-        _clock = clock;
+        if (partitionId < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionId));
+        }
+
+        _partitionId = partitionId;
+        _writeQueue = writeQueue ?? throw new ArgumentNullException(nameof(writeQueue));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _state = state ?? throw new ArgumentNullException(nameof(state));
+        _pipelineTelemetry = pipelineTelemetry ?? throw new ArgumentNullException(nameof(pipelineTelemetry));
+        if (_partitionId >= _options.Workers)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionId));
+        }
+
+        if (_state.PartitionCount != _options.Workers)
+        {
+            throw new InvalidOperationException(
+                "Write pipeline state partition count does not match configured worker count.");
+        }
+
+        _searchCoordinator = searchCoordinator ?? throw new ArgumentNullException(nameof(searchCoordinator));
+        _searchIndexer = searchIndexer ?? throw new ArgumentNullException(nameof(searchIndexer));
+        _integrityService = integrityService ?? throw new ArgumentNullException(nameof(integrityService));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _needsReindexEvaluator = needsReindexEvaluator ?? throw new ArgumentNullException(nameof(needsReindexEvaluator));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
@@ -70,7 +93,10 @@ internal sealed class WriteWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Write worker started");
+        _logger.LogInformation(
+            "Write worker partition {PartitionId} started (configured workers={WorkerCount})",
+            _partitionId,
+            _options.Workers);
         Exception? terminationException = null;
         try
         {
@@ -89,7 +115,12 @@ internal sealed class WriteWorker : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to process write batch of size {BatchSize}", batch.Count);
+                    _pipelineTelemetry.RecordBatchFailure(_partitionId);
+                    _logger.LogError(
+                        ex,
+                        "Failed to process write batch of size {BatchSize} on partition {PartitionId}",
+                        batch.Count,
+                        _partitionId);
                     foreach (var request in batch)
                     {
                         request.TrySetException(ex);
@@ -100,12 +131,17 @@ internal sealed class WriteWorker : BackgroundService
         catch (OperationCanceledException oce)
         {
             terminationException = oce;
-            _logger.LogInformation("Write worker stopping");
+            _logger.LogInformation(
+                "Write worker partition {PartitionId} stopping",
+                _partitionId);
         }
         catch (Exception ex)
         {
             terminationException = ex;
-            _logger.LogError(ex, "Write worker terminated unexpectedly");
+            _logger.LogError(
+                ex,
+                "Write worker partition {PartitionId} terminated unexpectedly",
+                _partitionId);
             throw;
         }
         finally
@@ -117,7 +153,7 @@ internal sealed class WriteWorker : BackgroundService
 
     private void DrainPendingRequests(Exception? terminationException, CancellationToken stoppingToken)
     {
-        while (_writeQueue.TryDequeue(out var pending))
+        while (_writeQueue.TryDequeue(_partitionId, out var pending))
         {
             if (pending is null)
             {
@@ -142,11 +178,11 @@ internal sealed class WriteWorker : BackgroundService
 
     private async Task<List<WriteRequest>> CollectBatchAsync(CancellationToken cancellationToken)
     {
-        var batch = new List<WriteRequest>(_options.BatchSize);
+        var batch = new List<WriteRequest>(_options.BatchMaxItems);
         WriteRequest? first;
         try
         {
-            first = await _writeQueue.DequeueAsync(cancellationToken).ConfigureAwait(false);
+            first = await _writeQueue.DequeueAsync(_partitionId, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -160,13 +196,13 @@ internal sealed class WriteWorker : BackgroundService
 
         batch.Add(first);
         using var windowCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        windowCts.CancelAfter(TimeSpan.FromMilliseconds(_options.BatchWindowMs));
+        windowCts.CancelAfter(TimeSpan.FromMilliseconds(_options.BatchMaxWindowMs));
 
-        while (batch.Count < _options.BatchSize)
+        while (batch.Count < _options.BatchMaxItems)
         {
             try
             {
-                var next = await _writeQueue.DequeueAsync(windowCts.Token).ConfigureAwait(false);
+                var next = await _writeQueue.DequeueAsync(_partitionId, windowCts.Token).ConfigureAwait(false);
                 if (next is null)
                 {
                     break;
@@ -186,12 +222,25 @@ internal sealed class WriteWorker : BackgroundService
     private async Task ProcessBatchAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
     {
         var repairAttempted = false;
+        var attempts = 0;
+        var totalStopwatch = Stopwatch.StartNew();
 
         while (true)
         {
             try
             {
-                await ProcessBatchAttemptAsync(batch, cancellationToken).ConfigureAwait(false);
+                attempts++;
+                var completed = await ProcessBatchAttemptAsync(batch, cancellationToken).ConfigureAwait(false);
+                totalStopwatch.Stop();
+
+                if (!completed)
+                {
+                    _pipelineTelemetry.RecordBatchFailure(_partitionId);
+                    return;
+                }
+
+                _state.RecordBatch(_partitionId, batch.Count, totalStopwatch.Elapsed, attempts - 1);
+                _pipelineTelemetry.RecordBatchProcessed(_partitionId, batch.Count, totalStopwatch.Elapsed, attempts - 1);
                 return;
             }
             catch (SearchIndexCorruptedException ex)
@@ -210,12 +259,14 @@ internal sealed class WriteWorker : BackgroundService
                     "Full-text search index corruption detected while processing a write batch. Initiating automatic repair.");
 
                 await AttemptIntegrityRepairAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("Retrying write batch after repairing the full-text search index.");
+                _logger.LogInformation(
+                    "Retrying write batch on partition {PartitionId} after repairing the full-text search index.",
+                    _partitionId);
             }
         }
     }
 
-    private async Task ProcessBatchAttemptAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
+    private async Task<bool> ProcessBatchAttemptAsync(IReadOnlyList<WriteRequest> batch, CancellationToken cancellationToken)
     {
         var batchStopwatch = Stopwatch.StartNew();
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
@@ -241,9 +292,10 @@ internal sealed class WriteWorker : BackgroundService
         var transactionId = Guid.NewGuid();
 
         _logger.LogInformation(
-            "Write transaction {TransactionId} started for batch size {BatchSize}",
+            "Write transaction {TransactionId} started for batch size {BatchSize} on partition {PartitionId}",
             transactionId,
-            batch.Count);
+            batch.Count,
+            _partitionId);
 
         var results = new object?[batch.Count];
         Exception? failure = null;
@@ -282,9 +334,10 @@ internal sealed class WriteWorker : BackgroundService
         {
             _logger.LogWarning(
                 failure,
-                "Write transaction {TransactionId} rolling back due to {ErrorType}",
+                "Write transaction {TransactionId} rolling back due to {ErrorType} on partition {PartitionId}",
                 transactionId,
-                failure.GetType().Name);
+                failure.GetType().Name,
+                _partitionId);
 
             await efTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             foreach (var request in batch)
@@ -292,7 +345,8 @@ internal sealed class WriteWorker : BackgroundService
                 request.TrySetException(failure);
             }
 
-            return;
+            batchStopwatch.Stop();
+            return false;
         }
 
         var fileEntries = context.ChangeTracker.Entries<FileEntity>().ToList();
@@ -346,6 +400,22 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
+        var outboxEntries = new List<OutboxEventEntity>();
+
+        foreach (var domainEvent in domainEvents)
+        {
+            if (OutboxDomainEventSerializer.TryCreateOutboxEvent(domainEvent, _clock.UtcNow, out var outboxEntry)
+                && outboxEntry is not null)
+            {
+                outboxEntries.Add(outboxEntry);
+            }
+            else
+            {
+                _logger.LogTrace(
+                    "Domain event {EventType} skipped by outbox serializer.",
+                    domainEvent.GetType().Name);
+            }
+        }
 
         try
         {
@@ -364,6 +434,11 @@ internal sealed class WriteWorker : BackgroundService
                     : "No full-text updates required for transaction {TransactionId}",
                 transactionId);
 
+            if (outboxEntries.Count > 0)
+            {
+                context.OutboxEvents.AddRange(outboxEntries);
+            }
+
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (SearchIndexCorruptedException)
@@ -380,9 +455,10 @@ internal sealed class WriteWorker : BackgroundService
         {
             _logger.LogWarning(
                 failure,
-                "Write transaction {TransactionId} rolling back due to {ErrorType}",
+                "Write transaction {TransactionId} rolling back due to {ErrorType} on partition {PartitionId}",
                 transactionId,
-                failure.GetType().Name);
+                failure.GetType().Name,
+                _partitionId);
 
             await efTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             foreach (var request in batch)
@@ -390,7 +466,8 @@ internal sealed class WriteWorker : BackgroundService
                 request.TrySetException(failure);
             }
 
-            return;
+            batchStopwatch.Stop();
+            return false;
         }
 
         try
@@ -406,9 +483,10 @@ internal sealed class WriteWorker : BackgroundService
         {
             _logger.LogWarning(
                 failure,
-                "Write transaction {TransactionId} rolling back due to {ErrorType}",
+                "Write transaction {TransactionId} rolling back due to {ErrorType} on partition {PartitionId}",
                 transactionId,
-                failure.GetType().Name);
+                failure.GetType().Name,
+                _partitionId);
 
             try
             {
@@ -427,14 +505,16 @@ internal sealed class WriteWorker : BackgroundService
                 request.TrySetException(failure);
             }
 
-            return;
+            batchStopwatch.Stop();
+            return false;
         }
 
         batchStopwatch.Stop();
 
         _logger.LogInformation(
-            "Write transaction {TransactionId} committed",
-            transactionId);
+            "Write transaction {TransactionId} committed on partition {PartitionId}",
+            transactionId,
+            _partitionId);
 
         foreach (var entry in fileEntries)
         {
@@ -446,25 +526,24 @@ internal sealed class WriteWorker : BackgroundService
             batch[index].TrySetResult(results[index]);
         }
 
-        if (domainEvents.Count > 0)
-        {
-            try
-            {
-                await _eventPublisher.PublishAsync(domainEvents, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                var eventTypes = string.Join(", ", domainEvents.Select(domainEvent => domainEvent.GetType().Name));
-                _logger.LogError(ex, "Domain event publication failed for {EventTypes}", eventTypes);
-            }
-        }
-
         _logger.LogInformation(
-            "Processed write batch of {BatchSize} items in {ElapsedMilliseconds} ms (indexed {IndexedCount}) [Transaction: {TransactionId}]",
+            "Processed write batch of {BatchSize} items in {ElapsedMilliseconds} ms (indexed {IndexedCount}) [Transaction: {TransactionId}, Partition: {PartitionId}]",
             batch.Count,
             batchStopwatch.Elapsed.TotalMilliseconds,
             staleCount,
-            transactionId);
+            transactionId,
+            _partitionId);
+
+        if (outboxEntries.Count > 0)
+        {
+            _logger.LogInformation(
+                "Enqueued {OutboxCount} domain events for reliable dispatch [Transaction: {TransactionId}, Partition: {PartitionId}]",
+                outboxEntries.Count,
+                transactionId,
+                _partitionId);
+        }
+
+        return true;
     }
 
     private static FilePersistenceOptions NormalizePersistenceOptions(FilePersistenceOptions requestedOptions)

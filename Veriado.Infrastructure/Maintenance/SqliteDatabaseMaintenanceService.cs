@@ -1,3 +1,6 @@
+using System;
+using Veriado.Infrastructure.Search;
+
 namespace Veriado.Infrastructure.Maintenance;
 
 /// <summary>
@@ -6,10 +9,12 @@ namespace Veriado.Infrastructure.Maintenance;
 internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceService
 {
     private readonly InfrastructureOptions _options;
+    private readonly ISqliteConnectionFactory _connectionFactory;
 
-    public SqliteDatabaseMaintenanceService(InfrastructureOptions options)
+    public SqliteDatabaseMaintenanceService(InfrastructureOptions options, ISqliteConnectionFactory connectionFactory)
     {
         _options = options;
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
     public async Task<int> VacuumAndOptimizeAsync(CancellationToken cancellationToken)
@@ -19,9 +24,9 @@ internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceSer
             throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
         }
 
-        await using var connection = new SqliteConnection(_options.ConnectionString);
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var statements = new[] { "VACUUM;", "PRAGMA optimize;" };
         var executed = 0;
@@ -44,9 +49,9 @@ internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceSer
             throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
         }
 
-        await using var connection = new SqliteConnection(_options.ConnectionString);
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";

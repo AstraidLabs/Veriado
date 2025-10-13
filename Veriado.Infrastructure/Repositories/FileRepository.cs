@@ -79,7 +79,7 @@ internal sealed class FileRepository : IFileRepository
         {
             db.Files.Add(entity);
             return Task.FromResult(true);
-        }, tracked, cancellationToken).ConfigureAwait(false);
+        }, tracked, entity.Id, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
@@ -90,7 +90,7 @@ internal sealed class FileRepository : IFileRepository
         {
             db.Files.Update(entity);
             return Task.FromResult(true);
-        }, tracked, cancellationToken).ConfigureAwait(false);
+        }, tracked, entity.Id, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -105,6 +105,6 @@ internal sealed class FileRepository : IFileRepository
 
             db.Files.Remove(entity);
             return true;
-        }, null, cancellationToken).ConfigureAwait(false);
+        }, null, id, cancellationToken).ConfigureAwait(false);
     }
 }
