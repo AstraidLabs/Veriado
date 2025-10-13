@@ -600,7 +600,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
             return string.Empty;
         }
 
-        return string.Concat(tokens);
+        return tokens.Length == 1 ? tokens[0] : string.Join(' ', tokens);
     }
 
     private static bool TryExtractField(string rawToken, out string fieldName, out string remainder)
