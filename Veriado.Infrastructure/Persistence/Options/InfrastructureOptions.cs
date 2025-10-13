@@ -68,6 +68,11 @@ public sealed class InfrastructureOptions
     /// </summary>
     public TimeSpan IdempotencyCleanupInterval { get; set; } = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// Gets or sets the interval at which the background index auditor verifies FTS consistency.
+    /// </summary>
+    public TimeSpan IndexAuditInterval { get; set; } = TimeSpan.FromHours(4);
+
     private int _batchSize = DefaultBatchSize;
     private int _batchWindowMs = DefaultBatchWindowMs;
 

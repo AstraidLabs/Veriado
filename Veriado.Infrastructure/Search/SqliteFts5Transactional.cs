@@ -50,27 +50,24 @@ internal sealed class SqliteFts5Transactional
                     normalizedTitle,
                     cancellationToken)
                 .ConfigureAwait(false);
-            var searchRowId = await EnsureMapRowIdAsync("file_search_map", document.FileId, connection, transaction, cancellationToken).ConfigureAwait(false);
-
-            await using (var delete = connection.CreateCommand())
+            await using (var upsert = connection.CreateCommand())
             {
-                delete.Transaction = transaction;
-                delete.CommandText = "INSERT INTO file_search(file_search, rowid) VALUES ('delete', $rowid);";
-                delete.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
-                await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            await using (var insert = connection.CreateCommand())
-            {
-                insert.Transaction = transaction;
-                insert.CommandText = "INSERT INTO file_search(rowid, title, mime, author, metadata_text, metadata) VALUES ($rowid, $title, $mime, $author, $metadata_text, $metadata);";
-                insert.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId;
-                insert.Parameters.AddWithValue("$title", (object?)normalizedTitle ?? DBNull.Value);
-                insert.Parameters.AddWithValue("$mime", document.Mime);
-                insert.Parameters.AddWithValue("$author", (object?)normalizedAuthor ?? DBNull.Value);
-                insert.Parameters.AddWithValue("$metadata_text", (object?)normalizedMetadataText ?? DBNull.Value);
-                insert.Parameters.AddWithValue("$metadata", (object?)document.MetadataJson ?? DBNull.Value);
-                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                upsert.Transaction = transaction;
+                upsert.CommandText = @"INSERT INTO DocumentContent (FileId, Title, Author, Mime, MetadataText, Metadata)
+VALUES ($fileId, $title, $author, $mime, $metadata_text, $metadata)
+ON CONFLICT(FileId) DO UPDATE SET
+    Title = excluded.Title,
+    Author = excluded.Author,
+    Mime = excluded.Mime,
+    MetadataText = excluded.MetadataText,
+    Metadata = excluded.Metadata;";
+                upsert.Parameters.Add("$fileId", SqliteType.Blob).Value = document.FileId.ToByteArray();
+                upsert.Parameters.AddWithValue("$title", (object?)normalizedTitle ?? DBNull.Value);
+                upsert.Parameters.AddWithValue("$author", (object?)normalizedAuthor ?? DBNull.Value);
+                upsert.Parameters.AddWithValue("$mime", document.Mime);
+                upsert.Parameters.AddWithValue("$metadata_text", (object?)normalizedMetadataText ?? DBNull.Value);
+                upsert.Parameters.AddWithValue("$metadata", (object?)document.MetadataJson ?? DBNull.Value);
+                await upsert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
             if (enlistJournal && journalId.HasValue)
@@ -108,7 +105,6 @@ internal sealed class SqliteFts5Transactional
             {
                 return null;
             }
-            var fileKey = fileId.ToByteArray();
             var journalTransaction = enlistJournal ? transaction : null;
             var journalId = await _writeAhead
                 .LogAsync(
@@ -121,22 +117,12 @@ internal sealed class SqliteFts5Transactional
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var searchRowId = await TryGetRowIdAsync("file_search_map", fileId, connection, transaction, cancellationToken).ConfigureAwait(false);
-            if (searchRowId.HasValue)
+            await using (var delete = connection.CreateCommand())
             {
-                await using var deleteFts = connection.CreateCommand();
-                deleteFts.Transaction = transaction;
-                deleteFts.CommandText = "INSERT INTO file_search(file_search, rowid) VALUES ('delete', $rowid);";
-                deleteFts.Parameters.Add("$rowid", SqliteType.Integer).Value = searchRowId.Value;
-                await deleteFts.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            await using (var deleteSearchMap = connection.CreateCommand())
-            {
-                deleteSearchMap.Transaction = transaction;
-                deleteSearchMap.CommandText = "DELETE FROM file_search_map WHERE file_id = $fileId;";
-                deleteSearchMap.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
-                await deleteSearchMap.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM DocumentContent WHERE FileId = $fileId;";
+                delete.Parameters.Add("$fileId", SqliteType.Blob).Value = fileId.ToByteArray();
+                await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
             if (enlistJournal && journalId.HasValue)
@@ -156,49 +142,6 @@ internal sealed class SqliteFts5Transactional
         {
             throw new SearchIndexCorruptedException("SQLite full-text index became unavailable and needs to be repaired.", ex);
         }
-    }
-
-    private static async Task<long> EnsureMapRowIdAsync(string mapTable, Guid fileId, SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(transaction);
-        ArgumentException.ThrowIfNullOrEmpty(mapTable);
-        var fileKey = fileId.ToByteArray();
-
-        await using (var insert = connection.CreateCommand())
-        {
-            insert.Transaction = transaction;
-            insert.CommandText = $"INSERT OR IGNORE INTO {mapTable}(file_id) VALUES ($fileId);";
-            insert.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
-            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        await using var select = connection.CreateCommand();
-        select.Transaction = transaction;
-        select.CommandText = $"SELECT rowid FROM {mapTable} WHERE file_id = $fileId;";
-        select.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
-        var rowId = await select.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        if (rowId is long value)
-        {
-            return value;
-        }
-
-        throw new InvalidOperationException($"Failed to resolve row identifier for {mapTable}.");
-    }
-
-    private static async Task<long?> TryGetRowIdAsync(string mapTable, Guid fileId, SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(transaction);
-        ArgumentException.ThrowIfNullOrEmpty(mapTable);
-        var fileKey = fileId.ToByteArray();
-
-        await using var select = connection.CreateCommand();
-        select.Transaction = transaction;
-        select.CommandText = $"SELECT rowid FROM {mapTable} WHERE file_id = $fileId;";
-        select.Parameters.Add("$fileId", SqliteType.Blob).Value = fileKey;
-        var result = await select.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return result is long value ? value : null;
     }
 
     private string? NormalizeOptional(string? value)

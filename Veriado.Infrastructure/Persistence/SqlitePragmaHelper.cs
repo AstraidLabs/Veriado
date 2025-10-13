@@ -35,7 +35,8 @@ internal static class SqlitePragmaHelper
 
         await ExecuteNonQueryAsync(connection, "PRAGMA foreign_keys=ON;", cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, "PRAGMA temp_store=MEMORY;", cancellationToken).ConfigureAwait(false);
-        await ExecuteNonQueryAsync(connection, "PRAGMA mmap_size=134217728;", cancellationToken).ConfigureAwait(false);
+        await ExecuteNonQueryAsync(connection, "PRAGMA page_size=4096;", cancellationToken).ConfigureAwait(false);
+        await ExecuteNonQueryAsync(connection, "PRAGMA mmap_size=268435456;", cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, "PRAGMA cache_size=-32768;", cancellationToken).ConfigureAwait(false);
     }
 
