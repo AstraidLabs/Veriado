@@ -27,14 +27,27 @@ internal sealed class WriteQueue : IWriteQueue
     {
         ArgumentNullException.ThrowIfNull(work);
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var registration = default(CancellationTokenRegistration);
+        if (cancellationToken.CanBeCanceled)
+        {
+            registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
+        }
+
         var request = new WriteRequest(async (context, ct) =>
         {
             var value = await work(context, ct).ConfigureAwait(false);
             return (object?)value;
         }, completion, trackedFiles, cancellationToken);
-        await _channel.Writer.WriteAsync(request, cancellationToken).ConfigureAwait(false);
-        var result = await completion.Task.ConfigureAwait(false);
-        return result is T typed ? typed : default!;
+        try
+        {
+            await _channel.Writer.WriteAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = await completion.Task.ConfigureAwait(false);
+            return result is T typed ? typed : default!;
+        }
+        finally
+        {
+            registration.Dispose();
+        }
     }
 
     public async ValueTask<WriteRequest?> DequeueAsync(CancellationToken cancellationToken)

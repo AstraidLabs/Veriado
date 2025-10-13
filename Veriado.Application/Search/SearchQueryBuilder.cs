@@ -257,20 +257,26 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     /// <inheritdoc />
     public void UseRankExpression(string sqlExpression, bool higherIsBetter = false)
     {
-        if (!string.IsNullOrWhiteSpace(sqlExpression))
+        if (string.IsNullOrWhiteSpace(sqlExpression))
         {
-            _scorePlan.CustomRankExpression = sqlExpression;
-            _scorePlan.HigherScoreIsBetter = higherIsBetter;
+            return;
         }
+
+        var sanitized = EnsureSafeSqlFragment(sqlExpression, nameof(sqlExpression));
+        _scorePlan.CustomRankExpression = sanitized;
+        _scorePlan.HigherScoreIsBetter = higherIsBetter;
     }
 
     /// <inheritdoc />
     public void UseCustomSimilaritySql(string sqlExpression)
     {
-        if (!string.IsNullOrWhiteSpace(sqlExpression))
+        if (string.IsNullOrWhiteSpace(sqlExpression))
         {
-            _scorePlan.CustomSimilaritySql = sqlExpression;
+            return;
         }
+
+        var sanitized = EnsureSafeSqlFragment(sqlExpression, nameof(sqlExpression));
+        _scorePlan.CustomSimilaritySql = sanitized;
     }
 
     /// <inheritdoc />
@@ -289,11 +295,21 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
             throw new InvalidOperationException("Search query must produce a non-empty MATCH expression.");
         }
 
+        var whereClauses = _whereClauses.Count == 0
+            ? Array.Empty<string>()
+            : _whereClauses.ToArray();
+        var parameters = _parameters.Count == 0
+            ? Array.Empty<SqliteParameterDefinition>()
+            : _parameters.ToArray();
+        var scorePlan = CloneScorePlan();
+
+        ResetState();
+
         return new SearchQueryPlan(
             match!,
-            _whereClauses.AsReadOnly(),
-            _parameters.AsReadOnly(),
-            _scorePlan,
+            whereClauses,
+            parameters,
+            scorePlan,
             rawQuery ?? match);
     }
 
@@ -499,5 +515,73 @@ public sealed class SearchQueryBuilder : ISearchQueryBuilder
     }
 
     private readonly record struct RangeTarget(string Column, SqliteType Type, Func<object, object?> Converter);
+
+    private SearchScorePlan CloneScorePlan()
+        => new()
+        {
+            TitleWeight = _scorePlan.TitleWeight,
+            MimeWeight = _scorePlan.MimeWeight,
+            AuthorWeight = _scorePlan.AuthorWeight,
+            MetadataTextWeight = _scorePlan.MetadataTextWeight,
+            MetadataWeight = _scorePlan.MetadataWeight,
+            ScoreMultiplier = _scorePlan.ScoreMultiplier,
+            HigherScoreIsBetter = _scorePlan.HigherScoreIsBetter,
+            UseTfIdfAlternative = _scorePlan.UseTfIdfAlternative,
+            TfIdfDampingFactor = _scorePlan.TfIdfDampingFactor,
+            CustomRankExpression = _scorePlan.CustomRankExpression,
+            CustomSimilaritySql = _scorePlan.CustomSimilaritySql,
+            CustomSimilarityDelegate = _scorePlan.CustomSimilarityDelegate,
+        };
+
+    private void ResetState()
+    {
+        _whereClauses.Clear();
+        _parameters.Clear();
+        _parameterIndex = 0;
+    }
+
+    private static string EnsureSafeSqlFragment(string sqlExpression, string parameterName)
+    {
+        var trimmed = sqlExpression.Trim();
+        if (trimmed.Length == 0)
+        {
+            throw new ArgumentException("SQL fragment cannot be empty.", parameterName);
+        }
+
+        foreach (var ch in trimmed)
+        {
+            if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch))
+            {
+                continue;
+            }
+
+            switch (ch)
+            {
+                case '_':
+                case '(':
+                case ')':
+                case '+':
+                case '-':
+                case '*':
+                case '/':
+                case '.':
+                case ',':
+                case ':':
+                    continue;
+                default:
+                    throw new ArgumentException("SQL fragment contains unsupported characters.", parameterName);
+            }
+        }
+
+        if (trimmed.Contains("--", StringComparison.Ordinal)
+            || trimmed.Contains("/*", StringComparison.Ordinal)
+            || trimmed.Contains("*/", StringComparison.Ordinal)
+            || trimmed.Contains(';'))
+        {
+            throw new ArgumentException("SQL fragment contains disallowed comment or statement separators.", parameterName);
+        }
+
+        return trimmed;
+    }
 
 }
