@@ -22,11 +22,6 @@ public sealed class SearchOptions
     public FacetOptions Facets { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets synonym expansion options.
-    /// </summary>
-    public SynonymOptions Synonyms { get; set; } = new();
-
-    /// <summary>
     /// Gets or sets suggestion service options.
     /// </summary>
     public SuggesterOptions Suggestions { get; set; } = new();
@@ -65,16 +60,6 @@ public sealed class FacetOptions
         "quarter",
         "year",
     };
-}
-
-/// <summary>
-/// Options controlling synonym expansion.
-/// </summary>
-public sealed class SynonymOptions
-{
-    public int MaxVariantsPerTerm { get; set; } = 5;
-    public bool EnableCaching { get; set; } = true;
-    public TimeSpan CacheTtl { get; set; } = TimeSpan.FromMinutes(10);
 }
 
 /// <summary>

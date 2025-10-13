@@ -37,7 +37,7 @@ public sealed class SearchFilesHandler : IRequestHandler<SearchFilesQuery, IRead
     public async Task<IReadOnlyList<SearchHitDto>> Handle(SearchFilesQuery request, CancellationToken cancellationToken)
     {
         Guard.AgainstNullOrWhiteSpace(request.Text, nameof(request.Text));
-        var builder = new SearchQueryBuilder(_searchOptions.Score, null, _searchOptions.Analyzer.DefaultProfile);
+        var builder = new SearchQueryBuilder(_searchOptions.Score);
         var expression = BuildQueryExpression(request.Text, builder);
         if (expression is null)
         {

@@ -1,41 +1,12 @@
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures search-adjacent entities such as synonyms, suggestions and document geolocation.
+/// Configures search-adjacent entities such as suggestions and document geolocation.
 /// </summary>
 internal sealed class SearchExtrasConfiguration :
-    IEntityTypeConfiguration<SynonymEntry>,
     IEntityTypeConfiguration<SuggestionEntry>,
     IEntityTypeConfiguration<DocumentLocationEntity>
 {
-    public void Configure(EntityTypeBuilder<SynonymEntry> builder)
-    {
-        builder.ToTable("synonyms");
-        builder.HasKey(entry => entry.Id);
-
-        builder.Property(entry => entry.Id)
-            .HasColumnName("id")
-            .ValueGeneratedOnAdd();
-
-        builder.Property(entry => entry.Language)
-            .HasColumnName("lang")
-            .HasMaxLength(16)
-            .IsRequired();
-
-        builder.Property(entry => entry.Term)
-            .HasColumnName("term")
-            .HasMaxLength(128)
-            .IsRequired();
-
-        builder.Property(entry => entry.Variant)
-            .HasColumnName("variant")
-            .HasMaxLength(128)
-            .IsRequired();
-
-        builder.HasIndex(entry => new { entry.Language, entry.Term })
-            .HasDatabaseName("idx_synonyms_term");
-    }
-
     public void Configure(EntityTypeBuilder<SuggestionEntry> builder)
     {
         builder.ToTable("suggestions");
