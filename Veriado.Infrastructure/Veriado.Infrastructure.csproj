@@ -33,7 +33,4 @@
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
     <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Migrations\" />
-  </ItemGroup>
 </Project>

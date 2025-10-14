@@ -380,8 +380,8 @@ namespace Veriado.Infrastructure.Migrations
                     b.Property<int>("Attempts")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
-                        .HasColumnName("attempts")
-                        .HasDefaultValue(0);
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempts");
 
                     b.Property<string>("CreatedUtc")
                         .IsRequired()
