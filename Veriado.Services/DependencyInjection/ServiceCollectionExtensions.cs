@@ -1,9 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Veriado.Appl.DependencyInjection;
 using Veriado.Contracts.Search.Abstractions;
 using Veriado.Services.Diagnostics;
 using Veriado.Services.Files;
 using Veriado.Services.Import;
+using Veriado.Services.Infrastructure;
 using Veriado.Services.Maintenance;
 using Veriado.Services.Search;
 
@@ -19,9 +22,6 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The same service collection for chaining.</returns>
-    /// <remarks>
-    /// Hosts must invoke <c>InitializeInfrastructureAsync()</c> during startup to ensure the database is ready.
-    /// </remarks>
     public static IServiceCollection AddVeriadoServices(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -35,6 +35,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMaintenanceService, MaintenanceService>();
         services.AddScoped<IHealthService, HealthService>();
         services.AddSingleton<ISearchFacade, SearchFacade>();
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InfrastructureInitializationHostedService>());
 
         return services;
     }
