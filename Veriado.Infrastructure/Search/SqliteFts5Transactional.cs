@@ -242,7 +242,7 @@ VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata);";
         Guid fileId,
         string? normalizedTitle,
         string? normalizedAuthor,
-        string? mime,
+        string mime,
         string? normalizedMetadataText,
         string? metadataJson)
     {
@@ -260,13 +260,17 @@ VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata);";
         SqliteCommand command,
         string? normalizedTitle,
         string? normalizedAuthor,
-        string? mime,
+        string mime,
         string? normalizedMetadataText,
         string? metadataJson)
     {
+        if (string.IsNullOrEmpty(mime))
+        {
+            throw new ArgumentException("MIME type is required for DocumentContent writes.", nameof(mime));
+        }
         command.Parameters.Add("$title", SqliteType.Text).Value = (object?)normalizedTitle ?? DBNull.Value;
         command.Parameters.Add("$author", SqliteType.Text).Value = (object?)normalizedAuthor ?? DBNull.Value;
-        command.Parameters.Add("$mime", SqliteType.Text).Value = (object?)mime ?? DBNull.Value;
+        command.Parameters.Add("$mime", SqliteType.Text).Value = mime;
         command.Parameters.Add("$metadata_text", SqliteType.Text).Value = (object?)normalizedMetadataText ?? DBNull.Value;
         command.Parameters.Add("$metadata", SqliteType.Text).Value = (object?)metadataJson ?? DBNull.Value;
     }

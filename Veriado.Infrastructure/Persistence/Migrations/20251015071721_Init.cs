@@ -341,7 +341,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
     file_id BLOB NOT NULL UNIQUE,
     title TEXT NULL,
     author TEXT NULL,
-    mime TEXT NULL,
+    mime TEXT NOT NULL,
     metadata_text TEXT NULL,
     metadata TEXT NULL
 );");
