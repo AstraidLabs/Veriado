@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -291,6 +292,7 @@ public static class ServiceCollectionExtensions
             }
 
             await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+            await RunDevelopmentFulltextGuardAsync(scopedProvider, dbContext, cancellationToken).ConfigureAwait(false);
             await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
             await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
@@ -300,5 +302,154 @@ public static class ServiceCollectionExtensions
             callerName ?? "unknown",
             options.DbPath,
             ranInitialization);
+    }
+
+    private static async Task RunDevelopmentFulltextGuardAsync(
+        IServiceProvider scopedProvider,
+        AppDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var environment = scopedProvider.GetService<IHostEnvironment>();
+        if (environment?.IsDevelopment() != true)
+        {
+            return;
+        }
+
+        if (!dbContext.Database.IsSqlite())
+        {
+            return;
+        }
+
+        var loggerFactory = scopedProvider.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("FulltextDevGuard");
+        var options = scopedProvider.GetRequiredService<InfrastructureOptions>();
+
+        var connection = (SqliteConnection)dbContext.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            var tableSql = await ReadFileSearchDefinitionAsync(connection, cancellationToken).ConfigureAwait(false);
+            var columns = await ReadFileSearchColumnsAsync(connection, cancellationToken).ConfigureAwait(false);
+            var triggers = await ReadDocumentContentTriggersAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            var expectedColumns = new[] { "title", "author", "mime", "metadata_text", "metadata" };
+            var missingColumns = expectedColumns
+                .Where(column => !columns.Contains(column, StringComparer.OrdinalIgnoreCase))
+                .ToArray();
+
+            var triggerNames = triggers.Keys.ToArray();
+            var expectedTriggers = new[] { "dc_ai", "dc_au", "dc_ad" };
+            var missingTriggers = expectedTriggers
+                .Where(trigger => !triggers.ContainsKey(trigger))
+                .ToArray();
+
+            var isContentless = !string.IsNullOrWhiteSpace(tableSql)
+                && !tableSql.Contains("content=", StringComparison.OrdinalIgnoreCase);
+
+            logger.LogInformation(
+                "Development FTS guard inspected file_search (contentless={IsContentless}) with columns {Columns} and triggers {Triggers}.",
+                isContentless,
+                string.Join(", ", columns),
+                string.Join(", ", triggerNames));
+
+            var reasons = new List<string>();
+            if (string.IsNullOrWhiteSpace(tableSql))
+            {
+                reasons.Add("file_search table definition missing");
+            }
+            else if (!isContentless)
+            {
+                reasons.Add("file_search is not contentless FTS5");
+            }
+
+            if (missingColumns.Length > 0)
+            {
+                reasons.Add($"missing columns: {string.Join(", ", missingColumns)}");
+            }
+
+            if (missingTriggers.Length > 0)
+            {
+                reasons.Add($"missing triggers: {string.Join(", ", missingTriggers)}");
+            }
+
+            var snapshot = new FulltextSchemaSnapshot(
+                tableSql,
+                columns,
+                triggers,
+                isContentless,
+                missingTriggers.Length == 0,
+                DateTimeOffset.UtcNow);
+            SqliteFulltextSupport.UpdateSchemaSnapshot(snapshot);
+
+            if (reasons.Count > 0)
+            {
+                var reason = string.Join("; ", reasons);
+                logger.LogError(
+                    "FTS schema mismatch detected in development environment: {Reason}. Disabling full-text indexing for this session.",
+                    reason);
+                options.IsFulltextAvailable = false;
+                options.FulltextAvailabilityError = reason;
+                SqliteFulltextSupport.Update(false, reason);
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static async Task<string?> ReadFileSearchDefinitionAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT sql FROM sqlite_master WHERE name='file_search' AND type='table';";
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result as string;
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadFileSearchColumnsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var columns = new List<string>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info(file_search);";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!reader.IsDBNull(1))
+            {
+                columns.Add(reader.GetString(1));
+            }
+        }
+
+        return columns;
+    }
+
+    private static async Task<IReadOnlyDictionary<string, string?>> ReadDocumentContentTriggersAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var triggers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='DocumentContent';";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+            var sql = reader.IsDBNull(1) ? null : reader.GetString(1);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                triggers[name] = sql;
+            }
+        }
+
+        return triggers;
     }
 }

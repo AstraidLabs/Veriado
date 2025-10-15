@@ -2,10 +2,10 @@
 
 #nullable disable
 
-namespace Veriado.Infrastructure.Migrations
+namespace Veriado.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class addInit : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -76,10 +76,10 @@ namespace Veriado.Infrastructure.Migrations
                     fts_analyzer_version = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false, defaultValue: "v1"),
                     fts_token_hash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
                     fts_policy = table.Column<string>(type: "TEXT", nullable: false),
-                    fs_ads = table.Column<uint>(type: "INTEGER", nullable: true),
+                    fs_ads = table.Column<int>(type: "INTEGER", nullable: true),
                     fs_attr = table.Column<int>(type: "INTEGER", nullable: false),
                     fs_created_utc = table.Column<string>(type: "TEXT", nullable: false),
-                    fs_links = table.Column<uint>(type: "INTEGER", nullable: true),
+                    fs_links = table.Column<int>(type: "INTEGER", nullable: true),
                     fs_access_utc = table.Column<string>(type: "TEXT", nullable: false),
                     fs_write_utc = table.Column<string>(type: "TEXT", nullable: false),
                     fs_owner_sid = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true)
@@ -179,7 +179,7 @@ namespace Veriado.Infrastructure.Migrations
                     match = table.Column<string>(type: "TEXT", nullable: false),
                     created_utc = table.Column<string>(type: "TEXT", nullable: false),
                     executions = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 1),
-                    last_total_hits = table.Column<int>(type: "INTEGER", nullable: true)
+                    last_total_hits = table.Column<long>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -277,20 +277,14 @@ namespace Veriado.Infrastructure.Migrations
                 column: "name");
 
             migrationBuilder.CreateIndex(
-                name: "ux_files_content_hash",
-                table: "files_content",
-                column: "hash",
-                unique: true);
+                name: "idx_fts_write_ahead_dlq_dead_lettered",
+                table: "fts_write_ahead_dlq",
+                column: "dead_lettered_utc");
 
             migrationBuilder.CreateIndex(
                 name: "idx_fts_write_ahead_enqueued",
                 table: "fts_write_ahead",
                 column: "enqueued_utc");
-
-            migrationBuilder.CreateIndex(
-                name: "idx_fts_write_ahead_dlq_dead_lettered",
-                table: "fts_write_ahead_dlq",
-                column: "dead_lettered_utc");
 
             migrationBuilder.CreateIndex(
                 name: "idx_outbox_attempts",
@@ -317,7 +311,7 @@ namespace Veriado.Infrastructure.Migrations
                 name: "idx_search_history_created",
                 table: "search_history",
                 column: "created_utc",
-                descending: new bool[0]);
+                descending: new[] { true });
 
             migrationBuilder.CreateIndex(
                 name: "idx_search_history_match",
@@ -334,11 +328,64 @@ namespace Veriado.Infrastructure.Migrations
                 table: "suggestions",
                 columns: new[] { "term", "lang", "source_field" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ux_files_content_hash",
+                table: "files_content",
+                column: "hash",
+                unique: true);
+
+            migrationBuilder.Sql(
+                @"CREATE TABLE DocumentContent (
+    DocId INTEGER PRIMARY KEY,
+    FileId BLOB NOT NULL UNIQUE,
+    Title TEXT NULL,
+    Author TEXT NULL,
+    Mime TEXT NOT NULL,
+    MetadataText TEXT NULL,
+    Metadata TEXT NULL
+);");
+
+            migrationBuilder.Sql(
+                @"CREATE VIRTUAL TABLE file_search USING fts5(
+    title,
+    author,
+    mime,
+    metadata_text,
+    metadata,
+    tokenize='unicode61 remove_diacritics 2'
+);");
+
+            migrationBuilder.Sql(
+                @"CREATE TRIGGER dc_ai AFTER INSERT ON DocumentContent BEGIN
+  INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
+  VALUES (new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
+END;");
+
+            migrationBuilder.Sql(
+                @"CREATE TRIGGER dc_au AFTER UPDATE ON DocumentContent BEGIN
+  INSERT INTO file_search(file_search, rowid)
+  VALUES('delete', old.DocId);
+  INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
+  VALUES(new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
+END;");
+
+            migrationBuilder.Sql(
+                @"CREATE TRIGGER dc_ad AFTER DELETE ON DocumentContent BEGIN
+  INSERT INTO file_search(file_search, rowid)
+  VALUES('delete', old.DocId);
+END;");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS dc_ad;");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS dc_au;");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS dc_ai;");
+            migrationBuilder.Sql("DROP TABLE IF EXISTS file_search;");
+            migrationBuilder.Sql("DROP TABLE IF EXISTS DocumentContent;");
+
             migrationBuilder.DropTable(
                 name: "audit_file");
 
@@ -358,10 +405,10 @@ namespace Veriado.Infrastructure.Migrations
                 name: "files_validity");
 
             migrationBuilder.DropTable(
-                name: "fts_write_ahead");
+                name: "fts_write_ahead_dlq");
 
             migrationBuilder.DropTable(
-                name: "fts_write_ahead_dlq");
+                name: "fts_write_ahead");
 
             migrationBuilder.DropTable(
                 name: "idempotency_keys");

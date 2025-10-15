@@ -45,6 +45,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
     private static readonly AsyncLocal<int> SuppressionCounter = new();
 
     private readonly ILogger<FtsWriteAheadService> _logger;
+    private readonly ILogger<SqliteFts5Transactional> _ftsLogger;
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly IAnalyzerFactory _analyzerFactory;
@@ -52,12 +53,14 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
 
     public FtsWriteAheadService(
         ILogger<FtsWriteAheadService> logger,
+        ILogger<SqliteFts5Transactional> ftsLogger,
         IDbContextFactory<AppDbContext> dbContextFactory,
         ISqliteConnectionFactory connectionFactory,
         IAnalyzerFactory analyzerFactory,
         ISearchTelemetry telemetry)
     {
         _logger = logger;
+        _ftsLogger = ftsLogger ?? throw new ArgumentNullException(nameof(ftsLogger));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
@@ -132,7 +135,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             "Replaying {Count} pending FTS write-ahead entries ({EntryIds})",
             pending.Count,
             string.Join(", ", pending.Select(entry => entry.Id)));
-        var helper = new SqliteFts5Transactional(_analyzerFactory, this);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, this, _ftsLogger);
 
         foreach (var entry in pending)
         {
@@ -212,7 +215,7 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
             "Retrying {Count} FTS write-ahead DLQ entries ({EntryIds})",
             pending.Count,
             string.Join(", ", pending.Select(entry => entry.Id)));
-        var helper = new SqliteFts5Transactional(_analyzerFactory, this);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, this, _ftsLogger);
         var succeeded = 0;
 
         foreach (var entry in pending)

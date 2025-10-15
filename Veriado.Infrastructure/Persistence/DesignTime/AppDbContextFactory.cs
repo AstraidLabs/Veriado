@@ -30,7 +30,13 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 
         if (string.IsNullOrWhiteSpace(options.DbPath))
         {
-            options.DbPath = Path.Combine(AppContext.BaseDirectory, "veriado.db");
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var dataDirectory = !string.IsNullOrWhiteSpace(localAppData)
+                ? Path.Combine(localAppData, "Veriado")
+                : Path.Combine(AppContext.BaseDirectory, "veriado-data");
+
+            // Eliminace duality DB (bin\Debug vs AppData)
+            options.DbPath = Path.Combine(dataDirectory, "veriado.db");
         }
 
         var directory = Path.GetDirectoryName(options.DbPath);

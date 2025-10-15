@@ -37,6 +37,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly FtsWriteAheadService _writeAhead;
     private readonly ISearchTelemetry _telemetry;
+    private readonly ILogger<SqliteFts5Transactional> _ftsLogger;
 
     private static readonly FilePersistenceOptions SameTransactionOptions = FilePersistenceOptions.Default;
 
@@ -56,7 +57,8 @@ internal sealed class WriteWorker : BackgroundService
         INeedsReindexEvaluator needsReindexEvaluator,
         ISearchIndexSignatureCalculator signatureCalculator,
         FtsWriteAheadService writeAhead,
-        ISearchTelemetry telemetry)
+        ISearchTelemetry telemetry,
+        ILogger<SqliteFts5Transactional> ftsLogger)
     {
         if (options is null)
         {
@@ -96,6 +98,7 @@ internal sealed class WriteWorker : BackgroundService
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _ftsLogger = ftsLogger ?? throw new ArgumentNullException(nameof(ftsLogger));
 
         _logger.LogDebug(
             "Write worker created for partition {PartitionId} of {WorkerCount} workers.",
@@ -602,7 +605,7 @@ internal sealed class WriteWorker : BackgroundService
             return true;
         }
 
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _writeAhead);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _writeAhead, _ftsLogger);
         var handled = false;
 
         foreach (var id in filesToDelete)
