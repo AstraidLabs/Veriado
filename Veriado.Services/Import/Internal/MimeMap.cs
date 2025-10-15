@@ -51,6 +51,6 @@ internal static class MimeMap
             return mime;
         }
 
-        return string.Concat("application/", normalized);
+        return "application/octet-stream";
     }
 }
