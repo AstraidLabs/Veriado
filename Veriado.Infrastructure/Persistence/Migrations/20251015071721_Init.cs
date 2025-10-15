@@ -337,13 +337,13 @@ namespace Veriado.Infrastructure.Persistence.Migrations
 
             migrationBuilder.Sql(
                 @"CREATE TABLE DocumentContent (
-    DocId INTEGER PRIMARY KEY,
-    FileId BLOB NOT NULL UNIQUE,
-    Title TEXT NULL,
-    Author TEXT NULL,
-    Mime TEXT NOT NULL,
-    MetadataText TEXT NULL,
-    Metadata TEXT NULL
+    doc_id INTEGER PRIMARY KEY,
+    file_id BLOB NOT NULL UNIQUE,
+    title TEXT NULL,
+    author TEXT NULL,
+    mime TEXT NULL,
+    metadata_text TEXT NULL,
+    metadata TEXT NULL
 );");
 
             migrationBuilder.Sql(
@@ -359,21 +359,21 @@ namespace Veriado.Infrastructure.Persistence.Migrations
             migrationBuilder.Sql(
                 @"CREATE TRIGGER dc_ai AFTER INSERT ON DocumentContent BEGIN
   INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
-  VALUES (new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
+  VALUES (new.doc_id, new.title, new.author, new.mime, new.metadata_text, new.metadata);
 END;");
 
             migrationBuilder.Sql(
                 @"CREATE TRIGGER dc_au AFTER UPDATE ON DocumentContent BEGIN
   INSERT INTO file_search(file_search, rowid)
-  VALUES('delete', old.DocId);
+  VALUES('delete', old.doc_id);
   INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
-  VALUES(new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
+  VALUES(new.doc_id, new.title, new.author, new.mime, new.metadata_text, new.metadata);
 END;");
 
             migrationBuilder.Sql(
                 @"CREATE TRIGGER dc_ad AFTER DELETE ON DocumentContent BEGIN
   INSERT INTO file_search(file_search, rowid)
-  VALUES('delete', old.DocId);
+  VALUES('delete', old.doc_id);
 END;");
         }
 

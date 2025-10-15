@@ -171,7 +171,7 @@ public sealed class IndexAuditor : IIndexAuditor
     {
         var ids = new HashSet<Guid>();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT FileId FROM DocumentContent;";
+        command.CommandText = "SELECT file_id FROM DocumentContent;";
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {

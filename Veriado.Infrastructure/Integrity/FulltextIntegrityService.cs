@@ -414,7 +414,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             command.CommandText = @"
 SELECT f.rowid, f.id
 FROM files f
-WHERE NOT EXISTS (SELECT 1 FROM DocumentContent dc WHERE dc.FileId = f.id)
+WHERE NOT EXISTS (SELECT 1 FROM DocumentContent dc WHERE dc.file_id = f.id)
   AND f.rowid > $lastRowId
 ORDER BY f.rowid
 LIMIT $batchSize;";
@@ -470,9 +470,9 @@ LIMIT $batchSize;";
             cancellationToken.ThrowIfCancellationRequested();
             await using var command = connection.CreateCommand();
             command.CommandText = @"
-SELECT dc.rowid, dc.FileId
+SELECT dc.rowid, dc.file_id
 FROM DocumentContent dc
-LEFT JOIN files f ON f.id = dc.FileId
+LEFT JOIN files f ON f.id = dc.file_id
 WHERE f.id IS NULL
   AND dc.rowid > $lastRowId
 ORDER BY dc.rowid

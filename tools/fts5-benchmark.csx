@@ -83,21 +83,21 @@ static async Task<(double Throughput, double ElapsedMs)> MeasureIndexingThroughp
         {
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = @"INSERT INTO DocumentContent (FileId, Title, Author, Mime, MetadataText, Metadata)
-VALUES ($fileId, $title, $author, $mime, $metadataText, $metadata)
-ON CONFLICT(FileId) DO UPDATE SET
-    Title = excluded.Title,
-    Author = excluded.Author,
-    Mime = excluded.Mime,
-    MetadataText = excluded.MetadataText,
-    Metadata = excluded.Metadata;";
+            command.CommandText = @"INSERT INTO DocumentContent (file_id, title, author, mime, metadata_text, metadata)
+VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata)
+ON CONFLICT(file_id) DO UPDATE SET
+    title = excluded.title,
+    author = excluded.author,
+    mime = excluded.mime,
+    metadata_text = excluded.metadata_text,
+    metadata = excluded.metadata;";
 
             var guid = Guid.NewGuid();
-            command.Parameters.Add("$fileId", SqliteType.Blob).Value = guid.ToByteArray();
+            command.Parameters.Add("$file_id", SqliteType.Blob).Value = guid.ToByteArray();
             command.Parameters.AddWithValue("$title", $"Synthetic benchmark document #{i}");
             command.Parameters.AddWithValue("$author", $"Test Author {random.Next(1, 100)}");
             command.Parameters.AddWithValue("$mime", "application/octet-stream");
-            command.Parameters.AddWithValue("$metadataText", $"Synthetic metadata summary {i}");
+            command.Parameters.AddWithValue("$metadata_text", $"Synthetic metadata summary {i}");
             command.Parameters.AddWithValue("$metadata", $"{{\"index\":{i}}}");
 
             await command.ExecuteNonQueryAsync();
@@ -128,8 +128,8 @@ static async Task<List<double>> MeasureQueryLatenciesAsync(SqliteConnection conn
 
     await using var command = connection.CreateCommand();
     var sqlBuilder = new StringBuilder();
-    sqlBuilder.Append("SELECT dc.FileId FROM file_search s ");
-    sqlBuilder.Append("JOIN DocumentContent dc ON dc.DocId = s.rowid ");
+    sqlBuilder.Append("SELECT dc.file_id FROM file_search s ");
+    sqlBuilder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
     sqlBuilder.Append("WHERE s MATCH $query LIMIT 25;");
 
     command.CommandText = sqlBuilder.ToString();
