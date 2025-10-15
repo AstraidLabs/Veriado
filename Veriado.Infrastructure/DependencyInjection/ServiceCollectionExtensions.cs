@@ -63,25 +63,8 @@ public static class ServiceCollectionExtensions
 
         optionsBuilder.PostConfigure(options =>
         {
-            if (string.IsNullOrWhiteSpace(options.DbPath))
-            {
-                var dataDirectory = ResolveDefaultDataDirectory();
-                options.DbPath = Path.Combine(dataDirectory, "veriado.db");
-            }
-
-            var directory = Path.GetDirectoryName(options.DbPath);
-            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var connectionStringBuilder = new SqliteConnectionStringBuilder
-            {
-                DataSource = options.DbPath,
-                Cache = SqliteCacheMode.Shared,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-            };
-            options.ConnectionString = connectionStringBuilder.ConnectionString;
+            options.DbPath = InfrastructurePathResolver.ResolveDatabasePath(options.DbPath);
+            options.ConnectionString = InfrastructurePathResolver.BuildConnectionString(options.DbPath);
 
             if (!File.Exists(options.DbPath))
             {
@@ -246,17 +229,6 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<IndexAuditBackgroundService>();
 
         return services;
-    }
-
-    private static string ResolveDefaultDataDirectory()
-    {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (!string.IsNullOrWhiteSpace(localAppData))
-        {
-            return Path.Combine(localAppData, "Veriado");
-        }
-
-        return Path.Combine(AppContext.BaseDirectory, "veriado-data");
     }
 
     public static async Task InitializeInfrastructureAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default, [CallerMemberName] string? callerName = null)

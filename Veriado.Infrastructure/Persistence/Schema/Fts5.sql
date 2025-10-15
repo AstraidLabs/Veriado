@@ -1,13 +1,13 @@
 DROP TABLE IF EXISTS file_trgm;
 
 CREATE TABLE IF NOT EXISTS DocumentContent (
-    DocId INTEGER PRIMARY KEY,
-    FileId BLOB NOT NULL UNIQUE,
-    Title TEXT NULL,
-    Author TEXT NULL,
-    Mime TEXT NOT NULL,
-    MetadataText TEXT NULL,
-    Metadata TEXT NULL
+    doc_id INTEGER PRIMARY KEY,
+    file_id BLOB NOT NULL UNIQUE,
+    title TEXT NULL,
+    author TEXT NULL,
+    mime TEXT NULL,
+    metadata_text TEXT NULL,
+    metadata TEXT NULL
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS file_search USING fts5(
@@ -21,19 +21,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS file_search USING fts5(
 
 CREATE TRIGGER IF NOT EXISTS dc_ai AFTER INSERT ON DocumentContent BEGIN
   INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
-  VALUES (new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
+  VALUES (new.doc_id, new.title, new.author, new.mime, new.metadata_text, new.metadata);
 END;
 
 CREATE TRIGGER IF NOT EXISTS dc_au AFTER UPDATE ON DocumentContent BEGIN
   INSERT INTO file_search(file_search, rowid)
-  VALUES('delete', old.DocId);
+  VALUES('delete', old.doc_id);
   INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
-  VALUES(new.DocId, new.Title, new.Author, new.Mime, new.MetadataText, new.Metadata);
+  VALUES(new.doc_id, new.title, new.author, new.mime, new.metadata_text, new.metadata);
 END;
 
 CREATE TRIGGER IF NOT EXISTS dc_ad AFTER DELETE ON DocumentContent BEGIN
   INSERT INTO file_search(file_search, rowid)
-  VALUES('delete', old.DocId);
+  VALUES('delete', old.doc_id);
 END;
 
 CREATE TABLE IF NOT EXISTS fts_write_ahead (

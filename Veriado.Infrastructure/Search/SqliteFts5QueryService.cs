@@ -157,8 +157,8 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
         builder.Append("SELECT COUNT(*) FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
-        builder.Append("JOIN DocumentContent dc ON dc.DocId = s.rowid ");
-        builder.Append("JOIN files f ON f.id = dc.FileId ");
+        builder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
+        builder.Append("JOIN files f ON f.id = dc.file_id ");
         builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append(';');
@@ -369,7 +369,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
     private string BuildScoreQuery(SearchQueryPlan plan, string bm25Expression, string rankExpression)
     {
         var builder = new StringBuilder();
-        builder.Append("SELECT dc.FileId, ");
+        builder.Append("SELECT dc.file_id, ");
         builder.Append(bm25Expression).Append(" AS bm25_score, ");
         builder.Append(rankExpression).Append(" AS score");
 
@@ -381,8 +381,8 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
 
         builder.Append(", f.modified_utc ");
         builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
-        builder.Append("JOIN DocumentContent dc ON dc.DocId = s.rowid ");
-        builder.Append("JOIN files f ON f.id = dc.FileId ");
+        builder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
+        builder.Append("JOIN files f ON f.id = dc.file_id ");
         builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
@@ -406,12 +406,12 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         var builder = new StringBuilder();
         builder.Append(
             "SELECT s.rowid, " +
-            "       dc.FileId, " +
-            "       COALESCE(f.title, dc.Title, s.title, '') AS title, " +
-            "       COALESCE(f.mime, dc.Mime, s.mime, '') AS mime, " +
-            "       COALESCE(f.author, dc.Author, s.author, '') AS author, " +
-            "       COALESCE(dc.MetadataText, s.metadata_text, '') AS metadata_text, " +
-            "       COALESCE(dc.Metadata, s.metadata, '') AS metadata_json, " +
+            "       dc.file_id, " +
+            "       COALESCE(f.title, dc.title, s.title, '') AS title, " +
+            "       COALESCE(f.mime, dc.mime, s.mime, '') AS mime, " +
+            "       COALESCE(f.author, dc.author, s.author, '') AS author, " +
+            "       COALESCE(dc.metadata_text, s.metadata_text, '') AS metadata_text, " +
+            "       COALESCE(dc.metadata, s.metadata, '') AS metadata_json, " +
             "       snippet(" + SearchTableName + ", 0, '', '', '…', 32) AS snippet_title, " +
             "       snippet(" + SearchTableName + ", 1, '', '', '…', 24) AS snippet_author, " +
             "       snippet(" + SearchTableName + ", 2, '', '', '…', 24) AS snippet_mime, " +
@@ -429,8 +429,8 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
 
         builder.Append(", f.modified_utc ");
         builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
-        builder.Append("JOIN DocumentContent dc ON dc.DocId = s.rowid ");
-        builder.Append("JOIN files f ON f.id = dc.FileId ");
+        builder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
+        builder.Append("JOIN files f ON f.id = dc.file_id ");
         builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
