@@ -62,16 +62,28 @@ internal static class SqliteExceptionExtensions
 
         if (exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
         {
-            return exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase);
+            return ContainsFulltextIdentifier(exception.Message);
         }
 
         if (exception.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase))
         {
-            return exception.Message.Contains("fts", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase);
+            if (exception.Message.Contains("fts", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return ContainsFulltextIdentifier(exception.Message);
         }
 
         return false;
+    }
+
+    private static bool ContainsFulltextIdentifier(string message)
+    {
+        return message.Contains("file_search", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("documentcontent", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("document_content", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IndicatesMissingColumn(this SqliteException exception)
