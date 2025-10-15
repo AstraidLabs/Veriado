@@ -26,8 +26,9 @@ public partial class UpdateDocumentContentSchema : Migration
 );");
 
         migrationBuilder.Sql(
-            @"INSERT INTO DocumentContent
-SELECT * FROM DocumentContent_old;");
+            @"INSERT INTO DocumentContent (doc_id, file_id, title, author, mime, metadata_text, metadata)
+SELECT doc_id, file_id, title, author, COALESCE(mime, ''), metadata_text, metadata
+FROM DocumentContent_old;");
 
         migrationBuilder.Sql("DROP TABLE DocumentContent_old;");
 
