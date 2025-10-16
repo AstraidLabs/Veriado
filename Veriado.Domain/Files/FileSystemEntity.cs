@@ -402,22 +402,7 @@ public enum StorageProvider
     Local = 0,
 
     /// <summary>
-    /// Network share storage.
+    /// Network storage (e.g., SMB or NFS shares).
     /// </summary>
-    NetworkShare = 1,
-
-    /// <summary>
-    /// Amazon S3 storage.
-    /// </summary>
-    S3 = 2,
-
-    /// <summary>
-    /// Azure Blob storage.
-    /// </summary>
-    AzureBlob = 3,
-
-    /// <summary>
-    /// Any other storage provider not explicitly listed.
-    /// </summary>
-    Other = 4,
+    Network = 1,
 }
