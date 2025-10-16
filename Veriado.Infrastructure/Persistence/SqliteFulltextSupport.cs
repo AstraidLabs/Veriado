@@ -58,7 +58,8 @@ internal static class SqliteFulltextSupport
 /// <param name="CheckedAtUtc">The timestamp when the schema was inspected.</param>
 internal sealed record FulltextSchemaSnapshot(
     string? TableSql,
-    IReadOnlyList<string> Columns,
+    IReadOnlyList<string> FtsColumns,
+    IReadOnlyList<string> DocumentColumns,
     IReadOnlyDictionary<string, string?> Triggers,
     bool IsContentless,
     bool HasDocumentContentTriggers,

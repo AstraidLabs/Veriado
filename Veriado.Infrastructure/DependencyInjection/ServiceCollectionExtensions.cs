@@ -306,62 +306,22 @@ public static class ServiceCollectionExtensions
 
         try
         {
-            var tableSql = await ReadFileSearchDefinitionAsync(connection, cancellationToken).ConfigureAwait(false);
-            var columns = await ReadFileSearchColumnsAsync(connection, cancellationToken).ConfigureAwait(false);
-            var triggers = await ReadDocumentContentTriggersAsync(connection, cancellationToken).ConfigureAwait(false);
-
-            var expectedColumns = new[] { "title", "author", "mime", "metadata_text", "metadata" };
-            var missingColumns = expectedColumns
-                .Where(column => !columns.Contains(column, StringComparer.OrdinalIgnoreCase))
-                .ToArray();
-
-            var triggerNames = triggers.Keys.ToArray();
-            var expectedTriggers = new[] { "dc_ai", "dc_au", "dc_ad" };
-            var missingTriggers = expectedTriggers
-                .Where(trigger => !triggers.ContainsKey(trigger))
-                .ToArray();
-
-            var isContentless = !string.IsNullOrWhiteSpace(tableSql)
-                && !tableSql.Contains("content=", StringComparison.OrdinalIgnoreCase);
-
-            logger.LogInformation(
-                "Development FTS guard inspected file_search (contentless={IsContentless}) with columns {Columns} and triggers {Triggers}.",
-                isContentless,
-                string.Join(", ", columns),
-                string.Join(", ", triggerNames));
-
-            var reasons = new List<string>();
-            if (string.IsNullOrWhiteSpace(tableSql))
-            {
-                reasons.Add("file_search table definition missing");
-            }
-            else if (!isContentless)
-            {
-                reasons.Add("file_search is not contentless FTS5");
-            }
-
-            if (missingColumns.Length > 0)
-            {
-                reasons.Add($"missing columns: {string.Join(", ", missingColumns)}");
-            }
-
-            if (missingTriggers.Length > 0)
-            {
-                reasons.Add($"missing triggers: {string.Join(", ", missingTriggers)}");
-            }
-
-            var snapshot = new FulltextSchemaSnapshot(
-                tableSql,
-                columns,
-                triggers,
-                isContentless,
-                missingTriggers.Length == 0,
-                DateTimeOffset.UtcNow);
+            var inspection = await SqliteFulltextSchemaInspector
+                .InspectAsync(connection, cancellationToken)
+                .ConfigureAwait(false);
+            var snapshot = inspection.Snapshot;
             SqliteFulltextSupport.UpdateSchemaSnapshot(snapshot);
 
-            if (reasons.Count > 0)
+            logger.LogInformation(
+                "Development FTS guard inspected file_search (contentless={IsContentless}) with columns {Columns}, DocumentContent columns {DocumentColumns} and triggers {Triggers}.",
+                snapshot.IsContentless,
+                string.Join(", ", snapshot.FtsColumns),
+                string.Join(", ", snapshot.DocumentColumns),
+                string.Join(", ", snapshot.Triggers.Keys));
+
+            if (!inspection.IsValid)
             {
-                var reason = string.Join("; ", reasons);
+                var reason = inspection.FailureReason ?? "Unknown FTS schema mismatch";
                 logger.LogError(
                     "FTS schema mismatch detected in development environment: {Reason}. Disabling full-text indexing for this session.",
                     reason);
@@ -377,51 +337,5 @@ public static class ServiceCollectionExtensions
                 await connection.CloseAsync().ConfigureAwait(false);
             }
         }
-    }
-
-    private static async Task<string?> ReadFileSearchDefinitionAsync(SqliteConnection connection, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT sql FROM sqlite_master WHERE name='file_search' AND type='table';";
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return result as string;
-    }
-
-    private static async Task<IReadOnlyList<string>> ReadFileSearchColumnsAsync(SqliteConnection connection, CancellationToken cancellationToken)
-    {
-        var columns = new List<string>();
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA table_info(file_search);";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            if (!reader.IsDBNull(1))
-            {
-                columns.Add(reader.GetString(1));
-            }
-        }
-
-        return columns;
-    }
-
-    private static async Task<IReadOnlyDictionary<string, string?>> ReadDocumentContentTriggersAsync(
-        SqliteConnection connection,
-        CancellationToken cancellationToken)
-    {
-        var triggers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='DocumentContent';";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
-            var sql = reader.IsDBNull(1) ? null : reader.GetString(1);
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                triggers[name] = sql;
-            }
-        }
-
-        return triggers;
     }
 }

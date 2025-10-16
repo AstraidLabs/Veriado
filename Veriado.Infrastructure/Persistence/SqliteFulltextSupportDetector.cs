@@ -49,6 +49,17 @@ internal static class SqliteFulltextSupportDetector
                 command.ExecuteNonQuery();
                 command.CommandText = "DROP TABLE temp.__fts5_probe;";
                 command.ExecuteNonQuery();
+
+                var inspection = SqliteFulltextSchemaInspector
+                    .InspectAsync(connection, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+                SqliteFulltextSupport.UpdateSchemaSnapshot(inspection.Snapshot);
+                if (!inspection.IsValid)
+                {
+                    return (false, inspection.FailureReason);
+                }
+
                 return (true, null);
             }
             catch (SqliteException ex)
