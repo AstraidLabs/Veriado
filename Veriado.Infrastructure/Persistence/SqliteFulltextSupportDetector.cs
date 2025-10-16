@@ -50,6 +50,11 @@ internal static class SqliteFulltextSupportDetector
                 command.CommandText = "DROP TABLE temp.__fts5_probe;";
                 command.ExecuteNonQuery();
 
+                if (!TableExists(connection, "DocumentContent"))
+                {
+                    return (true, null);
+                }
+
                 var inspection = SqliteFulltextSchemaInspector
                     .InspectAsync(connection, CancellationToken.None)
                     .GetAwaiter()
@@ -88,5 +93,14 @@ internal static class SqliteFulltextSupportDetector
         {
             return (false, ex.Message);
         }
+    }
+
+    private static bool TableExists(SqliteConnection connection, string tableName)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = $name LIMIT 1;";
+        command.Parameters.AddWithValue("$name", tableName);
+        return command.ExecuteScalar() is not null;
     }
 }
