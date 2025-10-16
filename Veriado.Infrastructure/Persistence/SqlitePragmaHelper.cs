@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +12,9 @@ internal static class SqlitePragmaHelper
     internal const string RequiredJournalMode = "wal";
     internal const string RequiredSynchronous = "normal";
     internal const int RequiredBusyTimeoutMs = 8000;
+    internal const int RequiredPageSize = 4096;
+
+    private static readonly ConcurrentDictionary<string, byte> PageSizeLockedSources = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Applies the required PRAGMA statements to the specified SQLite connection.
@@ -32,10 +36,10 @@ internal static class SqlitePragmaHelper
         await EnsureJournalModeAsync(connection, logger, cancellationToken).ConfigureAwait(false);
         await EnsureSynchronousAsync(connection, logger, cancellationToken).ConfigureAwait(false);
         await EnsureBusyTimeoutAsync(connection, logger, cancellationToken).ConfigureAwait(false);
+        await EnsurePageSizeAsync(connection, logger, cancellationToken).ConfigureAwait(false);
 
         await ExecuteNonQueryAsync(connection, "PRAGMA foreign_keys=ON;", cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, "PRAGMA temp_store=MEMORY;", cancellationToken).ConfigureAwait(false);
-        await ExecuteNonQueryAsync(connection, "PRAGMA page_size=4096;", cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, "PRAGMA mmap_size=268435456;", cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, "PRAGMA cache_size=-32768;", cancellationToken).ConfigureAwait(false);
     }
@@ -122,6 +126,40 @@ internal static class SqlitePragmaHelper
         await using var command = connection.CreateCommand();
         command.CommandText = commandText;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task EnsurePageSizeAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)
+    {
+        var dataSource = connection.DataSource ?? "memory";
+        if (PageSizeLockedSources.ContainsKey(dataSource))
+        {
+            return;
+        }
+
+        var currentValue = await ExecuteScalarAsync(connection, "PRAGMA page_size;", cancellationToken).ConfigureAwait(false);
+        if (int.TryParse(currentValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var current)
+            && current == RequiredPageSize)
+        {
+            logger?.LogDebug("SQLite page_size already {PageSize} for {DataSource}", RequiredPageSize, dataSource);
+            return;
+        }
+
+        try
+        {
+            await ExecuteNonQueryAsync(connection, $"PRAGMA page_size={RequiredPageSize};", cancellationToken).ConfigureAwait(false);
+            logger?.LogInformation("SQLite page_size changed to {PageSize} for {DataSource}", RequiredPageSize, dataSource);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1
+            && ex.Message.Contains("page size", StringComparison.OrdinalIgnoreCase))
+        {
+            PageSizeLockedSources.TryAdd(dataSource, 0);
+            logger?.LogWarning(
+                ex,
+                "SQLite page_size remains {CurrentPageSize} for {DataSource}; VACUUM the database to apply the required page size {RequiredPageSize}.",
+                currentValue,
+                dataSource,
+                RequiredPageSize);
+        }
     }
 
     internal readonly record struct SqlitePragmaState(string JournalMode, string Synchronous, int BusyTimeout)
