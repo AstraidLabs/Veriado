@@ -33,7 +33,13 @@ internal sealed class SuggestionService : ISearchSuggestionService
             return Array.Empty<SearchSuggestion>();
         }
 
-        var match = NormalizePrefix(prefix) + "*";
+        var normalizedPrefix = NormalizePrefix(prefix);
+        if (string.IsNullOrWhiteSpace(normalizedPrefix))
+        {
+            return Array.Empty<SearchSuggestion>();
+        }
+
+        var likePattern = BuildLikePattern(normalizedPrefix);
         var lang = string.IsNullOrWhiteSpace(language) ? null : language.Trim().ToLowerInvariant();
 
         try
@@ -44,17 +50,16 @@ internal sealed class SuggestionService : ISearchSuggestionService
 
             await using var command = connection.CreateCommand();
             var builder = new StringBuilder();
-            builder.Append("SELECT s.term, s.weight, s.lang, s.source_field FROM suggestions_fts f ");
-            builder.Append("JOIN suggestions s ON s.id = f.rowid ");
-            builder.Append("WHERE suggestions_fts MATCH $match ");
+            builder.Append("SELECT s.term, s.weight, s.lang, s.source_field FROM suggestions s ");
+            builder.Append("WHERE lower(s.term) LIKE $pattern ESCAPE '\\' ");
             if (!string.IsNullOrWhiteSpace(lang))
             {
                 builder.Append("AND s.lang = $lang ");
             }
 
-            builder.Append("ORDER BY s.weight DESC, s.term ASC LIMIT $limit;");
+            builder.Append("ORDER BY s.weight DESC, s.term COLLATE NOCASE ASC LIMIT $limit;");
             command.CommandText = builder.ToString();
-            command.Parameters.Add("$match", SqliteType.Text).Value = match;
+            command.Parameters.Add("$pattern", SqliteType.Text).Value = likePattern;
             if (!string.IsNullOrWhiteSpace(lang))
             {
                 command.Parameters.Add("$lang", SqliteType.Text).Value = lang;
@@ -98,5 +103,22 @@ internal sealed class SuggestionService : ISearchSuggestionService
         }
 
         return builder.ToString().Trim();
+    }
+
+    private static string BuildLikePattern(string prefix)
+    {
+        var builder = new StringBuilder(prefix.Length + 1);
+        foreach (var ch in prefix)
+        {
+            if (ch is '_' or '%')
+            {
+                builder.Append('\\');
+            }
+
+            builder.Append(ch);
+        }
+
+        builder.Append('%');
+        return builder.ToString();
     }
 }
