@@ -2,6 +2,7 @@ using Veriado.Domain.Files.Events;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.Search;
 using Veriado.Domain.Search.Events;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Files;
 
@@ -10,8 +11,6 @@ namespace Veriado.Domain.Files;
 /// </summary>
 public sealed class FileEntity : AggregateRoot
 {
-    private const int InitialVersion = 1;
-
     private FileEntity(Guid id)
         : base(id)
     {
@@ -23,7 +22,10 @@ public sealed class FileEntity : AggregateRoot
         FileExtension extension,
         MimeType mime,
         string author,
-        FileContentEntity content,
+        Guid fileSystemId,
+        FileHash contentHash,
+        ByteSize size,
+        ContentVersion version,
         UtcTimestamp createdUtc,
         FileSystemMetadata systemMetadata,
         string? title)
@@ -33,11 +35,13 @@ public sealed class FileEntity : AggregateRoot
         Extension = extension;
         Mime = mime;
         Author = author;
-        Content = content;
-        Size = content.Length;
+        FileSystemId = fileSystemId;
+        ContentHash = contentHash;
+        Size = size;
         CreatedUtc = createdUtc;
         LastModifiedUtc = createdUtc;
-        Version = InitialVersion;
+        LinkedContentVersion = version;
+        Version = version.Value;
         IsReadOnly = false;
         SystemMetadata = systemMetadata;
         Title = NormalizeOptionalText(title);
@@ -91,9 +95,19 @@ public sealed class FileEntity : AggregateRoot
     public UtcTimestamp LastModifiedUtc { get; private set; }
 
     /// <summary>
-    /// Gets the file content entity.
+    /// Gets the identifier of the linked file system content.
     /// </summary>
-    public FileContentEntity Content { get; private set; } = null!;
+    public Guid FileSystemId { get; private set; }
+
+    /// <summary>
+    /// Gets the version of the linked file system content.
+    /// </summary>
+    public ContentVersion LinkedContentVersion { get; private set; }
+
+    /// <summary>
+    /// Gets the SHA-256 hash of the linked content.
+    /// </summary>
+    public FileHash ContentHash { get; private set; }
 
     /// <summary>
     /// Gets the optional document validity information.
@@ -135,16 +149,39 @@ public sealed class FileEntity : AggregateRoot
         FileExtension extension,
         MimeType mime,
         string author,
-        byte[] bytes,
+        Guid fileSystemId,
+        FileHash contentHash,
+        ByteSize size,
+        ContentVersion version,
         UtcTimestamp createdUtc,
-        int? maxContentSize = null)
+        string? title = null,
+        FileSystemMetadata? systemMetadata = null)
     {
         var normalizedAuthor = NormalizeAuthor(author);
-        var content = FileContentEntity.FromBytes(bytes, maxContentSize);
-        var systemMetadata = new FileSystemMetadata(FileAttributesFlags.Normal, createdUtc, createdUtc, createdUtc, null, null, null);
+        var metadata = systemMetadata ?? new FileSystemMetadata(
+            FileAttributesFlags.Normal,
+            createdUtc,
+            createdUtc,
+            createdUtc,
+            ownerSid: null,
+            hardLinkCount: null,
+            alternateDataStreamCount: null);
 
-        var entity = new FileEntity(Guid.NewGuid(), name, extension, mime, normalizedAuthor, content, createdUtc, systemMetadata, null);
-        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.Content.Hash, createdUtc));
+        var entity = new FileEntity(
+            Guid.NewGuid(),
+            name,
+            extension,
+            mime,
+            normalizedAuthor,
+            fileSystemId,
+            contentHash,
+            size,
+            version,
+            createdUtc,
+            metadata,
+            title);
+        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.ContentHash, createdUtc));
+        entity.RaiseDomainEvent(new FileContentLinked(entity.Id, entity.FileSystemId, entity.LinkedContentVersion, entity.ContentHash, entity.Size, entity.Mime, createdUtc));
         entity.MarkSearchDirty(createdUtc, ReindexReason.Created);
         return entity;
     }
@@ -206,25 +243,83 @@ public sealed class FileEntity : AggregateRoot
     }
 
     /// <summary>
-    /// Replaces the file content and bumps the version if the hash changes.
+    /// Links the file to the specified file system content, emitting change events when required.
     /// </summary>
-    /// <param name="bytes">The new content bytes.</param>
-    /// <param name="maxContentSize">Optional maximum content length.</param>
-    public void ReplaceContent(byte[] bytes, UtcTimestamp whenUtc, int? maxContentSize = null)
+    /// <param name="fileSystemId">The identifier of the file system record.</param>
+    /// <param name="hash">The content hash.</param>
+    /// <param name="size">The content size.</param>
+    /// <param name="version">The file system content version.</param>
+    /// <param name="mime">The MIME type detected for the content.</param>
+    /// <param name="whenUtc">The timestamp of the linkage.</param>
+    public void LinkTo(Guid fileSystemId, FileHash hash, ByteSize size, ContentVersion version, MimeType mime, UtcTimestamp whenUtc)
     {
         EnsureWritable();
-        var newContent = FileContentEntity.FromBytes(bytes, maxContentSize);
-        if (newContent.Hash == Content.Hash)
+
+        var hasChanges = FileSystemId != fileSystemId
+            || ContentHash != hash
+            || Size != size
+            || LinkedContentVersion != version
+            || Mime != mime;
+
+        if (!hasChanges)
         {
             return;
         }
 
-        Content = newContent;
-        Size = newContent.Length;
-        BumpVersion();
+        FileSystemId = fileSystemId;
+        ContentHash = hash;
+        Size = size;
+        LinkedContentVersion = version;
+        Version = version.Value;
+        Mime = mime;
+
         Touch(whenUtc);
-        RaiseDomainEvent(new FileContentReplaced(Id, newContent.Hash, newContent.Length, Version, whenUtc));
+        RaiseDomainEvent(new FileContentRelinked(Id, FileSystemId, LinkedContentVersion, ContentHash, Size, Mime, whenUtc));
         MarkSearchDirty(whenUtc, ReindexReason.ContentChanged);
+    }
+
+    /// <summary>
+    /// Applies an idempotent relink update originating from a file system domain event.
+    /// </summary>
+    public void RelinkFromFsEvent(Guid fileSystemId, FileHash hash, ByteSize size, ContentVersion version, MimeType mime, UtcTimestamp whenUtc)
+    {
+        var changed = false;
+
+        if (FileSystemId != fileSystemId)
+        {
+            FileSystemId = fileSystemId;
+            changed = true;
+        }
+
+        if (ContentHash != hash)
+        {
+            ContentHash = hash;
+            changed = true;
+        }
+
+        if (Size != size)
+        {
+            Size = size;
+            changed = true;
+        }
+
+        if (LinkedContentVersion != version)
+        {
+            LinkedContentVersion = version;
+            Version = version.Value;
+            changed = true;
+        }
+
+        if (Mime != mime)
+        {
+            Mime = mime;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            Touch(whenUtc);
+        }
     }
 
     /// <summary>
@@ -393,7 +488,7 @@ public sealed class FileEntity : AggregateRoot
             LastModifiedUtc.Value,
             metadataJson,
             metadataText,
-            Content.Hash.Value);
+            ContentHash.Value);
     }
 
     /// <summary>
@@ -422,7 +517,7 @@ public sealed class FileEntity : AggregateRoot
                 ? Name.Value
                 : Title!
             : indexedTitle!;
-        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Content.Hash.Value, resolvedTitle, analyzerVersion, tokenHash);
+        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, ContentHash.Value, resolvedTitle, analyzerVersion, tokenHash);
     }
 
     /// <summary>
@@ -482,16 +577,6 @@ public sealed class FileEntity : AggregateRoot
     private void Touch(UtcTimestamp whenUtc)
     {
         LastModifiedUtc = whenUtc;
-    }
-
-    private void BumpVersion()
-    {
-        if (Version == int.MaxValue)
-        {
-            throw new InvalidOperationException("File version overflow.");
-        }
-
-        Version += 1;
     }
 
     private void MarkSearchDirty(UtcTimestamp whenUtc, ReindexReason reason)

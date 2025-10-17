@@ -314,7 +314,6 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await context.Files
             .AsNoTracking()
-            .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -425,7 +424,6 @@ internal sealed class FtsWriteAheadService : IFtsDlqMonitor
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await context.Files
             .AsNoTracking()
-            .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
             .ConfigureAwait(false);
 

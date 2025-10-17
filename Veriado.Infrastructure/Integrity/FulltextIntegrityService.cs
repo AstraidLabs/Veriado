@@ -350,7 +350,6 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     {
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
-            .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
             .ConfigureAwait(false);
         if (file is null)

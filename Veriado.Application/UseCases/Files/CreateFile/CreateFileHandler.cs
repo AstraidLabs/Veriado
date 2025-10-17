@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Appl.UseCases.Files.CreateFile;
 
@@ -35,9 +36,20 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             var extension = FileExtension.From(request.Extension);
             var mime = MimeType.From(request.Mime);
             var createdAt = CurrentTimestamp();
-            var file = FileEntity.CreateNew(name, extension, mime, request.Author, request.Content, createdAt, _importPolicy.MaxContentLengthBytes);
+            var size = ByteSize.From(request.Content.LongLength);
+            var hash = FileHash.Compute(request.Content);
+            var file = FileEntity.CreateNew(
+                name,
+                extension,
+                mime,
+                request.Author,
+                Guid.NewGuid(),
+                hash,
+                size,
+                ContentVersion.Initial,
+                createdAt);
 
-            if (await Repository.ExistsByHashAsync(file.Content.Hash, cancellationToken).ConfigureAwait(false))
+            if (await Repository.ExistsByHashAsync(file.ContentHash, cancellationToken).ConfigureAwait(false))
             {
                 return AppResult<Guid>.Conflict("A file with identical content already exists.");
             }

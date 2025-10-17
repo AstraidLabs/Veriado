@@ -44,7 +44,6 @@ public sealed class IndexAuditor : IIndexAuditor
         await using var context = await _readFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         var files = context.Files
             .AsNoTracking()
-            .Include(f => f.Content)
             .AsAsyncEnumerable()
             .WithCancellation(ct);
 

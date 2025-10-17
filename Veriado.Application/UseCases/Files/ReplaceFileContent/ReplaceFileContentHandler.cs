@@ -1,3 +1,5 @@
+using Veriado.Domain.ValueObjects;
+
 namespace Veriado.Appl.UseCases.Files.ReplaceFileContent;
 
 /// <summary>
@@ -35,7 +37,15 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
             }
 
             var timestamp = CurrentTimestamp();
-            file.ReplaceContent(request.Content, timestamp, _importPolicy.MaxContentLengthBytes);
+            var newHash = FileHash.Compute(request.Content);
+            if (newHash == file.ContentHash)
+            {
+                return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
+            }
+
+            var newSize = ByteSize.From(request.Content.LongLength);
+            var nextVersion = file.LinkedContentVersion.Next();
+            file.LinkTo(Guid.NewGuid(), newHash, newSize, nextVersion, file.Mime, timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }

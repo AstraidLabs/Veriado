@@ -8,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Domain.ValueObjects;
 using Veriado.Appl.Abstractions;
 using Veriado.Domain.Files;
 using Veriado.Domain.Primitives;
@@ -153,12 +154,16 @@ public sealed class WriteWorkerIntegrationTests
 
     private static FileEntity CreateTestFile()
     {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("hello world");
         return FileEntity.CreateNew(
             FileName.From("sample"),
             FileExtension.From("txt"),
             MimeType.From("text/plain"),
             "tester",
-            System.Text.Encoding.UTF8.GetBytes("hello world"),
+            Guid.NewGuid(),
+            FileHash.Compute(bytes),
+            ByteSize.From(bytes.LongLength),
+            ContentVersion.Initial,
             UtcTimestamp.From(DateTimeOffset.UtcNow));
     }
 
