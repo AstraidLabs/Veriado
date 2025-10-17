@@ -14,6 +14,14 @@ public interface IFileRepository
     Task<FileEntity?> GetAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Loads a file system aggregate by its identifier.
+    /// </summary>
+    /// <param name="id">The identifier of the file system entity.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The loaded aggregate or <see langword="null"/> when it does not exist.</returns>
+    Task<FileSystemEntity?> GetFileSystemAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Loads multiple file aggregates by their identifiers in a single call.
     /// </summary>
     /// <param name="ids">The identifiers of the files to retrieve.</param>
@@ -44,9 +52,27 @@ public interface IFileRepository
     Task AddAsync(FileEntity file, FilePersistenceOptions options, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Adds a file aggregate together with its backing file system entity.
+    /// </summary>
+    /// <param name="file">The file aggregate.</param>
+    /// <param name="fileSystem">The file system aggregate describing the stored content.</param>
+    /// <param name="options">The persistence options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task AddAsync(FileEntity file, FileSystemEntity fileSystem, FilePersistenceOptions options, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Persists the provided file aggregate updates.
     /// </summary>
     /// <param name="file">The aggregate to persist.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     Task UpdateAsync(FileEntity file, FilePersistenceOptions options, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Persists updates to a file aggregate and its associated file system entity.
+    /// </summary>
+    /// <param name="file">The file aggregate.</param>
+    /// <param name="fileSystem">The associated file system aggregate.</param>
+    /// <param name="options">The persistence options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task UpdateAsync(FileEntity file, FileSystemEntity fileSystem, FilePersistenceOptions options, CancellationToken cancellationToken);
 }

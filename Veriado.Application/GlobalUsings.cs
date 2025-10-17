@@ -1,6 +1,7 @@
 global using System;
 global using System.Collections.Generic;
 global using System.Globalization;
+global using System.IO;
 global using System.Linq;
 global using System.Text;
 global using System.Threading;
@@ -15,6 +16,7 @@ global using Veriado.Appl.UseCases.Files.Common;
 global using Veriado.Contracts.Diagnostics;
 global using Veriado.Contracts.Files;
 global using Veriado.Contracts.Search;
+global using Veriado.Domain.FileSystem;
 global using Veriado.Domain.Files;
 global using Veriado.Domain.Metadata;
 global using Veriado.Domain.ValueObjects;

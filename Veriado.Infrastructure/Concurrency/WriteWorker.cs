@@ -370,6 +370,7 @@ internal sealed class WriteWorker : BackgroundService
         }
 
         var fileEntries = context.ChangeTracker.Entries<FileEntity>().ToList();
+        var fileSystemEntries = context.ChangeTracker.Entries<FileSystemEntity>().ToList();
 
         foreach (var entry in fileEntries)
         {
@@ -419,9 +420,19 @@ internal sealed class WriteWorker : BackgroundService
             _logger.LogDebug("Processing {Count} stale search index entries", staleCount);
         }
 
-        var domainEvents = fileEntries
-            .SelectMany(entry => entry.Entity.DomainEvents.Select(domainEvent => (entry.Entity.Id, domainEvent)))
-            .ToList();
+        var domainEvents = new List<(Guid AggregateId, IDomainEvent DomainEvent)>();
+
+        if (fileEntries.Count > 0)
+        {
+            domainEvents.AddRange(fileEntries
+                .SelectMany(entry => entry.Entity.DomainEvents.Select(domainEvent => (entry.Entity.Id, domainEvent))));
+        }
+
+        if (fileSystemEntries.Count > 0)
+        {
+            domainEvents.AddRange(fileSystemEntries
+                .SelectMany(entry => entry.Entity.DomainEvents.Select(domainEvent => (entry.Entity.Id, domainEvent))));
+        }
 
         try
         {
@@ -523,6 +534,11 @@ internal sealed class WriteWorker : BackgroundService
             _partitionId);
 
         foreach (var entry in fileEntries)
+        {
+            entry.Entity.ClearDomainEvents();
+        }
+
+        foreach (var entry in fileSystemEntries)
         {
             entry.Entity.ClearDomainEvents();
         }
