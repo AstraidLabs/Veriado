@@ -29,6 +29,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.Property(file => file.Mime)
             .HasColumnName("mime")
+            .HasColumnType("TEXT")
             .HasMaxLength(255)
             .HasConversion(Converters.MimeTypeToString)
             .IsRequired();
@@ -46,12 +47,14 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.Property(file => file.ContentHash)
             .HasColumnName("content_hash")
+            .HasColumnType("TEXT")
             .HasMaxLength(64)
             .HasConversion(Converters.FileHashToString)
             .IsRequired();
 
         builder.Property(file => file.LinkedContentVersion)
             .HasColumnName("content_version")
+            .HasColumnType("INTEGER")
             .HasConversion(Converters.ContentVersionToInt)
             .IsRequired();
 
@@ -61,6 +64,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.Property(file => file.Size)
             .HasColumnName("size_bytes")
+            .HasColumnType("BIGINT")
             .HasConversion(Converters.ByteSizeToLong)
             .IsRequired();
 

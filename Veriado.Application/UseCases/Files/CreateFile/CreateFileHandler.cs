@@ -95,7 +95,8 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             return false;
         }
 
-        return sqlite.Message.Contains("files_content.hash", StringComparison.OrdinalIgnoreCase)
+        return sqlite.Message.Contains("files.content_hash", StringComparison.OrdinalIgnoreCase)
+            || sqlite.Message.Contains("files_content.hash", StringComparison.OrdinalIgnoreCase)
             || sqlite.Message.Contains("ux_files_content_hash", StringComparison.OrdinalIgnoreCase);
     }
 }

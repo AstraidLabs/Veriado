@@ -30,6 +30,7 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
 
         builder.Property(entity => entity.Hash)
             .HasColumnName("hash")
+            .HasColumnType("TEXT")
             .HasMaxLength(64)
             .HasConversion(Converters.FileHashToString)
             .IsRequired();
@@ -42,6 +43,7 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
 
         builder.Property(entity => entity.Mime)
             .HasColumnName("mime")
+            .HasColumnType("TEXT")
             .HasMaxLength(255)
             .HasConversion(Converters.MimeTypeToString)
             .IsRequired();

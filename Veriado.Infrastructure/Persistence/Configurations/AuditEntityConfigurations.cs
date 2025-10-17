@@ -2,9 +2,9 @@ using Veriado.Infrastructure.Persistence.Audit;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
-internal sealed class FileAuditEntityConfiguration : IEntityTypeConfiguration<FileAuditEntity>
+internal sealed class FileAuditRecordConfiguration : IEntityTypeConfiguration<FileAuditRecord>
 {
-    public void Configure(EntityTypeBuilder<FileAuditEntity> builder)
+    public void Configure(EntityTypeBuilder<FileAuditRecord> builder)
     {
         builder.ToTable("audit_file");
         builder.HasKey(audit => new { audit.FileId, audit.OccurredUtc });
@@ -46,9 +46,9 @@ internal sealed class FileAuditEntityConfiguration : IEntityTypeConfiguration<Fi
     }
 }
 
-internal sealed class FileLinkAuditEntityConfiguration : IEntityTypeConfiguration<FileLinkAuditEntity>
+internal sealed class FileLinkAuditRecordConfiguration : IEntityTypeConfiguration<FileLinkAuditRecord>
 {
-    public void Configure(EntityTypeBuilder<FileLinkAuditEntity> builder)
+    public void Configure(EntityTypeBuilder<FileLinkAuditRecord> builder)
     {
         builder.ToTable("audit_file_link");
         builder.HasKey(audit => new { audit.FileId, audit.OccurredUtc });
@@ -99,9 +99,9 @@ internal sealed class FileLinkAuditEntityConfiguration : IEntityTypeConfiguratio
     }
 }
 
-internal sealed class FileSystemAuditEntityConfiguration : IEntityTypeConfiguration<FileSystemAuditEntity>
+internal sealed class FileSystemAuditRecordConfiguration : IEntityTypeConfiguration<FileSystemAuditRecord>
 {
-    public void Configure(EntityTypeBuilder<FileSystemAuditEntity> builder)
+    public void Configure(EntityTypeBuilder<FileSystemAuditRecord> builder)
     {
         builder.ToTable("audit_filesystem");
         builder.HasKey(audit => new { audit.FileSystemId, audit.OccurredUtc });

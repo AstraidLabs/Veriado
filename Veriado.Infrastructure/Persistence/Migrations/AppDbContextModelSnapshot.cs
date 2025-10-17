@@ -307,7 +307,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnName("name");
 
                     b.Property<long>("Size")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("BIGINT")
                         .HasColumnName("size_bytes");
 
                     b.Property<string>("Title")
