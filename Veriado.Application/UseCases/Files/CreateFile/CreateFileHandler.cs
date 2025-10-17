@@ -35,12 +35,16 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             var extension = FileExtension.From(request.Extension);
             var mime = MimeType.From(request.Mime);
             var createdAt = CurrentTimestamp();
-            var file = FileEntity.CreateNew(name, extension, mime, request.Author, request.Content, createdAt, _importPolicy.MaxContentLengthBytes);
+            var size = ByteSize.From(request.Content.LongLength);
+            var hash = FileHash.Compute(request.Content);
 
-            if (await Repository.ExistsByHashAsync(file.Content.Hash, cancellationToken).ConfigureAwait(false))
+            if (await Repository.ExistsByHashAsync(hash, cancellationToken).ConfigureAwait(false))
             {
                 return AppResult<Guid>.Conflict("A file with identical content already exists.");
             }
+
+            var fileSystemId = Guid.NewGuid();
+            var file = FileEntity.CreateNew(name, extension, mime, request.Author, fileSystemId, hash, size, createdAt, _importPolicy.MaxContentLengthBytes);
 
             await PersistNewAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<Guid>.Success(file.Id);
@@ -83,7 +87,7 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             return false;
         }
 
-        return sqlite.Message.Contains("files_content.hash", StringComparison.OrdinalIgnoreCase)
-            || sqlite.Message.Contains("ux_files_content_hash", StringComparison.OrdinalIgnoreCase);
+        return sqlite.Message.Contains("files.hash", StringComparison.OrdinalIgnoreCase)
+            || sqlite.Message.Contains("ux_files_hash", StringComparison.OrdinalIgnoreCase);
     }
 }

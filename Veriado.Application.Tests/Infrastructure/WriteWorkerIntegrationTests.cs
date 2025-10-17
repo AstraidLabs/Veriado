@@ -153,12 +153,17 @@ public sealed class WriteWorkerIntegrationTests
 
     private static FileEntity CreateTestFile()
     {
+        var content = System.Text.Encoding.UTF8.GetBytes("hello world");
+        var size = ByteSize.From(content.LongLength);
+        var hash = FileHash.Compute(content);
         return FileEntity.CreateNew(
             FileName.From("sample"),
             FileExtension.From("txt"),
             MimeType.From("text/plain"),
             "tester",
-            System.Text.Encoding.UTF8.GetBytes("hello world"),
+            Guid.NewGuid(),
+            hash,
+            size,
             UtcTimestamp.From(DateTimeOffset.UtcNow));
     }
 

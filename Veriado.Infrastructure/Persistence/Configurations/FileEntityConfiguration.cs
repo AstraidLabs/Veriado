@@ -17,6 +17,12 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasConversion(Converters.GuidToBlob)
             .ValueGeneratedNever();
 
+        builder.Property(file => file.FileSystemId)
+            .HasColumnName("file_system_id")
+            .HasColumnType("BLOB")
+            .HasConversion(Converters.GuidToBlob)
+            .IsRequired();
+
         builder.Property(file => file.Name)
             .HasColumnName("name")
             .HasMaxLength(255)
@@ -33,6 +39,12 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasColumnName("mime")
             .HasMaxLength(255)
             .HasConversion(Converters.MimeTypeToString)
+            .IsRequired();
+
+        builder.Property(file => file.Hash)
+            .HasColumnName("hash")
+            .HasMaxLength(64)
+            .HasConversion(Converters.FileHashToString)
             .IsRequired();
 
         builder.Property(file => file.Author)
@@ -79,8 +91,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.HasIndex(file => file.Name).HasDatabaseName("idx_files_name");
         builder.HasIndex(file => file.Mime).HasDatabaseName("idx_files_mime");
-
-        builder.OwnsOne(file => file.Content, FileContentEntityConfiguration.Configure);
+        builder.HasIndex(file => file.Hash).IsUnique().HasDatabaseName("ux_files_hash");
 
         builder.OwnsOne(file => file.Validity, FileDocumentValidityEntityConfiguration.Configure);
 

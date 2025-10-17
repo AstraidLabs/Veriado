@@ -22,7 +22,6 @@ internal sealed class FileRepository : IFileRepository
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var entity = await context.Files
             .Include(f => f.Validity)
-            .Include(f => f.Content)
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
             .ConfigureAwait(false);
 
@@ -42,7 +41,6 @@ internal sealed class FileRepository : IFileRepository
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var files = await context.Files
             .Include(f => f.Validity)
-            .Include(f => f.Content)
             .Where(f => idList.Contains(f.Id))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -55,7 +53,6 @@ internal sealed class FileRepository : IFileRepository
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var query = context.Files
             .Include(f => f.Validity)
-            .Include(f => f.Content)
             .AsAsyncEnumerable()
             .WithCancellation(cancellationToken);
 
@@ -68,7 +65,7 @@ internal sealed class FileRepository : IFileRepository
     public async Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken)
     {
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        return await context.Files.AnyAsync(f => f.Content.Hash == hash, cancellationToken).ConfigureAwait(false);
+        return await context.Files.AnyAsync(f => f.Hash == hash, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)

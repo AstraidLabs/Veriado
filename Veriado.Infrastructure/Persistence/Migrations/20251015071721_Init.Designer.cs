@@ -105,6 +105,10 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("BLOB")
                         .HasColumnName("id");
 
+                    b.Property<byte[]>("FileSystemId")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("file_system_id");
+
                     b.Property<string>("Author")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -141,6 +145,12 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT")
                         .HasColumnName("mime");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("hash");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -203,6 +213,10 @@ namespace Veriado.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Name")
                         .HasDatabaseName("idx_files_name");
+
+                    b.HasIndex("Hash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_files_hash");
 
                     b.ToTable("files", (string)null);
                 });
@@ -559,35 +573,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("FileEntityId");
                         });
 
-                    b.OwnsOne("Veriado.Domain.Files.FileContentEntity", "Content", b1 =>
-                        {
-                            b1.Property<byte[]>("file_id")
-                                .HasColumnType("BLOB")
-                                .HasColumnName("file_id");
-
-                            b1.Property<byte[]>("Bytes")
-                                .IsRequired()
-                                .HasColumnType("BLOB")
-                                .HasColumnName("bytes");
-
-                            b1.Property<string>("Hash")
-                                .IsRequired()
-                                .HasMaxLength(64)
-                                .HasColumnType("TEXT")
-                                .HasColumnName("hash");
-
-                            b1.HasKey("file_id");
-
-                            b1.HasIndex("Hash")
-                                .IsUnique()
-                                .HasDatabaseName("ux_files_content_hash");
-
-                            b1.ToTable("files_content", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("file_id");
-                        });
-
                     b.OwnsOne("Veriado.Domain.Files.FileDocumentValidityEntity", "Validity", b1 =>
                         {
                             b1.Property<byte[]>("file_id")
@@ -619,9 +604,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("file_id");
                         });
-
-                    b.Navigation("Content")
-                        .IsRequired();
 
                     b.Navigation("SearchIndex")
                         .IsRequired();

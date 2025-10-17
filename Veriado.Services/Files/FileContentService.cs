@@ -1,4 +1,3 @@
-using System.IO;
 using AutoMapper;
 
 namespace Veriado.Services.Files;
@@ -41,24 +40,6 @@ public sealed class FileContentService : IFileContentService
             return AppResult<Guid>.NotFound($"File '{fileId}' was not found.");
         }
 
-        try
-        {
-            var directory = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            await File.WriteAllBytesAsync(targetPath, file.Content.Bytes, cancellationToken).ConfigureAwait(false);
-            return AppResult<Guid>.Success(file.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return AppResult<Guid>.FromException(ex, "Failed to save file content to disk.");
-        }
+        return AppResult<Guid>.Unexpected("File content is stored externally and must be retrieved via the file system layer.");
     }
 }

@@ -19,22 +19,25 @@ public sealed class FileEntity : AggregateRoot
 
     private FileEntity(
         Guid id,
+        Guid fileSystemId,
         FileName name,
         FileExtension extension,
         MimeType mime,
         string author,
-        FileContentEntity content,
+        FileHash hash,
+        ByteSize size,
         UtcTimestamp createdUtc,
         FileSystemMetadata systemMetadata,
         string? title)
         : base(id)
     {
+        FileSystemId = fileSystemId;
         Name = name;
         Extension = extension;
         Mime = mime;
         Author = author;
-        Content = content;
-        Size = content.Length;
+        Hash = hash;
+        Size = size;
         CreatedUtc = createdUtc;
         LastModifiedUtc = createdUtc;
         Version = InitialVersion;
@@ -44,6 +47,11 @@ public sealed class FileEntity : AggregateRoot
         SearchIndex = new SearchIndexState(schemaVersion: 1);
         FtsPolicy = Fts5Policy.Default;
     }
+
+    /// <summary>
+    /// Gets the identifier referencing the physical file stored externally.
+    /// </summary>
+    public Guid FileSystemId { get; private set; }
 
     /// <summary>
     /// Gets the file name without extension.
@@ -61,9 +69,20 @@ public sealed class FileEntity : AggregateRoot
     public MimeType Mime { get; private set; }
 
     /// <summary>
+    /// Gets the SHA-256 hash of the content stored externally.
+    /// </summary>
+    public FileHash Hash { get; private set; }
+
+    /// <summary>
     /// Gets the file size.
     /// </summary>
     public ByteSize Size { get; private set; }
+
+    /// <summary>
+    /// Creates metadata describing the externally stored file content.
+    /// </summary>
+    /// <returns>The content metadata.</returns>
+    public FileContentEntity CreateContentMetadata() => FileContentEntity.FromMetadata(Hash, Size);
 
     /// <summary>
     /// Gets the file author stored in the core metadata.
@@ -89,11 +108,6 @@ public sealed class FileEntity : AggregateRoot
     /// Gets the last modification timestamp of the file.
     /// </summary>
     public UtcTimestamp LastModifiedUtc { get; private set; }
-
-    /// <summary>
-    /// Gets the file content entity.
-    /// </summary>
-    public FileContentEntity Content { get; private set; } = null!;
 
     /// <summary>
     /// Gets the optional document validity information.
@@ -127,7 +141,9 @@ public sealed class FileEntity : AggregateRoot
     /// <param name="extension">The file extension.</param>
     /// <param name="mime">The MIME type.</param>
     /// <param name="author">The document author.</param>
-    /// <param name="bytes">The file content bytes.</param>
+    /// <param name="fileSystemId">The identifier referencing the stored file within the file system layer.</param>
+    /// <param name="hash">The SHA-256 hash of the stored content.</param>
+    /// <param name="size">The length of the stored content.</param>
     /// <param name="maxContentSize">Optional maximum content length.</param>
     /// <returns>The created aggregate root.</returns>
     public static FileEntity CreateNew(
@@ -135,16 +151,21 @@ public sealed class FileEntity : AggregateRoot
         FileExtension extension,
         MimeType mime,
         string author,
-        byte[] bytes,
+        Guid fileSystemId,
+        FileHash hash,
+        ByteSize size,
         UtcTimestamp createdUtc,
         int? maxContentSize = null)
     {
         var normalizedAuthor = NormalizeAuthor(author);
-        var content = FileContentEntity.FromBytes(bytes, maxContentSize);
+        if (maxContentSize.HasValue && size.Value > maxContentSize.Value)
+        {
+            throw new ArgumentOutOfRangeException(nameof(size), size.Value, "Content exceeds the configured maximum size.");
+        }
         var systemMetadata = new FileSystemMetadata(FileAttributesFlags.Normal, createdUtc, createdUtc, createdUtc, null, null, null);
 
-        var entity = new FileEntity(Guid.NewGuid(), name, extension, mime, normalizedAuthor, content, createdUtc, systemMetadata, null);
-        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.Content.Hash, createdUtc));
+        var entity = new FileEntity(Guid.NewGuid(), fileSystemId, name, extension, mime, normalizedAuthor, hash, size, createdUtc, systemMetadata, null);
+        entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.Hash, createdUtc));
         entity.MarkSearchDirty(createdUtc, ReindexReason.Created);
         return entity;
     }
@@ -206,25 +227,61 @@ public sealed class FileEntity : AggregateRoot
     }
 
     /// <summary>
-    /// Replaces the file content and bumps the version if the hash changes.
+    /// Replaces the file system reference for the aggregate, updating metadata as needed.
     /// </summary>
-    /// <param name="bytes">The new content bytes.</param>
-    /// <param name="maxContentSize">Optional maximum content length.</param>
-    public void ReplaceContent(byte[] bytes, UtcTimestamp whenUtc, int? maxContentSize = null)
+    /// <param name="newFileSystemId">The identifier of the new external file.</param>
+    /// <param name="newHash">The SHA-256 hash of the new content.</param>
+    /// <param name="newSize">The length of the new content.</param>
+    /// <param name="mime">The MIME type associated with the new content.</param>
+    /// <param name="whenUtc">The timestamp of the replacement.</param>
+    public void ReplaceFileReference(Guid newFileSystemId, FileHash newHash, ByteSize newSize, MimeType mime, UtcTimestamp whenUtc)
     {
         EnsureWritable();
-        var newContent = FileContentEntity.FromBytes(bytes, maxContentSize);
-        if (newContent.Hash == Content.Hash)
+
+        var hashChanged = newHash != Hash;
+        var sizeChanged = newSize != Size;
+        var fileSystemChanged = newFileSystemId != FileSystemId;
+        var mimeChanged = mime != Mime;
+
+        if (!hashChanged && !sizeChanged && !fileSystemChanged && !mimeChanged)
         {
             return;
         }
 
-        Content = newContent;
-        Size = newContent.Length;
-        BumpVersion();
+        FileSystemId = newFileSystemId;
+
+        if (hashChanged)
+        {
+            Hash = newHash;
+            Size = newSize;
+            BumpVersion();
+        }
+        else if (sizeChanged)
+        {
+            Size = newSize;
+        }
+
+        if (mimeChanged)
+        {
+            Mime = mime;
+        }
+
         Touch(whenUtc);
-        RaiseDomainEvent(new FileContentReplaced(Id, newContent.Hash, newContent.Length, Version, whenUtc));
-        MarkSearchDirty(whenUtc, ReindexReason.ContentChanged);
+
+        if (hashChanged)
+        {
+            RaiseDomainEvent(new FileContentReplaced(Id, Hash, Size, Version, whenUtc));
+            MarkSearchDirty(whenUtc, ReindexReason.ContentChanged);
+        }
+
+        if (mimeChanged)
+        {
+            RaiseDomainEvent(new FileMetadataUpdated(Id, Mime, Author, Title, SystemMetadata, whenUtc));
+            if (!hashChanged)
+            {
+                MarkSearchDirty(whenUtc, ReindexReason.MetadataChanged);
+            }
+        }
     }
 
     /// <summary>
@@ -393,7 +450,7 @@ public sealed class FileEntity : AggregateRoot
             LastModifiedUtc.Value,
             metadataJson,
             metadataText,
-            Content.Hash.Value);
+            Hash.Value);
     }
 
     /// <summary>
@@ -422,7 +479,7 @@ public sealed class FileEntity : AggregateRoot
                 ? Name.Value
                 : Title!
             : indexedTitle!;
-        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Content.Hash.Value, resolvedTitle, analyzerVersion, tokenHash);
+        SearchIndex.ApplyIndexed(schemaVersion, whenUtc.Value, Hash.Value, resolvedTitle, analyzerVersion, tokenHash);
     }
 
     /// <summary>

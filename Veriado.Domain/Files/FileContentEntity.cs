@@ -1,21 +1,15 @@
 namespace Veriado.Domain.Files;
 
 /// <summary>
-/// Represents the binary content of a file along with its derived metadata.
+/// Represents lightweight metadata describing externally stored file content.
 /// </summary>
 public sealed class FileContentEntity
 {
-    private FileContentEntity(byte[] bytes, FileHash hash)
+    private FileContentEntity(ByteSize length, FileHash hash)
     {
-        Bytes = bytes;
         Hash = hash;
-        Length = ByteSize.From(bytes.LongLength);
+        Length = length;
     }
-
-    /// <summary>
-    /// Gets the raw file content bytes.
-    /// </summary>
-    public byte[] Bytes { get; }
 
     /// <summary>
     /// Gets the SHA-256 hash of the content.
@@ -28,28 +22,13 @@ public sealed class FileContentEntity
     public ByteSize Length { get; }
 
     /// <summary>
-    /// Creates a <see cref="FileContentEntity"/> from the provided byte array.
+    /// Creates a <see cref="FileContentEntity"/> from the provided metadata.
     /// </summary>
-    /// <param name="bytes">The content bytes.</param>
-    /// <param name="maxBytes">Optional maximum content size constraint.</param>
-    /// <returns>The created content entity.</returns>
-    public static FileContentEntity FromBytes(byte[] bytes, int? maxBytes = null)
+    /// <param name="hash">The SHA-256 hash of the stored content.</param>
+    /// <param name="length">The length of the stored content.</param>
+    /// <returns>The created content metadata entity.</returns>
+    public static FileContentEntity FromMetadata(FileHash hash, ByteSize length)
     {
-        ArgumentNullException.ThrowIfNull(bytes);
-
-        if (maxBytes.HasValue && maxBytes.Value < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxBytes), maxBytes.Value, "Maximum bytes must be non-negative.");
-        }
-
-        if (maxBytes.HasValue && bytes.LongLength > maxBytes.Value)
-        {
-            throw new ArgumentOutOfRangeException(nameof(bytes), bytes.LongLength, "Content exceeds the configured maximum size.");
-        }
-
-        var copy = new byte[bytes.Length];
-        Array.Copy(bytes, copy, bytes.Length);
-        var hash = FileHash.Compute(copy);
-        return new FileContentEntity(copy, hash);
+        return new FileContentEntity(length, hash);
     }
 }

@@ -35,11 +35,6 @@ public sealed class FileReadProfiles : Profile
             .ForCtorParam(nameof(FileSystemMetadataDto.AlternateDataStreamCount), opt =>
                 opt.MapFrom(static src => src.AlternateDataStreamCount));
 
-        CreateMap<FileContentEntity, FileContentDto>()
-            .ForCtorParam(nameof(FileContentDto.Hash), opt => opt.MapFrom(static src => src.Hash))
-            .ForCtorParam(nameof(FileContentDto.Length), opt => opt.MapFrom(static src => src.Length))
-            .ForCtorParam(nameof(FileContentDto.Bytes), opt => opt.MapFrom(static _ => (byte[]?)null));
-
         CreateMap<FileEntity, FileContentResponseDto>()
             .ForCtorParam(nameof(FileContentResponseDto.Id), opt => opt.MapFrom(static src => src.Id))
             .ForCtorParam(nameof(FileContentResponseDto.Name), opt => opt.MapFrom(static src => src.Name))
@@ -53,7 +48,7 @@ public sealed class FileReadProfiles : Profile
             .ForCtorParam(nameof(FileContentResponseDto.LastModifiedUtc), opt => opt.MapFrom(static src => src.LastModifiedUtc))
             .ForCtorParam(nameof(FileContentResponseDto.Validity), opt => opt.MapFrom(static src => src.Validity))
             .ForCtorParam(nameof(FileContentResponseDto.Content), opt =>
-                opt.MapFrom(static src => CloneBytes(src.Content.Bytes)));
+                opt.MapFrom(static src => BuildContentDto(src)));
 
         CreateMap<FileEntity, FileSummaryDto>()
             .ForMember(dest => dest.Name, opt => opt.MapFrom(static src => src.Name))
@@ -85,7 +80,7 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.LastModifiedUtc, opt => opt.MapFrom(static src => src.LastModifiedUtc))
             .ForMember(dest => dest.IsReadOnly, opt => opt.MapFrom(static src => src.IsReadOnly))
             .ForMember(dest => dest.Version, opt => opt.MapFrom(static src => src.Version))
-            .ForMember(dest => dest.Content, opt => opt.MapFrom(static src => src.Content))
+            .ForMember(dest => dest.Content, opt => opt.MapFrom(static src => BuildContentDto(src)))
             .ForMember(dest => dest.SystemMetadata, opt => opt.MapFrom(static src => src.SystemMetadata))
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(static src => src.Validity))
             .ForMember(dest => dest.IsIndexStale, ConfigureSearchIndexMember<FileDetailDto, bool>(static state => state.IsStale))
@@ -135,15 +130,9 @@ public sealed class FileReadProfiles : Profile
         };
     }
 
-    private static byte[] CloneBytes(byte[] source)
+    private static FileContentDto BuildContentDto(FileEntity file)
     {
-        if (source is null || source.Length == 0)
-        {
-            return Array.Empty<byte>();
-        }
-
-        var clone = new byte[source.Length];
-        Array.Copy(source, clone, source.Length);
-        return clone;
+        var metadata = file.CreateContentMetadata();
+        return new FileContentDto(metadata.Hash.Value, metadata.Length.Value, null);
     }
 }

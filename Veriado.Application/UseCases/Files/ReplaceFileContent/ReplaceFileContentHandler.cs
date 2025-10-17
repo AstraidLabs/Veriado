@@ -35,7 +35,10 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
             }
 
             var timestamp = CurrentTimestamp();
-            file.ReplaceContent(request.Content, timestamp, _importPolicy.MaxContentLengthBytes);
+            var newSize = ByteSize.From(request.Content.LongLength);
+            var newHash = FileHash.Compute(request.Content);
+            var newFileSystemId = Guid.NewGuid();
+            file.ReplaceFileReference(newFileSystemId, newHash, newSize, file.Mime, timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }

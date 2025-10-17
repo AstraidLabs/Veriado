@@ -58,9 +58,11 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    file_system_id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     name = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
                     extension = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
                     mime = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    hash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     size_bytes = table.Column<long>(type: "INTEGER", nullable: false),
                     author = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
                     is_read_only = table.Column<bool>(type: "INTEGER", nullable: false),
@@ -222,25 +224,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "files_content",
-                columns: table => new
-                {
-                    file_id = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    bytes = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    hash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_files_content", x => x.file_id);
-                    table.ForeignKey(
-                        name: "FK_files_content_files_file_id",
-                        column: x => x.file_id,
-                        principalTable: "files",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "files_validity",
                 columns: table => new
                 {
@@ -330,8 +313,8 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ux_files_content_hash",
-                table: "files_content",
+                name: "ux_files_hash",
+                table: "files",
                 column: "hash",
                 unique: true);
 
@@ -397,9 +380,6 @@ END;");
 
             migrationBuilder.DropTable(
                 name: "document_locations");
-
-            migrationBuilder.DropTable(
-                name: "files_content");
 
             migrationBuilder.DropTable(
                 name: "files_validity");
