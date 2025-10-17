@@ -11,7 +11,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Veriado.Infrastructure.Concurrency;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
@@ -81,9 +80,9 @@ public static class ServiceCollectionExtensions
         {
             var logger = loggerFactory.CreateLogger(nameof(InfrastructureOptions));
             logger.LogInformation(
-                "Infrastructure configured with {Workers} workers and write queue capacity {Capacity}.",
-                opts.Workers,
-                opts.WriteQueueCapacity);
+                "Infrastructure configured for database {DatabasePath} (full-text available: {IsFulltextAvailable}).",
+                opts.DbPath,
+                opts.IsFulltextAvailable);
         });
 
         optionsBuilder.ValidateDataAnnotations();
@@ -92,20 +91,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<InfrastructureOptions>>().Value);
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
-        services.AddSingleton<ISearchWriteTelemetry, SearchWriteTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
-        services.AddSingleton<WritePipelineState>(sp =>
-        {
-            var opts = sp.GetRequiredService<InfrastructureOptions>();
-            var workers = Math.Max(1, opts.Workers);
-            return new WritePipelineState(workers);
-        });
-        services.AddSingleton<IWritePipelineTelemetry, WritePipelineTelemetry>();
         services.AddHealthChecks()
-            .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas")
-            .AddCheck<FtsDlqHealthCheck>("fts_write_ahead_dlq")
-            .AddCheck<WritePipelineHealthCheck>("write_pipeline");
+            .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas");
 
         var searchOptions = services.AddOptions<SearchOptions>();
         if (configuration is not null)
@@ -133,31 +122,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<SearchOptions>().Suggestions);
         services.AddSingleton<IOptions<AnalyzerOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Analyzer));
         services.AddSingleton<IOptions<SearchScoreOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Score));
-
-        var searchWriteOptions = services.AddOptions<SearchWriteOptions>();
-        if (configuration is not null)
-        {
-            searchWriteOptions.Bind(configuration.GetSection("Search:Write"));
-        }
-        else
-        {
-            searchWriteOptions.Configure(_ => { });
-        }
-
-        searchWriteOptions.PostConfigure(options =>
-        {
-            if (options.Workers < 1)
-            {
-                options.Workers = 1;
-            }
-
-            if (options.MaxBatchSize < 1)
-            {
-                options.MaxBatchSize = 1;
-            }
-        });
-
-        services.AddSingleton(sp => sp.GetRequiredService<IOptions<SearchWriteOptions>>().Value);
 
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
 
@@ -188,19 +152,14 @@ public static class ServiceCollectionExtensions
         });
 
         services.TryAddSingleton<IClock, SystemClock>();
-
-        services.AddSingleton<IWriteQueue, WriteQueue>();
         services.AddSingleton<SuggestionMaintenanceService>();
         services.AddSingleton<SqliteFts5Indexer>();
         services.AddSingleton<ISearchIndexer>(sp => sp.GetRequiredService<SqliteFts5Indexer>());
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
-        services.AddSingleton<IIndexQueue, IndexQueue>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
-        services.AddSingleton<FtsWriteAheadService>();
-        services.AddSingleton<IFtsDlqMonitor>(sp => sp.GetRequiredService<FtsWriteAheadService>());
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
         services.AddSingleton<ISearchFavoritesService, SearchFavoritesService>();
         services.AddSingleton<IFacetService, FacetService>();
@@ -217,18 +176,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileReadRepository, FileReadRepository>();
         services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();
 
-        services.AddHostedService(sp =>
-        {
-            var opts = sp.GetRequiredService<InfrastructureOptions>();
-            var workers = Math.Max(1, opts.Workers);
-            var servicesToRun = Enumerable.Range(0, workers)
-                .Select(index => (IHostedService)ActivatorUtilities.CreateInstance<WriteWorker>(sp, index))
-                .ToArray();
-            return new CompositeHostedService(servicesToRun);
-        });
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
-        services.AddHostedService<ReindexWorker>();
 
         return services;
     }

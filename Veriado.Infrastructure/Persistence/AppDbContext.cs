@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
 using Veriado.Infrastructure.Persistence.EventLog;
-using Veriado.Infrastructure.Persistence.WriteAhead;
 
 namespace Veriado.Infrastructure.Persistence;
 
@@ -54,35 +53,6 @@ public sealed class AppDbContext : DbContext
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
-
-        modelBuilder.Entity<FtsWriteAheadRecord>(entity =>
-        {
-            entity.ToTable("fts_write_ahead");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
-            entity.Property(e => e.FileId).HasColumnName("file_id").HasColumnType("TEXT").IsRequired();
-            entity.Property(e => e.Operation).HasColumnName("op").HasColumnType("TEXT").IsRequired();
-            entity.Property(e => e.ContentHash).HasColumnName("content_hash").HasColumnType("TEXT");
-            entity.Property(e => e.TitleHash).HasColumnName("title_hash").HasColumnType("TEXT");
-            entity.Property(e => e.EnqueuedUtc).HasColumnName("enqueued_utc").HasColumnType("TEXT").IsRequired();
-            entity.HasIndex(e => e.EnqueuedUtc).HasDatabaseName("idx_fts_write_ahead_enqueued");
-        });
-
-        modelBuilder.Entity<FtsWriteAheadDeadLetterRecord>(entity =>
-        {
-            entity.ToTable("fts_write_ahead_dlq");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
-            entity.Property(e => e.OriginalId).HasColumnName("original_id").HasColumnType("INTEGER").IsRequired();
-            entity.Property(e => e.FileId).HasColumnName("file_id").HasColumnType("TEXT").IsRequired();
-            entity.Property(e => e.Operation).HasColumnName("op").HasColumnType("TEXT").IsRequired();
-            entity.Property(e => e.ContentHash).HasColumnName("content_hash").HasColumnType("TEXT");
-            entity.Property(e => e.TitleHash).HasColumnName("title_hash").HasColumnType("TEXT");
-            entity.Property(e => e.EnqueuedUtc).HasColumnName("enqueued_utc").HasColumnType("TEXT").IsRequired();
-            entity.Property(e => e.DeadLetteredUtc).HasColumnName("dead_lettered_utc").HasColumnType("TEXT").IsRequired();
-            entity.Property(e => e.Error).HasColumnName("error").HasColumnType("TEXT").IsRequired();
-            entity.HasIndex(e => e.DeadLetteredUtc).HasDatabaseName("idx_fts_write_ahead_dlq_dead_lettered");
-        });
 
     }
 

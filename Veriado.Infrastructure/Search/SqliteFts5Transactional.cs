@@ -14,16 +14,13 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5Transactional
 {
     private readonly IAnalyzerFactory _analyzerFactory;
-    private readonly FtsWriteAheadService _writeAhead;
     private readonly ILogger<SqliteFts5Transactional> _logger;
 
     public SqliteFts5Transactional(
         IAnalyzerFactory analyzerFactory,
-        FtsWriteAheadService writeAhead,
         ILogger<SqliteFts5Transactional>? logger = null)
     {
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
-        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _logger = logger ?? NullLogger<SqliteFts5Transactional>.Instance;
     }
 
@@ -32,8 +29,7 @@ internal sealed class SqliteFts5Transactional
         SqliteConnection connection,
         SqliteTransaction transaction,
         Func<CancellationToken, Task>? beforeCommit,
-        CancellationToken cancellationToken,
-        bool enlistJournal = true)
+        CancellationToken cancellationToken)
     {
         SqliteCommand? activeCommand = null;
         try
@@ -47,18 +43,6 @@ internal sealed class SqliteFts5Transactional
             var normalizedTitle = NormalizeOptional(document.Title);
             var normalizedAuthor = NormalizeOptional(document.Author);
             var normalizedMetadataText = NormalizeOptional(document.MetadataText);
-
-            var journalTransaction = enlistJournal ? transaction : null;
-            var journalId = await _writeAhead
-                .LogAsync(
-                    connection,
-                    journalTransaction,
-                    document.FileId,
-                    FtsWriteAheadService.OperationIndex,
-                    document.ContentHash,
-                    normalizedTitle,
-                    cancellationToken)
-                .ConfigureAwait(false);
 
             await using var update = connection.CreateCommand();
             update.Transaction = transaction;
@@ -129,18 +113,12 @@ VALUES (
                 activeCommand = null;
             }
 
-            if (enlistJournal && journalId.HasValue)
-            {
-                await _writeAhead.ClearAsync(connection, transaction, journalId.Value, cancellationToken).ConfigureAwait(false);
-                journalId = null;
-            }
-
             if (beforeCommit is not null)
             {
                 await beforeCommit(cancellationToken).ConfigureAwait(false);
             }
 
-            return enlistJournal ? null : journalId;
+            return null;
         }
         catch (SqliteException ex)
         {
@@ -159,8 +137,7 @@ VALUES (
         SqliteConnection connection,
         SqliteTransaction transaction,
         Func<CancellationToken, Task>? beforeCommit,
-        CancellationToken cancellationToken,
-        bool enlistJournal = true)
+        CancellationToken cancellationToken)
     {
         SqliteCommand? activeCommand = null;
         try
@@ -171,18 +148,6 @@ VALUES (
             {
                 return null;
             }
-            var journalTransaction = enlistJournal ? transaction : null;
-            var journalId = await _writeAhead
-                .LogAsync(
-                    connection,
-                    journalTransaction,
-                    fileId,
-                    FtsWriteAheadService.OperationDelete,
-                    contentHash: null,
-                    normalizedTitle: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
             await using var delete = connection.CreateCommand();
             delete.Transaction = transaction;
             delete.CommandText = "DELETE FROM search_document WHERE file_id = $file_id;";
@@ -191,18 +156,12 @@ VALUES (
             await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             activeCommand = null;
 
-            if (enlistJournal && journalId.HasValue)
-            {
-                await _writeAhead.ClearAsync(connection, transaction, journalId.Value, cancellationToken).ConfigureAwait(false);
-                journalId = null;
-            }
-
             if (beforeCommit is not null)
             {
                 await beforeCommit(cancellationToken).ConfigureAwait(false);
             }
 
-            return enlistJournal ? null : journalId;
+            return null;
         }
         catch (SqliteException ex)
         {

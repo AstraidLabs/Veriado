@@ -19,16 +19,13 @@ internal sealed class SearchTelemetry : ISearchTelemetry
     private readonly Counter<long> _sqliteBusyRetryCounter = Meter.CreateCounter<long>("sqlite_busy_retries_total");
     private readonly ObservableGauge<long> _documentGauge;
     private readonly ObservableGauge<long> _indexSizeGauge;
-    private readonly ObservableGauge<long> _deadLetterGauge;
     private long _documentCount;
     private long _indexSizeBytes;
-    private long _deadLetterCount;
 
     public SearchTelemetry()
     {
         _documentGauge = Meter.CreateObservableGauge("search_documents_total", ObserveDocuments);
         _indexSizeGauge = Meter.CreateObservableGauge("search_index_bytes", ObserveIndexSize);
-        _deadLetterGauge = Meter.CreateObservableGauge("fts_dlq_size", ObserveDeadLetterSize);
     }
 
     public void RecordFtsQuery(TimeSpan elapsed)
@@ -42,9 +39,6 @@ internal sealed class SearchTelemetry : ISearchTelemetry
         Interlocked.Exchange(ref _documentCount, documentCount);
         Interlocked.Exchange(ref _indexSizeBytes, indexSizeBytes);
     }
-
-    public void UpdateDeadLetterQueueSize(long entryCount)
-        => Interlocked.Exchange(ref _deadLetterCount, entryCount);
 
     public void RecordIndexVerificationDuration(TimeSpan elapsed)
         => _verifyDurationHistogram.Record(elapsed.TotalMilliseconds);
@@ -92,8 +86,4 @@ internal sealed class SearchTelemetry : ISearchTelemetry
         yield return new Measurement<long>(Interlocked.Read(ref _indexSizeBytes));
     }
 
-    private IEnumerable<Measurement<long>> ObserveDeadLetterSize()
-    {
-        yield return new Measurement<long>(Interlocked.Read(ref _deadLetterCount));
-    }
 }

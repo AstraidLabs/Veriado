@@ -256,12 +256,6 @@ public interface ISearchTelemetry
     void UpdateIndexMetrics(long documentCount, long indexSizeBytes);
 
     /// <summary>
-    /// Updates gauges describing the current FTS dead-letter queue depth.
-    /// </summary>
-    /// <param name="entryCount">The number of entries currently in the dead-letter queue.</param>
-    void UpdateDeadLetterQueueSize(long entryCount);
-
-    /// <summary>
     /// Records the elapsed time of a full-text index verification pass.
     /// </summary>
     /// <param name="elapsed">The elapsed duration.</param>
@@ -289,47 +283,4 @@ public interface ISearchTelemetry
     /// </summary>
     /// <param name="retryCount">The number of retries to add to the counter.</param>
     void RecordSqliteBusyRetry(int retryCount);
-}
-
-/// <summary>
-/// Provides telemetry hooks specific to the write pipeline.
-/// </summary>
-public interface ISearchWriteTelemetry
-{
-    /// <summary>
-    /// Updates the current depth of the write queue for a partition.
-    /// </summary>
-    /// <param name="partitionId">The partition identifier.</param>
-    /// <param name="depth">The depth to report.</param>
-    void UpdateQueueDepth(int partitionId, int depth);
-
-    /// <summary>
-    /// Records the wait duration for a request before it entered execution.
-    /// </summary>
-    /// <param name="elapsed">The elapsed wait duration.</param>
-    void RecordQueueWait(TimeSpan elapsed);
-
-    /// <summary>
-    /// Records the execution duration of a processed batch.
-    /// </summary>
-    /// <param name="elapsed">The elapsed duration.</param>
-    /// <param name="itemCount">The number of items processed.</param>
-    void RecordBatchDuration(TimeSpan elapsed, int itemCount);
-
-    /// <summary>
-    /// Records the number of SQLite retry attempts performed.
-    /// </summary>
-    /// <param name="count">The number of retries.</param>
-    void RecordSqliteRetry(int count);
-
-    /// <summary>
-    /// Publishes the current availability state of the FTS subsystem.
-    /// </summary>
-    /// <param name="isAvailable">True when FTS is available.</param>
-    void UpdateFtsAvailability(bool isAvailable);
-
-    /// <summary>
-    /// Records a repair trigger emitted by the pipeline.
-    /// </summary>
-    void RecordFtsRepairTriggered();
 }
