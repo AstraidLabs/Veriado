@@ -171,6 +171,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AuditEventProjector>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
+        services.AddScoped<SearchProjectionService>();
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
         services.AddScoped<IFileReadRepository, FileReadRepository>();
