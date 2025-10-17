@@ -13,6 +13,7 @@ global using Microsoft.Extensions.Logging;
 global using Veriado.Appl.Abstractions;
 global using Veriado.Appl.Search.Abstractions;
 global using Veriado.Domain.Files;
+global using Veriado.Domain.FileSystem;
 global using Veriado.Domain.Search;
 global using Veriado.Domain.ValueObjects;
 global using Veriado.Infrastructure.Persistence;

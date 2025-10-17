@@ -1,5 +1,5 @@
 using System;
-using Veriado.Domain.Audit;
+using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
 
 namespace Veriado.Infrastructure.Persistence;
@@ -23,11 +23,13 @@ public sealed class ReadOnlyDbContext : DbContext
 
     public DbSet<FileEntity> Files => Set<FileEntity>();
 
-    public DbSet<FileAuditEntity> FileAudits => Set<FileAuditEntity>();
+    public DbSet<FileSystemEntity> FileSystems => Set<FileSystemEntity>();
 
-    public DbSet<FileLinkAuditEntity> FileLinkAudits => Set<FileLinkAuditEntity>();
+    public DbSet<FileAuditRecord> FileAudits => Set<FileAuditRecord>();
 
-    public DbSet<FileSystemAuditEntity> FileSystemAudits => Set<FileSystemAuditEntity>();
+    public DbSet<FileLinkAuditRecord> FileLinkAudits => Set<FileLinkAuditRecord>();
+
+    public DbSet<FileSystemAuditRecord> FileSystemAudits => Set<FileSystemAuditRecord>();
 
     public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
 

@@ -17,7 +17,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
 
-            modelBuilder.Entity("Veriado.Domain.Audit.FileAuditEntity", b =>
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.Audit.FileAuditRecord", b =>
                 {
                     b.Property<byte[]>("FileId")
                         .HasColumnType("BLOB")
@@ -59,7 +59,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_file", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Domain.Audit.FileLinkAuditEntity", b =>
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.Audit.FileLinkAuditRecord", b =>
                 {
                     b.Property<byte[]>("FileId")
                         .HasColumnType("BLOB")
@@ -104,7 +104,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_file_link", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Domain.Audit.FileSystemAuditEntity", b =>
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.Audit.FileSystemAuditRecord", b =>
                 {
                     b.Property<byte[]>("FileSystemId")
                         .HasColumnType("BLOB")
@@ -156,6 +156,93 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_filesystem", (string)null);
                 });
 
+            modelBuilder.Entity("Veriado.Domain.FileSystem.FileSystemEntity", b =>
+                {
+                    b.Property<byte[]>("Id")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attributes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attributes");
+
+                    b.Property<int>("ContentVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("content_version");
+
+                    b.Property<string>("CreatedUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_utc");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("hash");
+
+                    b.Property<bool>("IsEncrypted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_encrypted");
+
+                    b.Property<bool>("IsMissing")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_missing");
+
+                    b.Property<string>("LastAccessUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_access_utc");
+
+                    b.Property<string>("LastLinkedUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_linked_utc");
+
+                    b.Property<string>("LastWriteUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_write_utc");
+
+                    b.Property<string>("Mime")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mime");
+
+                    b.Property<string>("MissingSinceUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("missing_since_utc");
+
+                    b.Property<string>("OwnerSid")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("owner_sid");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("path");
+
+                    b.Property<int>("Provider")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("provider");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("BIGINT")
+                        .HasColumnName("size");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Hash")
+                        .HasDatabaseName("idx_filesystem_entities_hash");
+
+                    b.HasIndex("Path")
+                        .IsUnique()
+                        .HasDatabaseName("ux_filesystem_entities_path");
+
+                    b.ToTable("filesystem_entities", (string)null);
+                });
+
             modelBuilder.Entity("Veriado.Domain.Files.FileEntity", b =>
                 {
                     b.Property<byte[]>("Id")
@@ -170,7 +257,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
 
                     b.Property<byte[]>("FileSystemId")
                         .HasColumnType("BLOB")
-                        .HasColumnName("file_system_id");
+                        .HasColumnName("filesystem_id");
 
                     b.Property<string>("ContentHash")
                         .IsRequired()
@@ -275,9 +362,15 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .HasDatabaseName("idx_files_name");
 
-                    b.HasIndex("ContentHash")
+                    b.HasIndex("FileSystemId")
                         .IsUnique()
-                        .HasDatabaseName("ux_files_content_hash");
+                        .HasDatabaseName("ux_files_filesystem_id");
+
+                    b.HasOne("Veriado.Domain.FileSystem.FileSystemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FileSystemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_files_filesystem_entities_filesystem_id");
 
                     b.ToTable("files", (string)null);
                 });
@@ -716,6 +809,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_document_locations_files_file_id");
                 });
+
 #pragma warning restore 612, 618
         }
     }

@@ -1,4 +1,4 @@
-using Veriado.Domain.Audit;
+using Veriado.Infrastructure.Persistence.Audit;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;
 

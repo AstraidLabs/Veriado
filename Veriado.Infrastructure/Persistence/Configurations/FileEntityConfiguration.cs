@@ -39,7 +39,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .IsRequired();
 
         builder.Property(file => file.FileSystemId)
-            .HasColumnName("file_system_id")
+            .HasColumnName("filesystem_id")
             .HasColumnType("BLOB")
             .HasConversion(Converters.GuidToBlob)
             .IsRequired();
@@ -94,7 +94,14 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.HasIndex(file => file.Name).HasDatabaseName("idx_files_name");
         builder.HasIndex(file => file.Mime).HasDatabaseName("idx_files_mime");
-        builder.HasIndex(file => file.ContentHash).HasDatabaseName("ux_files_content_hash").IsUnique();
+        builder.HasIndex(file => file.FileSystemId).HasDatabaseName("ux_files_filesystem_id").IsUnique();
+
+        builder.HasOne<FileSystemEntity>()
+            .WithMany()
+            .HasForeignKey(file => file.FileSystemId)
+            .HasPrincipalKey(entity => entity.Id)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_files_filesystem_entities_filesystem_id");
 
         builder.OwnsOne(file => file.Validity, FileDocumentValidityEntityConfiguration.Configure);
 
