@@ -1,31 +1,21 @@
-using Veriado.Domain.Files;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Domain.Files.Events;
+namespace Veriado.Domain.FileSystem.Events;
 
 /// <summary>
-/// Domain event emitted when file system content is created or replaced.
+/// Domain event emitted when the physical content backing a file is created or replaced.
 /// </summary>
 public sealed class FileSystemContentChanged : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemContentChanged"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="provider">The storage provider hosting the content.</param>
-    /// <param name="storagePath">The storage path referencing the binary content.</param>
-    /// <param name="hash">The SHA-256 hash of the content.</param>
-    /// <param name="size">The size of the content in bytes.</param>
-    /// <param name="mime">The MIME type of the content.</param>
-    /// <param name="contentVersion">The version number assigned to the content.</param>
-    /// <param name="isEncrypted">Indicates whether the content is encrypted.</param>
-    /// <param name="occurredUtc">The timestamp when the change was observed.</param>
     public FileSystemContentChanged(
         Guid fileSystemId,
         StorageProvider provider,
-        StoragePath storagePath,
+        StoragePath path,
         FileHash hash,
         ByteSize size,
         MimeType mime,
@@ -35,7 +25,7 @@ public sealed class FileSystemContentChanged : IDomainEvent
     {
         FileSystemId = fileSystemId;
         Provider = provider;
-        StoragePath = storagePath;
+        Path = path;
         Hash = hash;
         Size = size;
         Mime = mime;
@@ -46,27 +36,27 @@ public sealed class FileSystemContentChanged : IDomainEvent
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the storage provider hosting the content.
+    /// Gets the provider hosting the content.
     /// </summary>
     public StorageProvider Provider { get; }
 
     /// <summary>
-    /// Gets the storage path referencing the binary content.
+    /// Gets the path referencing the content.
     /// </summary>
-    public StoragePath StoragePath { get; }
+    public StoragePath Path { get; }
 
     /// <summary>
-    /// Gets the SHA-256 hash of the content.
+    /// Gets the hash of the content.
     /// </summary>
     public FileHash Hash { get; }
 
     /// <summary>
-    /// Gets the size of the content in bytes.
+    /// Gets the size of the content.
     /// </summary>
     public ByteSize Size { get; }
 
@@ -76,7 +66,7 @@ public sealed class FileSystemContentChanged : IDomainEvent
     public MimeType Mime { get; }
 
     /// <summary>
-    /// Gets the version number assigned to the content.
+    /// Gets the version assigned to the content.
     /// </summary>
     public ContentVersion ContentVersion { get; }
 
@@ -93,18 +83,13 @@ public sealed class FileSystemContentChanged : IDomainEvent
 }
 
 /// <summary>
-/// Domain event emitted when file system content is moved to a different storage path.
+/// Domain event emitted when the physical content is moved to a different path.
 /// </summary>
 public sealed class FileSystemMoved : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemMoved"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="provider">The storage provider hosting the content.</param>
-    /// <param name="previousPath">The previous storage path.</param>
-    /// <param name="newPath">The new storage path.</param>
-    /// <param name="occurredUtc">The timestamp when the change was observed.</param>
     public FileSystemMoved(
         Guid fileSystemId,
         StorageProvider provider,
@@ -121,7 +106,7 @@ public sealed class FileSystemMoved : IDomainEvent
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
@@ -148,16 +133,13 @@ public sealed class FileSystemMoved : IDomainEvent
 }
 
 /// <summary>
-/// Domain event emitted when file system attributes are updated.
+/// Domain event emitted when file attributes change.
 /// </summary>
 public sealed class FileSystemAttributesChanged : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemAttributesChanged"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="attributes">The updated file system attributes.</param>
-    /// <param name="occurredUtc">The timestamp when the change was observed.</param>
     public FileSystemAttributesChanged(Guid fileSystemId, FileAttributesFlags attributes, UtcTimestamp occurredUtc)
     {
         FileSystemId = fileSystemId;
@@ -167,12 +149,12 @@ public sealed class FileSystemAttributesChanged : IDomainEvent
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the updated file system attributes.
+    /// Gets the updated attributes.
     /// </summary>
     public FileAttributesFlags Attributes { get; }
 
@@ -184,16 +166,13 @@ public sealed class FileSystemAttributesChanged : IDomainEvent
 }
 
 /// <summary>
-/// Domain event emitted when the owner SID associated with a file is updated.
+/// Domain event emitted when the owner SID of a file changes.
 /// </summary>
 public sealed class FileSystemOwnerChanged : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemOwnerChanged"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="ownerSid">The new owner SID.</param>
-    /// <param name="occurredUtc">The timestamp when the change was observed.</param>
     public FileSystemOwnerChanged(Guid fileSystemId, string? ownerSid, UtcTimestamp occurredUtc)
     {
         FileSystemId = fileSystemId;
@@ -203,12 +182,12 @@ public sealed class FileSystemOwnerChanged : IDomainEvent
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the owner SID associated with the file.
+    /// Gets the owner SID.
     /// </summary>
     public string? OwnerSid { get; }
 
@@ -220,18 +199,13 @@ public sealed class FileSystemOwnerChanged : IDomainEvent
 }
 
 /// <summary>
-/// Domain event emitted when file system timestamps are updated.
+/// Domain event emitted when timestamps are updated.
 /// </summary>
 public sealed class FileSystemTimestampsUpdated : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemTimestampsUpdated"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="createdUtc">The updated creation timestamp.</param>
-    /// <param name="lastWriteUtc">The updated last write timestamp.</param>
-    /// <param name="lastAccessUtc">The updated last access timestamp.</param>
-    /// <param name="occurredUtc">The timestamp when the change was observed.</param>
     public FileSystemTimestampsUpdated(
         Guid fileSystemId,
         UtcTimestamp createdUtc,
@@ -248,22 +222,22 @@ public sealed class FileSystemTimestampsUpdated : IDomainEvent
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the updated creation timestamp.
+    /// Gets the creation timestamp.
     /// </summary>
     public UtcTimestamp CreatedUtc { get; }
 
     /// <summary>
-    /// Gets the updated last write timestamp.
+    /// Gets the last write timestamp.
     /// </summary>
     public UtcTimestamp LastWriteUtc { get; }
 
     /// <summary>
-    /// Gets the updated last access timestamp.
+    /// Gets the last access timestamp.
     /// </summary>
     public UtcTimestamp LastAccessUtc { get; }
 
@@ -275,33 +249,40 @@ public sealed class FileSystemTimestampsUpdated : IDomainEvent
 }
 
 /// <summary>
-/// Domain event emitted when a file is detected as missing from storage.
+/// Domain event emitted when content is detected as missing.
 /// </summary>
 public sealed class FileSystemMissingDetected : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemMissingDetected"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="storagePath">The storage path that was probed.</param>
-    /// <param name="occurredUtc">The timestamp when the missing state was detected.</param>
-    public FileSystemMissingDetected(Guid fileSystemId, StoragePath storagePath, UtcTimestamp occurredUtc)
+    public FileSystemMissingDetected(
+        Guid fileSystemId,
+        StoragePath path,
+        UtcTimestamp occurredUtc,
+        UtcTimestamp? missingSinceUtc)
     {
         FileSystemId = fileSystemId;
-        StoragePath = storagePath;
+        Path = path;
+        MissingSinceUtc = missingSinceUtc;
         EventId = Guid.NewGuid();
         OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the storage path that was probed.
+    /// Gets the path that was probed.
     /// </summary>
-    public StoragePath StoragePath { get; }
+    public StoragePath Path { get; }
+
+    /// <summary>
+    /// Gets the timestamp when the content was first observed missing, if known.
+    /// </summary>
+    public UtcTimestamp? MissingSinceUtc { get; }
 
     /// <inheritdoc />
     public Guid EventId { get; }
@@ -311,52 +292,54 @@ public sealed class FileSystemMissingDetected : IDomainEvent
 }
 
 /// <summary>
-/// Domain event emitted when a previously missing file is rehydrated in storage.
+/// Domain event emitted when content is rehydrated in storage.
 /// </summary>
 public sealed class FileSystemRehydrated : IDomainEvent
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemRehydrated"/> class.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system entity.</param>
-    /// <param name="provider">The storage provider hosting the content.</param>
-    /// <param name="storagePath">The storage path referencing the binary content.</param>
-    /// <param name="wasMissing">Indicates whether the file was previously marked as missing.</param>
-    /// <param name="occurredUtc">The timestamp when rehydration occurred.</param>
     public FileSystemRehydrated(
         Guid fileSystemId,
         StorageProvider provider,
-        StoragePath storagePath,
+        StoragePath path,
         bool wasMissing,
+        UtcTimestamp? missingSinceUtc,
         UtcTimestamp occurredUtc)
     {
         FileSystemId = fileSystemId;
         Provider = provider;
-        StoragePath = storagePath;
+        Path = path;
         WasMissing = wasMissing;
+        MissingSinceUtc = missingSinceUtc;
         EventId = Guid.NewGuid();
         OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
     /// <summary>
-    /// Gets the identifier of the file system entity.
+    /// Gets the identifier of the file system aggregate.
     /// </summary>
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the storage provider hosting the content.
+    /// Gets the provider hosting the content.
     /// </summary>
     public StorageProvider Provider { get; }
 
     /// <summary>
-    /// Gets the storage path referencing the binary content.
+    /// Gets the path referencing the rehydrated content.
     /// </summary>
-    public StoragePath StoragePath { get; }
+    public StoragePath Path { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the file was previously missing from storage.
+    /// Gets a value indicating whether the content had been missing prior to rehydration.
     /// </summary>
     public bool WasMissing { get; }
+
+    /// <summary>
+    /// Gets the timestamp when the content was first observed missing, if known.
+    /// </summary>
+    public UtcTimestamp? MissingSinceUtc { get; }
 
     /// <inheritdoc />
     public Guid EventId { get; }
