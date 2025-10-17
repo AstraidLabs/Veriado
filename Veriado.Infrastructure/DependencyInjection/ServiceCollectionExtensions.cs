@@ -224,7 +224,6 @@ public static class ServiceCollectionExtensions
                 .ToArray();
             return new CompositeHostedService(servicesToRun);
         });
-        services.AddHostedService<OutboxDispatcherHostedService>();
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
 

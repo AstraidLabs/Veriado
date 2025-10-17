@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Veriado.Domain.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
-using Veriado.Infrastructure.Persistence.Outbox;
+using Veriado.Infrastructure.Persistence.EventLog;
 using Veriado.Infrastructure.Persistence.WriteAhead;
 
 namespace Veriado.Infrastructure.Persistence;
@@ -42,7 +42,9 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<DocumentLocationEntity> DocumentLocations => Set<DocumentLocationEntity>();
 
-    public DbSet<OutboxEventEntity> OutboxEvents => Set<OutboxEventEntity>();
+    public DbSet<DomainEventLogEntry> DomainEventLog => Set<DomainEventLogEntry>();
+
+    public DbSet<ReindexQueueEntry> ReindexQueue => Set<ReindexQueueEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

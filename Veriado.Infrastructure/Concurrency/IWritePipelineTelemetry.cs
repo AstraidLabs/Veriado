@@ -15,9 +15,6 @@ internal interface IWritePipelineTelemetry
 
     void RecordBatchFailure(int partitionId);
 
-    void RecordOutboxDelivery(TimeSpan latency);
-
-    void RecordOutboxFailure();
 }
 
 internal sealed class WritePipelineTelemetry : IWritePipelineTelemetry
@@ -29,11 +26,8 @@ internal sealed class WritePipelineTelemetry : IWritePipelineTelemetry
     private readonly Histogram<long> _batchSizeHistogram = Meter.CreateHistogram<long>("write_batch_size");
     private readonly Counter<long> _batchRetryCounter = Meter.CreateCounter<long>("write_batch_retries_total");
     private readonly Counter<long> _batchFailureCounter = Meter.CreateCounter<long>("write_batch_failures_total");
-    private readonly Counter<long> _outboxDeliveredCounter = Meter.CreateCounter<long>("write_outbox_delivered_total");
-    private readonly Counter<long> _outboxFailureCounter = Meter.CreateCounter<long>("write_outbox_failures_total");
     private readonly ObservableGauge<long> _queueDepthGauge;
     private readonly ObservableGauge<double> _queueLatencyGauge;
-    private readonly Histogram<double> _outboxLatencyHistogram = Meter.CreateHistogram<double>("write_outbox_latency_ms");
     private readonly WritePipelineState _state;
 
     private long _queueDepth;
@@ -80,20 +74,6 @@ internal sealed class WritePipelineTelemetry : IWritePipelineTelemetry
     public void RecordBatchFailure(int partitionId)
     {
         _batchFailureCounter.Add(1, new KeyValuePair<string, object?>("partition", partitionId));
-    }
-
-    public void RecordOutboxDelivery(TimeSpan latency)
-    {
-        _outboxDeliveredCounter.Add(1);
-        if (latency > TimeSpan.Zero)
-        {
-            _outboxLatencyHistogram.Record(latency.TotalMilliseconds);
-        }
-    }
-
-    public void RecordOutboxFailure()
-    {
-        _outboxFailureCounter.Add(1);
     }
 
     private IEnumerable<Measurement<long>> ObserveQueueDepth()
