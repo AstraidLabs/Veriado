@@ -226,6 +226,7 @@ public static class ServiceCollectionExtensions
         });
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
+        services.AddHostedService<ReindexWorker>();
 
         return services;
     }

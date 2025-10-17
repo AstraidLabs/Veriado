@@ -612,6 +612,12 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("processed_utc");
 
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("retry_count");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProcessedUtc")

@@ -39,6 +39,12 @@ internal sealed class ReindexQueueConfiguration : IEntityTypeConfiguration<Reind
             .HasColumnType("TEXT")
             .HasConversion(Converters.NullableDateTimeOffsetToString);
 
+        builder.Property(entry => entry.RetryCount)
+            .HasColumnName("retry_count")
+            .HasColumnType("INTEGER")
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.HasIndex(entry => entry.ProcessedUtc)
             .HasDatabaseName("idx_reindex_queue_unprocessed");
     }

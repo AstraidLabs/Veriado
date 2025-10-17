@@ -16,5 +16,7 @@ public sealed class ReindexQueueEntry
     public DateTimeOffset EnqueuedUtc { get; set; }
 
     public DateTimeOffset? ProcessedUtc { get; set; }
+
+    public int RetryCount { get; set; }
 }
 
