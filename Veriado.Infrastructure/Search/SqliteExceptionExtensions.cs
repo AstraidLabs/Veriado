@@ -68,7 +68,7 @@ internal static class SqliteExceptionExtensions
         if (exception.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase))
         {
             if (exception.Message.Contains("fts", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("file_search", StringComparison.OrdinalIgnoreCase))
+                || exception.Message.Contains("search_document_fts", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -81,7 +81,8 @@ internal static class SqliteExceptionExtensions
 
     private static bool ContainsFulltextIdentifier(string message)
     {
-        return message.Contains("file_search", StringComparison.OrdinalIgnoreCase)
+        return message.Contains("search_document_fts", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("search_document", StringComparison.OrdinalIgnoreCase)
             || message.Contains("documentcontent", StringComparison.OrdinalIgnoreCase)
             || message.Contains("document_content", StringComparison.OrdinalIgnoreCase);
     }

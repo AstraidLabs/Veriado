@@ -1263,7 +1263,7 @@ public sealed class ImportService : IImportService
         }
 
         if (normalized.Contains("no such table", StringComparison.Ordinal)
-            && (normalized.Contains("file_search", StringComparison.Ordinal)
+            && (normalized.Contains("search_document_fts", StringComparison.Ordinal)
                 || normalized.Contains("fts", StringComparison.Ordinal)))
         {
             return true;

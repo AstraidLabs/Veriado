@@ -52,15 +52,15 @@ internal static class SqliteFulltextSupport
 /// </summary>
 /// <param name="TableSql">The raw CREATE VIRTUAL TABLE statement.</param>
 /// <param name="Columns">The column names reported by PRAGMA table_info.</param>
-/// <param name="Triggers">The triggers bound to DocumentContent.</param>
+/// <param name="Triggers">The triggers bound to the search document table.</param>
 /// <param name="IsContentless">Indicates whether the table uses the contentless FTS5 variant.</param>
-/// <param name="HasDocumentContentTriggers">Indicates whether the expected triggers are present.</param>
+/// <param name="HasSearchDocumentTriggers">Indicates whether the expected triggers are present.</param>
 /// <param name="CheckedAtUtc">The timestamp when the schema was inspected.</param>
 internal sealed record FulltextSchemaSnapshot(
     string? TableSql,
     IReadOnlyList<string> FtsColumns,
-    IReadOnlyList<string> DocumentColumns,
+    IReadOnlyList<string> SearchDocumentColumns,
     IReadOnlyDictionary<string, string?> Triggers,
     bool IsContentless,
-    bool HasDocumentContentTriggers,
+    bool HasSearchDocumentTriggers,
     DateTimeOffset CheckedAtUtc);

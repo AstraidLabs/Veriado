@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 if (Args.Length == 0)
@@ -83,14 +84,35 @@ static async Task<(double Throughput, double ElapsedMs)> MeasureIndexingThroughp
         {
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = @"INSERT INTO DocumentContent (file_id, title, author, mime, metadata_text, metadata)
-VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata)
+            command.CommandText = @"INSERT INTO search_document (
+    file_id,
+    title,
+    author,
+    mime,
+    metadata_text,
+    metadata_json,
+    created_utc,
+    modified_utc,
+    content_hash)
+VALUES (
+    $file_id,
+    $title,
+    $author,
+    $mime,
+    $metadata_text,
+    $metadata_json,
+    $created_utc,
+    $modified_utc,
+    $content_hash)
 ON CONFLICT(file_id) DO UPDATE SET
     title = excluded.title,
     author = excluded.author,
     mime = excluded.mime,
     metadata_text = excluded.metadata_text,
-    metadata = excluded.metadata;";
+    metadata_json = excluded.metadata_json,
+    created_utc = excluded.created_utc,
+    modified_utc = excluded.modified_utc,
+    content_hash = excluded.content_hash;";
 
             var guid = Guid.NewGuid();
             command.Parameters.Add("$file_id", SqliteType.Blob).Value = guid.ToByteArray();
@@ -98,7 +120,11 @@ ON CONFLICT(file_id) DO UPDATE SET
             command.Parameters.AddWithValue("$author", $"Test Author {random.Next(1, 100)}");
             command.Parameters.AddWithValue("$mime", "application/octet-stream");
             command.Parameters.AddWithValue("$metadata_text", $"Synthetic metadata summary {i}");
-            command.Parameters.AddWithValue("$metadata", $"{{\"index\":{i}}}");
+            command.Parameters.AddWithValue("$metadata_json", $"{{\"index\":{i}}}");
+            var now = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            command.Parameters.AddWithValue("$created_utc", now);
+            command.Parameters.AddWithValue("$modified_utc", now);
+            command.Parameters.AddWithValue("$content_hash", Guid.NewGuid().ToString("N"));
 
             await command.ExecuteNonQueryAsync();
         }
@@ -121,15 +147,15 @@ static async Task<List<double>> MeasureQueryLatenciesAsync(SqliteConnection conn
     // Warm-up to mitigate cold cache effects.
     await using (var warmup = connection.CreateCommand())
     {
-        warmup.CommandText = "SELECT 1 FROM file_search WHERE file_search MATCH $q LIMIT 1;";
+        warmup.CommandText = "SELECT 1 FROM search_document_fts WHERE search_document_fts MATCH $q LIMIT 1;";
         warmup.Parameters.Add("$q", SqliteType.Text).Value = query;
         await warmup.ExecuteScalarAsync();
     }
 
     await using var command = connection.CreateCommand();
     var sqlBuilder = new StringBuilder();
-    sqlBuilder.Append("SELECT dc.file_id FROM file_search s ");
-    sqlBuilder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
+    sqlBuilder.Append("SELECT sd.file_id FROM search_document_fts s ");
+    sqlBuilder.Append("JOIN search_document sd ON sd.rowid = s.rowid ");
     sqlBuilder.Append("WHERE s MATCH $query LIMIT 25;");
 
     command.CommandText = sqlBuilder.ToString();
