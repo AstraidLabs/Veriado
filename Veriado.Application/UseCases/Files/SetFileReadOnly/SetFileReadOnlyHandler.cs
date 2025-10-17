@@ -12,10 +12,10 @@ public sealed class SetFileReadOnlyHandler : FileWriteHandlerBase, IRequestHandl
         IFileRepository repository,
         IClock clock,
         IMapper mapper,
-        DbContext dbContext,
+        IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
     {
     }
 

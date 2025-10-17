@@ -17,10 +17,10 @@ public sealed class RelinkFileContentHandler : FileWriteHandlerBase, IRequestHan
         ImportPolicy importPolicy,
         IMapper mapper,
         IFileStorage fileStorage,
-        DbContext dbContext,
+        IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
     {
         _importPolicy = importPolicy ?? throw new ArgumentNullException(nameof(importPolicy));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));

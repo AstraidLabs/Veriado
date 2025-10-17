@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace Veriado.Appl.UseCases.Files.Common;
 
 /// <summary>
@@ -9,7 +7,7 @@ public abstract class FileWriteHandlerBase
 {
     private readonly IFileRepository _repository;
     private readonly IClock _clock;
-    private readonly DbContext _dbContext;
+    private readonly IFilePersistenceUnitOfWork _unitOfWork;
     private readonly IFileSearchProjection _searchProjection;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
 
@@ -21,14 +19,14 @@ public abstract class FileWriteHandlerBase
         IFileRepository repository,
         IClock clock,
         IMapper mapper,
-        DbContext dbContext,
+        IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         Mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         _searchProjection = searchProjection ?? throw new ArgumentNullException(nameof(searchProjection));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
     }
@@ -80,7 +78,7 @@ public abstract class FileWriteHandlerBase
         }
         else
         {
-            if (!_dbContext.ChangeTracker.HasChanges()
+            if (!_unitOfWork.HasTrackedChanges
                 && file.DomainEvents.Count == 0
                 && (fileSystem?.DomainEvents.Count ?? 0) == 0
                 && !file.SearchIndex.IsStale)
@@ -112,11 +110,11 @@ public abstract class FileWriteHandlerBase
         bool deleteFromProjection,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await _dbContext.Database
+        await using var transaction = await _unitOfWork
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         if (requiresProjection)
         {
@@ -134,7 +132,7 @@ public abstract class FileWriteHandlerBase
                     signature.AnalyzerVersion,
                     signature.TokenHash,
                     signature.NormalizedTitle);
-                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 

@@ -174,6 +174,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IFileSearchProjection, SearchProjectionService>();
         services.AddScoped<IFileRepository, FileRepository>();
+        services.AddScoped<IFilePersistenceUnitOfWork, EfFilePersistenceUnitOfWork>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
         services.AddScoped<IFileReadRepository, FileReadRepository>();
         services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();

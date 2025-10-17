@@ -9,10 +9,10 @@ public sealed class ReindexCorpusAfterSchemaUpgradeHandler : FileWriteHandlerBas
         IFileRepository repository,
         IClock clock,
         IMapper mapper,
-        DbContext dbContext,
+        IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
     {
     }
 
