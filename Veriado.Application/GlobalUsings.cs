@@ -9,7 +9,6 @@ global using System.Threading.Tasks;
 global using AutoMapper;
 global using FluentValidation;
 global using MediatR;
-global using Microsoft.EntityFrameworkCore;
 global using Veriado.Appl.Abstractions;
 global using Veriado.Appl.Common;
 global using Veriado.Appl.Common.Policies;

@@ -17,10 +17,10 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
         IClock clock,
         ImportPolicy importPolicy,
         IMapper mapper,
-        DbContext dbContext,
+        IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
     {
         _importPolicy = importPolicy;
     }
