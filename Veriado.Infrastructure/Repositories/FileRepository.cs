@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Infrastructure.Events;
@@ -15,24 +16,23 @@ internal sealed class FileRepository : IFileRepository
 {
     private static readonly JsonSerializerOptions EventSerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly IDbContextFactory<AppDbContext> _writeFactory;
+    private readonly AppDbContext _db;
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly AuditEventProjector _auditProjector;
 
     public FileRepository(
-        IDbContextFactory<AppDbContext> writeFactory,
+        AppDbContext db,
         IDbContextFactory<ReadOnlyDbContext> readFactory,
         AuditEventProjector auditProjector)
     {
-        _writeFactory = writeFactory ?? throw new ArgumentNullException(nameof(writeFactory));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
         _readFactory = readFactory ?? throw new ArgumentNullException(nameof(readFactory));
         _auditProjector = auditProjector ?? throw new ArgumentNullException(nameof(auditProjector));
     }
 
     public async Task<FileEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await context.Files
+        var entity = await _db.Files
             .Include(f => f.Validity)
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
             .ConfigureAwait(false);
@@ -42,8 +42,7 @@ internal sealed class FileRepository : IFileRepository
 
     public async Task<FileSystemEntity?> GetFileSystemAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await context.FileSystems
+        var entity = await _db.FileSystems
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
             .ConfigureAwait(false);
 
@@ -60,8 +59,7 @@ internal sealed class FileRepository : IFileRepository
             return Array.Empty<FileEntity>();
         }
 
-        await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var files = await context.Files
+        var files = await _db.Files
             .Include(f => f.Validity)
             .Where(f => idList.Contains(f.Id))
             .ToListAsync(cancellationToken)
@@ -90,21 +88,15 @@ internal sealed class FileRepository : IFileRepository
         return await context.Files.AnyAsync(f => f.ContentHash == hash, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
+    public Task AddAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         _ = options;
-        await ExecuteWriteAsync(
-            async (context, ct) =>
-            {
-                await context.Files.AddAsync(entity, ct).ConfigureAwait(false);
-            },
-            entity,
-            fileSystem: null,
-            cancellationToken).ConfigureAwait(false);
+        _db.Files.Add(entity);
+        return Task.CompletedTask;
     }
 
-    public async Task AddAsync(
+    public Task AddAsync(
         FileEntity file,
         FileSystemEntity fileSystem,
         FilePersistenceOptions options,
@@ -114,33 +106,19 @@ internal sealed class FileRepository : IFileRepository
         ArgumentNullException.ThrowIfNull(fileSystem);
         _ = options;
 
-        await ExecuteWriteAsync(
-            async (context, ct) =>
-            {
-                await context.FileSystems.AddAsync(fileSystem, ct).ConfigureAwait(false);
-                await context.Files.AddAsync(file, ct).ConfigureAwait(false);
-            },
-            file,
-            fileSystem,
-            cancellationToken).ConfigureAwait(false);
+        _db.FileSystems.Add(fileSystem);
+        _db.Files.Add(file);
+        return Task.CompletedTask;
     }
 
-    public async Task UpdateAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         _ = options;
-        await ExecuteWriteAsync(
-            (context, ct) =>
-            {
-                context.Files.Update(entity);
-                return Task.CompletedTask;
-            },
-            entity,
-            fileSystem: null,
-            cancellationToken).ConfigureAwait(false);
+        return Task.CompletedTask;
     }
 
-    public async Task UpdateAsync(
+    public Task UpdateAsync(
         FileEntity file,
         FileSystemEntity fileSystem,
         FilePersistenceOptions options,
@@ -149,35 +127,18 @@ internal sealed class FileRepository : IFileRepository
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(fileSystem);
         _ = options;
-
-        await ExecuteWriteAsync(
-            (context, ct) =>
-            {
-                context.Files.Update(file);
-                context.FileSystems.Update(fileSystem);
-                return Task.CompletedTask;
-            },
-            file,
-            fileSystem,
-            cancellationToken).ConfigureAwait(false);
+        return Task.CompletedTask;
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await ExecuteWriteAsync(
-            async (context, ct) =>
-            {
-                var entity = await context.Files.FirstOrDefaultAsync(f => f.Id == id, ct).ConfigureAwait(false);
-                if (entity is null)
-                {
-                    return;
-                }
+        var entity = await _db.Files.FirstOrDefaultAsync(f => f.Id == id, cancellationToken).ConfigureAwait(false);
+        if (entity is null)
+        {
+            return;
+        }
 
-                context.Files.Remove(entity);
-            },
-            file: null,
-            fileSystem: null,
-            cancellationToken).ConfigureAwait(false);
+        _db.Files.Remove(entity);
     }
 
     // TODO(FTS Sync Phase 2): write use-case checklist for synchronous projection integration.
@@ -194,28 +155,19 @@ internal sealed class FileRepository : IFileRepository
     // - Delete: FileRepository.DeleteAsync currently invoked directly (no dedicated handler yet)
     // - Import workflows (ImportService.ImportFileAsync / ImportFolderStreamAsync) orchestrate the create/replace commands above.
 
-    private async Task ExecuteWriteAsync(
-        Func<AppDbContext, CancellationToken, Task> action,
+    public async Task PersistDomainEventsAsync(
         FileEntity? file,
         FileSystemEntity? fileSystem,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(action);
-
-        await using var context = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-
-        await action(context, cancellationToken).ConfigureAwait(false);
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
         var domainEvents = CollectDomainEvents(file, fileSystem);
-        if (domainEvents.Count > 0)
+        if (domainEvents.Count == 0)
         {
-            await PersistDomainEventsAsync(context, _auditProjector, domainEvents, cancellationToken).ConfigureAwait(false);
+            ClearDomainEvents(file, fileSystem);
+            return;
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-
+        await StoreDomainEventsAsync(_db, _auditProjector, domainEvents, cancellationToken).ConfigureAwait(false);
         ClearDomainEvents(file, fileSystem);
     }
 
@@ -250,7 +202,7 @@ internal sealed class FileRepository : IFileRepository
         fileSystem?.ClearDomainEvents();
     }
 
-    private static async Task PersistDomainEventsAsync(
+    private static async Task StoreDomainEventsAsync(
         AppDbContext context,
         AuditEventProjector auditProjector,
         IReadOnlyList<(Guid AggregateId, IDomainEvent DomainEvent)> domainEvents,

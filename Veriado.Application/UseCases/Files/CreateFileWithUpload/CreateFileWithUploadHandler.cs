@@ -16,8 +16,11 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
         IClock clock,
         ImportPolicy importPolicy,
         IMapper mapper,
-        IFileStorage fileStorage)
-        : base(repository, clock, mapper)
+        IFileStorage fileStorage,
+        DbContext dbContext,
+        IFileSearchProjection searchProjection,
+        ISearchIndexSignatureCalculator signatureCalculator)
+        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
     {
         _importPolicy = importPolicy ?? throw new ArgumentNullException(nameof(importPolicy));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
@@ -82,7 +85,7 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
                 ContentVersion.Initial,
                 createdAt);
 
-            await Repository.AddAsync(file, fileSystem, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
+            await PersistNewAsync(file, fileSystem, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
             return AppResult<Guid>.Success(file.Id);
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)

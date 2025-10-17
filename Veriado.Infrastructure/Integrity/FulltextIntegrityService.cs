@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Linq;
 using Microsoft.Data.Sqlite;
+using Veriado.Appl.Abstractions;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
