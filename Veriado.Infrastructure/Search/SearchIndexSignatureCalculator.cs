@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Veriado.Appl.Abstractions;
 using Veriado.Appl.Search;
 
 namespace Veriado.Infrastructure.Search;
@@ -131,8 +132,3 @@ internal sealed class SearchIndexSignatureCalculator : ISearchIndexSignatureCalc
         return Convert.ToHexString(bytes);
     }
 }
-
-public readonly record struct SearchIndexSignature(
-    string AnalyzerVersion,
-    string? TokenHash,
-    string NormalizedTitle);

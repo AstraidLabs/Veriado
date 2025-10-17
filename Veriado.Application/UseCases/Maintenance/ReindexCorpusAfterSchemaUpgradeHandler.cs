@@ -3,15 +3,17 @@ namespace Veriado.Appl.UseCases.Maintenance;
 /// <summary>
 /// Handles bulk reindex operations triggered by a schema upgrade.
 /// </summary>
-public sealed class ReindexCorpusAfterSchemaUpgradeHandler : IRequestHandler<ReindexCorpusAfterSchemaUpgradeCommand, AppResult<int>>
+public sealed class ReindexCorpusAfterSchemaUpgradeHandler : FileWriteHandlerBase, IRequestHandler<ReindexCorpusAfterSchemaUpgradeCommand, AppResult<int>>
 {
-    private readonly IFileRepository _repository;
-    private readonly IClock _clock;
-
-    public ReindexCorpusAfterSchemaUpgradeHandler(IFileRepository repository, IClock clock)
+    public ReindexCorpusAfterSchemaUpgradeHandler(
+        IFileRepository repository,
+        IClock clock,
+        IMapper mapper,
+        DbContext dbContext,
+        IFileSearchProjection searchProjection,
+        ISearchIndexSignatureCalculator signatureCalculator)
+        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
     {
-        _repository = repository;
-        _clock = clock;
     }
 
     public async Task<AppResult<int>> Handle(ReindexCorpusAfterSchemaUpgradeCommand request, CancellationToken cancellationToken)
@@ -25,13 +27,11 @@ public sealed class ReindexCorpusAfterSchemaUpgradeHandler : IRequestHandler<Rei
 
         try
         {
-            await foreach (var file in _repository.StreamAllAsync(cancellationToken))
+            await foreach (var file in Repository.StreamAllAsync(cancellationToken))
             {
-                var timestamp = UtcTimestamp.From(_clock.UtcNow);
+                var timestamp = CurrentTimestamp();
                 file.BumpSchemaVersion(request.TargetSchemaVersion, timestamp);
-                await _repository
-                    .UpdateAsync(file, FilePersistenceOptions.Default, cancellationToken)
-                    .ConfigureAwait(false);
+                await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
                 reindexed++;
             }
 

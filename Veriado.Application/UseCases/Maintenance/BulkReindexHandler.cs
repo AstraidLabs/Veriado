@@ -3,18 +3,20 @@ namespace Veriado.Appl.UseCases.Maintenance;
 /// <summary>
 /// Handles bulk reindex operations over multiple files.
 /// </summary>
-public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, AppResult<int>>
+public sealed class BulkReindexHandler : FileWriteHandlerBase, IRequestHandler<BulkReindexCommand, AppResult<int>>
 {
-    private readonly IFileRepository _repository;
-    private readonly IClock _clock;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="BulkReindexHandler"/> class.
     /// </summary>
-    public BulkReindexHandler(IFileRepository repository, IClock clock)
+    public BulkReindexHandler(
+        IFileRepository repository,
+        IClock clock,
+        IMapper mapper,
+        DbContext dbContext,
+        IFileSearchProjection searchProjection,
+        ISearchIndexSignatureCalculator signatureCalculator)
+        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
     {
-        _repository = repository;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -26,7 +28,7 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
         }
 
         var distinctIds = request.FileIds.Distinct().ToArray();
-        var files = await _repository.GetManyAsync(distinctIds, cancellationToken);
+        var files = await Repository.GetManyAsync(distinctIds, cancellationToken).ConfigureAwait(false);
         if (files.Count != distinctIds.Length)
         {
             var foundIds = files.Select(f => f.Id).ToHashSet();
@@ -34,11 +36,11 @@ public sealed class BulkReindexHandler : IRequestHandler<BulkReindexCommand, App
             return AppResult<int>.NotFound($"Files not found: {string.Join(", ", missing)}");
         }
 
-        var timestamp = UtcTimestamp.From(_clock.UtcNow);
         foreach (var file in files)
         {
+            var timestamp = CurrentTimestamp();
             file.RequestManualReindex(timestamp);
-            await _repository.UpdateAsync(file, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
+            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
         }
 
         return AppResult<int>.Success(files.Count);

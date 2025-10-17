@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Appl.Abstractions;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
@@ -171,7 +172,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AuditEventProjector>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
-        services.AddScoped<SearchProjectionService>();
+        services.AddScoped<IFileSearchProjection, SearchProjectionService>();
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
         services.AddScoped<IFileReadRepository, FileReadRepository>();

@@ -8,8 +8,14 @@ public sealed class RenameFileHandler : FileWriteHandlerBase, IRequestHandler<Re
     /// <summary>
     /// Initializes a new instance of the <see cref="RenameFileHandler"/> class.
     /// </summary>
-    public RenameFileHandler(IFileRepository repository, IClock clock, IMapper mapper)
-        : base(repository, clock, mapper)
+    public RenameFileHandler(
+        IFileRepository repository,
+        IClock clock,
+        IMapper mapper,
+        DbContext dbContext,
+        IFileSearchProjection searchProjection,
+        ISearchIndexSignatureCalculator signatureCalculator)
+        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
     {
     }
 

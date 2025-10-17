@@ -3,11 +3,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.Files;
 
 namespace Veriado.Infrastructure.Search;
 
-public sealed class SearchProjectionService
+public sealed class SearchProjectionService : IFileSearchProjection
 {
     private readonly DbContext _db;
 

@@ -8,8 +8,14 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
     /// <summary>
     /// Initializes a new instance of the <see cref="ApplySystemMetadataHandler"/> class.
     /// </summary>
-    public ApplySystemMetadataHandler(IFileRepository repository, IClock clock, IMapper mapper)
-        : base(repository, clock, mapper)
+    public ApplySystemMetadataHandler(
+        IFileRepository repository,
+        IClock clock,
+        IMapper mapper,
+        DbContext dbContext,
+        IFileSearchProjection searchProjection,
+        ISearchIndexSignatureCalculator signatureCalculator)
+        : base(repository, clock, mapper, dbContext, searchProjection, signatureCalculator)
     {
     }
 
