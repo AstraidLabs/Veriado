@@ -19,7 +19,7 @@ public sealed class NeedsReindexEvaluator : INeedsReindexEvaluator
         var normalizedTitle = signature.NormalizedTitle;
         var analyzerVersion = signature.AnalyzerVersion;
         var tokenHash = signature.TokenHash;
-        var contentHash = file.Content.Hash.Value;
+        var contentHash = file.ContentHash.Value;
 
         var needsReindex = !string.Equals(state.IndexedContentHash, contentHash, StringComparison.Ordinal)
             || !string.Equals(state.IndexedTitle, normalizedTitle, StringComparison.Ordinal)

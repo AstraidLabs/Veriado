@@ -1,4 +1,3 @@
-// VERIADO REFACTOR
 using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Domain.Files.Events;
@@ -8,47 +7,38 @@ namespace Veriado.Domain.Files.Events;
 /// </summary>
 public sealed class FileContentLinked : IDomainEvent
 {
-    // VERIADO REFACTOR
     public FileContentLinked(
         Guid fileId,
         Guid fileSystemId,
-        StorageProvider provider,
-        StoragePath path,
         FileHash hash,
+        ByteSize size,
         ContentVersion version,
+        MimeType mime,
         UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         FileSystemId = fileSystemId;
-        Provider = provider;
-        Path = path;
         Hash = hash;
+        Size = size;
         Version = version;
+        Mime = mime;
         EventId = Guid.NewGuid();
         OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
 
-    // VERIADO REFACTOR
     public Guid FileId { get; }
 
-    // VERIADO REFACTOR
     public Guid FileSystemId { get; }
 
-    // VERIADO REFACTOR
-    public StorageProvider Provider { get; }
-
-    // VERIADO REFACTOR
-    public StoragePath Path { get; }
-
-    // VERIADO REFACTOR
     public FileHash Hash { get; }
 
-    // VERIADO REFACTOR
+    public ByteSize Size { get; }
+
     public ContentVersion Version { get; }
 
-    // VERIADO REFACTOR
+    public MimeType Mime { get; }
+
     public Guid EventId { get; }
 
-    // VERIADO REFACTOR
     public DateTimeOffset OccurredOnUtc { get; }
 }

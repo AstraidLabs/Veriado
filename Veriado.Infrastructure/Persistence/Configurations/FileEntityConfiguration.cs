@@ -7,8 +7,6 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 {
     public void Configure(EntityTypeBuilder<FileEntity> builder)
     {
-        var options = InfrastructureModel.Current;
-
         builder.ToTable("files");
         builder.HasKey(file => file.Id);
         builder.Property(file => file.Id)
@@ -38,6 +36,23 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
         builder.Property(file => file.Author)
             .HasColumnName("author")
             .HasMaxLength(256)
+            .IsRequired();
+
+        builder.Property(file => file.FileSystemId)
+            .HasColumnName("file_system_id")
+            .HasColumnType("BLOB")
+            .HasConversion(Converters.GuidToBlob)
+            .IsRequired();
+
+        builder.Property(file => file.ContentHash)
+            .HasColumnName("content_hash")
+            .HasMaxLength(64)
+            .HasConversion(Converters.FileHashToString)
+            .IsRequired();
+
+        builder.Property(file => file.LinkedContentVersion)
+            .HasColumnName("content_version")
+            .HasConversion(Converters.ContentVersionToInt)
             .IsRequired();
 
         builder.Property(file => file.Title)
@@ -79,8 +94,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.HasIndex(file => file.Name).HasDatabaseName("idx_files_name");
         builder.HasIndex(file => file.Mime).HasDatabaseName("idx_files_mime");
-
-        builder.OwnsOne(file => file.Content, FileContentEntityConfiguration.Configure);
+        builder.HasIndex(file => file.ContentHash).HasDatabaseName("ux_files_content_hash").IsUnique();
 
         builder.OwnsOne(file => file.Validity, FileDocumentValidityEntityConfiguration.Configure);
 

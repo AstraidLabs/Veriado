@@ -42,12 +42,16 @@ public sealed class SearchIndexSignatureCalculatorTests
         var calculator = new SearchIndexSignatureCalculator(Options.Create(searchOptions), analyzerFactory);
 
         var created = UtcTimestamp.From(new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        var bytes = Encoding.UTF8.GetBytes("Hello metadata");
         var file = FileEntity.CreateNew(
             FileName.From("Výkaz"),
             FileExtension.From("pdf"),
             MimeType.From("application/pdf"),
             "Čeněk",
-            Encoding.UTF8.GetBytes("Hello metadata"),
+            Guid.NewGuid(),
+            FileHash.Compute(bytes),
+            ByteSize.From(bytes.LongLength),
+            ContentVersion.Initial,
             created);
 
         file.SetTitle("Přehled Dat", created);
