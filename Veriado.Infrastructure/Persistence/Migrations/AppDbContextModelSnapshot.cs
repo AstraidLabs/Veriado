@@ -33,18 +33,33 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("action");
 
+                    b.Property<string>("Author")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("author");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("TEXT")
                         .HasColumnName("description");
 
+                    b.Property<string>("Mime")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mime");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
                     b.HasKey("FileId", "OccurredUtc");
 
                     b.ToTable("audit_file", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Domain.Audit.FileContentAuditEntity", b =>
+            modelBuilder.Entity("Veriado.Domain.Audit.FileLinkAuditEntity", b =>
                 {
                     b.Property<byte[]>("FileId")
                         .HasColumnType("BLOB")
@@ -54,46 +69,91 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("occurred_utc");
 
-                    b.Property<string>("NewHash")
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Hash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
-                        .HasColumnName("new_hash");
+                        .HasColumnName("hash");
+
+                    b.Property<string>("Mime")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mime");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size");
+
+                    b.Property<byte[]>("FileSystemId")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("filesystem_id");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
 
                     b.HasKey("FileId", "OccurredUtc");
 
-                    b.ToTable("audit_file_content", (string)null);
+                    b.ToTable("audit_file_link", (string)null);
                 });
 
-            modelBuilder.Entity("Veriado.Domain.Audit.FileDocumentValidityAuditEntity", b =>
+            modelBuilder.Entity("Veriado.Domain.Audit.FileSystemAuditEntity", b =>
                 {
-                    b.Property<byte[]>("FileId")
+                    b.Property<byte[]>("FileSystemId")
                         .HasColumnType("BLOB")
-                        .HasColumnName("file_id");
+                        .HasColumnName("filesystem_id");
 
                     b.Property<string>("OccurredUtc")
                         .HasColumnType("TEXT")
                         .HasColumnName("occurred_utc");
 
-                    b.Property<bool>("HasElectronicCopy")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("has_electronic");
-
-                    b.Property<bool>("HasPhysicalCopy")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("has_physical");
-
-                    b.Property<string>("IssuedAt")
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT")
-                        .HasColumnName("issued_at");
+                        .HasColumnName("action");
 
-                    b.Property<string>("ValidUntil")
+                    b.Property<int?>("Attributes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attrs");
+
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT")
-                        .HasColumnName("valid_until");
+                        .HasColumnName("hash");
 
-                    b.HasKey("FileId", "OccurredUtc");
+                    b.Property<bool?>("IsEncrypted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_encrypted");
 
-                    b.ToTable("audit_file_validity", (string)null);
+                    b.Property<string>("Mime")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mime");
+
+                    b.Property<string>("OwnerSid")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("owner_sid");
+
+                    b.Property<string>("Path")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("path");
+
+                    b.Property<long?>("Size")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size");
+
+                    b.HasKey("FileSystemId", "OccurredUtc");
+
+                    b.ToTable("audit_filesystem", (string)null);
                 });
 
             modelBuilder.Entity("Veriado.Domain.Files.FileEntity", b =>

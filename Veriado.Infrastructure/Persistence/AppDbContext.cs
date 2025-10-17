@@ -30,9 +30,9 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<FileAuditEntity> FileAudits => Set<FileAuditEntity>();
 
-    public DbSet<FileContentAuditEntity> FileContentAudits => Set<FileContentAuditEntity>();
+    public DbSet<FileLinkAuditEntity> FileLinkAudits => Set<FileLinkAuditEntity>();
 
-    public DbSet<FileDocumentValidityAuditEntity> FileValidityAudits => Set<FileDocumentValidityAuditEntity>();
+    public DbSet<FileSystemAuditEntity> FileSystemAudits => Set<FileSystemAuditEntity>();
 
     public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
 

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
+using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Persistence.EventLog;
 using Veriado.Infrastructure.Search;
 using Veriado.Appl.Search;
@@ -39,6 +40,7 @@ internal sealed class WriteWorker : BackgroundService
     private readonly FtsWriteAheadService _writeAhead;
     private readonly ISearchTelemetry _telemetry;
     private readonly ILogger<SqliteFts5Transactional> _ftsLogger;
+    private readonly AuditEventProjector _auditProjector;
 
     private static readonly FilePersistenceOptions SameTransactionOptions = FilePersistenceOptions.Default;
 
@@ -59,7 +61,8 @@ internal sealed class WriteWorker : BackgroundService
         ISearchIndexSignatureCalculator signatureCalculator,
         FtsWriteAheadService writeAhead,
         ISearchTelemetry telemetry,
-        ILogger<SqliteFts5Transactional> ftsLogger)
+        ILogger<SqliteFts5Transactional> ftsLogger,
+        AuditEventProjector auditProjector)
     {
         if (options is null)
         {
@@ -100,6 +103,7 @@ internal sealed class WriteWorker : BackgroundService
         _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _ftsLogger = ftsLogger ?? throw new ArgumentNullException(nameof(ftsLogger));
+        _auditProjector = auditProjector ?? throw new ArgumentNullException(nameof(auditProjector));
 
         _logger.LogDebug(
             "Write worker created for partition {PartitionId} of {WorkerCount} workers.",
@@ -440,7 +444,7 @@ internal sealed class WriteWorker : BackgroundService
 
             if (domainEvents.Count > 0)
             {
-                await PersistDomainEventsAsync(context, domainEvents, cancellationToken).ConfigureAwait(false);
+                await PersistDomainEventsAsync(context, _auditProjector, domainEvents, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (SearchIndexCorruptedException)
@@ -839,6 +843,7 @@ internal sealed class WriteWorker : BackgroundService
 
     private static async Task PersistDomainEventsAsync(
         AppDbContext context,
+        AuditEventProjector auditProjector,
         IReadOnlyList<(Guid AggregateId, IDomainEvent DomainEvent)> domainEvents,
         CancellationToken cancellationToken)
     {
@@ -846,6 +851,8 @@ internal sealed class WriteWorker : BackgroundService
         {
             return;
         }
+
+        ArgumentNullException.ThrowIfNull(auditProjector);
 
         var logs = new List<DomainEventLogEntry>(domainEvents.Count);
         var reindexEntries = new List<ReindexQueueEntry>();
@@ -872,6 +879,8 @@ internal sealed class WriteWorker : BackgroundService
             }
         }
 
+        var hasAuditChanges = auditProjector.Project(context, domainEvents);
+
         if (logs.Count > 0)
         {
             await context.DomainEventLog.AddRangeAsync(logs, cancellationToken).ConfigureAwait(false);
@@ -882,7 +891,7 @@ internal sealed class WriteWorker : BackgroundService
             await context.ReindexQueue.AddRangeAsync(reindexEntries, cancellationToken).ConfigureAwait(false);
         }
 
-        if (logs.Count > 0 || reindexEntries.Count > 0)
+        if (logs.Count > 0 || reindexEntries.Count > 0 || hasAuditChanges)
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
