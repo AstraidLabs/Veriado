@@ -18,21 +18,23 @@ internal static class SqliteFulltextSchemaInspector
         "metadata",
     };
 
-    private static readonly string[] ExpectedDocumentColumns =
+    private static readonly string[] ExpectedSearchDocumentColumns =
     {
-        "doc_id",
         "file_id",
         "title",
         "author",
         "mime",
         "metadata_text",
-        "metadata",
+        "metadata_json",
+        "created_utc",
+        "modified_utc",
+        "content_hash",
     };
 
-    private static readonly string[] ExpectedTriggers = { "dc_ai", "dc_au", "dc_ad" };
+    private static readonly string[] ExpectedTriggers = { "sd_ai", "sd_au", "sd_ad" };
 
     /// <summary>
-    /// Inspects the <c>file_search</c> and <c>DocumentContent</c> schema to detect structural problems.
+    /// Inspects the <c>search_document_fts</c> and <c>search_document</c> schema to detect structural problems.
     /// </summary>
     public static async Task<FulltextSchemaInspectionResult> InspectAsync(
         SqliteConnection connection,
@@ -40,19 +42,32 @@ internal static class SqliteFulltextSchemaInspector
     {
         ArgumentNullException.ThrowIfNull(connection);
 
-        var tableSql = await ReadTableDefinitionAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
-        var ftsColumns = await ReadColumnsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
-        var documentColumns = await ReadColumnsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
-        var triggers = await ReadDocumentContentTriggersAsync(connection, cancellationToken).ConfigureAwait(false);
+        var tableSql = await ReadTableDefinitionAsync(connection, "search_document_fts", cancellationToken).ConfigureAwait(false);
+        var ftsColumns = await ReadColumnsAsync(connection, "search_document_fts", cancellationToken).ConfigureAwait(false);
+        var documentColumns = await ReadColumnsAsync(connection, "search_document", cancellationToken).ConfigureAwait(false);
+        var triggers = await ReadSearchDocumentTriggersAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        var isContentless = !string.IsNullOrWhiteSpace(tableSql)
-            && !tableSql.Contains("content=", StringComparison.OrdinalIgnoreCase);
+        var isContentless = false;
+        if (!string.IsNullOrWhiteSpace(tableSql))
+        {
+            var contentIndex = tableSql.IndexOf("content=", StringComparison.OrdinalIgnoreCase);
+            if (contentIndex < 0)
+            {
+                isContentless = true;
+            }
+            else
+            {
+                var remainder = tableSql.Substring(contentIndex + "content=".Length).TrimStart();
+                isContentless = remainder.StartsWith("''", StringComparison.Ordinal)
+                    || remainder.StartsWith("\"\"", StringComparison.Ordinal);
+            }
+        }
 
         var missingFtsColumns = ExpectedFtsColumns
             .Where(column => !ftsColumns.Contains(column, StringComparer.OrdinalIgnoreCase))
             .ToArray();
 
-        var missingDocumentColumns = ExpectedDocumentColumns
+        var missingDocumentColumns = ExpectedSearchDocumentColumns
             .Where(column => !documentColumns.Contains(column, StringComparer.OrdinalIgnoreCase))
             .ToArray();
 
@@ -63,21 +78,21 @@ internal static class SqliteFulltextSchemaInspector
         var reasons = new List<string>();
         if (string.IsNullOrWhiteSpace(tableSql))
         {
-            reasons.Add("file_search table definition missing");
+            reasons.Add("search_document_fts table definition missing");
         }
         else if (!isContentless)
         {
-            reasons.Add("file_search is not contentless FTS5");
+            reasons.Add("search_document_fts is not contentless FTS5");
         }
 
         if (missingFtsColumns.Length > 0)
         {
-            reasons.Add($"file_search missing columns: {string.Join(", ", missingFtsColumns)}");
+            reasons.Add($"search_document_fts missing columns: {string.Join(", ", missingFtsColumns)}");
         }
 
         if (missingDocumentColumns.Length > 0)
         {
-            reasons.Add($"DocumentContent missing columns: {string.Join(", ", missingDocumentColumns)}");
+            reasons.Add($"search_document missing columns: {string.Join(", ", missingDocumentColumns)}");
         }
 
         if (missingTriggers.Length > 0)
@@ -136,13 +151,13 @@ internal static class SqliteFulltextSchemaInspector
         return columns;
     }
 
-    private static async Task<IReadOnlyDictionary<string, string?>> ReadDocumentContentTriggersAsync(
+    private static async Task<IReadOnlyDictionary<string, string?>> ReadSearchDocumentTriggersAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
         var triggers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='DocumentContent';";
+        command.CommandText = "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='search_document';";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {

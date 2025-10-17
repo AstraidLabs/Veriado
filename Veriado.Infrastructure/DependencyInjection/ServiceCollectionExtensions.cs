@@ -312,10 +312,10 @@ public static class ServiceCollectionExtensions
             SqliteFulltextSupport.UpdateSchemaSnapshot(snapshot);
 
             logger.LogInformation(
-                "Development FTS guard inspected file_search (contentless={IsContentless}) with columns {Columns}, DocumentContent columns {DocumentColumns} and triggers {Triggers}.",
+                "Development FTS guard inspected search_document_fts (contentless={IsContentless}) with columns {Columns}, search_document columns {DocumentColumns} and triggers {Triggers}.",
                 snapshot.IsContentless,
                 string.Join(", ", snapshot.FtsColumns),
-                string.Join(", ", snapshot.DocumentColumns),
+                string.Join(", ", snapshot.SearchDocumentColumns),
                 string.Join(", ", snapshot.Triggers.Keys));
 
             if (!inspection.IsValid)

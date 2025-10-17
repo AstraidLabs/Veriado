@@ -336,55 +336,58 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.Sql(
-                @"CREATE TABLE DocumentContent (
-    doc_id INTEGER PRIMARY KEY,
-    file_id BLOB NOT NULL UNIQUE,
+                @"CREATE TABLE search_document (
+    file_id BLOB PRIMARY KEY,
     title TEXT NULL,
     author TEXT NULL,
     mime TEXT NOT NULL,
     metadata_text TEXT NULL,
-    metadata TEXT NULL
+    metadata_json TEXT NULL,
+    created_utc TEXT NULL,
+    modified_utc TEXT NULL,
+    content_hash TEXT NULL
 );");
 
             migrationBuilder.Sql(
-                @"CREATE VIRTUAL TABLE file_search USING fts5(
+                @"CREATE VIRTUAL TABLE search_document_fts USING fts5(
     title,
     author,
     mime,
     metadata_text,
     metadata,
+    content='',
     tokenize='unicode61 remove_diacritics 2'
 );");
 
             migrationBuilder.Sql(
-                @"CREATE TRIGGER dc_ai AFTER INSERT ON DocumentContent BEGIN
-  INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
-  VALUES (new.doc_id, new.title, new.author, new.mime, new.metadata_text, new.metadata);
+                @"CREATE TRIGGER sd_ai AFTER INSERT ON search_document BEGIN
+  INSERT INTO search_document_fts(rowid, title, author, mime, metadata_text, metadata)
+  VALUES (new.rowid, new.title, new.author, new.mime, new.metadata_text, new.metadata_json);
 END;");
 
             migrationBuilder.Sql(
-                @"CREATE TRIGGER dc_au AFTER UPDATE ON DocumentContent BEGIN
-  INSERT INTO file_search(file_search, rowid)
-  VALUES('delete', old.doc_id);
-  INSERT INTO file_search(rowid, title, author, mime, metadata_text, metadata)
-  VALUES(new.doc_id, new.title, new.author, new.mime, new.metadata_text, new.metadata);
+                @"CREATE TRIGGER sd_au AFTER UPDATE ON search_document BEGIN
+  INSERT INTO search_document_fts(search_document_fts, rowid, title, author, mime, metadata_text, metadata)
+  VALUES ('delete', old.rowid, old.title, old.author, old.mime, old.metadata_text, old.metadata_json);
+  INSERT INTO search_document_fts(rowid, title, author, mime, metadata_text, metadata)
+  VALUES (new.rowid, new.title, new.author, new.mime, new.metadata_text, new.metadata_json);
 END;");
 
             migrationBuilder.Sql(
-                @"CREATE TRIGGER dc_ad AFTER DELETE ON DocumentContent BEGIN
-  INSERT INTO file_search(file_search, rowid)
-  VALUES('delete', old.doc_id);
+                @"CREATE TRIGGER sd_ad AFTER DELETE ON search_document BEGIN
+  INSERT INTO search_document_fts(search_document_fts, rowid, title, author, mime, metadata_text, metadata)
+  VALUES ('delete', old.rowid, old.title, old.author, old.mime, old.metadata_text, old.metadata_json);
 END;");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("DROP TRIGGER IF EXISTS dc_ad;");
-            migrationBuilder.Sql("DROP TRIGGER IF EXISTS dc_au;");
-            migrationBuilder.Sql("DROP TRIGGER IF EXISTS dc_ai;");
-            migrationBuilder.Sql("DROP TABLE IF EXISTS file_search;");
-            migrationBuilder.Sql("DROP TABLE IF EXISTS DocumentContent;");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS sd_ad;");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS sd_au;");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS sd_ai;");
+            migrationBuilder.Sql("DROP TABLE IF EXISTS search_document_fts;");
+            migrationBuilder.Sql("DROP TABLE IF EXISTS search_document;");
 
             migrationBuilder.DropTable(
                 name: "audit_file");

@@ -60,47 +60,69 @@ internal sealed class SqliteFts5Transactional
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var documentId = await GetDocumentIdAsync(connection, transaction, document.FileId, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (documentId.HasValue)
-            {
-                await using var update = connection.CreateCommand();
-                update.Transaction = transaction;
-                update.CommandText = @"UPDATE DocumentContent
+            await using var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = @"UPDATE search_document
 SET title = $title,
     author = $author,
     mime = $mime,
     metadata_text = $metadata_text,
-    metadata = $metadata
-WHERE doc_id = $doc_id;";
-                ConfigureDocumentContentWriteParameters(
-                    update,
-                    normalizedTitle,
-                    normalizedAuthor,
-                    document.Mime,
-                    normalizedMetadataText,
-                    document.MetadataJson);
-                update.Parameters.Add("$doc_id", SqliteType.Integer).Value = documentId.Value;
+    metadata_json = $metadata_json,
+    created_utc = $created_utc,
+    modified_utc = $modified_utc,
+    content_hash = $content_hash
+WHERE file_id = $file_id;";
+            ConfigureSearchDocumentParameters(
+                update,
+                document.FileId,
+                normalizedTitle,
+                normalizedAuthor,
+                document.Mime,
+                normalizedMetadataText,
+                document.MetadataJson,
+                document.CreatedUtc,
+                document.ModifiedUtc,
+                document.ContentHash);
 
-                activeCommand = update;
-                await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                activeCommand = null;
-            }
-            else
+            activeCommand = update;
+            var rowsAffected = await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            activeCommand = null;
+
+            if (rowsAffected == 0)
             {
                 await using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
-                insert.CommandText = @"INSERT INTO DocumentContent (file_id, title, author, mime, metadata_text, metadata)
-VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata);";
-                ConfigureDocumentContentInsertParameters(
+                insert.CommandText = @"INSERT INTO search_document (
+    file_id,
+    title,
+    author,
+    mime,
+    metadata_text,
+    metadata_json,
+    created_utc,
+    modified_utc,
+    content_hash)
+VALUES (
+    $file_id,
+    $title,
+    $author,
+    $mime,
+    $metadata_text,
+    $metadata_json,
+    $created_utc,
+    $modified_utc,
+    $content_hash);";
+                ConfigureSearchDocumentParameters(
                     insert,
                     document.FileId,
                     normalizedTitle,
                     normalizedAuthor,
                     document.Mime,
                     normalizedMetadataText,
-                    document.MetadataJson);
+                    document.MetadataJson,
+                    document.CreatedUtc,
+                    document.ModifiedUtc,
+                    document.ContentHash);
 
                 activeCommand = insert;
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -161,18 +183,13 @@ VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata);";
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var documentId = await GetDocumentIdAsync(connection, transaction, fileId, cancellationToken)
-                .ConfigureAwait(false);
-            if (documentId.HasValue)
-            {
-                await using var delete = connection.CreateCommand();
-                delete.Transaction = transaction;
-                delete.CommandText = "DELETE FROM DocumentContent WHERE doc_id = $doc_id;";
-                delete.Parameters.Add("$doc_id", SqliteType.Integer).Value = documentId.Value;
-                activeCommand = delete;
-                await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                activeCommand = null;
-            }
+            await using var delete = connection.CreateCommand();
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM search_document WHERE file_id = $file_id;";
+            delete.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
+            activeCommand = delete;
+            await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            activeCommand = null;
 
             if (enlistJournal && journalId.HasValue)
             {
@@ -206,73 +223,32 @@ VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata);";
             : TextNormalization.NormalizeText(value, _analyzerFactory);
     }
 
-    private static Task<long?> GetDocumentIdAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        Guid fileId,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(transaction);
-
-        return GetDocumentIdCoreAsync(connection, transaction, fileId, cancellationToken);
-    }
-
-    private static async Task<long?> GetDocumentIdCoreAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        Guid fileId,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = "SELECT doc_id FROM DocumentContent WHERE file_id = $file_id;";
-        command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return result switch
-        {
-            long value => value,
-            int value => value,
-            _ => null,
-        };
-    }
-
-    private static void ConfigureDocumentContentInsertParameters(
+    private static void ConfigureSearchDocumentParameters(
         SqliteCommand command,
         Guid fileId,
         string? normalizedTitle,
         string? normalizedAuthor,
         string mime,
         string? normalizedMetadataText,
-        string? metadataJson)
-    {
-        command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
-        ConfigureDocumentContentWriteParameters(
-            command,
-            normalizedTitle,
-            normalizedAuthor,
-            mime,
-            normalizedMetadataText,
-            metadataJson);
-    }
-
-    private static void ConfigureDocumentContentWriteParameters(
-        SqliteCommand command,
-        string? normalizedTitle,
-        string? normalizedAuthor,
-        string mime,
-        string? normalizedMetadataText,
-        string? metadataJson)
+        string? metadataJson,
+        DateTimeOffset createdUtc,
+        DateTimeOffset modifiedUtc,
+        string? contentHash)
     {
         if (string.IsNullOrEmpty(mime))
         {
-            throw new ArgumentException("MIME type is required for DocumentContent writes.", nameof(mime));
+            throw new ArgumentException("MIME type is required for search_document writes.", nameof(mime));
         }
+
+        command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
         command.Parameters.Add("$title", SqliteType.Text).Value = (object?)normalizedTitle ?? DBNull.Value;
         command.Parameters.Add("$author", SqliteType.Text).Value = (object?)normalizedAuthor ?? DBNull.Value;
         command.Parameters.Add("$mime", SqliteType.Text).Value = mime;
         command.Parameters.Add("$metadata_text", SqliteType.Text).Value = (object?)normalizedMetadataText ?? DBNull.Value;
-        command.Parameters.Add("$metadata", SqliteType.Text).Value = (object?)metadataJson ?? DBNull.Value;
+        command.Parameters.Add("$metadata_json", SqliteType.Text).Value = (object?)metadataJson ?? DBNull.Value;
+        command.Parameters.Add("$created_utc", SqliteType.Text).Value = createdUtc.ToString("O", CultureInfo.InvariantCulture);
+        command.Parameters.Add("$modified_utc", SqliteType.Text).Value = modifiedUtc.ToString("O", CultureInfo.InvariantCulture);
+        command.Parameters.Add("$content_hash", SqliteType.Text).Value = (object?)contentHash ?? DBNull.Value;
     }
 
     private void LogSqliteFailure(SqliteException exception, SqliteCommand? command)
@@ -307,7 +283,7 @@ VALUES ($file_id, $title, $author, $mime, $metadata_text, $metadata);";
             _ => "unknown",
         };
 
-        var triggerSummary = snapshot?.HasDocumentContentTriggers == true
+        var triggerSummary = snapshot?.HasSearchDocumentTriggers == true
             ? string.Join(", ", snapshot.Triggers.Keys)
             : "missing";
 

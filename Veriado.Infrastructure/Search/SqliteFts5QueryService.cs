@@ -18,7 +18,7 @@ namespace Veriado.Infrastructure.Search;
 internal sealed class SqliteFts5QueryService : ISearchQueryService
 {
     private const char Ellipsis = '…';
-    private const string SearchTableName = "file_search";
+    private const string SearchTableName = "search_document_fts";
     private const string SearchTableAlias = "s";
     private static readonly Encoding Utf8 = Encoding.UTF8;
 
@@ -157,8 +157,8 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         await using var command = connection.CreateCommand();
         var builder = new StringBuilder();
         builder.Append("SELECT COUNT(*) FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
-        builder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
-        builder.Append("JOIN files f ON f.id = dc.file_id ");
+        builder.Append("JOIN search_document sd ON sd.rowid = s.rowid ");
+        builder.Append("JOIN files f ON f.id = sd.file_id ");
         builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append(';');
@@ -369,7 +369,7 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
     private string BuildScoreQuery(SearchQueryPlan plan, string bm25Expression, string rankExpression)
     {
         var builder = new StringBuilder();
-        builder.Append("SELECT dc.file_id, ");
+        builder.Append("SELECT sd.file_id, ");
         builder.Append(bm25Expression).Append(" AS bm25_score, ");
         builder.Append(rankExpression).Append(" AS score");
 
@@ -379,16 +379,16 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             builder.Append(", ").Append(customSimilarity).Append(" AS custom_similarity");
         }
 
-        builder.Append(", f.modified_utc ");
+        builder.Append(", COALESCE(f.modified_utc, sd.modified_utc) ");
         builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
-        builder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
-        builder.Append("JOIN files f ON f.id = dc.file_id ");
+        builder.Append("JOIN search_document sd ON sd.rowid = s.rowid ");
+        builder.Append("JOIN files f ON f.id = sd.file_id ");
         builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
         const string TitleSortExpression = "COALESCE(f.title, '')";
-        builder.Append(", f.modified_utc DESC, CASE WHEN lower(");
+        builder.Append(", COALESCE(f.modified_utc, sd.modified_utc) DESC, CASE WHEN lower(");
         builder.Append(TitleSortExpression);
         builder.Append(") = lower($raw) THEN 0 ELSE 1 END, ");
         builder.Append(TitleSortExpression);
@@ -406,12 +406,12 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
         var builder = new StringBuilder();
         builder.Append(
             "SELECT s.rowid, " +
-            "       dc.file_id, " +
-            "       COALESCE(f.title, dc.title, s.title, '') AS title, " +
-            "       COALESCE(f.mime, dc.mime, s.mime, '') AS mime, " +
-            "       COALESCE(f.author, dc.author, s.author, '') AS author, " +
-            "       COALESCE(dc.metadata_text, s.metadata_text, '') AS metadata_text, " +
-            "       COALESCE(dc.metadata, s.metadata, '') AS metadata_json, " +
+            "       sd.file_id, " +
+            "       COALESCE(f.title, sd.title, s.title, '') AS title, " +
+            "       COALESCE(f.mime, sd.mime, s.mime, '') AS mime, " +
+            "       COALESCE(f.author, sd.author, s.author, '') AS author, " +
+            "       COALESCE(sd.metadata_text, s.metadata_text, '') AS metadata_text, " +
+            "       COALESCE(sd.metadata_json, s.metadata, '') AS metadata_json, " +
             "       snippet(" + SearchTableName + ", 0, '', '', '…', 32) AS snippet_title, " +
             "       snippet(" + SearchTableName + ", 1, '', '', '…', 24) AS snippet_author, " +
             "       snippet(" + SearchTableName + ", 2, '', '', '…', 24) AS snippet_mime, " +
@@ -427,15 +427,15 @@ internal sealed class SqliteFts5QueryService : ISearchQueryService
             builder.Append(", ").Append(custom).Append(" AS custom_similarity");
         }
 
-        builder.Append(", f.modified_utc ");
+        builder.Append(", COALESCE(f.modified_utc, sd.modified_utc) ");
         builder.Append("FROM ").Append(SearchTableName).Append(' ').Append(SearchTableAlias).Append(' ');
-        builder.Append("JOIN DocumentContent dc ON dc.doc_id = s.rowid ");
-        builder.Append("JOIN files f ON f.id = dc.file_id ");
+        builder.Append("JOIN search_document sd ON sd.rowid = s.rowid ");
+        builder.Append("JOIN files f ON f.id = sd.file_id ");
         builder.Append("WHERE ").Append(SearchTableName).Append(" MATCH $query ");
         AppendWhereClauses(builder, plan);
         builder.Append("ORDER BY score ");
         builder.Append(plan.ScorePlan.HigherScoreIsBetter ? "DESC" : "ASC");
-        builder.Append(", f.modified_utc DESC, CASE WHEN lower(title) = lower($raw) THEN 0 ELSE 1 END, title COLLATE NOCASE ");
+        builder.Append(", COALESCE(f.modified_utc, sd.modified_utc) DESC, CASE WHEN lower(title) = lower($raw) THEN 0 ELSE 1 END, title COLLATE NOCASE ");
         builder.Append("LIMIT $take;");
         return builder.ToString();
     }

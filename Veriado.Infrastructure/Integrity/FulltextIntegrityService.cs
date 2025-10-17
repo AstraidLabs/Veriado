@@ -76,8 +76,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         {
             var connection = lease.Connection;
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            searchTableExists = await TableExistsAsync(connection, "file_search", cancellationToken).ConfigureAwait(false);
-            contentTableExists = await TableExistsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
+            searchTableExists = await TableExistsAsync(connection, "search_document_fts", cancellationToken).ConfigureAwait(false);
+            contentTableExists = await TableExistsAsync(connection, "search_document", cancellationToken).ConfigureAwait(false);
 
             if (contentTableExists && searchTableExists)
             {
@@ -113,12 +113,12 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             var missingTables = new List<string>();
             if (!searchTableExists)
             {
-                missingTables.Add("file_search");
+                missingTables.Add("search_document_fts");
             }
 
             if (!contentTableExists)
             {
-                missingTables.Add("DocumentContent");
+                missingTables.Add("search_document");
             }
 
             _logger.LogWarning(
@@ -381,7 +381,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var contentTableExists = await TableExistsAsync(connection, "DocumentContent", cancellationToken).ConfigureAwait(false);
+        var contentTableExists = await TableExistsAsync(connection, "search_document", cancellationToken).ConfigureAwait(false);
         return contentTableExists;
     }
 
@@ -413,7 +413,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             command.CommandText = @"
 SELECT f.rowid, f.id
 FROM files f
-WHERE NOT EXISTS (SELECT 1 FROM DocumentContent dc WHERE dc.file_id = f.id)
+WHERE NOT EXISTS (SELECT 1 FROM search_document sd WHERE sd.file_id = f.id)
   AND f.rowid > $lastRowId
 ORDER BY f.rowid
 LIMIT $batchSize;";
@@ -469,12 +469,12 @@ LIMIT $batchSize;";
             cancellationToken.ThrowIfCancellationRequested();
             await using var command = connection.CreateCommand();
             command.CommandText = @"
-SELECT dc.rowid, dc.file_id
-FROM DocumentContent dc
-LEFT JOIN files f ON f.id = dc.file_id
+SELECT sd.rowid, sd.file_id
+FROM search_document sd
+LEFT JOIN files f ON f.id = sd.file_id
 WHERE f.id IS NULL
-  AND dc.rowid > $lastRowId
-ORDER BY dc.rowid
+  AND sd.rowid > $lastRowId
+ORDER BY sd.rowid
 LIMIT $batchSize;";
             command.Parameters.Add("$lastRowId", SqliteType.Integer).Value = lastRowId;
             command.Parameters.Add("$batchSize", SqliteType.Integer).Value = batchSize;
@@ -529,9 +529,13 @@ LIMIT $batchSize;";
 
         var dropStatements = new[]
         {
+            "DROP TRIGGER IF EXISTS sd_ai;",
+            "DROP TRIGGER IF EXISTS sd_au;",
+            "DROP TRIGGER IF EXISTS sd_ad;",
             "DROP TRIGGER IF EXISTS dc_ai;",
             "DROP TRIGGER IF EXISTS dc_au;",
             "DROP TRIGGER IF EXISTS dc_ad;",
+            "DROP TABLE IF EXISTS search_document_fts;",
             "DROP TABLE IF EXISTS file_search;",
             "DROP TABLE IF EXISTS file_search_data;",
             "DROP TABLE IF EXISTS file_search_idx;",
@@ -539,6 +543,7 @@ LIMIT $batchSize;";
             "DROP TABLE IF EXISTS file_search_docsize;",
             "DROP TABLE IF EXISTS file_search_config;",
             "DROP TABLE IF EXISTS file_trgm;",
+            "DROP TABLE IF EXISTS search_document;",
             "DROP TABLE IF EXISTS DocumentContent;",
             "DROP TABLE IF EXISTS fts_write_ahead;",
             "DROP TABLE IF EXISTS fts_write_ahead_dlq;"
@@ -565,7 +570,7 @@ LIMIT $batchSize;";
 
         await using (var rebuildCommand = connection.CreateCommand())
         {
-            rebuildCommand.CommandText = "INSERT INTO file_search(file_search) VALUES('rebuild');";
+            rebuildCommand.CommandText = "INSERT INTO search_document_fts(search_document_fts) VALUES('rebuild');";
             LogSchemaStatement("rebuild", 1, 1, rebuildCommand.CommandText);
             await rebuildCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
