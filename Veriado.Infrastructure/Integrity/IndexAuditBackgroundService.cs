@@ -87,9 +87,18 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         }
 
         var scheduled = await _auditor.RepairDriftAsync(summary, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation(
-            "Periodic FTS audit detected {IssueCount} discrepancies and scheduled {ScheduledCount} reindex operations.",
-            issues,
-            scheduled);
+        if (scheduled > 0)
+        {
+            _logger.LogInformation(
+                "Periodic FTS audit detected {IssueCount} discrepancies and scheduled {ScheduledCount} reindex operations.",
+                issues,
+                scheduled);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Periodic FTS audit detected {IssueCount} discrepancies; automated reindexing is disabled in this phase.",
+                issues);
+        }
     }
 }

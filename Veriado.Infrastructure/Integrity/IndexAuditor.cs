@@ -10,7 +10,6 @@ public sealed class IndexAuditor : IIndexAuditor
 {
     private readonly INeedsReindexEvaluator _evaluator;
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
-    private readonly IIndexQueue _indexQueue;
     private readonly InfrastructureOptions _options;
     private readonly ISearchTelemetry _telemetry;
     private readonly ILogger<IndexAuditor> _logger;
@@ -18,14 +17,12 @@ public sealed class IndexAuditor : IIndexAuditor
     public IndexAuditor(
         INeedsReindexEvaluator evaluator,
         IDbContextFactory<ReadOnlyDbContext> readFactory,
-        IIndexQueue indexQueue,
         InfrastructureOptions options,
         ISearchTelemetry telemetry,
         ILogger<IndexAuditor> logger)
     {
         _evaluator = evaluator ?? throw new ArgumentNullException(nameof(evaluator));
         _readFactory = readFactory ?? throw new ArgumentNullException(nameof(readFactory));
-        _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -122,21 +119,19 @@ public sealed class IndexAuditor : IIndexAuditor
                 continue;
             }
 
-            if (!unique.Add(id))
-            {
-                continue;
-            }
-
-            _indexQueue.Enqueue(new IndexDocument(id));
+            unique.Add(id);
         }
 
-        _logger.LogInformation(
-            "Scheduled re-index of {Count} files based on audit summary (missing={Missing}, drift={Drift})",
-            unique.Count,
-            missing.Count,
-            drift.Count);
+        if (unique.Count > 0)
+        {
+            _logger.LogInformation(
+                "Detected {Count} files requiring re-index (missing={Missing}, drift={Drift}); queueing is disabled in this phase.",
+                unique.Count,
+                missing.Count,
+                drift.Count);
+        }
 
-        return Task.FromResult(unique.Count);
+        return Task.FromResult(0);
     }
 
     private async Task<(bool IndexAvailable, HashSet<Guid> SearchMap)> LoadIndexSnapshotAsync(CancellationToken ct)

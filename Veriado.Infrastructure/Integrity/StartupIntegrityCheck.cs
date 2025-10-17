@@ -30,10 +30,6 @@ internal static class StartupIntegrityCheck
             return;
         }
 
-        var writeAhead = provider.GetRequiredService<FtsWriteAheadService>();
-        await writeAhead.ReplayPendingAsync(cancellationToken).ConfigureAwait(false);
-        logger.LogInformation("Replayed any pending FTS write-ahead journal entries.");
-
         var integrity = provider.GetRequiredService<IFulltextIntegrityService>();
         var report = await integrity.VerifyAsync(cancellationToken).ConfigureAwait(false);
         if (!report.RequiresFullRebuild && report.MissingCount == 0 && report.OrphanCount == 0)

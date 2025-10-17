@@ -15,7 +15,6 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
     private readonly SuggestionMaintenanceService? _suggestionMaintenance;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ISqliteConnectionFactory _connectionFactory;
-    private readonly FtsWriteAheadService _writeAhead;
     private readonly ILogger<SqliteFts5Transactional> _ftsLogger;
 
     public SqliteFts5Indexer(
@@ -23,7 +22,6 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         ILogger<SqliteFts5Indexer> logger,
         IAnalyzerFactory analyzerFactory,
         ISqliteConnectionFactory connectionFactory,
-        FtsWriteAheadService writeAhead,
         ILogger<SqliteFts5Transactional> ftsLogger,
         SuggestionMaintenanceService? suggestionMaintenance = null)
     {
@@ -31,7 +29,6 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-        _writeAhead = writeAhead ?? throw new ArgumentNullException(nameof(writeAhead));
         _ftsLogger = ftsLogger ?? throw new ArgumentNullException(nameof(ftsLogger));
         _suggestionMaintenance = suggestionMaintenance;
     }
@@ -72,7 +69,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _writeAhead, _ftsLogger);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _ftsLogger);
 
         try
         {
@@ -111,7 +108,7 @@ internal sealed class SqliteFts5Indexer : ISearchIndexer
         await using SqliteTransaction sqliteTransaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
-        var helper = new SqliteFts5Transactional(_analyzerFactory, _writeAhead, _ftsLogger);
+        var helper = new SqliteFts5Transactional(_analyzerFactory, _ftsLogger);
 
         try
         {
