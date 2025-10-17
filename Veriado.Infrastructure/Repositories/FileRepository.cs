@@ -28,6 +28,16 @@ internal sealed class FileRepository : IFileRepository
         return entity;
     }
 
+    public async Task<FileSystemEntity?> GetFileSystemAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var entity = await context.FileSystems
+            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
+            .ConfigureAwait(false);
+
+        return entity;
+    }
+
     public async Task<IReadOnlyList<FileEntity>> GetManyAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(ids);
@@ -79,6 +89,24 @@ internal sealed class FileRepository : IFileRepository
         }, tracked, entity.Id, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task AddAsync(
+        FileEntity file,
+        FileSystemEntity fileSystem,
+        FilePersistenceOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(fileSystem);
+
+        var tracked = new[] { new QueuedFileWrite(file, options) };
+        await _writeQueue.EnqueueAsync((AppDbContext db, CancellationToken ct) =>
+        {
+            db.FileSystems.Add(fileSystem);
+            db.Files.Add(file);
+            return Task.FromResult(true);
+        }, tracked, file.Id, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task UpdateAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
@@ -88,6 +116,24 @@ internal sealed class FileRepository : IFileRepository
             db.Files.Update(entity);
             return Task.FromResult(true);
         }, tracked, entity.Id, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAsync(
+        FileEntity file,
+        FileSystemEntity fileSystem,
+        FilePersistenceOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(fileSystem);
+
+        var tracked = new[] { new QueuedFileWrite(file, options) };
+        await _writeQueue.EnqueueAsync((AppDbContext db, CancellationToken ct) =>
+        {
+            db.Files.Update(file);
+            db.FileSystems.Update(fileSystem);
+            return Task.FromResult(true);
+        }, tracked, file.Id, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

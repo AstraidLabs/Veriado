@@ -21,6 +21,7 @@ using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Repositories;
 using Veriado.Infrastructure.Search;
 using Veriado.Infrastructure.Time;
+using Veriado.Infrastructure.Storage;
 using Veriado.Domain.Primitives;
 using Veriado.Appl.Pipeline.Idempotency;
 using Veriado.Appl.Search;
@@ -195,6 +196,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchIndexCoordinator, SqliteSearchIndexCoordinator>();
         services.AddSingleton<IIndexQueue, IndexQueue>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<FtsWriteAheadService>();
