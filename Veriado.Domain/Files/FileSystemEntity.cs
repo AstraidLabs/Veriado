@@ -10,8 +10,6 @@ namespace Veriado.Domain.Files;
 /// </summary>
 public sealed class FileSystemEntity : AggregateRoot
 {
-    private const int InitialContentVersion = 1;
-
     private FileSystemEntity(Guid id)
         : base(id)
     {
@@ -20,7 +18,7 @@ public sealed class FileSystemEntity : AggregateRoot
     private FileSystemEntity(
         Guid id,
         StorageProvider provider,
-        string storagePath,
+        StoragePath storagePath,
         MimeType mime,
         FileHash hash,
         ByteSize size,
@@ -31,7 +29,7 @@ public sealed class FileSystemEntity : AggregateRoot
         string? ownerSid,
         bool isEncrypted,
         bool isMissing,
-        int contentVersion)
+        ContentVersion contentVersion)
         : base(id)
     {
         Provider = provider;
@@ -57,7 +55,7 @@ public sealed class FileSystemEntity : AggregateRoot
     /// <summary>
     /// Gets the storage path referencing the file content.
     /// </summary>
-    public string StoragePath { get; private set; } = null!;
+    public StoragePath StoragePath { get; private set; } = null!;
 
     /// <summary>
     /// Gets the MIME type associated with the file.
@@ -112,7 +110,7 @@ public sealed class FileSystemEntity : AggregateRoot
     /// <summary>
     /// Gets the version number of the physical content stored for this file.
     /// </summary>
-    public int ContentVersion { get; private set; }
+    public ContentVersion ContentVersion { get; private set; }
 
     /// <summary>
     /// Creates a new file system entity from the provided content bytes and metadata.
@@ -149,7 +147,7 @@ public sealed class FileSystemEntity : AggregateRoot
         }
 
         var hash = FileHash.Compute(bytes);
-        var path = NormalizeStoragePath(save(hash, bytes));
+        var path = StoragePath.From(save(hash, bytes));
         var size = ByteSize.From(bytes.Length);
         var normalizedOwner = NormalizeOwnerSid(ownerSid);
 
@@ -167,7 +165,7 @@ public sealed class FileSystemEntity : AggregateRoot
             normalizedOwner,
             isEncrypted,
             isMissing: false,
-            contentVersion: InitialContentVersion);
+            contentVersion: ContentVersion.Initial);
 
         entity.RaiseDomainEvent(new FileSystemContentChanged(
             entity.Id,
@@ -227,7 +225,7 @@ public sealed class FileSystemEntity : AggregateRoot
             return;
         }
 
-        var path = NormalizeStoragePath(save(hash, bytes));
+        var path = StoragePath.From(save(hash, bytes));
 
         Hash = hash;
         Mime = mime;
@@ -235,7 +233,7 @@ public sealed class FileSystemEntity : AggregateRoot
         Size = ByteSize.From(bytes.Length);
         LastWriteUtc = whenUtc;
         IsMissing = false;
-        ContentVersion += 1;
+        ContentVersion = ContentVersion.Next();
 
         RaiseDomainEvent(new FileSystemContentChanged(Id, Provider, path, hash, Size, Mime, ContentVersion, IsEncrypted, whenUtc));
     }
@@ -247,8 +245,8 @@ public sealed class FileSystemEntity : AggregateRoot
     /// <param name="whenUtc">The timestamp describing when the change occurred.</param>
     public void MoveTo(string newPath, UtcTimestamp whenUtc)
     {
-        var normalized = NormalizeStoragePath(newPath);
-        if (string.Equals(StoragePath, normalized, StringComparison.Ordinal))
+        var normalized = StoragePath.From(newPath);
+        if (StoragePath.Equals(normalized))
         {
             return;
         }
@@ -355,8 +353,8 @@ public sealed class FileSystemEntity : AggregateRoot
     /// <param name="whenUtc">The timestamp describing when rehydration occurred.</param>
     public void Rehydrate(string? newPath, UtcTimestamp whenUtc)
     {
-        var normalized = newPath is null ? StoragePath : NormalizeStoragePath(newPath);
-        var pathChanged = !string.Equals(StoragePath, normalized, StringComparison.Ordinal);
+        var normalized = newPath is null ? StoragePath : StoragePath.From(newPath);
+        var pathChanged = !StoragePath.Equals(normalized);
         var wasMissing = IsMissing;
 
         StoragePath = normalized;
@@ -370,16 +368,6 @@ public sealed class FileSystemEntity : AggregateRoot
         RaiseDomainEvent(new FileSystemRehydrated(Id, Provider, normalized, wasMissing, whenUtc));
     }
 
-    private static string NormalizeStoragePath(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new ArgumentException("Storage path cannot be null or whitespace.", nameof(value));
-        }
-
-        return value.Trim();
-    }
-
     private static string? NormalizeOwnerSid(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -389,20 +377,4 @@ public sealed class FileSystemEntity : AggregateRoot
 
         return value.Trim();
     }
-}
-
-/// <summary>
-/// Defines the supported storage providers for physical file content.
-/// </summary>
-public enum StorageProvider
-{
-    /// <summary>
-    /// Local disk storage.
-    /// </summary>
-    Local = 0,
-
-    /// <summary>
-    /// Network storage (e.g., SMB or NFS shares).
-    /// </summary>
-    Network = 1,
 }

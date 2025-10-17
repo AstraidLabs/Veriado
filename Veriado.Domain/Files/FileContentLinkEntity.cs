@@ -92,7 +92,7 @@ public sealed class FileContentLinkEntity
             mime,
             isEncrypted,
             attributes,
-            ContentVersion.Initial(),
+            ContentVersion.Initial,
             linkedUtc);
     }
 

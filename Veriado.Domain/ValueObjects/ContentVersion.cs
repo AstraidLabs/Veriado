@@ -1,4 +1,5 @@
-// VERIADO REFACTOR
+using System.Globalization;
+
 namespace Veriado.Domain.ValueObjects;
 
 /// <summary>
@@ -6,7 +7,6 @@ namespace Veriado.Domain.ValueObjects;
 /// </summary>
 public readonly record struct ContentVersion
 {
-    // VERIADO REFACTOR
     private ContentVersion(int value)
     {
         if (value <= 0)
@@ -17,13 +17,20 @@ public readonly record struct ContentVersion
         Value = value;
     }
 
-    // VERIADO REFACTOR
+    /// <summary>
+    /// Gets the numeric value of the version.
+    /// </summary>
     public int Value { get; }
 
-    // VERIADO REFACTOR
-    public static ContentVersion Initial() => new(1);
+    /// <summary>
+    /// Gets the initial content version.
+    /// </summary>
+    public static ContentVersion Initial => new(1);
 
-    // VERIADO REFACTOR
+    /// <summary>
+    /// Creates the next sequential version.
+    /// </summary>
+    /// <returns>The incremented version.</returns>
     public ContentVersion Next()
     {
         if (Value == int.MaxValue)
@@ -34,9 +41,13 @@ public readonly record struct ContentVersion
         return new ContentVersion(Value + 1);
     }
 
-    // VERIADO REFACTOR
+    /// <summary>
+    /// Creates a new <see cref="ContentVersion"/> from the provided value.
+    /// </summary>
+    /// <param name="value">The numeric version value.</param>
+    /// <returns>The created value object.</returns>
     public static ContentVersion From(int value) => new(value);
 
-    // VERIADO REFACTOR
-    public override string ToString() => Value.ToString();
+    /// <inheritdoc />
+    public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);
 }
