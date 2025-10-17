@@ -5,12 +5,22 @@ namespace Veriado.Domain.Audit;
 /// </summary>
 public sealed class FileAuditEntity
 {
-    private FileAuditEntity(Guid fileId, FileAuditAction action, string description, UtcTimestamp occurredUtc)
+    private FileAuditEntity(
+        Guid fileId,
+        FileAuditAction action,
+        string description,
+        UtcTimestamp occurredUtc,
+        string? mime,
+        string? author,
+        string? title)
     {
         FileId = fileId;
         Action = action;
         Description = description;
         OccurredUtc = occurredUtc;
+        Mime = mime;
+        Author = author;
+        Title = title;
     }
 
     /// <summary>
@@ -29,6 +39,21 @@ public sealed class FileAuditEntity
     public string Description { get; }
 
     /// <summary>
+    /// Gets the MIME type associated with the audit entry, if any.
+    /// </summary>
+    public string? Mime { get; }
+
+    /// <summary>
+    /// Gets the author associated with the audit entry, if any.
+    /// </summary>
+    public string? Author { get; }
+
+    /// <summary>
+    /// Gets the title associated with the audit entry, if any.
+    /// </summary>
+    public string? Title { get; }
+
+    /// <summary>
     /// Gets the timestamp when the audit entry was recorded.
     /// </summary>
     public UtcTimestamp OccurredUtc { get; }
@@ -38,11 +63,20 @@ public sealed class FileAuditEntity
     /// </summary>
     /// <param name="fileId">The file identifier.</param>
     /// <param name="name">The file name.</param>
+    /// <param name="mime">The MIME type recorded at creation.</param>
+    /// <param name="author">The author recorded at creation.</param>
     /// <param name="occurredUtc">The timestamp when the event occurred.</param>
     /// <returns>The created audit entry.</returns>
-    public static FileAuditEntity Created(Guid fileId, FileName name, UtcTimestamp occurredUtc)
+    public static FileAuditEntity Created(Guid fileId, FileName name, MimeType mime, string author, UtcTimestamp occurredUtc)
     {
-        return new FileAuditEntity(fileId, FileAuditAction.Created, $"Created as '{name.Value}'", occurredUtc);
+        return new FileAuditEntity(
+            fileId,
+            FileAuditAction.Created,
+            $"Created as '{name.Value}'",
+            occurredUtc,
+            mime.Value,
+            author,
+            title: null);
     }
 
     /// <summary>
@@ -55,7 +89,14 @@ public sealed class FileAuditEntity
     /// <returns>The created audit entry.</returns>
     public static FileAuditEntity Renamed(Guid fileId, FileName oldName, FileName newName, UtcTimestamp occurredUtc)
     {
-        return new FileAuditEntity(fileId, FileAuditAction.Renamed, $"Renamed from '{oldName.Value}' to '{newName.Value}'", occurredUtc);
+        return new FileAuditEntity(
+            fileId,
+            FileAuditAction.Renamed,
+            $"Renamed from '{oldName.Value}' to '{newName.Value}'",
+            occurredUtc,
+            mime: null,
+            author: null,
+            title: null);
     }
 
     /// <summary>
@@ -74,7 +115,10 @@ public sealed class FileAuditEntity
             fileId,
             FileAuditAction.MetadataUpdated,
             $"Metadata updated (MIME: {mime.Value}, Author: {author}, Title: {titleText})",
-            occurredUtc);
+            occurredUtc,
+            mime.Value,
+            author,
+            string.IsNullOrWhiteSpace(title) ? null : title);
     }
 
     /// <summary>
@@ -87,7 +131,47 @@ public sealed class FileAuditEntity
     public static FileAuditEntity ReadOnlyChanged(Guid fileId, bool isReadOnly, UtcTimestamp occurredUtc)
     {
         var state = isReadOnly ? "enabled" : "disabled";
-        return new FileAuditEntity(fileId, FileAuditAction.ReadOnlyChanged, $"Read-only {state}", occurredUtc);
+        return new FileAuditEntity(
+            fileId,
+            FileAuditAction.ReadOnlyChanged,
+            $"Read-only {state}",
+            occurredUtc,
+            mime: null,
+            author: null,
+            title: null);
+    }
+
+    /// <summary>
+    /// Creates an audit entry representing a document validity change.
+    /// </summary>
+    /// <param name="fileId">The file identifier.</param>
+    /// <param name="issuedAt">The issued timestamp after the change.</param>
+    /// <param name="validUntil">The expiration timestamp after the change.</param>
+    /// <param name="hasPhysicalCopy">Indicates whether a physical copy exists.</param>
+    /// <param name="hasElectronicCopy">Indicates whether an electronic copy exists.</param>
+    /// <param name="occurredUtc">The timestamp when the event occurred.</param>
+    /// <returns>The created audit entry.</returns>
+    public static FileAuditEntity ValidityChanged(
+        Guid fileId,
+        UtcTimestamp? issuedAt,
+        UtcTimestamp? validUntil,
+        bool hasPhysicalCopy,
+        bool hasElectronicCopy,
+        UtcTimestamp occurredUtc)
+    {
+        var issuedText = issuedAt?.Value.ToString("O") ?? "n/a";
+        var validText = validUntil?.Value.ToString("O") ?? "n/a";
+        var description =
+            $"Validity updated (Issued: {issuedText}, Expires: {validText}, Physical: {hasPhysicalCopy}, Electronic: {hasElectronicCopy})";
+
+        return new FileAuditEntity(
+            fileId,
+            FileAuditAction.ValidityChanged,
+            description,
+            occurredUtc,
+            mime: null,
+            author: null,
+            title: null);
     }
 }
 
@@ -115,4 +199,9 @@ public enum FileAuditAction
     /// Indicates that the read-only flag changed.
     /// </summary>
     ReadOnlyChanged,
+
+    /// <summary>
+    /// Indicates that the document validity details changed.
+    /// </summary>
+    ValidityChanged,
 }

@@ -207,7 +207,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIndexAuditor, IndexAuditor>();
         services.AddSingleton<ISearchIndexSignatureCalculator, SearchIndexSignatureCalculator>();
         services.AddSingleton<INeedsReindexEvaluator, NeedsReindexEvaluator>();
-        services.AddSingleton<IEventPublisher, AuditEventPublisher>();
+        services.AddSingleton<AuditEventProjector>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
         services.AddScoped<IFileRepository, FileRepository>();
