@@ -25,11 +25,11 @@ public sealed class FileSystemContentChanged : IDomainEvent
     public FileSystemContentChanged(
         Guid fileSystemId,
         StorageProvider provider,
-        string storagePath,
+        StoragePath storagePath,
         FileHash hash,
         ByteSize size,
         MimeType mime,
-        int contentVersion,
+        ContentVersion contentVersion,
         bool isEncrypted,
         UtcTimestamp occurredUtc)
     {
@@ -58,7 +58,7 @@ public sealed class FileSystemContentChanged : IDomainEvent
     /// <summary>
     /// Gets the storage path referencing the binary content.
     /// </summary>
-    public string StoragePath { get; }
+    public StoragePath StoragePath { get; }
 
     /// <summary>
     /// Gets the SHA-256 hash of the content.
@@ -78,7 +78,7 @@ public sealed class FileSystemContentChanged : IDomainEvent
     /// <summary>
     /// Gets the version number assigned to the content.
     /// </summary>
-    public int ContentVersion { get; }
+    public ContentVersion ContentVersion { get; }
 
     /// <summary>
     /// Gets a value indicating whether the content is encrypted.
@@ -108,8 +108,8 @@ public sealed class FileSystemMoved : IDomainEvent
     public FileSystemMoved(
         Guid fileSystemId,
         StorageProvider provider,
-        string previousPath,
-        string newPath,
+        StoragePath previousPath,
+        StoragePath newPath,
         UtcTimestamp occurredUtc)
     {
         FileSystemId = fileSystemId;
@@ -133,12 +133,12 @@ public sealed class FileSystemMoved : IDomainEvent
     /// <summary>
     /// Gets the previous storage path.
     /// </summary>
-    public string PreviousPath { get; }
+    public StoragePath PreviousPath { get; }
 
     /// <summary>
     /// Gets the new storage path.
     /// </summary>
-    public string NewPath { get; }
+    public StoragePath NewPath { get; }
 
     /// <inheritdoc />
     public Guid EventId { get; }
@@ -285,7 +285,7 @@ public sealed class FileSystemMissingDetected : IDomainEvent
     /// <param name="fileSystemId">The identifier of the file system entity.</param>
     /// <param name="storagePath">The storage path that was probed.</param>
     /// <param name="occurredUtc">The timestamp when the missing state was detected.</param>
-    public FileSystemMissingDetected(Guid fileSystemId, string storagePath, UtcTimestamp occurredUtc)
+    public FileSystemMissingDetected(Guid fileSystemId, StoragePath storagePath, UtcTimestamp occurredUtc)
     {
         FileSystemId = fileSystemId;
         StoragePath = storagePath;
@@ -301,7 +301,7 @@ public sealed class FileSystemMissingDetected : IDomainEvent
     /// <summary>
     /// Gets the storage path that was probed.
     /// </summary>
-    public string StoragePath { get; }
+    public StoragePath StoragePath { get; }
 
     /// <inheritdoc />
     public Guid EventId { get; }
@@ -326,7 +326,7 @@ public sealed class FileSystemRehydrated : IDomainEvent
     public FileSystemRehydrated(
         Guid fileSystemId,
         StorageProvider provider,
-        string storagePath,
+        StoragePath storagePath,
         bool wasMissing,
         UtcTimestamp occurredUtc)
     {
@@ -351,7 +351,7 @@ public sealed class FileSystemRehydrated : IDomainEvent
     /// <summary>
     /// Gets the storage path referencing the binary content.
     /// </summary>
-    public string StoragePath { get; }
+    public StoragePath StoragePath { get; }
 
     /// <summary>
     /// Gets a value indicating whether the file was previously missing from storage.

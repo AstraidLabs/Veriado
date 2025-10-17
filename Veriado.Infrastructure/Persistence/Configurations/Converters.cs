@@ -32,6 +32,14 @@ internal static class Converters
         hash => hash.Value,
         value => FileHash.From(value));
 
+    public static readonly ValueConverter<StoragePath, string> StoragePathToString = new(
+        path => path.Value,
+        value => StoragePath.From(value));
+
+    public static readonly ValueConverter<ContentVersion, int> ContentVersionToInt = new(
+        version => version.Value,
+        value => ContentVersion.From(value));
+
     public static readonly ValueConverter<ByteSize, long> ByteSizeToLong = new(
         size => size.Value,
         value => ByteSize.From(value));
