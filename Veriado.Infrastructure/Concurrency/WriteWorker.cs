@@ -7,9 +7,10 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using Veriado.Domain.Primitives;
-using Veriado.Infrastructure.Events;
-using Veriado.Infrastructure.Persistence.Outbox;
+using Veriado.Domain.Search.Events;
+using Veriado.Infrastructure.Persistence.EventLog;
 using Veriado.Infrastructure.Search;
 using Veriado.Appl.Search;
 using Veriado.Appl.Search.Abstractions;
@@ -414,23 +415,9 @@ internal sealed class WriteWorker : BackgroundService
             _logger.LogDebug("Processing {Count} stale search index entries", staleCount);
         }
 
-        var domainEvents = fileEntries.SelectMany(entry => entry.Entity.DomainEvents).ToList();
-        var outboxEntries = new List<OutboxEventEntity>();
-
-        foreach (var domainEvent in domainEvents)
-        {
-            if (OutboxDomainEventSerializer.TryCreateOutboxEvent(domainEvent, _clock.UtcNow, out var outboxEntry)
-                && outboxEntry is not null)
-            {
-                outboxEntries.Add(outboxEntry);
-            }
-            else
-            {
-                _logger.LogTrace(
-                    "Domain event {EventType} skipped by outbox serializer.",
-                    domainEvent.GetType().Name);
-            }
-        }
+        var domainEvents = fileEntries
+            .SelectMany(entry => entry.Entity.DomainEvents.Select(domainEvent => (entry.Entity.Id, domainEvent)))
+            .ToList();
 
         try
         {
@@ -449,12 +436,12 @@ internal sealed class WriteWorker : BackgroundService
                     : "No full-text updates required for transaction {TransactionId}",
                 transactionId);
 
-            if (outboxEntries.Count > 0)
-            {
-                context.OutboxEvents.AddRange(outboxEntries);
-            }
-
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            if (domainEvents.Count > 0)
+            {
+                await PersistDomainEventsAsync(context, domainEvents, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (SearchIndexCorruptedException)
         {
@@ -548,15 +535,6 @@ internal sealed class WriteWorker : BackgroundService
             staleCount,
             transactionId,
             _partitionId);
-
-        if (outboxEntries.Count > 0)
-        {
-            _logger.LogInformation(
-                "Enqueued {OutboxCount} domain events for reliable dispatch [Transaction: {TransactionId}, Partition: {PartitionId}]",
-                outboxEntries.Count,
-                transactionId,
-                _partitionId);
-        }
 
         return true;
     }
@@ -854,6 +832,59 @@ internal sealed class WriteWorker : BackgroundService
         {
             _logger.LogCritical(repairEx, "Automatic full-text index repair failed. Manual intervention is required.");
             throw;
+        }
+    }
+
+    private static readonly JsonSerializerOptions EventSerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private static async Task PersistDomainEventsAsync(
+        AppDbContext context,
+        IReadOnlyList<(Guid AggregateId, IDomainEvent DomainEvent)> domainEvents,
+        CancellationToken cancellationToken)
+    {
+        if (domainEvents.Count == 0)
+        {
+            return;
+        }
+
+        var logs = new List<DomainEventLogEntry>(domainEvents.Count);
+        var reindexEntries = new List<ReindexQueueEntry>();
+
+        foreach (var (aggregateId, domainEvent) in domainEvents)
+        {
+            var eventType = domainEvent.GetType();
+            logs.Add(new DomainEventLogEntry
+            {
+                EventType = eventType.FullName ?? eventType.Name,
+                EventJson = JsonSerializer.Serialize(domainEvent, eventType, EventSerializerOptions),
+                AggregateId = aggregateId.ToString("D", CultureInfo.InvariantCulture),
+                OccurredUtc = domainEvent.OccurredOnUtc,
+            });
+
+            if (domainEvent is SearchReindexRequested reindexRequested)
+            {
+                reindexEntries.Add(new ReindexQueueEntry
+                {
+                    FileId = reindexRequested.FileId,
+                    Reason = reindexRequested.Reason,
+                    EnqueuedUtc = reindexRequested.OccurredOnUtc,
+                });
+            }
+        }
+
+        if (logs.Count > 0)
+        {
+            await context.DomainEventLog.AddRangeAsync(logs, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (reindexEntries.Count > 0)
+        {
+            await context.ReindexQueue.AddRangeAsync(reindexEntries, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (logs.Count > 0 || reindexEntries.Count > 0)
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 }
