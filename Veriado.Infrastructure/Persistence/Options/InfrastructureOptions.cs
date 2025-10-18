@@ -144,6 +144,4 @@ public sealed class InfrastructureOptions
     private int _healthWorkerStallMs = DefaultHealthWorkerStallMs;
     private int _integrityBatchSize = DefaultIntegrityBatchSize;
     private int _integrityTimeSliceMs = DefaultIntegrityTimeSliceMs;
-    internal string? ConnectionString { get; set; }
-        = null;
 }

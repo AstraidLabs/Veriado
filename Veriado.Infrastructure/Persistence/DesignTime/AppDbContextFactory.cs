@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging.Abstractions;
+using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Infrastructure.Persistence;
@@ -16,12 +17,15 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     {
         var infrastructureOptions = BuildInfrastructureOptions();
         var pragmaInterceptor = new SqlitePragmaInterceptor(NullLogger<SqlitePragmaInterceptor>.Instance);
-        var connectionString = infrastructureOptions.ConnectionString
-            ?? throw new InvalidOperationException("The infrastructure connection string was not initialized.");
+        var connectionProvider = SqliteConnectionStringProvider.CreateDesignTimeProvider(
+            infrastructureOptions,
+            NullLogger<SqliteConnectionStringProvider>.Instance);
 
         var builder = new DbContextOptionsBuilder<AppDbContext>();
-        builder.UseSqlite(connectionString, sqlite => sqlite.CommandTimeout(30));
+        builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
         builder.AddInterceptors(pragmaInterceptor);
+
+        SqliteFulltextSupportDetector.Detect(infrastructureOptions, connectionProvider);
 
         return new AppDbContext(builder.Options, infrastructureOptions, NullLogger<AppDbContext>.Instance);
     }
@@ -29,9 +33,8 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     private static InfrastructureOptions BuildInfrastructureOptions()
     {
         var options = new InfrastructureOptions();
-        options.DbPath = InfrastructurePathResolver.ResolveDatabasePath(options.DbPath);
-        options.ConnectionString = InfrastructurePathResolver.BuildConnectionString(options.DbPath);
-        SqliteFulltextSupportDetector.Detect(options);
+        var resolver = new SqlitePathResolver(options.DbPath);
+        options.DbPath = resolver.Resolve(SqliteResolutionScenario.DesignTime);
         return options;
     }
 }

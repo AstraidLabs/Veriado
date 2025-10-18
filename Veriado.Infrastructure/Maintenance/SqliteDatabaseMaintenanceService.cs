@@ -8,22 +8,15 @@ namespace Veriado.Infrastructure.Maintenance;
 /// </summary>
 internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceService
 {
-    private readonly InfrastructureOptions _options;
     private readonly ISqliteConnectionFactory _connectionFactory;
 
-    public SqliteDatabaseMaintenanceService(InfrastructureOptions options, ISqliteConnectionFactory connectionFactory)
+    public SqliteDatabaseMaintenanceService(ISqliteConnectionFactory connectionFactory)
     {
-        _options = options;
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
     public async Task<int> VacuumAndOptimizeAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -44,11 +37,6 @@ internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceSer
 
     public async Task RehydrateWalAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);

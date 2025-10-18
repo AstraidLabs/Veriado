@@ -1,3 +1,5 @@
+using Veriado.Infrastructure.Persistence.Connections;
+
 namespace Veriado.Infrastructure.Persistence;
 
 /// <summary>
@@ -5,29 +7,22 @@ namespace Veriado.Infrastructure.Persistence;
 /// </summary>
 internal static class SqliteFulltextSupportDetector
 {
-    public static void Detect(InfrastructureOptions options)
+    public static void Detect(InfrastructureOptions options, IConnectionStringProvider connectionStringProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(connectionStringProvider);
 
-        if (string.IsNullOrWhiteSpace(options.ConnectionString))
-        {
-            options.IsFulltextAvailable = false;
-            options.FulltextAvailabilityError = "Infrastructure connection string has not been initialised.";
-            SqliteFulltextSupport.Update(false, options.FulltextAvailabilityError);
-            return;
-        }
-
-        var (available, reason) = Probe(options.ConnectionString);
+        var (available, reason) = Probe(connectionStringProvider);
         options.IsFulltextAvailable = available;
         options.FulltextAvailabilityError = reason;
         SqliteFulltextSupport.Update(available, reason);
     }
 
-    private static (bool Available, string? Reason) Probe(string connectionString)
+    private static (bool Available, string? Reason) Probe(IConnectionStringProvider provider)
     {
         try
         {
-            using var connection = new SqliteConnection(connectionString);
+            using var connection = provider.CreateConnection();
             connection.Open();
             SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
 

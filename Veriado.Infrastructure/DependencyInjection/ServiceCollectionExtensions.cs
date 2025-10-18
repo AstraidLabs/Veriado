@@ -17,6 +17,7 @@ using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Maintenance;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Interceptors;
 using Veriado.Infrastructure.Repositories;
 using Veriado.Infrastructure.Search;
@@ -64,17 +65,8 @@ public static class ServiceCollectionExtensions
 
         optionsBuilder.PostConfigure(options =>
         {
-            options.DbPath = InfrastructurePathResolver.ResolveDatabasePath(options.DbPath);
-            options.ConnectionString = InfrastructurePathResolver.BuildConnectionString(options.DbPath);
-
-            if (!File.Exists(options.DbPath))
-            {
-                using var connection = new SqliteConnection(options.ConnectionString);
-                connection.Open();
-                SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
-            }
-
-            SqliteFulltextSupportDetector.Detect(options);
+            var resolver = new SqlitePathResolver(options.DbPath);
+            options.DbPath = resolver.Resolve(SqliteResolutionScenario.Runtime);
         });
 
         optionsBuilder.PostConfigure<ILoggerFactory>((opts, loggerFactory) =>
@@ -90,6 +82,21 @@ public static class ServiceCollectionExtensions
         optionsBuilder.ValidateOnStart();
 
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<InfrastructureOptions>>().Value);
+        services.AddSingleton<IConnectionStringProvider>(sp =>
+        {
+            var optionsMonitor = sp.GetRequiredService<IOptions<InfrastructureOptions>>();
+            var logger = sp.GetRequiredService<ILogger<SqliteConnectionStringProvider>>();
+            var provider = new SqliteConnectionStringProvider(optionsMonitor, logger);
+
+            using (var connection = provider.CreateConnection())
+            {
+                connection.Open();
+                SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
+            }
+
+            SqliteFulltextSupportDetector.Detect(optionsMonitor.Value, provider);
+            return provider;
+        });
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
@@ -128,27 +135,27 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContextPool<AppDbContext>((sp, builder) =>
         {
-            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
-            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
+            builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         }, poolSize: 128);
         services.AddDbContextFactory<AppDbContext>((sp, builder) =>
         {
-            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
-            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
+            builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         });
 
         services.AddDbContextPool<ReadOnlyDbContext>((sp, builder) =>
         {
-            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
-            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
+            builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         }, poolSize: 256);
         services.AddDbContextFactory<ReadOnlyDbContext>((sp, builder) =>
         {
-            var infrastructureOptions = sp.GetRequiredService<InfrastructureOptions>();
-            builder.UseSqlite(infrastructureOptions.ConnectionString, sqlite => sqlite.CommandTimeout(30));
+            var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
+            builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         });
 

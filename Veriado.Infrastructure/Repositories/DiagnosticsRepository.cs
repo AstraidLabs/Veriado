@@ -1,3 +1,5 @@
+using Veriado.Infrastructure.Persistence.Connections;
+
 namespace Veriado.Infrastructure.Repositories;
 
 /// <summary>
@@ -5,23 +7,23 @@ namespace Veriado.Infrastructure.Repositories;
 /// </summary>
 internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 {
-    private readonly InfrastructureOptions _options;
     private readonly ISearchTelemetry _telemetry;
+    private readonly InfrastructureOptions _options;
+    private readonly IConnectionStringProvider _connectionStringProvider;
 
-    public DiagnosticsRepository(InfrastructureOptions options, ISearchTelemetry telemetry)
+    public DiagnosticsRepository(
+        InfrastructureOptions options,
+        ISearchTelemetry telemetry,
+        IConnectionStringProvider connectionStringProvider)
     {
         _options = options;
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
     }
 
     public async Task<DatabaseHealthSnapshot> GetDatabaseHealthAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        await using var connection = new SqliteConnection(_options.ConnectionString);
+        await using var connection = _connectionStringProvider.CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -33,12 +35,7 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
 
     public async Task<SearchIndexSnapshot> GetIndexStatisticsAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        await using var connection = new SqliteConnection(_options.ConnectionString);
+        await using var connection = _connectionStringProvider.CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 

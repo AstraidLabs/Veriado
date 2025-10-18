@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Persistence.Connections;
 
 namespace Veriado.Infrastructure.Search;
 
@@ -72,6 +73,7 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
     private const int DefaultMaxPoolSize = 64;
 
     private readonly InfrastructureOptions _options;
+    private readonly IConnectionStringProvider _connectionStringProvider;
     private readonly ConcurrentBag<PooledConnection> _pool = new();
     private readonly int _maxPoolSize;
 
@@ -79,18 +81,15 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
     private int _generation;
     private bool _disposed;
 
-    public PooledSqliteConnectionFactory(InfrastructureOptions options)
-        : this(options, DefaultMaxPoolSize)
+    public PooledSqliteConnectionFactory(InfrastructureOptions options, IConnectionStringProvider connectionStringProvider)
+        : this(options, connectionStringProvider, DefaultMaxPoolSize)
     {
     }
 
-    public PooledSqliteConnectionFactory(InfrastructureOptions options, int maxPoolSize)
+    public PooledSqliteConnectionFactory(InfrastructureOptions options, IConnectionStringProvider connectionStringProvider, int maxPoolSize)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
+        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
 
         if (maxPoolSize <= 0)
         {
@@ -123,7 +122,7 @@ internal sealed class PooledSqliteConnectionFactory : ISqliteConnectionFactory, 
         }
 
         var generation = Volatile.Read(ref _generation);
-        var connection = new SqliteConnection(_options.ConnectionString);
+        var connection = _connectionStringProvider.CreateConnection();
         PrepareConnection(connection);
         return new PooledConnection(connection, generation);
     }
