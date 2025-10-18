@@ -10,7 +10,7 @@ namespace Veriado.Infrastructure.Import;
 
 internal static class ImportMapping
 {
-    public static MappedImport MapToAggregate(ImportItem item, Guid? existingFileSystemId = null)
+    public static MappedImport MapToAggregate(ImportItem item, bool isNewFile, Guid? existingFileSystemId = null)
     {
         ArgumentNullException.ThrowIfNull(item);
 
@@ -58,7 +58,8 @@ internal static class ImportMapping
             contentVersion,
             isMissing: false,
             missingSinceUtc: null,
-            lastLinkedUtc: modifiedUtc);
+            lastLinkedUtc: modifiedUtc,
+            emitContentEvents: true);
 
         var file = FileEntity.CreateForImport(
             fileId,
@@ -78,7 +79,8 @@ internal static class ImportMapping
             validity,
             searchIndex,
             ftsPolicy,
-            metadata.Title);
+            metadata.Title,
+            emitCreationEvents: isNewFile);
 
         return new MappedImport(file, fileSystem, metadata.Version, metadata.Search);
     }

@@ -916,6 +916,16 @@ public sealed class ImportService : IImportService
 
         using var scope = BeginScope();
 
+        if (await FileAlreadyExistsAsync(import.ContentHash, cancellationToken).ConfigureAwait(false))
+        {
+            var duplicateError = new ApiError(
+                "duplicate_content",
+                "File was skipped because identical content already exists.",
+                descriptor);
+            LogApiError(descriptor, duplicateError);
+            return ApiResponse<Guid>.Failure(duplicateError);
+        }
+
         await using var contentStream = new MemoryStream(command.Content, writable: false);
         var storageResult = await _fileStorage.SaveAsync(contentStream, cancellationToken).ConfigureAwait(false);
 

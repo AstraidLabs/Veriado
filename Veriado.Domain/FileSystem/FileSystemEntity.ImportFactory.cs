@@ -1,4 +1,5 @@
 using System;
+using Veriado.Domain.FileSystem.Events;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
 
@@ -22,7 +23,8 @@ public sealed partial class FileSystemEntity
         ContentVersion contentVersion,
         bool isMissing,
         UtcTimestamp? missingSinceUtc,
-        UtcTimestamp? lastLinkedUtc)
+        UtcTimestamp? lastLinkedUtc,
+        bool emitContentEvents = true)
     {
         var entity = new FileSystemEntity(id)
         {
@@ -42,6 +44,37 @@ public sealed partial class FileSystemEntity
             MissingSinceUtc = missingSinceUtc,
             LastLinkedUtc = lastLinkedUtc,
         };
+
+        if (emitContentEvents)
+        {
+            entity.RaiseDomainEvent(new FileSystemContentChanged(
+                entity.Id,
+                provider,
+                path,
+                hash,
+                size,
+                mime,
+                contentVersion,
+                isEncrypted,
+                lastLinkedUtc ?? createdUtc));
+
+            entity.RaiseDomainEvent(new FileSystemTimestampsUpdated(
+                entity.Id,
+                createdUtc,
+                lastWriteUtc,
+                lastAccessUtc,
+                lastLinkedUtc ?? createdUtc));
+
+            if (attributes != FileAttributesFlags.None)
+            {
+                entity.RaiseDomainEvent(new FileSystemAttributesChanged(entity.Id, attributes, createdUtc));
+            }
+
+            if (!string.IsNullOrWhiteSpace(entity.OwnerSid))
+            {
+                entity.RaiseDomainEvent(new FileSystemOwnerChanged(entity.Id, entity.OwnerSid, createdUtc));
+            }
+        }
 
         return entity;
     }

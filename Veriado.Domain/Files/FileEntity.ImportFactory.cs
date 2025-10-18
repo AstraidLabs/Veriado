@@ -1,4 +1,5 @@
 using System;
+using Veriado.Domain.Files.Events;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.Search;
 using Veriado.Domain.ValueObjects;
@@ -25,7 +26,8 @@ public sealed partial class FileEntity
         FileDocumentValidityEntity? validity,
         SearchIndexState searchIndex,
         Fts5Policy ftsPolicy,
-        string? title)
+        string? title,
+        bool emitCreationEvents = false)
     {
         var entity = new FileEntity(id)
         {
@@ -47,6 +49,28 @@ public sealed partial class FileEntity
             FtsPolicy = ftsPolicy,
             Title = NormalizeOptionalText(title),
         };
+
+        if (emitCreationEvents)
+        {
+            entity.RaiseDomainEvent(new FileCreated(
+                entity.Id,
+                entity.Name,
+                entity.Extension,
+                entity.Mime,
+                entity.Author,
+                entity.Size,
+                entity.ContentHash,
+                createdUtc));
+        }
+
+        entity.RaiseDomainEvent(new FileContentLinked(
+            entity.Id,
+            entity.FileSystemId,
+            entity.LinkedContentVersion,
+            entity.ContentHash,
+            entity.Size,
+            entity.Mime,
+            lastModifiedUtc));
 
         return entity;
     }
