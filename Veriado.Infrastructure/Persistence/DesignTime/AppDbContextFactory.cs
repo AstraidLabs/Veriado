@@ -25,7 +25,10 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
         builder.AddInterceptors(pragmaInterceptor);
 
-        SqliteFulltextSupportDetector.Detect(infrastructureOptions, connectionProvider);
+        SqliteFulltextSupportDetector.Detect(
+            infrastructureOptions,
+            connectionProvider,
+            NullLogger.Instance);
 
         return new AppDbContext(builder.Options, infrastructureOptions, NullLogger<AppDbContext>.Instance);
     }

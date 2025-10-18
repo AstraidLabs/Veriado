@@ -97,6 +97,7 @@ public static class ServiceCollectionExtensions
             var optionsMonitor = sp.GetRequiredService<IOptions<InfrastructureOptions>>();
             var pathResolver = sp.GetRequiredService<ISqlitePathResolver>();
             var logger = sp.GetRequiredService<ILogger<SqliteConnectionStringProvider>>();
+            var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             var provider = new SqliteConnectionStringProvider(optionsMonitor, pathResolver, logger);
 
             using (var connection = provider.CreateConnection())
@@ -105,7 +106,8 @@ public static class ServiceCollectionExtensions
                 SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
             }
 
-            SqliteFulltextSupportDetector.Detect(optionsMonitor.Value, provider);
+            var detectorLogger = loggerFactory.CreateLogger("FulltextBootstrap");
+            SqliteFulltextSupportDetector.Detect(optionsMonitor.Value, provider, detectorLogger);
             return provider;
         });
         services.AddSingleton<InfrastructureInitializationState>();
@@ -113,7 +115,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
         services.AddHealthChecks()
-            .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas");
+            .AddCheck<SqlitePragmaHealthCheck>("sqlite_pragmas")
+            .AddCheck<SqliteFulltextSchemaHealthCheck>("FTS5SchemaConsistent");
 
         var searchOptions = services.AddOptions<SearchOptions>();
         if (configuration is not null)
@@ -212,6 +215,7 @@ public static class ServiceCollectionExtensions
             await using var scope = serviceProvider.CreateAsyncScope();
             var scopedProvider = scope.ServiceProvider;
             var dbContext = scopedProvider.GetRequiredService<AppDbContext>();
+            var loggerFactory = scopedProvider.GetRequiredService<ILoggerFactory>();
 
             var providerName = dbContext.Database.ProviderName;
             if (string.IsNullOrWhiteSpace(providerName)
@@ -233,7 +237,59 @@ public static class ServiceCollectionExtensions
                 }
             }
 
-            await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+            var migrationLogger = loggerFactory.CreateLogger("EfMigrations");
+            var appliedMigrations = (await dbContext.Database
+                    .GetAppliedMigrationsAsync(cancellationToken)
+                    .ConfigureAwait(false))
+                .ToList();
+            var pendingMigrations = (await dbContext.Database
+                    .GetPendingMigrationsAsync(cancellationToken)
+                    .ConfigureAwait(false))
+                .ToList();
+
+            migrationLogger.LogInformation(
+                "EF migrations status before apply: applied={AppliedCount}, pending={PendingCount}",
+                appliedMigrations.Count,
+                pendingMigrations.Count);
+
+            if (pendingMigrations.Count > 0)
+            {
+                migrationLogger.LogInformation(
+                    "Applying pending migrations: {Pending}",
+                    string.Join(", ", pendingMigrations));
+                await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                migrationLogger.LogInformation("Database schema already up to date; skipping EF migration execution.");
+            }
+
+            if (dbContext.Database.IsSqlite())
+            {
+                var schemaLogger = loggerFactory.CreateLogger("FulltextSchemaBootstrap");
+                var connection = (SqliteConnection)dbContext.Database.GetDbConnection();
+                var shouldCloseConnection = connection.State != ConnectionState.Open;
+
+                if (shouldCloseConnection)
+                {
+                    await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                try
+                {
+                    await SqliteFulltextSchemaManager
+                        .EnsureUnifiedSchemaAsync(connection, schemaLogger, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (shouldCloseConnection)
+                    {
+                        await connection.CloseAsync().ConfigureAwait(false);
+                    }
+                }
+            }
+
             await RunDevelopmentFulltextGuardAsync(scopedProvider, dbContext, cancellationToken).ConfigureAwait(false);
             await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
             await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);

@@ -17,4 +17,11 @@ public interface IDatabaseMaintenanceService
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     Task RehydrateWalAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Rebuilds the full-text index using the unified contentless FTS5 schema.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of maintenance commands executed.</returns>
+    Task<int> RebuildFulltextIndexAsync(CancellationToken cancellationToken);
 }

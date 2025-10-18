@@ -1,12 +1,11 @@
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Reflection;
-using System.Text;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Search;
+using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Persistence.Schema;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
@@ -16,7 +15,6 @@ namespace Veriado.Infrastructure.Integrity;
 /// </summary>
 internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 {
-    private const string Fts5SchemaResourceName = "Veriado.Infrastructure.Persistence.Schema.Fts5.sql";
     private const int RepairBatchSize = 250;
     private const int RepairDegreeOfParallelism = 3;
 
@@ -553,29 +551,9 @@ LIMIT $batchSize;";
         // errors even after the schema is rebuilt.
         await ExecutePragmaAsync(connection, "wal_checkpoint(TRUNCATE)", cancellationToken).ConfigureAwait(false);
 
-        var dropStatements = new[]
-        {
-            "DROP TRIGGER IF EXISTS sd_ai;",
-            "DROP TRIGGER IF EXISTS sd_au;",
-            "DROP TRIGGER IF EXISTS sd_ad;",
-            "DROP TRIGGER IF EXISTS dc_ai;",
-            "DROP TRIGGER IF EXISTS dc_au;",
-            "DROP TRIGGER IF EXISTS dc_ad;",
-            "DROP TABLE IF EXISTS search_document_fts;",
-            "DROP TABLE IF EXISTS file_search;",
-            "DROP TABLE IF EXISTS file_search_data;",
-            "DROP TABLE IF EXISTS file_search_idx;",
-            "DROP TABLE IF EXISTS file_search_content;",
-            "DROP TABLE IF EXISTS file_search_docsize;",
-            "DROP TABLE IF EXISTS file_search_config;",
-            "DROP TABLE IF EXISTS file_trgm;",
-            "DROP TABLE IF EXISTS search_document;",
-            "DROP TABLE IF EXISTS DocumentContent;",
-            "DROP TABLE IF EXISTS fts_write_ahead;",
-            "DROP TABLE IF EXISTS fts_write_ahead_dlq;"
-        };
-
-        await ExecuteStatementsAsync(connection, dropStatements, "drop", cancellationToken).ConfigureAwait(false);
+        await SqliteFulltextSchemaManager
+            .ApplyFullResetAsync(connection, _logger, cancellationToken)
+            .ConfigureAwait(false);
 
         // Rebuild the database pages after removing the corrupted tables. This helps clear out any
         // lingering corrupted pages that would otherwise continue to surface "database disk image is
@@ -590,33 +568,21 @@ LIMIT $batchSize;";
         // before creating the new schema objects.
         await ExecutePragmaAsync(connection, "wal_checkpoint(TRUNCATE)", cancellationToken).ConfigureAwait(false);
 
-        var schemaSql = ReadEmbeddedSql(Fts5SchemaResourceName);
-        var schemaStatements = SplitSqlStatements(schemaSql).ToArray();
-        await ExecuteStatementsAsync(connection, schemaStatements, "create", cancellationToken).ConfigureAwait(false);
+        await ExecuteStatementsAsync(
+                connection,
+                SqliteFulltextSchemaSql.CreateStatements.ToArray(),
+                "create",
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        await using (var rebuildCommand = connection.CreateCommand())
-        {
-            rebuildCommand.CommandText = "INSERT INTO search_document_fts(search_document_fts) VALUES('rebuild');";
-            LogSchemaStatement("rebuild", 1, 1, rebuildCommand.CommandText);
-            await rebuildCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
+        await ExecuteStatementsAsync(
+                connection,
+                new[] { SqliteFulltextSchemaSql.RebuildStatement },
+                "rebuild",
+                cancellationToken)
+            .ConfigureAwait(false);
 
         _logger.LogInformation("Full-text schema recreated successfully.");
-    }
-
-    private static string ReadEmbeddedSql(string resourceName)
-    {
-        var assembly = typeof(FulltextIntegrityService).GetTypeInfo().Assembly;
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-
-        if (stream is null)
-        {
-            var availableResources = string.Join(", ", assembly.GetManifestResourceNames());
-            throw new FileNotFoundException($"Embedded SQL resource '{resourceName}' was not found. Available resources: {availableResources}");
-        }
-
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 
     private async Task ExecuteStatementsAsync(
@@ -680,150 +646,6 @@ LIMIT $batchSize;";
         await pragmaCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static IEnumerable<string> SplitSqlStatements(string script)
-    {
-        if (string.IsNullOrWhiteSpace(script))
-        {
-            yield break;
-        }
+    private static IEnumerable<string> SplitSqlStatements(string script) => Enumerable.Empty<string>();
 
-        var builder = new StringBuilder();
-        var inSingleQuote = false;
-        var inDoubleQuote = false;
-        var inBracketIdentifier = false;
-        var inLineComment = false;
-        var inBlockComment = false;
-        var blockDepth = 0;
-
-        for (var i = 0; i < script.Length; i++)
-        {
-            var current = script[i];
-            var next = i + 1 < script.Length ? script[i + 1] : '\0';
-
-            if (inLineComment)
-            {
-                if (current == '\n')
-                {
-                    inLineComment = false;
-                }
-
-                continue;
-            }
-
-            if (inBlockComment)
-            {
-                if (current == '*' && next == '/')
-                {
-                    inBlockComment = false;
-                    i++;
-                }
-
-                continue;
-            }
-
-            if (!inSingleQuote && !inDoubleQuote && !inBracketIdentifier)
-            {
-                if (current == '-' && next == '-')
-                {
-                    inLineComment = true;
-                    i++;
-                    continue;
-                }
-
-                if (current == '/' && next == '*')
-                {
-                    inBlockComment = true;
-                    i++;
-                    continue;
-                }
-            }
-
-            builder.Append(current);
-
-            if (!inDoubleQuote && !inBracketIdentifier && current == '\'')
-            {
-                if (inSingleQuote && next == '\'')
-                {
-                    builder.Append(next);
-                    i++;
-                    continue;
-                }
-
-                inSingleQuote = !inSingleQuote;
-                continue;
-            }
-
-            if (!inSingleQuote && !inBracketIdentifier && current == '"')
-            {
-                if (inDoubleQuote && next == '"')
-                {
-                    builder.Append(next);
-                    i++;
-                    continue;
-                }
-
-                inDoubleQuote = !inDoubleQuote;
-                continue;
-            }
-
-            if (!inSingleQuote && !inDoubleQuote)
-            {
-                if (current == '[')
-                {
-                    inBracketIdentifier = true;
-                    continue;
-                }
-
-                if (current == ']')
-                {
-                    inBracketIdentifier = false;
-                    continue;
-                }
-            }
-
-            if (inSingleQuote || inDoubleQuote || inBracketIdentifier)
-            {
-                continue;
-            }
-
-            if (char.IsLetter(current))
-            {
-                var tokenStart = i;
-                while (i + 1 < script.Length && char.IsLetter(script[i + 1]))
-                {
-                    i++;
-                    builder.Append(script[i]);
-                }
-
-                var token = script[tokenStart..(i + 1)];
-                if (string.Equals(token, "BEGIN", StringComparison.OrdinalIgnoreCase))
-                {
-                    blockDepth++;
-                }
-                else if (string.Equals(token, "END", StringComparison.OrdinalIgnoreCase) && blockDepth > 0)
-                {
-                    blockDepth--;
-                }
-
-                continue;
-            }
-
-            if (current == ';' && blockDepth == 0)
-            {
-                var statement = builder.ToString().Trim();
-                if (statement.Length > 0)
-                {
-                    yield return statement;
-                }
-
-                builder.Clear();
-            }
-        }
-
-        var trailing = builder.ToString().Trim();
-        if (trailing.Length > 0)
-        {
-            yield return trailing;
-        }
-    }
 }

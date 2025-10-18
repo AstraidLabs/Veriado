@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence.Connections;
 
 namespace Veriado.Infrastructure.Persistence;
@@ -7,18 +8,21 @@ namespace Veriado.Infrastructure.Persistence;
 /// </summary>
 internal static class SqliteFulltextSupportDetector
 {
-    public static void Detect(InfrastructureOptions options, IConnectionStringProvider connectionStringProvider)
+    public static void Detect(
+        InfrastructureOptions options,
+        IConnectionStringProvider connectionStringProvider,
+        ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(connectionStringProvider);
 
-        var (available, reason) = Probe(connectionStringProvider);
+        var (available, reason) = Probe(connectionStringProvider, logger);
         options.IsFulltextAvailable = available;
         options.FulltextAvailabilityError = reason;
         SqliteFulltextSupport.Update(available, reason);
     }
 
-    private static (bool Available, string? Reason) Probe(IConnectionStringProvider provider)
+    private static (bool Available, string? Reason) Probe(IConnectionStringProvider provider, ILogger? logger)
     {
         try
         {
@@ -50,9 +54,36 @@ internal static class SqliteFulltextSupportDetector
                     .GetAwaiter()
                     .GetResult();
                 SqliteFulltextSupport.UpdateSchemaSnapshot(inspection.Snapshot);
+
                 if (!inspection.IsValid)
                 {
-                    return (false, inspection.FailureReason);
+                    logger?.LogWarning(
+                        "FTS schema inspection failed during bootstrap: {Reason}. Attempting to enforce unified schema.",
+                        inspection.FailureReason);
+
+                    try
+                    {
+                        SqliteFulltextSchemaManager
+                            .EnsureUnifiedSchemaAsync(connection, logger, CancellationToken.None)
+                            .GetAwaiter()
+                            .GetResult();
+                    }
+                    catch (Exception rebuildEx)
+                    {
+                        logger?.LogError(rebuildEx, "Failed to enforce unified FTS schema during detection.");
+                        return (false, rebuildEx.Message);
+                    }
+
+                    inspection = SqliteFulltextSchemaInspector
+                        .InspectAsync(connection, CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
+                    SqliteFulltextSupport.UpdateSchemaSnapshot(inspection.Snapshot);
+
+                    if (!inspection.IsValid)
+                    {
+                        return (false, inspection.FailureReason);
+                    }
                 }
 
                 return (true, null);
