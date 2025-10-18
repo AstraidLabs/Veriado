@@ -148,8 +148,6 @@ public abstract class FileWriteHandlerBase
             }
         }
 
-        await _repository.PersistDomainEventsAsync(file, fileSystem, cancellationToken).ConfigureAwait(false);
-
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 }

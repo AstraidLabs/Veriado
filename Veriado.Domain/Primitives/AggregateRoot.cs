@@ -18,4 +18,14 @@ public abstract class AggregateRoot : EntityBase
         : base(id)
     {
     }
+
+    internal void IncrementVersion()
+    {
+        Version++;
+    }
+
+    internal void SetVersion(ulong version)
+    {
+        Version = version;
+    }
 }

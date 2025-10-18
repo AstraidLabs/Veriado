@@ -76,11 +76,4 @@ public interface IFileRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     Task UpdateAsync(FileEntity file, FileSystemEntity fileSystem, FilePersistenceOptions options, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Persists domain events emitted by the supplied aggregates into the audit and event log tables.
-    /// </summary>
-    /// <param name="file">The file aggregate that produced events.</param>
-    /// <param name="fileSystem">The optional file system aggregate that produced events.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    Task PersistDomainEventsAsync(FileEntity? file, FileSystemEntity? fileSystem, CancellationToken cancellationToken);
 }

@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
+using Veriado.Infrastructure.Events.Handlers;
 using Veriado.Infrastructure.Import;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
@@ -26,6 +27,7 @@ using Veriado.Infrastructure.Search;
 using Veriado.Infrastructure.Time;
 using Veriado.Infrastructure.Storage;
 using Veriado.Domain.Primitives;
+using Veriado.Domain.Search.Events;
 using Veriado.Appl.Pipeline.Idempotency;
 using Veriado.Appl.Search;
 
@@ -147,17 +149,26 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
 
+        services.AddSingleton<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddSingleton<DomainEventsInterceptor>();
+        services.AddSingleton<ISearchIndexCoordinator, SearchIndexCoordinator>();
+        services.AddSingleton<IDomainEventHandler<SearchReindexRequested>, SearchReindexRequestedHandler>();
+
         services.AddDbContextPool<AppDbContext>((sp, builder) =>
         {
             var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
             builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
-            builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
+            builder.AddInterceptors(
+                sp.GetRequiredService<SqlitePragmaInterceptor>(),
+                sp.GetRequiredService<DomainEventsInterceptor>());
         }, poolSize: 128);
         services.AddDbContextFactory<AppDbContext>((sp, builder) =>
         {
             var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
             builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
-            builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
+            builder.AddInterceptors(
+                sp.GetRequiredService<SqlitePragmaInterceptor>(),
+                sp.GetRequiredService<DomainEventsInterceptor>());
         });
 
         services.AddDbContextPool<ReadOnlyDbContext>((sp, builder) =>
