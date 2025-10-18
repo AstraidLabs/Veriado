@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.Abstractions;
 using Veriado.Application.Tests.Domain.Files;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Metadata;
