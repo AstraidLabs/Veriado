@@ -21,24 +21,74 @@ internal sealed class SuggestionMaintenanceService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    public Task ReplaceAsync(
+        SearchDocument? previousDocument,
+        SearchDocument currentDocument,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(currentDocument);
+
+        if (previousDocument is null)
+        {
+            return UpsertAsync(currentDocument, cancellationToken);
+        }
+
+        return ReplaceInternalAsync(previousDocument, currentDocument, cancellationToken);
+    }
+
     public async Task UpsertAsync(SearchDocument document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var harvested = Harvest(document)
-            .GroupBy(entry => (entry.Term, entry.Source), TermSourceComparer.Instance)
-            .Select(group => new
-            {
-                group.Key.Term,
-                group.Key.Source,
-                Weight = group.Sum(x => x.Weight),
-            })
-            .ToList();
+        var harvested = HarvestGrouped(document);
 
         if (harvested.Count == 0)
         {
             return;
         }
 
+        await ApplyAsync(harvested, SuggestionOperation.Add, document.FileId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task PruneAsync(SearchDocument document, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var harvested = HarvestGrouped(document);
+
+        if (harvested.Count == 0)
+        {
+            return;
+        }
+
+        await ApplyAsync(harvested, SuggestionOperation.Remove, document.FileId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task ReplaceInternalAsync(
+        SearchDocument previousDocument,
+        SearchDocument currentDocument,
+        CancellationToken cancellationToken)
+    {
+        await ApplyAsync(
+            HarvestGrouped(previousDocument),
+            SuggestionOperation.Remove,
+            previousDocument.FileId,
+            cancellationToken)
+            .ConfigureAwait(false);
+        await ApplyAsync(
+            HarvestGrouped(currentDocument),
+            SuggestionOperation.Add,
+            currentDocument.FileId,
+            cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task ApplyAsync(
+        IReadOnlyList<HarvestedEntry> harvested,
+        SuggestionOperation operation,
+        Guid fileId,
+        CancellationToken cancellationToken)
+    {
         try
         {
             await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -53,8 +103,21 @@ internal sealed class SuggestionMaintenanceService
             {
                 await using var command = connection.CreateCommand();
                 command.Transaction = sqliteTransaction;
-                command.CommandText = "INSERT INTO suggestions(term, weight, lang, source_field) VALUES($term, $weight, $lang, $source) " +
-                    "ON CONFLICT(term, lang, source_field) DO UPDATE SET weight = weight + excluded.weight;";
+                if (operation == SuggestionOperation.Add)
+                {
+                    command.CommandText = "INSERT INTO suggestions(term, weight, lang, source_field) VALUES($term, $weight, $lang, $source) " +
+                        "ON CONFLICT(term, lang, source_field) DO UPDATE SET weight = weight + excluded.weight;";
+                }
+                else
+                {
+                    command.CommandText = @"UPDATE suggestions
+SET weight = CASE
+    WHEN weight > $weight THEN weight - $weight
+    ELSE 0
+END
+WHERE term = $term AND lang = $lang AND source_field = $source;";
+                }
+
                 command.Parameters.Add("$term", SqliteType.Text).Value = entry.Term;
                 command.Parameters.Add("$weight", SqliteType.Real).Value = entry.Weight;
                 command.Parameters.Add("$lang", SqliteType.Text).Value = "en";
@@ -62,12 +125,28 @@ internal sealed class SuggestionMaintenanceService
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            if (operation == SuggestionOperation.Remove)
+            {
+                await using var cleanup = connection.CreateCommand();
+                cleanup.Transaction = sqliteTransaction;
+                cleanup.CommandText = "DELETE FROM suggestions WHERE weight <= 0;";
+                await cleanup.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await sqliteTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (SqliteException ex)
         {
-            _logger.LogWarning(ex, "Failed to update suggestions for document {FileId}", document.FileId);
+            _logger.LogWarning(ex, "Failed to update suggestions for document {FileId}", fileId);
         }
+    }
+
+    private static List<HarvestedEntry> HarvestGrouped(SearchDocument document)
+    {
+        return Harvest(document)
+            .GroupBy(entry => (entry.Term, entry.Source), TermSourceComparer.Instance)
+            .Select(group => new HarvestedEntry(group.Key.Term, group.Key.Source, group.Sum(x => x.Weight)))
+            .ToList();
     }
 
     private static IEnumerable<(string Term, double Weight, string Source)> Harvest(SearchDocument document)
@@ -98,6 +177,14 @@ internal sealed class SuggestionMaintenanceService
             }
         }
     }
+
+    private enum SuggestionOperation
+    {
+        Add,
+        Remove,
+    }
+
+    private sealed record HarvestedEntry(string Term, string Source, double Weight);
 
     private static IEnumerable<string> Tokenize(string? text)
     {

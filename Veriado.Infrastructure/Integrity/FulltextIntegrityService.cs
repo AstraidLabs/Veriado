@@ -30,6 +30,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private readonly ISearchTelemetry _telemetry;
     private readonly ILogger<SearchProjectionService> _projectionLogger;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly SuggestionMaintenanceService _suggestionMaintenanceService;
 
     public FulltextIntegrityService(
         IDbContextFactory<ReadOnlyDbContext> readFactory,
@@ -41,7 +42,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         ISearchIndexSignatureCalculator signatureCalculator,
         ISearchTelemetry telemetry,
         ILogger<SearchProjectionService> projectionLogger,
-        IAnalyzerFactory analyzerFactory)
+        IAnalyzerFactory analyzerFactory,
+        SuggestionMaintenanceService suggestionMaintenanceService)
     {
         _readFactory = readFactory;
         _writeFactory = writeFactory;
@@ -53,6 +55,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _projectionLogger = projectionLogger ?? throw new ArgumentNullException(nameof(projectionLogger));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _suggestionMaintenanceService = suggestionMaintenanceService
+            ?? throw new ArgumentNullException(nameof(suggestionMaintenanceService));
     }
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
@@ -282,6 +286,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 IFileSearchProjection projectionService = new SearchProjectionService(
                     writeContext,
                     _analyzerFactory,
+                    _suggestionMaintenanceService,
                     _projectionLogger);
 
                 var processedCount = 0;
@@ -397,7 +402,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await writeContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var guard = new DbContextSearchProjectionGuard(writeContext);
-        var projectionService = new SearchProjectionService(writeContext, _analyzerFactory, _projectionLogger);
+        var projectionService = new SearchProjectionService(
+            writeContext,
+            _analyzerFactory,
+            _suggestionMaintenanceService,
+            _projectionLogger);
         await projectionService.DeleteAsync(fileId, guard, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }

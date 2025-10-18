@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Search;
 using Veriado.Domain.Files;
+using Veriado.Domain.Search;
 using Veriado.Infrastructure.Persistence;
 
 namespace Veriado.Infrastructure.Search;
@@ -16,15 +18,19 @@ public sealed class SearchProjectionService : IFileSearchProjection
 {
     private readonly DbContext _dbContext;
     private readonly IAnalyzerFactory _analyzerFactory;
+    private readonly SuggestionMaintenanceService _suggestionMaintenanceService;
     private readonly ILogger<SearchProjectionService> _logger;
 
     public SearchProjectionService(
         DbContext dbContext,
         IAnalyzerFactory analyzerFactory,
+        SuggestionMaintenanceService suggestionMaintenanceService,
         ILogger<SearchProjectionService>? logger = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _suggestionMaintenanceService = suggestionMaintenanceService
+            ?? throw new ArgumentNullException(nameof(suggestionMaintenanceService));
         _logger = logger ?? NullLogger<SearchProjectionService>.Instance;
     }
 
@@ -49,9 +55,16 @@ public sealed class SearchProjectionService : IFileSearchProjection
             "Active SQLite transaction has no associated connection.");
 
         SqliteCommand? activeCommand = null;
+        SearchDocument? previousDocument = null;
 
         try
         {
+            previousDocument = await LoadExistingDocumentAsync(
+                connection,
+                sqliteTransaction,
+                document.FileId,
+                cancellationToken).ConfigureAwait(false);
+
             var normalizedTitle = NormalizeOptional(document.Title);
             var normalizedAuthor = NormalizeOptional(document.Author);
             var normalizedMetadataText = NormalizeOptional(document.MetadataText);
@@ -126,6 +139,10 @@ VALUES (
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 activeCommand = null;
             }
+
+            await _suggestionMaintenanceService
+                .ReplaceAsync(previousDocument, document, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (SqliteException ex)
         {
@@ -159,9 +176,16 @@ VALUES (
             "Active SQLite transaction has no associated connection.");
 
         SqliteCommand? activeCommand = null;
+        SearchDocument? existingDocument = null;
 
         try
         {
+            existingDocument = await LoadExistingDocumentAsync(
+                connection,
+                sqliteTransaction,
+                fileId,
+                cancellationToken).ConfigureAwait(false);
+
             await using var delete = connection.CreateCommand();
             delete.Transaction = sqliteTransaction;
             delete.CommandText = "DELETE FROM search_document WHERE file_id = $file_id;";
@@ -169,6 +193,13 @@ VALUES (
             activeCommand = delete;
             await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             activeCommand = null;
+
+            if (existingDocument is not null)
+            {
+                await _suggestionMaintenanceService
+                    .PruneAsync(existingDocument, cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
         catch (SqliteException ex)
         {
@@ -202,6 +233,62 @@ VALUES (
         return string.IsNullOrWhiteSpace(value)
             ? null
             : TextNormalization.NormalizeText(value, _analyzerFactory);
+    }
+
+    private static async Task<SearchDocument?> LoadExistingDocumentAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid fileId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = @"SELECT title, author, mime, metadata_json, metadata_text, created_utc, modified_utc, content_hash
+FROM search_document WHERE file_id = $file_id;";
+        command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var title = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+        var author = reader.IsDBNull(1) ? null : reader.GetString(1);
+        var mime = reader.GetString(2);
+        var metadataJson = reader.IsDBNull(3) ? null : reader.GetString(3);
+        var metadataText = reader.IsDBNull(4) ? null : reader.GetString(4);
+        var createdUtc = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture);
+        var modifiedUtc = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture);
+        var contentHash = reader.IsDBNull(7) ? null : reader.GetString(7);
+
+        string fileName = string.Empty;
+        if (!string.IsNullOrWhiteSpace(metadataJson))
+        {
+            try
+            {
+                var metadata = JsonSerializer.Deserialize<SearchDocumentMetadata>(
+                    metadataJson,
+                    SearchDocument.MetadataSerializerOptions);
+                fileName = metadata?.FileName ?? string.Empty;
+            }
+            catch (JsonException)
+            {
+                fileName = string.Empty;
+            }
+        }
+
+        return new SearchDocument(
+            fileId,
+            title,
+            mime,
+            author,
+            fileName,
+            createdUtc,
+            modifiedUtc,
+            metadataJson,
+            metadataText,
+            contentHash);
     }
 
     private static void ConfigureSearchDocumentParameters(
