@@ -68,12 +68,6 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 
     private async Task CleanupAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            _logger.LogDebug("Skipping idempotency cleanup because connection string is not available yet");
-            return;
-        }
-
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);

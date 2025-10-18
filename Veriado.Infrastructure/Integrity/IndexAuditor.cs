@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
@@ -13,19 +14,22 @@ public sealed class IndexAuditor : IIndexAuditor
     private readonly InfrastructureOptions _options;
     private readonly ISearchTelemetry _telemetry;
     private readonly ILogger<IndexAuditor> _logger;
+    private readonly IConnectionStringProvider _connectionStringProvider;
 
     public IndexAuditor(
         INeedsReindexEvaluator evaluator,
         IDbContextFactory<ReadOnlyDbContext> readFactory,
         InfrastructureOptions options,
         ISearchTelemetry telemetry,
-        ILogger<IndexAuditor> logger)
+        ILogger<IndexAuditor> logger,
+        IConnectionStringProvider connectionStringProvider)
     {
         _evaluator = evaluator ?? throw new ArgumentNullException(nameof(evaluator));
         _readFactory = readFactory ?? throw new ArgumentNullException(nameof(readFactory));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
     }
 
     public async Task<AuditSummary> VerifyAsync(CancellationToken ct)
@@ -136,14 +140,14 @@ public sealed class IndexAuditor : IIndexAuditor
 
     private async Task<(bool IndexAvailable, HashSet<Guid> SearchMap)> LoadIndexSnapshotAsync(CancellationToken ct)
     {
-        if (!_options.IsFulltextAvailable || string.IsNullOrWhiteSpace(_options.ConnectionString))
+        if (!_options.IsFulltextAvailable)
         {
             return (false, new HashSet<Guid>());
         }
 
         try
         {
-            await using var connection = new SqliteConnection(_options.ConnectionString);
+            await using var connection = _connectionStringProvider.CreateConnection();
             await connection.OpenAsync(ct).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: ct).ConfigureAwait(false);
 

@@ -1,4 +1,5 @@
 using Veriado.Appl.Pipeline.Idempotency;
+using Veriado.Infrastructure.Persistence.Connections;
 
 namespace Veriado.Infrastructure.Idempotency;
 
@@ -7,12 +8,14 @@ namespace Veriado.Infrastructure.Idempotency;
 /// </summary>
 internal sealed class SqliteIdempotencyStore : IIdempotencyStore
 {
-    private readonly InfrastructureOptions _options;
     private readonly IClock _clock;
+    private readonly IConnectionStringProvider _connectionStringProvider;
 
-    public SqliteIdempotencyStore(InfrastructureOptions options, IClock clock)
+    public SqliteIdempotencyStore(
+        IConnectionStringProvider connectionStringProvider,
+        IClock clock)
     {
-        _options = options;
+        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
         _clock = clock;
     }
 
@@ -56,14 +59,7 @@ internal sealed class SqliteIdempotencyStore : IIdempotencyStore
     }
 
     private SqliteConnection CreateConnection()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            throw new InvalidOperationException("Infrastructure has not been initialised with a connection string.");
-        }
-
-        return new SqliteConnection(_options.ConnectionString);
-    }
+        => _connectionStringProvider.CreateConnection();
 
     private static string FormatKey(Guid requestId) => requestId.ToString("N", CultureInfo.InvariantCulture);
 }

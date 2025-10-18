@@ -1,19 +1,22 @@
 namespace Veriado.Infrastructure.Search;
 
 using System.Text;
+using Veriado.Infrastructure.Persistence.Connections;
 
 /// <summary>
 /// Provides prefix-based autocomplete suggestions sourced from the SQLite suggestion index.
 /// </summary>
 internal sealed class SuggestionService : ISearchSuggestionService
 {
-    private readonly InfrastructureOptions _options;
     private readonly ILogger<SuggestionService> _logger;
+    private readonly IConnectionStringProvider _connectionStringProvider;
 
-    public SuggestionService(InfrastructureOptions options, ILogger<SuggestionService> logger)
+    public SuggestionService(
+        ILogger<SuggestionService> logger,
+        IConnectionStringProvider connectionStringProvider)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
     }
 
     public async Task<IReadOnlyList<SearchSuggestion>> SuggestAsync(
@@ -24,12 +27,6 @@ internal sealed class SuggestionService : ISearchSuggestionService
     {
         if (string.IsNullOrWhiteSpace(prefix) || limit <= 0)
         {
-            return Array.Empty<SearchSuggestion>();
-        }
-
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            _logger.LogWarning("Suggestion lookup skipped because infrastructure is not initialised");
             return Array.Empty<SearchSuggestion>();
         }
 
@@ -44,7 +41,7 @@ internal sealed class SuggestionService : ISearchSuggestionService
 
         try
         {
-            await using var connection = new SqliteConnection(_options.ConnectionString);
+            await using var connection = _connectionStringProvider.CreateConnection();
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: cancellationToken).ConfigureAwait(false);
 

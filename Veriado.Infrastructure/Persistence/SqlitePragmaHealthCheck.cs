@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Veriado.Infrastructure.Persistence.Connections;
 
 namespace Veriado.Infrastructure.Persistence;
 
@@ -7,28 +8,25 @@ namespace Veriado.Infrastructure.Persistence;
 /// </summary>
 internal sealed class SqlitePragmaHealthCheck : IHealthCheck
 {
-    private readonly InfrastructureOptions _options;
     private readonly ILogger<SqlitePragmaHealthCheck> _logger;
+    private readonly IConnectionStringProvider _connectionStringProvider;
     private readonly SemaphoreSlim _mutex = new(1, 1);
 
-    public SqlitePragmaHealthCheck(InfrastructureOptions options, ILogger<SqlitePragmaHealthCheck> logger)
+    public SqlitePragmaHealthCheck(
+        ILogger<SqlitePragmaHealthCheck> logger,
+        IConnectionStringProvider connectionStringProvider)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
     }
 
     /// <inheritdoc />
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
-            return HealthCheckResult.Unhealthy("SQLite infrastructure has not been initialised with a connection string.");
-        }
-
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var connection = new SqliteConnection(_options.ConnectionString);
+            await using var connection = _connectionStringProvider.CreateConnection();
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
             var current = await SqlitePragmaHelper.ReadStateAsync(connection, cancellationToken).ConfigureAwait(false);
