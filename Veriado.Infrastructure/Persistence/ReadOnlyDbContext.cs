@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
 
@@ -10,15 +11,21 @@ namespace Veriado.Infrastructure.Persistence;
 public sealed class ReadOnlyDbContext : DbContext
 {
     private readonly InfrastructureOptions _options;
+    private readonly ILogger<ReadOnlyDbContext> _logger;
 
-    public ReadOnlyDbContext(DbContextOptions<ReadOnlyDbContext> options, InfrastructureOptions infrastructureOptions)
+    public ReadOnlyDbContext(
+        DbContextOptions<ReadOnlyDbContext> options,
+        InfrastructureOptions infrastructureOptions,
+        ILogger<ReadOnlyDbContext> logger)
         : base(options)
     {
         _options = infrastructureOptions;
+        _logger = logger;
         EnsureSqliteProvider();
         ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
         ChangeTracker.AutoDetectChangesEnabled = false;
         Database.SetCommandTimeout(30);
+        _logger.LogInformation("ResolvedDbPath = {DatabasePath}", _options.DbPath);
     }
 
     public DbSet<FileEntity> Files => Set<FileEntity>();

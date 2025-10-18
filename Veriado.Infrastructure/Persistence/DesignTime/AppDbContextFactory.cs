@@ -33,8 +33,11 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     private static InfrastructureOptions BuildInfrastructureOptions()
     {
         var options = new InfrastructureOptions();
-        var resolver = new SqlitePathResolver(options.DbPath);
-        options.DbPath = resolver.Resolve(SqliteResolutionScenario.DesignTime);
+        var designOverride = Environment.GetEnvironmentVariable("VERIADO_DESIGNTIME_DB_PATH");
+        var resolver = new SqlitePathResolver(options.DbPath, designOverride, NullLogger<SqlitePathResolver>.Instance);
+        var resolvedPath = resolver.Resolve(SqliteResolutionScenario.DesignTime);
+        resolver.EnsureStorageExists(resolvedPath);
+        options.DbPath = resolvedPath;
         return options;
     }
 }

@@ -23,6 +23,7 @@ public sealed class AppDbContext : DbContext
         _options = infrastructureOptions;
         _logger = logger;
         EnsureSqliteProvider();
+        _logger.LogInformation("ResolvedDbPath = {DatabasePath}", _options.DbPath);
     }
 
     public DbSet<FileEntity> Files => Set<FileEntity>();

@@ -1,31 +1,37 @@
 using System;
 using System.IO;
+using Microsoft.Extensions.Logging;
 
 namespace Veriado.Infrastructure.Persistence.Connections;
 
 /// <summary>
 /// Resolves the absolute path to the SQLite database for runtime and design-time scenarios.
 /// </summary>
-public sealed class SqlitePathResolver
+public sealed class SqlitePathResolver : ISqlitePathResolver
 {
     private const string DefaultFileName = "veriado.db";
-    private const string RuntimeDirectoryName = "Veriado";
-    private const string DesignDirectoryName = "Veriado.DesignTime";
+    private const string DefaultDirectoryName = "Veriado";
 
     private readonly string? _configuredPath;
     private readonly string? _designTimeOverride;
+    private readonly ILogger<SqlitePathResolver>? _logger;
 
     public SqlitePathResolver(string? configuredPath, string? designTimeOverride = null)
+        : this(configuredPath, designTimeOverride, logger: null)
     {
-        _configuredPath = configuredPath;
-        _designTimeOverride = designTimeOverride;
     }
 
-    /// <summary>
-    /// Resolves the database path for the supplied scenario.
-    /// </summary>
-    /// <param name="scenario">The resolution scenario.</param>
-    /// <returns>The absolute database path.</returns>
+    public SqlitePathResolver(
+        string? configuredPath,
+        string? designTimeOverride,
+        ILogger<SqlitePathResolver>? logger)
+    {
+        _configuredPath = string.IsNullOrWhiteSpace(configuredPath) ? null : configuredPath;
+        _designTimeOverride = string.IsNullOrWhiteSpace(designTimeOverride) ? null : designTimeOverride;
+        _logger = logger;
+    }
+
+    /// <inheritdoc />
     public string Resolve(SqliteResolutionScenario scenario)
     {
         var basePath = scenario switch
@@ -37,7 +43,7 @@ public sealed class SqlitePathResolver
 
         if (!string.IsNullOrWhiteSpace(basePath))
         {
-            return NormalizeAndEnsure(basePath);
+            return NormalizeAndEnsure(basePath!);
         }
 
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -46,11 +52,30 @@ public sealed class SqlitePathResolver
             root = Path.Combine(AppContext.BaseDirectory, "veriado-data");
         }
 
-        var folder = scenario == SqliteResolutionScenario.DesignTime
-            ? Path.Combine(root, DesignDirectoryName)
-            : Path.Combine(root, RuntimeDirectoryName);
+        return NormalizeAndEnsure(Path.Combine(root, DefaultDirectoryName, DefaultFileName));
+    }
 
-        return NormalizeAndEnsure(Path.Combine(folder, DefaultFileName));
+    /// <inheritdoc />
+    public void EnsureStorageExists(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            using var _ = File.Create(fullPath);
+        }
+
+        _logger?.LogDebug("Ensured SQLite storage at {DatabasePath}", fullPath);
     }
 
     private static string NormalizeAndEnsure(string path)

@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -17,21 +18,25 @@ public sealed class SqliteConnectionStringProvider : IConnectionStringProvider
 
     public SqliteConnectionStringProvider(
         IOptions<InfrastructureOptions> options,
+        ISqlitePathResolver pathResolver,
         ILogger<SqliteConnectionStringProvider> logger)
-        : this(options.Value, logger)
+        : this(options.Value, pathResolver, logger)
     {
     }
 
-    public SqliteConnectionStringProvider(InfrastructureOptions options, ILogger<SqliteConnectionStringProvider> logger)
+    public SqliteConnectionStringProvider(
+        InfrastructureOptions options,
+        ISqlitePathResolver pathResolver,
+        ILogger<SqliteConnectionStringProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(pathResolver);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        var configuredPath = string.IsNullOrWhiteSpace(options.DbPath) ? null : options.DbPath;
-        var designOverride = Environment.GetEnvironmentVariable("VERIADO_DESIGNTIME_DB_PATH");
-        var resolver = new SqlitePathResolver(configuredPath, designOverride);
-
-        _databasePath = resolver.Resolve(SqliteResolutionScenario.Runtime);
+        var resolvedPath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
+        pathResolver.EnsureStorageExists(resolvedPath);
+        options.DbPath = resolvedPath;
+        _databasePath = resolvedPath;
         _connectionString = BuildConnectionString(_databasePath);
 
         _logger.LogInformation("Using SQLite DB: {DatabasePath}", _databasePath);
@@ -62,9 +67,10 @@ public sealed class SqliteConnectionStringProvider : IConnectionStringProvider
 
         var configuredPath = string.IsNullOrWhiteSpace(options.DbPath) ? null : options.DbPath;
         var designOverride = Environment.GetEnvironmentVariable("VERIADO_DESIGNTIME_DB_PATH");
-        var resolver = new SqlitePathResolver(configuredPath, designOverride);
+        var resolver = new SqlitePathResolver(configuredPath, designOverride, NullLogger<SqlitePathResolver>.Instance);
 
         var designPath = resolver.Resolve(SqliteResolutionScenario.DesignTime);
+        resolver.EnsureStorageExists(designPath);
         var connectionString = BuildConnectionString(designPath);
 
         logger.LogInformation("Using SQLite DB: {DatabasePath} (design-time)", designPath);

@@ -1,7 +1,7 @@
-using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Veriado.Infrastructure.DependencyInjection;
+using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Options;
 using Veriado.Mapping.DependencyInjection;
 using Veriado.Services;
@@ -37,10 +37,6 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton(messenger);
                 services.AddSingleton<IMessenger>(messenger);
 
-                var infrastructureConfig = new InfrastructureConfigProvider();
-                services.AddSingleton<IInfrastructureConfigProvider>(infrastructureConfig);
-                services.AddSingleton<InfrastructureConfigProvider>(infrastructureConfig);
-
                 services.AddSingleton<IWindowProvider, WindowProvider>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
                 services.AddSingleton<IDispatcherService, DispatcherService>();
@@ -64,20 +60,16 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddWinUiShell();
 
                 services.AddVeriadoMapping();
-                services.AddInfrastructure(context.Configuration, options =>
-                {
-                    var databasePath = infrastructureConfig.GetDatabasePath();
-                    infrastructureConfig.EnsureStorageExists(databasePath);
-                    options.DbPath = databasePath;
-                });
+                services.AddInfrastructure(context.Configuration);
                 services.AddApplication();
                 services.AddVeriadoServices();
                 services.AddSingleton<IFilesSearchSuggestionsProvider, FilesSearchSuggestionsProvider>();
             })
             .Build();
 
-        var configProvider = host.Services.GetRequiredService<IInfrastructureConfigProvider>();
-        var databasePath = configProvider.GetDatabasePath();
+        var pathResolver = host.Services.GetRequiredService<ISqlitePathResolver>();
+        var databasePath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
+        pathResolver.EnsureStorageExists(databasePath);
         var mutexKey = BuildMigrationMutexKey(databasePath);
 
         using (var gate = new NamedGlobalMutex(mutexKey))
