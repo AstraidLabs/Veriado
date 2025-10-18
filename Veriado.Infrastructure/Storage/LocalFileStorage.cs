@@ -168,19 +168,21 @@ internal sealed class LocalFileStorage : IFileStorage
         return Path.Combine(identifier[..2], identifier[2..]);
     }
 
+    private const string Backslash = "\u005C";
+
     private string ResolvePath(string relativePath)
     {
         var trimmed = relativePath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var directorySeparator = Path.DirectorySeparatorChar.ToString();
         var localPath = trimmed
             .Replace(Path.AltDirectorySeparatorChar.ToString(), directorySeparator, StringComparison.Ordinal)
-            .Replace("\\", directorySeparator, StringComparison.Ordinal);
+            .Replace(Backslash, directorySeparator, StringComparison.Ordinal);
         return Path.Combine(_rootPath, localPath);
     }
 
     private static string NormalizePath(string relativePath)
     {
-        return relativePath.Replace("\\", "/", StringComparison.Ordinal);
+        return relativePath.Replace(Backslash, "/", StringComparison.Ordinal);
     }
 
     private static FileAttributesFlags MapAttributes(FileAttributes attributes)
