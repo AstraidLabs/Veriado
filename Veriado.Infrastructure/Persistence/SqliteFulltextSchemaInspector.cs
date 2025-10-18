@@ -29,6 +29,8 @@ internal static class SqliteFulltextSchemaInspector
         "created_utc",
         "modified_utc",
         "content_hash",
+        "stored_content_hash",
+        "stored_token_hash",
     };
 
     private static readonly string[] ExpectedTriggers = { "sd_ai", "sd_au", "sd_ad" };

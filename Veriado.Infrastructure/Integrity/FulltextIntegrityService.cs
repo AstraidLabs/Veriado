@@ -280,7 +280,8 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 IFileSearchProjection projectionService = new SearchProjectionService(
                     writeContext,
                     _analyzerFactory,
-                    _projectionLogger);
+                    _projectionLogger,
+                    _telemetry);
 
                 var processedCount = 0;
 
@@ -372,12 +373,26 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return false;
         }
 
-        await projectionService.UpsertAsync(file, guard, cancellationToken).ConfigureAwait(false);
+        var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
+            .ConfigureAwait(false);
 
-        var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
+        var signatureSource = tracked ?? file;
+        var signature = _signatureCalculator.Compute(signatureSource);
+        var expectedContentHash = tracked?.SearchIndex?.IndexedContentHash ?? file.SearchIndex?.IndexedContentHash;
+        var newContentHash = file.ContentHash.Value;
+
+        await projectionService
+            .UpsertAsync(
+                file,
+                expectedContentHash,
+                newContentHash,
+                signature.TokenHash,
+                guard,
+                cancellationToken)
+            .ConfigureAwait(false);
+
         if (tracked is not null)
         {
-            var signature = _signatureCalculator.Compute(tracked);
             tracked.ConfirmIndexed(
                 tracked.SearchIndex.SchemaVersion,
                 UtcTimestamp.From(_clock.UtcNow),
@@ -395,7 +410,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await writeContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var guard = new DbContextSearchProjectionGuard(writeContext);
-        var projectionService = new SearchProjectionService(writeContext, _analyzerFactory, _projectionLogger);
+        var projectionService = new SearchProjectionService(writeContext, _analyzerFactory, _projectionLogger, _telemetry);
         await projectionService.DeleteAsync(fileId, guard, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
