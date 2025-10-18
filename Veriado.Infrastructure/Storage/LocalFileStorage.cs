@@ -1,3 +1,4 @@
+using System;
 using System.Buffers;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -170,13 +171,16 @@ internal sealed class LocalFileStorage : IFileStorage
     private string ResolvePath(string relativePath)
     {
         var trimmed = relativePath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var localPath = trimmed.Replace('/', Path.DirectorySeparatorChar).Replace('\', Path.DirectorySeparatorChar);
+        var directorySeparator = Path.DirectorySeparatorChar.ToString();
+        var localPath = trimmed
+            .Replace(Path.AltDirectorySeparatorChar.ToString(), directorySeparator, StringComparison.Ordinal)
+            .Replace("\\", directorySeparator, StringComparison.Ordinal);
         return Path.Combine(_rootPath, localPath);
     }
 
     private static string NormalizePath(string relativePath)
     {
-        return relativePath.Replace('\', '/');
+        return relativePath.Replace("\\", "/", StringComparison.Ordinal);
     }
 
     private static FileAttributesFlags MapAttributes(FileAttributes attributes)
