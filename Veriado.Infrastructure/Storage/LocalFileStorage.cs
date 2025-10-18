@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Globalization;
 using System.Security.Cryptography;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
 
@@ -154,8 +154,8 @@ internal sealed class LocalFileStorage : IFileStorage
             ByteSize.From(length),
             mime,
             attributes,
-            ownerSid: null,
-            isEncrypted: attributes.HasFlag(FileAttributesFlags.Encrypted),
+            OwnerSid: null,
+            IsEncrypted: attributes.HasFlag(FileAttributesFlags.Encrypted),
             UtcTimestamp.From(info.CreationTimeUtc),
             UtcTimestamp.From(info.LastWriteTimeUtc),
             UtcTimestamp.From(info.LastAccessTimeUtc));
