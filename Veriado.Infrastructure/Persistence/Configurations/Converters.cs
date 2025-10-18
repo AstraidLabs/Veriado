@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -77,4 +78,19 @@ internal static class Converters
         json => string.IsNullOrWhiteSpace(json)
             ? Fts5Policy.Default
             : JsonSerializer.Deserialize<Fts5Policy>(json, JsonOptions) ?? Fts5Policy.Default);
+
+    public static readonly ValueConverter<ulong, byte[]> UInt64ToBytes = new(
+        value =>
+        {
+            var buffer = new byte[sizeof(ulong)];
+            BinaryPrimitives.WriteUInt64LittleEndian(buffer, value);
+            return buffer;
+        },
+        bytes => bytes is not { Length: sizeof(ulong) }
+            ? 0UL
+            : BinaryPrimitives.ReadUInt64LittleEndian(bytes));
+
+    public static readonly ValueComparer<ulong> UInt64Comparer = new(
+        (left, right) => left == right,
+        value => value.GetHashCode());
 }

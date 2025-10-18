@@ -47,9 +47,9 @@ public sealed class FileImportService
         .GetProperty(nameof(FileEntity.IsReadOnly), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
         ?? throw new InvalidOperationException("IsReadOnly property is missing.");
 
-    private static readonly PropertyInfo VersionProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.Version), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("Version property is missing.");
+    private static readonly PropertyInfo ContentRevisionProperty = typeof(FileEntity)
+        .GetProperty(nameof(FileEntity.ContentRevision), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+        ?? throw new InvalidOperationException("ContentRevision property is missing.");
 
     private static readonly PropertyInfo SearchIndexProperty = typeof(FileEntity)
         .GetProperty(nameof(FileEntity.SearchIndex), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
@@ -213,7 +213,7 @@ public sealed class FileImportService
 
         LastModifiedProperty.SetValue(entity, dto.LastModifiedUtc);
         IsReadOnlyProperty.SetValue(entity, dto.IsReadOnly);
-        VersionProperty.SetValue(entity, dto.Version);
+        ContentRevisionProperty.SetValue(entity, dto.Version);
         FtsPolicyProperty.SetValue(entity, dto.FtsPolicy ?? Fts5Policy.Default);
 
         var searchIndex = new SearchIndexState(dto.SearchSchemaVersion, isStale: true);

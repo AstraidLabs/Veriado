@@ -130,7 +130,7 @@ internal static class QueryableFilters
 
         if (dto.Version.HasValue)
         {
-            query = query.Where(file => file.Version == dto.Version.Value);
+            query = query.Where(file => file.ContentRevision == dto.Version.Value);
         }
 
         return query;
@@ -169,7 +169,7 @@ internal static class QueryableFilters
                 "size" => ApplyOrder(orderedQuery, file => EF.Property<long>(file, nameof(FileEntity.Size)), spec.Descending, ref ordered),
                 "createdutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.CreatedUtc)), spec.Descending, ref ordered),
                 "modifiedutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)), spec.Descending, ref ordered),
-                "version" => ApplyOrder(orderedQuery, file => file.Version, spec.Descending, ref ordered),
+                "version" => ApplyOrder(orderedQuery, file => file.ContentRevision, spec.Descending, ref ordered),
                 "author" => ApplyOrder(orderedQuery, file => file.Author, spec.Descending, ref ordered),
                 "validuntil" => ApplyOrder(
                     orderedQuery,

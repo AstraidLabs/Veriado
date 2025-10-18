@@ -41,7 +41,7 @@ public sealed class FileEntity : AggregateRoot
         CreatedUtc = createdUtc;
         LastModifiedUtc = createdUtc;
         LinkedContentVersion = version;
-        Version = version.Value;
+        ContentRevision = version.Value;
         IsReadOnly = false;
         SystemMetadata = systemMetadata;
         Title = NormalizeOptionalText(title);
@@ -82,7 +82,7 @@ public sealed class FileEntity : AggregateRoot
     /// <summary>
     /// Gets the version number of the file content.
     /// </summary>
-    public int Version { get; private set; }
+    public int ContentRevision { get; private set; }
 
     /// <summary>
     /// Gets the creation timestamp of the file.
@@ -270,7 +270,7 @@ public sealed class FileEntity : AggregateRoot
         ContentHash = hash;
         Size = size;
         LinkedContentVersion = version;
-        Version = version.Value;
+        ContentRevision = version.Value;
         Mime = mime;
 
         Touch(whenUtc);
@@ -306,7 +306,7 @@ public sealed class FileEntity : AggregateRoot
         if (LinkedContentVersion != version)
         {
             LinkedContentVersion = version;
-            Version = version.Value;
+            ContentRevision = version.Value;
             changed = true;
         }
 
