@@ -1,4 +1,7 @@
 using System;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Maintenance;
@@ -9,10 +12,14 @@ namespace Veriado.Infrastructure.Maintenance;
 internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceService
 {
     private readonly ISqliteConnectionFactory _connectionFactory;
+    private readonly ILogger<SqliteDatabaseMaintenanceService> _logger;
 
-    public SqliteDatabaseMaintenanceService(ISqliteConnectionFactory connectionFactory)
+    public SqliteDatabaseMaintenanceService(
+        ISqliteConnectionFactory connectionFactory,
+        ILogger<SqliteDatabaseMaintenanceService> logger)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<int> VacuumAndOptimizeAsync(CancellationToken cancellationToken)
@@ -44,5 +51,22 @@ internal sealed class SqliteDatabaseMaintenanceService : IDatabaseMaintenanceSer
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int> RebuildFulltextIndexAsync(CancellationToken cancellationToken)
+    {
+        await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = (SqliteConnection)lease.Connection;
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Ensuring unified FTS schema prior to rebuild.");
+        await SqliteFulltextSchemaManager
+            .EnsureUnifiedSchemaAsync(connection, _logger, cancellationToken)
+            .ConfigureAwait(false);
+
+        _logger.LogInformation("Triggering full-text index rebuild.");
+        return await SqliteFulltextSchemaManager
+            .ReindexAsync(connection, _logger, cancellationToken)
+            .ConfigureAwait(false);
     }
 }
