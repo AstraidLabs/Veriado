@@ -1,9 +1,13 @@
-using System.Reflection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
+using Veriado.Application.Import;
+using Veriado.Domain.FileSystem;
 using Veriado.Domain.Files;
-using Veriado.Domain.Search;
-using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 
@@ -12,56 +16,10 @@ namespace Veriado.Infrastructure.Import;
 /// <summary>
 /// Provides a high-throughput import pipeline for file aggregates.
 /// </summary>
-public sealed class FileImportService
+public sealed class FileImportService : IFileImportWriter
 {
-    private const int MinimumChunkSize = 500;
-    private const int MaximumChunkSize = 2000;
-
-    private static readonly ConstructorInfo FileEntityConstructor = typeof(FileEntity)
-        .GetConstructor(
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            new[]
-            {
-                typeof(Guid),
-                typeof(FileName),
-                typeof(FileExtension),
-                typeof(MimeType),
-                typeof(string),
-                typeof(Guid),
-                typeof(FileHash),
-                typeof(ByteSize),
-                typeof(ContentVersion),
-                typeof(UtcTimestamp),
-                typeof(FileSystemMetadata),
-                typeof(string),
-            },
-            modifiers: null)
-        ?? throw new InvalidOperationException("FileEntity private constructor could not be resolved.");
-
-    private static readonly PropertyInfo LastModifiedProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.LastModifiedUtc), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("LastModifiedUtc property is missing.");
-
-    private static readonly PropertyInfo IsReadOnlyProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.IsReadOnly), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("IsReadOnly property is missing.");
-
-    private static readonly PropertyInfo ContentRevisionProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.ContentRevision), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("ContentRevision property is missing.");
-
-    private static readonly PropertyInfo SearchIndexProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.SearchIndex), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("SearchIndex property is missing.");
-
-    private static readonly PropertyInfo ValidityProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.Validity), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("Validity property is missing.");
-
-    private static readonly PropertyInfo FtsPolicyProperty = typeof(FileEntity)
-        .GetProperty(nameof(FileEntity.FtsPolicy), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-        ?? throw new InvalidOperationException("FtsPolicy property is missing.");
+    private const int MinimumBatchSize = 500;
+    private const int MaximumBatchSize = 2000;
 
     private readonly AppDbContext _dbContext;
     private readonly IFileSearchProjection _searchProjection;
@@ -80,183 +38,172 @@ public sealed class FileImportService
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
-    public async Task ImportAsync(IEnumerable<NewFileDto> batch, CancellationToken cancellationToken, int chunkSize = 1000)
+    public async Task<ImportResult> ImportAsync(
+        IReadOnlyList<ImportItem> items,
+        ImportOptions options,
+        CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(batch);
-        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(options);
+        ct.ThrowIfCancellationRequested();
 
-        var normalizedChunkSize = Math.Clamp(chunkSize, MinimumChunkSize, MaximumChunkSize);
-        using var enumerator = batch.GetEnumerator();
-        var buffer = new List<NewFileDto>(normalizedChunkSize);
-
-        while (true)
+        if (items.Count == 0)
         {
-            buffer.Clear();
+            return new ImportResult(0, 0, 0);
+        }
 
-            while (buffer.Count < normalizedChunkSize && enumerator.MoveNext())
+        var normalizedBatchSize = Math.Clamp(options.BatchSize, MinimumBatchSize, MaximumBatchSize);
+        var imported = 0;
+        var skipped = 0;
+        var updated = 0;
+
+        for (var offset = 0; offset < items.Count; offset += normalizedBatchSize)
+        {
+            ct.ThrowIfCancellationRequested();
+            var count = Math.Min(normalizedBatchSize, items.Count - offset);
+            var slice = new ImportItem[count];
+            for (var i = 0; i < count; i++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                buffer.Add(enumerator.Current);
+                slice[i] = items[offset + i];
             }
 
-            if (buffer.Count == 0)
-            {
-                break;
-            }
+            var batchResult = await PersistBatchAsync(slice, options, ct).ConfigureAwait(false);
+            imported += batchResult.Imported;
+            skipped += batchResult.Skipped;
+            updated += batchResult.Updated;
 
-            var deduped = Deduplicate(buffer);
-            await ImportChunkAsync(deduped, cancellationToken).ConfigureAwait(false);
-
-            if (buffer.Count < normalizedChunkSize)
+            if (options.DetachAfterBatch)
             {
-                break;
+                _dbContext.ChangeTracker.Clear();
             }
         }
+
+        return new ImportResult(imported, skipped, updated);
     }
 
-    private async Task ImportChunkAsync(IReadOnlyList<NewFileDto> chunk, CancellationToken cancellationToken)
+    private async Task<ImportResult> PersistBatchAsync(
+        IReadOnlyList<ImportItem> batch,
+        ImportOptions options,
+        CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (chunk.Count == 0)
+        var deduped = Deduplicate(batch);
+        if (deduped.Count == 0)
         {
-            return;
+            return new ImportResult(0, 0, 0);
         }
 
-        var ids = new HashSet<Guid>(chunk.Count);
-        foreach (var dto in chunk)
-        {
-            ids.Add(dto.FileId);
-        }
+        var ids = deduped.Select(item => item.FileId).ToArray();
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
 
-        await using var transaction = await _dbContext.Database
-            .BeginTransactionAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var existingEntities = await _dbContext.Files
+        var existingFiles = await _dbContext.Files
             .Where(file => ids.Contains(file.Id))
             .Include(file => file.Validity)
-            .ToListAsync(cancellationToken)
+            .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        var existingMap = existingEntities.ToDictionary(file => file.Id);
-        var dtoLookup = chunk.ToDictionary(dto => dto.FileId);
-        var tracked = new List<FileEntity>(chunk.Count);
+        var existingFileSystemIds = existingFiles
+            .Select(file => file.FileSystemId)
+            .Distinct()
+            .ToArray();
 
-        foreach (var dto in chunk)
+        var existingFileSystems = await _dbContext.FileSystems
+            .Where(fs => existingFileSystemIds.Contains(fs.Id))
+            .ToDictionaryAsync(fs => fs.Id, ct)
+            .ConfigureAwait(false);
+
+        var imported = 0;
+        var skipped = 0;
+        var updated = 0;
+        var persisted = new List<MappedImport>(deduped.Count);
+
+        foreach (var item in deduped)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            ct.ThrowIfCancellationRequested();
+            var existing = existingFiles.FirstOrDefault(file => file.Id == item.FileId);
+            var mapped = ImportMapping.MapToAggregate(item, existing?.FileSystemId);
 
-            var entity = CreateEntity(dto);
-            tracked.Add(entity);
-
-            if (existingMap.TryGetValue(dto.FileId, out var existing))
+            if (existing is not null)
             {
+                if (existing.ContentRevision >= mapped.Version)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (existing.FileSystemId != Guid.Empty
+                    && existingFileSystems.TryGetValue(existing.FileSystemId, out var existingFs))
+                {
+                    _dbContext.Entry(existingFs).State = EntityState.Detached;
+                }
+
                 _dbContext.Entry(existing).State = EntityState.Detached;
-                _dbContext.Files.Update(entity);
+                _dbContext.FileSystems.Update(mapped.FileSystem);
+                _dbContext.Files.Update(mapped.File);
+                updated++;
             }
             else
             {
-                _dbContext.Files.Add(entity);
+                _dbContext.FileSystems.Add(mapped.FileSystem);
+                _dbContext.Files.Add(mapped.File);
+                imported++;
             }
+
+            persisted.Add(mapped);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        foreach (var entity in tracked)
+        if (persisted.Count == 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            await _searchProjection.UpsertAsync(entity, cancellationToken).ConfigureAwait(false);
-            var dto = dtoLookup[entity.Id];
-            var signature = _signatureCalculator.Compute(entity);
-            var indexedAt = dto.SearchIndexedUtc ?? UtcTimestamp.From(_clock.UtcNow);
-            var indexedTitle = string.IsNullOrWhiteSpace(dto.SearchIndexedTitle)
-                ? signature.NormalizedTitle
-                : dto.SearchIndexedTitle!;
-
-            entity.ConfirmIndexed(
-                dto.SearchSchemaVersion <= 0 ? 1 : dto.SearchSchemaVersion,
-                indexedAt,
-                signature.AnalyzerVersion,
-                signature.TokenHash,
-                indexedTitle);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            return new ImportResult(imported, skipped, updated);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-    }
+        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
-    private static FileEntity CreateEntity(NewFileDto dto)
-    {
-        if (dto.SearchSchemaVersion <= 0)
+        if (options.UpsertFts)
         {
-            throw new ArgumentOutOfRangeException(nameof(dto.SearchSchemaVersion), dto.SearchSchemaVersion, "Schema version must be positive.");
-        }
-
-        var entity = (FileEntity)FileEntityConstructor.Invoke(
-            new object?[]
+            foreach (var mapped in persisted)
             {
-                dto.FileId,
-                dto.Name,
-                dto.Extension,
-                dto.Mime,
-                dto.Author,
-                dto.FileSystemId,
-                dto.ContentHash,
-                dto.Size,
-                dto.LinkedContentVersion,
-                dto.CreatedUtc,
-                dto.SystemMetadata,
-                dto.Title,
-            });
+                ct.ThrowIfCancellationRequested();
+                await _searchProjection.UpsertAsync(mapped.File, ct).ConfigureAwait(false);
 
-        LastModifiedProperty.SetValue(entity, dto.LastModifiedUtc);
-        IsReadOnlyProperty.SetValue(entity, dto.IsReadOnly);
-        ContentRevisionProperty.SetValue(entity, dto.Version);
-        FtsPolicyProperty.SetValue(entity, dto.FtsPolicy ?? Fts5Policy.Default);
+                var signature = _signatureCalculator.Compute(mapped.File);
+                var indexedAt = mapped.SearchMetadata?.IndexedUtc ?? _clock.UtcNow;
+                mapped.File.ConfirmIndexed(
+                    mapped.File.SearchIndex?.SchemaVersion ?? 1,
+                    UtcTimestamp.From(indexedAt),
+                    signature.AnalyzerVersion,
+                    signature.TokenHash,
+                    mapped.SearchMetadata?.IndexedTitle ?? signature.NormalizedTitle);
+            }
 
-        var searchIndex = new SearchIndexState(dto.SearchSchemaVersion, isStale: true);
-        SearchIndexProperty.SetValue(entity, searchIndex);
-
-        if (dto.Validity is not null)
-        {
-            var validity = new FileDocumentValidityEntity(
-                dto.Validity.IssuedAt,
-                dto.Validity.ValidUntil,
-                dto.Validity.HasPhysicalCopy,
-                dto.Validity.HasElectronicCopy);
-            ValidityProperty.SetValue(entity, validity);
-        }
-        else
-        {
-            ValidityProperty.SetValue(entity, null);
+            await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
-        return entity;
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return new ImportResult(imported, skipped, updated);
     }
 
-    private static IReadOnlyList<NewFileDto> Deduplicate(IReadOnlyList<NewFileDto> input)
+    private static IReadOnlyList<ImportItem> Deduplicate(IReadOnlyList<ImportItem> items)
     {
-        if (input.Count == 0)
+        if (items.Count == 0)
         {
-            return Array.Empty<NewFileDto>();
+            return Array.Empty<ImportItem>();
         }
 
-        var order = new List<NewFileDto>(input.Count);
+        var order = new List<ImportItem>(items.Count);
         var index = new Dictionary<Guid, int>();
 
-        for (var i = 0; i < input.Count; i++)
+        for (var i = 0; i < items.Count; i++)
         {
-            var dto = input[i];
-            if (index.TryGetValue(dto.FileId, out var existingIndex))
+            var item = items[i];
+            if (index.TryGetValue(item.FileId, out var existingIndex))
             {
-                order[existingIndex] = dto;
+                order[existingIndex] = item;
             }
             else
             {
-                index[dto.FileId] = order.Count;
-                order.Add(dto);
+                index[item.FileId] = order.Count;
+                order.Add(item);
             }
         }
 

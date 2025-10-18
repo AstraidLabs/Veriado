@@ -8,7 +8,7 @@ namespace Veriado.Domain.FileSystem;
 /// <summary>
 /// Represents the metadata snapshot of a physical file stored externally.
 /// </summary>
-public sealed class FileSystemEntity : AggregateRoot
+public sealed partial class FileSystemEntity : AggregateRoot
 {
     private FileSystemEntity(Guid id)
         : base(id)

@@ -12,7 +12,10 @@ using Veriado.Mapping.AC;
 using Veriado.Services.Import.Internal;
 using Veriado.Services.Maintenance;
 using Veriado.Contracts.Import;
+using Veriado.Appl.Abstractions;
 using Veriado.Appl.UseCases.Files.CheckFileHash;
+using Veriado.Application.Import;
+using ApplicationImportOptions = Veriado.Application.Import.ImportOptions;
 
 namespace Veriado.Services.Import;
 
@@ -39,7 +42,10 @@ public sealed class ImportService : IImportService
     private readonly IRequestContext _requestContext;
     private readonly ILogger<ImportService> _logger;
     private readonly IMaintenanceService _maintenanceService;
+    private readonly IFileStorage _fileStorage;
+    private readonly IFileImportWriter _importWriter;
     private readonly SemaphoreSlim _fulltextRepairSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _importSemaphore = new(1, 1);
     private bool _fulltextRepairAttempted;
     private bool _fulltextRepairSucceeded;
 
@@ -49,7 +55,9 @@ public sealed class ImportService : IImportService
         IClock clock,
         IRequestContext requestContext,
         ILogger<ImportService> logger,
-        IMaintenanceService maintenanceService)
+        IMaintenanceService maintenanceService,
+        IFileStorage fileStorage,
+        IFileImportWriter importWriter)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _mappingPipeline = mappingPipeline ?? throw new ArgumentNullException(nameof(mappingPipeline));
@@ -57,6 +65,8 @@ public sealed class ImportService : IImportService
         _requestContext = requestContext ?? throw new ArgumentNullException(nameof(requestContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _maintenanceService = maintenanceService ?? throw new ArgumentNullException(nameof(maintenanceService));
+        _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
+        _importWriter = importWriter ?? throw new ArgumentNullException(nameof(importWriter));
     }
 
     /// <inheritdoc />
@@ -68,7 +78,9 @@ public sealed class ImportService : IImportService
 
         var normalized = NormalizeRequest(request);
         var descriptor = string.IsNullOrWhiteSpace(normalized.Name) ? normalized.Extension : normalized.Name;
-        return await ImportFileInternalAsync(normalized, descriptor, cancellationToken)
+        var contentHash = ComputeContentHash(normalized.Content);
+        var import = new CreateFileImport(normalized, contentHash);
+        return await ImportFileInternalAsync(import, descriptor, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -434,7 +446,7 @@ public sealed class ImportService : IImportService
                             return;
                         }
 
-                        var response = await ImportFileInternalAsync(createRequest.Request, filePath, token).ConfigureAwait(false);
+                        var response = await ImportFileInternalAsync(createRequest, filePath, token).ConfigureAwait(false);
 
                         if (!response.IsSuccess
                             && ShouldAttemptFulltextRepair(response.Errors)
@@ -443,7 +455,7 @@ public sealed class ImportService : IImportService
                             _logger.LogInformation(
                                 "Retrying import for {FilePath} after repairing the full-text index.",
                                 filePath);
-                            response = await ImportFileInternalAsync(createRequest.Request, filePath, token)
+                            response = await ImportFileInternalAsync(createRequest, filePath, token)
                                 .ConfigureAwait(false);
                         }
 
@@ -884,10 +896,13 @@ public sealed class ImportService : IImportService
     }
 
     private async Task<ApiResponse<Guid>> ImportFileInternalAsync(
-        CreateFileRequest request,
+        CreateFileImport import,
         string? descriptor,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(import);
+        var request = import.Request;
+
         var mapping = await _mappingPipeline.MapCreateAsync(request, cancellationToken).ConfigureAwait(false);
         if (!mapping.IsSuccess)
         {
@@ -895,31 +910,39 @@ public sealed class ImportService : IImportService
             return ApiResponse<Guid>.Failure(mapping.Errors);
         }
 
+        var mapped = mapping.Data!;
+        var command = mapped.Command;
+        var fileId = Guid.NewGuid();
+
         using var scope = BeginScope();
 
-        var mapped = mapping.Data!;
-        var createResult = await _mediator.Send(mapped.Command, cancellationToken).ConfigureAwait(false);
-        if (createResult.IsFailure)
+        await using var contentStream = new MemoryStream(command.Content, writable: false);
+        var storageResult = await _fileStorage.SaveAsync(contentStream, cancellationToken).ConfigureAwait(false);
+
+        if (!string.Equals(storageResult.Hash.Value, import.ContentHash, StringComparison.Ordinal))
         {
-            var apiError = ConvertAppError(createResult.Error);
-            LogApiError(descriptor, apiError);
-            return ApiResponse<Guid>.Failure(apiError);
+            throw new InvalidOperationException("Stored content hash does not match the computed hash.");
         }
 
-        var fileId = createResult.Value;
-
-        foreach (var followUp in mapped.BuildFollowUpCommands(fileId))
+        if (storageResult.Size.Value != command.Content.LongLength)
         {
-            var followUpResult = await _mediator.Send(followUp, cancellationToken).ConfigureAwait(false);
-            if (followUpResult.IsFailure)
-            {
-                var apiError = ConvertAppError(followUpResult.Error);
-                LogApiError(descriptor, apiError);
-                return ApiResponse<Guid>.Failure(apiError);
-            }
+            throw new InvalidOperationException("Stored content size does not match the provided payload.");
         }
 
-        return ApiResponse<Guid>.Success(fileId);
+        var item = CreateImportItem(fileId, request, mapped, storageResult, import.ContentHash);
+        var importResult = await InvokeImportAsync(item, cancellationToken).ConfigureAwait(false);
+
+        if (importResult.Imported + importResult.Updated > 0)
+        {
+            return ApiResponse<Guid>.Success(fileId);
+        }
+
+        var skipError = new ApiError(
+            "import_skipped",
+            "File was skipped because a newer version already exists.",
+            descriptor);
+        LogApiError(descriptor, skipError);
+        return ApiResponse<Guid>.Failure(skipError);
     }
 
     private async Task<CreateFileImport> CreateRequestFromFileAsync(
@@ -1528,7 +1551,99 @@ public sealed class ImportService : IImportService
         return new DateTimeOffset(value, TimeSpan.Zero);
     }
 
+    private static string ComputeContentHash(byte[] content)
+    {
+        if (content is null || content.Length == 0)
+        {
+            using var emptyHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            return Convert.ToHexString(emptyHash.GetHashAndReset());
+        }
+
+        return Convert.ToHexString(SHA256.HashData(content));
+    }
+
     private sealed record CreateFileImport(CreateFileRequest Request, string ContentHash);
+
+    private ImportItem CreateImportItem(
+        Guid fileId,
+        CreateFileRequest request,
+        CreateFileMappedRequest mapped,
+        StorageResult storageResult,
+        string contentHash)
+    {
+        var systemMetadataDto = request.SystemMetadata;
+        var isReadOnly = request.IsReadOnly || mapped.SetReadOnly;
+
+        var fileSystemMetadata = systemMetadataDto is null
+            ? new ImportFileSystemMetadata(
+                (int)storageResult.Attributes,
+                storageResult.OwnerSid,
+                storageResult.IsEncrypted,
+                storageResult.CreatedUtc.Value,
+                storageResult.LastWriteUtc.Value,
+                storageResult.LastAccessUtc.Value,
+                null,
+                null)
+            : new ImportFileSystemMetadata(
+                systemMetadataDto.Attributes,
+                systemMetadataDto.OwnerSid,
+                storageResult.IsEncrypted,
+                systemMetadataDto.CreatedUtc,
+                systemMetadataDto.LastWriteUtc,
+                systemMetadataDto.LastAccessUtc,
+                systemMetadataDto.HardLinkCount,
+                systemMetadataDto.AlternateDataStreamCount);
+
+        var metadata = new ImportMetadata(
+            mapped.Command.Author,
+            request.Name,
+            isReadOnly,
+            Version: 1,
+            LinkedContentVersion: 1,
+            FileSystemId: null,
+            FileSystem: fileSystemMetadata,
+            Validity: null,
+            Search: new ImportSearchMetadata(
+                SchemaVersion: 1,
+                IsStale: true,
+                IndexedUtc: null,
+                IndexedTitle: null,
+                IndexedContentHash: contentHash,
+                AnalyzerVersion: null,
+                TokenHash: null),
+            FtsPolicy: new ImportFtsPolicy(true, "unicode61", "-_."));
+
+        var createdUtc = systemMetadataDto?.CreatedUtc ?? storageResult.CreatedUtc.Value;
+        var modifiedUtc = systemMetadataDto?.LastWriteUtc ?? storageResult.LastWriteUtc.Value;
+
+        return new ImportItem(
+            fileId,
+            request.Name,
+            request.Extension,
+            request.Mime,
+            storageResult.Size.Value,
+            storageResult.Hash.Value,
+            storageResult.Provider.ToString(),
+            storageResult.Path.Value,
+            createdUtc,
+            modifiedUtc,
+            metadata);
+    }
+
+    private async Task<ImportResult> InvokeImportAsync(ImportItem item, CancellationToken cancellationToken)
+    {
+        await _importSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await _importWriter
+                .ImportAsync(new[] { item }, new ApplicationImportOptions(), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _importSemaphore.Release();
+        }
+    }
 
     private sealed record FileEnumerationResult(string[] Files, IReadOnlyList<ImportError> Errors, ImportError? FatalError);
 
