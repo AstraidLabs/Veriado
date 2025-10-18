@@ -912,6 +912,31 @@ public sealed class ImportService : IImportService
 
         var mapped = mapping.Data!;
         var command = mapped.Command;
+
+        if (await FileAlreadyExistsAsync(import.ContentHash, cancellationToken).ConfigureAwait(false))
+        {
+            if (!string.IsNullOrWhiteSpace(descriptor))
+            {
+                _logger.LogInformation(
+                    "Skipping import for {Descriptor} because identical content already exists (SHA256 {Hash}).",
+                    descriptor,
+                    import.ContentHash);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Skipping import because identical content already exists (SHA256 {Hash}).",
+                    import.ContentHash);
+            }
+
+            var conflictError = new ApiError(
+                "conflict",
+                "File was skipped because identical content already exists.",
+                descriptor);
+
+            return ApiResponse<Guid>.Failure(conflictError);
+        }
+
         var fileId = Guid.NewGuid();
 
         using var scope = BeginScope();
