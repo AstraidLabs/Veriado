@@ -166,9 +166,20 @@ public sealed class FileImportService : IFileImportWriter
             foreach (var mapped in persisted)
             {
                 ct.ThrowIfCancellationRequested();
-                await _searchProjection.UpsertAsync(mapped.File, projectionGuard, ct).ConfigureAwait(false);
-
                 var signature = _signatureCalculator.Compute(mapped.File);
+                var expectedContentHash = mapped.File.SearchIndex?.IndexedContentHash;
+                var newContentHash = mapped.File.ContentHash.Value;
+
+                await _searchProjection
+                    .UpsertAsync(
+                        mapped.File,
+                        expectedContentHash,
+                        newContentHash,
+                        signature.TokenHash,
+                        projectionGuard,
+                        ct)
+                    .ConfigureAwait(false);
+
                 var indexedAt = mapped.SearchMetadata?.IndexedUtc ?? _clock.UtcNow;
                 mapped.File.ConfirmIndexed(
                     mapped.File.SearchIndex?.SchemaVersion ?? 1,

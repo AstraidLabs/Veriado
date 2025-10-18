@@ -6,11 +6,21 @@ namespace Veriado.Appl.Abstractions;
 public interface IFileSearchProjection
 {
     /// <summary>
-    /// Upserts the specified file aggregate into the search projection store.
+    /// Upserts the specified file aggregate into the search projection store using optimistic concurrency guards.
     /// </summary>
     /// <param name="file">The aggregate to project.</param>
+    /// <param name="expectedContentHash">The content hash currently recorded in the index.</param>
+    /// <param name="newContentHash">The new content hash to persist.</param>
+    /// <param name="tokenHash">The analyzer token hash captured for the projection.</param>
+    /// <param name="guard">The projection transaction guard.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task UpsertAsync(FileEntity file, ISearchProjectionTransactionGuard guard, CancellationToken cancellationToken);
+    Task UpsertAsync(
+        FileEntity file,
+        string? expectedContentHash,
+        string? newContentHash,
+        string? tokenHash,
+        ISearchProjectionTransactionGuard guard,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Deletes the search projection entry for the supplied identifier.

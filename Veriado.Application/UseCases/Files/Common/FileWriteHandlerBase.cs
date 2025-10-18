@@ -124,8 +124,20 @@ public abstract class FileWriteHandlerBase
             }
             else
             {
-                await _searchProjection.UpsertAsync(file, _unitOfWork, cancellationToken).ConfigureAwait(false);
                 var signature = _signatureCalculator.Compute(file);
+                var expectedContentHash = file.SearchIndex?.IndexedContentHash;
+                var newContentHash = file.ContentHash.Value;
+
+                await _searchProjection
+                    .UpsertAsync(
+                        file,
+                        expectedContentHash,
+                        newContentHash,
+                        signature.TokenHash,
+                        _unitOfWork,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
                 file.ConfirmIndexed(
                     file.SearchIndex.SchemaVersion,
                     CurrentTimestamp(),

@@ -47,16 +47,20 @@ internal static class SqliteFulltextSchemaSql
     public static IReadOnlyList<string> CreateStatements { get; } = new[]
     {
         @"CREATE TABLE IF NOT EXISTS search_document (
-    file_id        BLOB PRIMARY KEY,
-    title          TEXT,
-    author         TEXT,
-    mime           TEXT NOT NULL,
-    metadata_text  TEXT,
-    metadata_json  TEXT,
-    created_utc    TEXT,
-    modified_utc   TEXT,
-    content_hash   TEXT
+    file_id             BLOB PRIMARY KEY,
+    title               TEXT,
+    author              TEXT,
+    mime                TEXT NOT NULL,
+    metadata_text       TEXT,
+    metadata_json       TEXT,
+    created_utc         TEXT,
+    modified_utc        TEXT,
+    content_hash        TEXT,
+    stored_content_hash TEXT,
+    stored_token_hash   TEXT
 );",
+        "ALTER TABLE search_document ADD COLUMN IF NOT EXISTS stored_content_hash TEXT;",
+        "ALTER TABLE search_document ADD COLUMN IF NOT EXISTS stored_token_hash TEXT;",
         "CREATE INDEX IF NOT EXISTS idx_search_document_mime ON search_document(mime);",
         "CREATE INDEX IF NOT EXISTS idx_search_document_modified ON search_document(modified_utc DESC);",
         @"CREATE VIRTUAL TABLE IF NOT EXISTS search_document_fts USING fts5(
