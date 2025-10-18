@@ -9,7 +9,7 @@ namespace Veriado.Domain.Files;
 /// <summary>
 /// Represents a rich aggregate root for managing file metadata, content and full-text indexing state.
 /// </summary>
-public sealed class FileEntity : AggregateRoot
+public sealed partial class FileEntity : AggregateRoot
 {
     private FileEntity(Guid id)
         : base(id)
