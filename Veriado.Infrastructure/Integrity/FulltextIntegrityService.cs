@@ -6,6 +6,7 @@ using System.Text;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Abstractions;
+using Veriado.Appl.Search;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Integrity;
@@ -21,34 +22,37 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
 
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
     private readonly IDbContextFactory<AppDbContext> _writeFactory;
-    private readonly ISearchIndexer _searchIndexer;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<FulltextIntegrityService> _logger;
     private readonly IClock _clock;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly ISearchTelemetry _telemetry;
+    private readonly ILogger<SearchProjectionService> _projectionLogger;
+    private readonly IAnalyzerFactory _analyzerFactory;
 
     public FulltextIntegrityService(
         IDbContextFactory<ReadOnlyDbContext> readFactory,
         IDbContextFactory<AppDbContext> writeFactory,
-        ISearchIndexer searchIndexer,
         ISqliteConnectionFactory connectionFactory,
         InfrastructureOptions options,
         ILogger<FulltextIntegrityService> logger,
         IClock clock,
         ISearchIndexSignatureCalculator signatureCalculator,
-        ISearchTelemetry telemetry)
+        ISearchTelemetry telemetry,
+        ILogger<SearchProjectionService> projectionLogger,
+        IAnalyzerFactory analyzerFactory)
     {
         _readFactory = readFactory;
         _writeFactory = writeFactory;
-        _searchIndexer = searchIndexer;
         _connectionFactory = connectionFactory;
         _options = options;
         _logger = logger;
         _clock = clock;
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+        _projectionLogger = projectionLogger ?? throw new ArgumentNullException(nameof(projectionLogger));
+        _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
     }
 
     public async Task<IntegrityReport> VerifyAsync(CancellationToken cancellationToken = default)
@@ -227,7 +231,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             {
                 try
                 {
-                    await _searchIndexer.DeleteAsync(orphan, cancellationToken).ConfigureAwait(false);
+                    await DeleteProjectionAsync(orphan, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -274,13 +278,20 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     transactionId,
                     batch.Length);
 
+                var projectionGuard = new DbContextSearchProjectionGuard(writeContext);
+                IFileSearchProjection projectionService = new SearchProjectionService(
+                    writeContext,
+                    _analyzerFactory,
+                    _projectionLogger);
+
                 var processedCount = 0;
 
                 foreach (var fileId in batch)
                 {
                     try
                     {
-                        if (await ReindexFileAsync(writeContext, fileId, ct).ConfigureAwait(false))
+                        if (await ReindexFileAsync(writeContext, projectionService, projectionGuard, fileId, ct)
+                                .ConfigureAwait(false))
                         {
                             processedCount++;
                         }
@@ -347,7 +358,12 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
     }
 
-    private async Task<bool> ReindexFileAsync(AppDbContext writeContext, Guid fileId, CancellationToken cancellationToken)
+    private async Task<bool> ReindexFileAsync(
+        AppDbContext writeContext,
+        IFileSearchProjection projectionService,
+        ISearchProjectionTransactionGuard guard,
+        Guid fileId,
+        CancellationToken cancellationToken)
     {
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
@@ -358,8 +374,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return false;
         }
 
-        var document = file.ToSearchDocument();
-        await _searchIndexer.IndexAsync(document, cancellationToken).ConfigureAwait(false);
+        await projectionService.UpsertAsync(file, guard, cancellationToken).ConfigureAwait(false);
 
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
         if (tracked is not null)
@@ -375,6 +390,16 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
 
         return false;
+    }
+
+    private async Task DeleteProjectionAsync(Guid fileId, CancellationToken cancellationToken)
+    {
+        await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await writeContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var guard = new DbContextSearchProjectionGuard(writeContext);
+        var projectionService = new SearchProjectionService(writeContext, _analyzerFactory, _projectionLogger);
+        await projectionService.DeleteAsync(fileId, guard, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> GetFulltextTableStateAsync(CancellationToken cancellationToken)

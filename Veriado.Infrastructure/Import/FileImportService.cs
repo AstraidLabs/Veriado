@@ -10,6 +10,7 @@ using Veriado.Domain.FileSystem;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Import;
 
@@ -94,6 +95,7 @@ public sealed class FileImportService : IFileImportWriter
 
         var ids = deduped.Select(item => item.FileId).ToArray();
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var projectionGuard = new DbContextSearchProjectionGuard(_dbContext);
 
         var existingFiles = await _dbContext.Files
             .Where(file => ids.Contains(file.Id))
@@ -164,7 +166,7 @@ public sealed class FileImportService : IFileImportWriter
             foreach (var mapped in persisted)
             {
                 ct.ThrowIfCancellationRequested();
-                await _searchProjection.UpsertAsync(mapped.File, ct).ConfigureAwait(false);
+                await _searchProjection.UpsertAsync(mapped.File, projectionGuard, ct).ConfigureAwait(false);
 
                 var signature = _signatureCalculator.Compute(mapped.File);
                 var indexedAt = mapped.SearchMetadata?.IndexedUtc ?? _clock.UtcNow;

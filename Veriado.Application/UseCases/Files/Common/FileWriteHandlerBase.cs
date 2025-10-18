@@ -120,11 +120,11 @@ public abstract class FileWriteHandlerBase
         {
             if (deleteFromProjection)
             {
-                await _searchProjection.DeleteAsync(file.Id, cancellationToken).ConfigureAwait(false);
+                await _searchProjection.DeleteAsync(file.Id, _unitOfWork, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                await _searchProjection.UpsertAsync(file, cancellationToken).ConfigureAwait(false);
+                await _searchProjection.UpsertAsync(file, _unitOfWork, cancellationToken).ConfigureAwait(false);
                 var signature = _signatureCalculator.Compute(file);
                 file.ConfirmIndexed(
                     file.SearchIndex.SchemaVersion,
