@@ -12,7 +12,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
+using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
+using Veriado.Infrastructure.Import;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Maintenance;
@@ -180,6 +182,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
         services.AddScoped<IFileSearchProjection, SearchProjectionService>();
+        services.AddScoped<IFileImportWriter, FileImportService>();
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IFilePersistenceUnitOfWork, EfFilePersistenceUnitOfWork>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
