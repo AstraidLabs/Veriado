@@ -67,7 +67,8 @@ public static class ServiceCollectionExtensions
 
         optionsBuilder.PostConfigure(options =>
         {
-            var resolver = new SqlitePathResolver(options.DbPath);
+            var designOverride = Environment.GetEnvironmentVariable("VERIADO_DESIGNTIME_DB_PATH");
+            var resolver = new SqlitePathResolver(options.DbPath, designOverride);
             options.DbPath = resolver.Resolve(SqliteResolutionScenario.Runtime);
         });
 
@@ -84,11 +85,19 @@ public static class ServiceCollectionExtensions
         optionsBuilder.ValidateOnStart();
 
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<InfrastructureOptions>>().Value);
+        services.AddSingleton<ISqlitePathResolver>(sp =>
+        {
+            var optionsMonitor = sp.GetRequiredService<IOptions<InfrastructureOptions>>();
+            var logger = sp.GetRequiredService<ILogger<SqlitePathResolver>>();
+            var designOverride = Environment.GetEnvironmentVariable("VERIADO_DESIGNTIME_DB_PATH");
+            return new SqlitePathResolver(optionsMonitor.Value.DbPath, designOverride, logger);
+        });
         services.AddSingleton<IConnectionStringProvider>(sp =>
         {
             var optionsMonitor = sp.GetRequiredService<IOptions<InfrastructureOptions>>();
+            var pathResolver = sp.GetRequiredService<ISqlitePathResolver>();
             var logger = sp.GetRequiredService<ILogger<SqliteConnectionStringProvider>>();
-            var provider = new SqliteConnectionStringProvider(optionsMonitor, logger);
+            var provider = new SqliteConnectionStringProvider(optionsMonitor, pathResolver, logger);
 
             using (var connection = provider.CreateConnection())
             {
