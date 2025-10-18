@@ -10,12 +10,12 @@ public interface IFileSearchProjection
     /// </summary>
     /// <param name="file">The aggregate to project.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task UpsertAsync(FileEntity file, CancellationToken cancellationToken);
+    Task UpsertAsync(FileEntity file, ISearchProjectionTransactionGuard guard, CancellationToken cancellationToken);
 
     /// <summary>
     /// Deletes the search projection entry for the supplied identifier.
     /// </summary>
     /// <param name="fileId">The file identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task DeleteAsync(Guid fileId, CancellationToken cancellationToken);
+    Task DeleteAsync(Guid fileId, ISearchProjectionTransactionGuard guard, CancellationToken cancellationToken);
 }

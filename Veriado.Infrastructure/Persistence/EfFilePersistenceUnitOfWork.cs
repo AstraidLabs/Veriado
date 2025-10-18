@@ -41,6 +41,21 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         }
     }
 
+    public void EnsureActiveTransaction(DbContext projectionContext)
+    {
+        ArgumentNullException.ThrowIfNull(projectionContext);
+
+        if (!ReferenceEquals(_dbContext, projectionContext))
+        {
+            throw new InvalidOperationException("Search projection must share the active persistence context instance.");
+        }
+
+        if (_dbContext.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Search projection operations require an active EF Core transaction.");
+        }
+    }
+
     private static bool IsDuplicateContentHashViolation(DbUpdateException exception)
     {
         if (exception.InnerException is not SqliteException sqlite)
