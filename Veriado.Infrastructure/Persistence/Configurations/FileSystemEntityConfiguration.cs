@@ -35,6 +35,16 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
             .HasConversion(Converters.FileHashToString)
             .IsRequired();
 
+        var versionProperty = builder.Property(entity => entity.Version)
+            .HasColumnName("row_version")
+            .HasColumnType("BLOB")
+            .HasConversion(Converters.UInt64ToBytes)
+            .IsRequired()
+            .IsConcurrencyToken()
+            .ValueGeneratedOnAddOrUpdate();
+
+        versionProperty.Metadata.SetValueComparer(Converters.UInt64Comparer);
+
         builder.Property(entity => entity.Size)
             .HasColumnName("size")
             .HasColumnType("BIGINT")

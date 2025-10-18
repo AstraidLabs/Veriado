@@ -80,9 +80,19 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasConversion(Converters.UtcTimestampToString)
             .IsRequired();
 
-        builder.Property(file => file.Version)
-            .HasColumnName("version")
+        builder.Property(file => file.ContentRevision)
+            .HasColumnName("content_revision")
             .IsRequired();
+
+        var versionProperty = builder.Property(file => file.Version)
+            .HasColumnName("row_version")
+            .HasColumnType("BLOB")
+            .HasConversion(Converters.UInt64ToBytes)
+            .IsRequired()
+            .IsConcurrencyToken()
+            .ValueGeneratedOnAddOrUpdate();
+
+        versionProperty.Metadata.SetValueComparer(Converters.UInt64Comparer);
 
         builder.Property(file => file.IsReadOnly)
             .HasColumnName("is_read_only")
