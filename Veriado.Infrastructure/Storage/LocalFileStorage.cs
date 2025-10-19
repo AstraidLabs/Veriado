@@ -170,12 +170,32 @@ internal sealed class LocalFileStorage : IFileStorage
 
     private string ResolvePath(string relativePath)
     {
-        var trimmed = relativePath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var directorySeparator = Path.DirectorySeparatorChar.ToString();
-        var localPath = trimmed
-            .Replace(Path.AltDirectorySeparatorChar.ToString(), directorySeparator, StringComparison.Ordinal)
-            .Replace("\\", directorySeparator, StringComparison.Ordinal);
-        return Path.Combine(_rootPath, localPath);
+        ArgumentNullException.ThrowIfNull(relativePath);
+
+        var rootFullPath = Path.GetFullPath(_rootPath);
+        var trimmedRelative = relativePath.Trim();
+        if (trimmedRelative.Length == 0)
+        {
+            throw new ArgumentException("Relative storage path cannot be empty or whitespace.", nameof(relativePath));
+        }
+
+        var sanitizedRelative = trimmedRelative
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+
+        var combined = Path.Combine(rootFullPath, sanitizedRelative);
+        var fullPath = Path.GetFullPath(combined);
+        var rootWithSeparator = Path.EndsInDirectorySeparator(rootFullPath)
+            ? rootFullPath
+            : rootFullPath + Path.DirectorySeparatorChar;
+
+        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(fullPath, rootFullPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new StoragePathViolationException(rootFullPath, fullPath);
+        }
+
+        return fullPath;
     }
 
     private static string NormalizePath(string relativePath)
