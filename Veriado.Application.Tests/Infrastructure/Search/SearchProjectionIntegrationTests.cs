@@ -209,7 +209,7 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         {
             await unitOfWork.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
             projectionScope.EnsureActive();
-            await Assert.ThrowsAsync<StaleSearchProjectionUpdateException>(() => projection.UpsertAsync(
+            await Assert.ThrowsAsync<AnalyzerOrContentDriftException>(() => projection.UpsertAsync(
                     file,
                     initialContentHash,
                     initialTokenHash,

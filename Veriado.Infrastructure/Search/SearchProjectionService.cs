@@ -167,16 +167,7 @@ ON CONFLICT(file_id) DO UPDATE SET
 
                 if (commandResult.RowsAffected == 0)
                 {
-                    var current = await ReadStoredSignaturesAsync(document.FileId, ct).ConfigureAwait(false);
-
-                    if (current is not null
-                        && EqualsOrdinal(current.StoredContentHash, storedContentHash)
-                        && EqualsOrdinal(current.StoredTokenHash, storedTokenHash))
-                    {
-                        throw new AnalyzerOrContentDriftException();
-                    }
-
-                    throw new StaleSearchProjectionUpdateException();
+                    throw new AnalyzerOrContentDriftException();
                 }
             },
             cancellationToken)
@@ -312,31 +303,21 @@ ON CONFLICT(file_id) DO UPDATE SET
                         continue;
                     }
 
-                    var current = await ReadStoredSignaturesAsync(document.FileId, ct).ConfigureAwait(false);
+                    var forceResult = await ExecuteUpsertCoreAsync(
+                            document,
+                            normalizedTitle,
+                            normalizedAuthor,
+                            normalizedMetadataText,
+                            expectedContentHash: null,
+                            expectedTokenHash: null,
+                            storedContentHash,
+                            storedTokenHash,
+                            applyGuard: false,
+                            ct,
+                            forceCommand)
+                        .ConfigureAwait(false);
 
-                    if (current is not null
-                        && EqualsOrdinal(current.StoredContentHash, storedContentHash)
-                        && EqualsOrdinal(current.StoredTokenHash, storedTokenHash))
-                    {
-                        var forceResult = await ExecuteUpsertCoreAsync(
-                                document,
-                                normalizedTitle,
-                                normalizedAuthor,
-                                normalizedMetadataText,
-                                expectedContentHash: null,
-                                expectedTokenHash: null,
-                                storedContentHash,
-                                storedTokenHash,
-                                applyGuard: false,
-                                ct,
-                                forceCommand)
-                            .ConfigureAwait(false);
-
-                        busyRetries += forceResult.BusyRetries;
-                        continue;
-                    }
-
-                    throw new StaleSearchProjectionUpdateException();
+                    busyRetries += forceResult.BusyRetries;
                 }
 
                 result = new SearchProjectionBatchResult(busyRetries);
@@ -577,33 +558,6 @@ ON CONFLICT(file_id) DO UPDATE SET
         command.Parameters.Add("$expected_old_hash", SqliteType.Text);
         command.Parameters.Add("$expected_old_token_hash", SqliteType.Text);
     }
-
-    private async Task<StoredSignatures?> ReadStoredSignaturesAsync(Guid fileId, CancellationToken cancellationToken)
-    {
-        var sqliteTransaction = GetAmbientTransaction();
-        var connection = sqliteTransaction.Connection ?? throw new InvalidOperationException(
-            "Active SQLite transaction has no associated connection.");
-
-        await using var command = connection.CreateCommand();
-        command.Transaction = sqliteTransaction;
-        command.CommandText = "SELECT stored_content_hash, stored_token_hash FROM search_document WHERE file_id = $file_id LIMIT 1;";
-        command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
-
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return null;
-        }
-
-        var storedContentHash = reader.IsDBNull(0) ? null : reader.GetString(0);
-        var storedTokenHash = reader.IsDBNull(1) ? null : reader.GetString(1);
-        return new StoredSignatures(storedContentHash, storedTokenHash);
-    }
-
-    private static bool EqualsOrdinal(string? left, string? right)
-        => string.Equals(left, right, StringComparison.Ordinal);
-
-    private sealed record StoredSignatures(string? StoredContentHash, string? StoredTokenHash);
 
     private readonly record struct CommandExecutionResult(int RowsAffected, int BusyRetries);
 
