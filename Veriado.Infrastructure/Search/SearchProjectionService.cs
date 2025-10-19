@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -15,7 +19,7 @@ using Veriado.Infrastructure.Persistence;
 
 namespace Veriado.Infrastructure.Search;
 
-public sealed class SearchProjectionService : IFileSearchProjection
+public sealed class SearchProjectionService : IFileSearchProjection, IBatchFileSearchProjection
 {
     private const string UpsertWithGuardSql = @"INSERT INTO search_document (
     file_id,
@@ -145,42 +149,20 @@ ON CONFLICT(file_id) DO UPDATE SET
             ? null
             : tokenHash;
 
-        var rowsAffected = await SqliteRetry.ExecuteAsync(
-                () => ExecuteUpsertCoreAsync(
-                    document,
-                    normalizedTitle,
-                    normalizedAuthor,
-                    normalizedMetadataText,
-                    expectedHash,
-                    expectedToken,
-                    storedContentHash,
-                    storedTokenHash,
-                    applyGuard: true,
-                    cancellationToken),
-                (exception, attempt, delay) =>
-                {
-                    _telemetry?.RecordSqliteBusyRetry(1);
-                    _logger.LogWarning(
-                        exception,
-                        "SQLite busy while updating search document for {FileId}; retrying in {Delay} (attempt {Attempt}/5)",
-                        document.FileId,
-                        delay,
-                        attempt);
-                    return Task.CompletedTask;
-                },
-                (exception, attempt) =>
-                {
-                    _telemetry?.RecordSqliteBusyRetry(1);
-                    _logger.LogError(
-                        exception,
-                        "SQLite busy while updating search document for {FileId} after {Attempts} attempts; aborting.",
-                        document.FileId,
-                        attempt);
-                },
+        var commandResult = await ExecuteUpsertCoreAsync(
+                document,
+                normalizedTitle,
+                normalizedAuthor,
+                normalizedMetadataText,
+                expectedHash,
+                expectedToken,
+                storedContentHash,
+                storedTokenHash,
+                applyGuard: true,
                 cancellationToken)
             .ConfigureAwait(false);
 
-        if (rowsAffected == 0)
+        if (commandResult.RowsAffected == 0)
         {
             var current = await ReadStoredSignaturesAsync(document.FileId, cancellationToken).ConfigureAwait(false);
 
@@ -224,43 +206,125 @@ ON CONFLICT(file_id) DO UPDATE SET
             ? null
             : tokenHash;
 
-        await SqliteRetry.ExecuteAsync(
-                () => ExecuteUpsertCoreAsync(
-                    document,
-                    normalizedTitle,
-                    normalizedAuthor,
-                    normalizedMetadataText,
-                    expectedContentHash: null,
-                    expectedTokenHash: null,
-                    storedContentHash,
-                    storedTokenHash,
-                    applyGuard: false,
-                    cancellationToken),
-                (exception, attempt, delay) =>
-                {
-                    _telemetry?.RecordSqliteBusyRetry(1);
-                    _logger.LogWarning(
-                        exception,
-                        "SQLite busy while force updating search document for {FileId}; retrying in {Delay} (attempt {Attempt}/5)",
-                        document.FileId,
-                        delay,
-                        attempt);
-                    return Task.CompletedTask;
-                },
-                (exception, attempt) =>
-                {
-                    _telemetry?.RecordSqliteBusyRetry(1);
-                    _logger.LogError(
-                        exception,
-                        "SQLite busy while force updating search document for {FileId} after {Attempts} attempts; aborting.",
-                        document.FileId,
-                        attempt);
-                },
+        await ExecuteUpsertCoreAsync(
+                document,
+                normalizedTitle,
+                normalizedAuthor,
+                normalizedMetadataText,
+                expectedContentHash: null,
+                expectedTokenHash: null,
+                storedContentHash,
+                storedTokenHash,
+                applyGuard: false,
                 cancellationToken)
             .ConfigureAwait(false);
     }
 
-    private async Task<int> ExecuteUpsertCoreAsync(
+    public async Task<SearchProjectionBatchResult> UpsertBatchAsync(
+        IReadOnlyList<SearchProjectionWorkItem> items,
+        ISearchProjectionTransactionGuard guard,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(guard);
+
+        guard.EnsureActiveTransaction(_dbContext);
+
+        if (!SqliteFulltextSupport.IsAvailable || items.Count == 0)
+        {
+            return new SearchProjectionBatchResult(0);
+        }
+
+        var sqliteTransaction = GetAmbientTransaction();
+        var connection = sqliteTransaction.Connection ?? throw new InvalidOperationException(
+            "Active SQLite transaction has no associated connection.");
+
+        await using var guardedCommand = connection.CreateCommand();
+        guardedCommand.Transaction = sqliteTransaction;
+        guardedCommand.CommandText = UpsertWithGuardSql;
+        EnsureSearchDocumentParameters(guardedCommand);
+
+        await using var forceCommand = connection.CreateCommand();
+        forceCommand.Transaction = sqliteTransaction;
+        forceCommand.CommandText = UpsertWithoutGuardSql;
+        EnsureSearchDocumentParameters(forceCommand);
+
+        var busyRetries = 0;
+
+        foreach (var item in items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var document = item.File.ToSearchDocument();
+            var normalizedTitle = NormalizeOptional(document.Title);
+            var normalizedAuthor = NormalizeOptional(document.Author);
+            var normalizedMetadataText = NormalizeOptional(document.MetadataText);
+
+            var expectedHash = string.IsNullOrWhiteSpace(item.ExpectedContentHash)
+                ? null
+                : item.ExpectedContentHash;
+            var expectedToken = string.IsNullOrWhiteSpace(item.ExpectedTokenHash)
+                ? null
+                : item.ExpectedTokenHash;
+            var storedContentHash = string.IsNullOrWhiteSpace(item.NewContentHash)
+                ? (string?)document.ContentHash
+                : item.NewContentHash;
+            var storedTokenHash = string.IsNullOrWhiteSpace(item.TokenHash)
+                ? null
+                : item.TokenHash;
+
+            var upsertResult = await ExecuteUpsertCoreAsync(
+                    document,
+                    normalizedTitle,
+                    normalizedAuthor,
+                    normalizedMetadataText,
+                    expectedHash,
+                    expectedToken,
+                    storedContentHash,
+                    storedTokenHash,
+                    applyGuard: true,
+                    cancellationToken,
+                    guardedCommand)
+                .ConfigureAwait(false);
+
+            busyRetries += upsertResult.BusyRetries;
+
+            if (upsertResult.RowsAffected != 0)
+            {
+                continue;
+            }
+
+            var current = await ReadStoredSignaturesAsync(document.FileId, cancellationToken).ConfigureAwait(false);
+
+            if (current is not null
+                && EqualsOrdinal(current.StoredContentHash, storedContentHash)
+                && EqualsOrdinal(current.StoredTokenHash, storedTokenHash))
+            {
+                var forceResult = await ExecuteUpsertCoreAsync(
+                        document,
+                        normalizedTitle,
+                        normalizedAuthor,
+                        normalizedMetadataText,
+                        expectedContentHash: null,
+                        expectedTokenHash: null,
+                        storedContentHash,
+                        storedTokenHash,
+                        applyGuard: false,
+                        cancellationToken,
+                        forceCommand)
+                    .ConfigureAwait(false);
+
+                busyRetries += forceResult.BusyRetries;
+                continue;
+            }
+
+            throw new StaleSearchProjectionUpdateException();
+        }
+
+        return new SearchProjectionBatchResult(busyRetries);
+    }
+
+    private async Task<CommandExecutionResult> ExecuteUpsertCoreAsync(
         SearchDocument document,
         string? normalizedTitle,
         string? normalizedAuthor,
@@ -270,51 +334,95 @@ ON CONFLICT(file_id) DO UPDATE SET
         string? storedContentHash,
         string? storedTokenHash,
         bool applyGuard,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SqliteCommand? reusableCommand = null)
     {
         var sqliteTransaction = GetAmbientTransaction();
         var connection = sqliteTransaction.Connection ?? throw new InvalidOperationException(
             "Active SQLite transaction has no associated connection.");
 
-        await using var command = connection.CreateCommand();
-        command.Transaction = sqliteTransaction;
-        command.CommandText = applyGuard ? UpsertWithGuardSql : UpsertWithoutGuardSql;
-
-        var contentHashValue = string.IsNullOrWhiteSpace(document.ContentHash)
-            ? storedContentHash
-            : document.ContentHash;
-
-        ConfigureSearchDocumentParameters(
-            command,
-            document.FileId,
-            normalizedTitle,
-            normalizedAuthor,
-            document.Mime,
-            normalizedMetadataText,
-            document.MetadataJson,
-            document.CreatedUtc,
-            document.ModifiedUtc,
-            contentHashValue,
-            storedContentHash,
-            storedTokenHash,
-            expectedContentHash,
-            expectedTokenHash);
-
-        try
+        if (reusableCommand is not null)
         {
-            return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            return await ExecuteCommandAsync(reusableCommand).ConfigureAwait(false);
         }
-        catch (SqliteException ex)
-        {
-            LogSqliteFailure(ex, command);
-            if (ex.IndicatesFatalFulltextFailure())
-            {
-                throw new SearchIndexCorruptedException(
-                    "SQLite full-text index became unavailable and needs to be repaired.",
-                    ex);
-            }
 
-            throw;
+        await using var command = connection.CreateCommand();
+        return await ExecuteCommandAsync(command).ConfigureAwait(false);
+
+        async Task<CommandExecutionResult> ExecuteCommandAsync(SqliteCommand command)
+        {
+            command.Transaction = sqliteTransaction;
+            command.CommandText = applyGuard ? UpsertWithGuardSql : UpsertWithoutGuardSql;
+            EnsureSearchDocumentParameters(command);
+
+            var contentHashValue = string.IsNullOrWhiteSpace(document.ContentHash)
+                ? storedContentHash
+                : document.ContentHash;
+
+            ConfigureSearchDocumentParameters(
+                command,
+                document.FileId,
+                normalizedTitle,
+                normalizedAuthor,
+                document.Mime,
+                normalizedMetadataText,
+                document.MetadataJson,
+                document.CreatedUtc,
+                document.ModifiedUtc,
+                contentHashValue,
+                storedContentHash,
+                storedTokenHash,
+                expectedContentHash,
+                expectedTokenHash);
+
+            var operation = applyGuard ? "updating" : "force updating";
+            var busyRetries = 0;
+
+            try
+            {
+                var rowsAffected = await SqliteRetry.ExecuteAsync(
+                        () => command.ExecuteNonQueryAsync(cancellationToken),
+                        (exception, attempt, delay) =>
+                        {
+                            busyRetries++;
+                            _telemetry?.RecordSqliteBusyRetry(1);
+                            _logger.LogWarning(
+                                exception,
+                                "SQLite busy while {Operation} search document for {FileId}; retrying in {Delay} (attempt {Attempt}/5)",
+                                operation,
+                                document.FileId,
+                                delay,
+                                attempt);
+                            return Task.CompletedTask;
+                        },
+                        (exception, attempt) =>
+                        {
+                            busyRetries++;
+                            _telemetry?.RecordSqliteBusyRetry(1);
+                            _logger.LogError(
+                                exception,
+                                "SQLite busy while {Operation} search document for {FileId} after {Attempts} attempts; aborting.",
+                                operation,
+                                document.FileId,
+                                attempt);
+                        },
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                return new CommandExecutionResult(rowsAffected, busyRetries);
+            }
+            catch (SqliteException ex)
+            {
+                LogSqliteFailure(ex, command);
+                if (ex.IndicatesFatalFulltextFailure())
+                {
+                    throw new SearchIndexCorruptedException(
+                        "SQLite full-text index became unavailable and needs to be repaired.",
+                        ex);
+                }
+
+                throw;
+            }
         }
     }
 
@@ -402,20 +510,42 @@ ON CONFLICT(file_id) DO UPDATE SET
             throw new ArgumentException("MIME type is required for search_document writes.", nameof(mime));
         }
 
-        command.Parameters.Clear();
-        command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
-        command.Parameters.Add("$title", SqliteType.Text).Value = (object?)normalizedTitle ?? DBNull.Value;
-        command.Parameters.Add("$author", SqliteType.Text).Value = (object?)normalizedAuthor ?? DBNull.Value;
-        command.Parameters.Add("$mime", SqliteType.Text).Value = mime;
-        command.Parameters.Add("$metadata_text", SqliteType.Text).Value = (object?)normalizedMetadataText ?? DBNull.Value;
-        command.Parameters.Add("$metadata_json", SqliteType.Text).Value = (object?)metadataJson ?? DBNull.Value;
-        command.Parameters.Add("$created_utc", SqliteType.Text).Value = createdUtc.ToString("O", CultureInfo.InvariantCulture);
-        command.Parameters.Add("$modified_utc", SqliteType.Text).Value = modifiedUtc.ToString("O", CultureInfo.InvariantCulture);
-        command.Parameters.Add("$content_hash", SqliteType.Text).Value = (object?)contentHash ?? DBNull.Value;
-        command.Parameters.Add("$stored_content_hash", SqliteType.Text).Value = (object?)storedContentHash ?? DBNull.Value;
-        command.Parameters.Add("$stored_token_hash", SqliteType.Text).Value = (object?)storedTokenHash ?? DBNull.Value;
-        command.Parameters.Add("$expected_old_hash", SqliteType.Text).Value = (object?)expectedOldHash ?? DBNull.Value;
-        command.Parameters.Add("$expected_old_token_hash", SqliteType.Text).Value = (object?)expectedOldTokenHash ?? DBNull.Value;
+        EnsureSearchDocumentParameters(command);
+        command.Parameters["$file_id"].Value = fileId.ToByteArray();
+        command.Parameters["$title"].Value = (object?)normalizedTitle ?? DBNull.Value;
+        command.Parameters["$author"].Value = (object?)normalizedAuthor ?? DBNull.Value;
+        command.Parameters["$mime"].Value = mime;
+        command.Parameters["$metadata_text"].Value = (object?)normalizedMetadataText ?? DBNull.Value;
+        command.Parameters["$metadata_json"].Value = (object?)metadataJson ?? DBNull.Value;
+        command.Parameters["$created_utc"].Value = createdUtc.ToString("O", CultureInfo.InvariantCulture);
+        command.Parameters["$modified_utc"].Value = modifiedUtc.ToString("O", CultureInfo.InvariantCulture);
+        command.Parameters["$content_hash"].Value = (object?)contentHash ?? DBNull.Value;
+        command.Parameters["$stored_content_hash"].Value = (object?)storedContentHash ?? DBNull.Value;
+        command.Parameters["$stored_token_hash"].Value = (object?)storedTokenHash ?? DBNull.Value;
+        command.Parameters["$expected_old_hash"].Value = (object?)expectedOldHash ?? DBNull.Value;
+        command.Parameters["$expected_old_token_hash"].Value = (object?)expectedOldTokenHash ?? DBNull.Value;
+    }
+
+    private static void EnsureSearchDocumentParameters(SqliteCommand command)
+    {
+        if (command.Parameters.Count > 0)
+        {
+            return;
+        }
+
+        command.Parameters.Add("$file_id", SqliteType.Blob);
+        command.Parameters.Add("$title", SqliteType.Text);
+        command.Parameters.Add("$author", SqliteType.Text);
+        command.Parameters.Add("$mime", SqliteType.Text);
+        command.Parameters.Add("$metadata_text", SqliteType.Text);
+        command.Parameters.Add("$metadata_json", SqliteType.Text);
+        command.Parameters.Add("$created_utc", SqliteType.Text);
+        command.Parameters.Add("$modified_utc", SqliteType.Text);
+        command.Parameters.Add("$content_hash", SqliteType.Text);
+        command.Parameters.Add("$stored_content_hash", SqliteType.Text);
+        command.Parameters.Add("$stored_token_hash", SqliteType.Text);
+        command.Parameters.Add("$expected_old_hash", SqliteType.Text);
+        command.Parameters.Add("$expected_old_token_hash", SqliteType.Text);
     }
 
     private async Task<StoredSignatures?> ReadStoredSignaturesAsync(Guid fileId, CancellationToken cancellationToken)
@@ -444,6 +574,8 @@ ON CONFLICT(file_id) DO UPDATE SET
         => string.Equals(left, right, StringComparison.Ordinal);
 
     private sealed record StoredSignatures(string? StoredContentHash, string? StoredTokenHash);
+
+    private readonly record struct CommandExecutionResult(int RowsAffected, int BusyRetries);
 
     private void LogSqliteFailure(SqliteException exception, SqliteCommand? command)
     {
@@ -512,3 +644,23 @@ ON CONFLICT(file_id) DO UPDATE SET
         };
     }
 }
+
+internal interface IBatchFileSearchProjection
+{
+    Task<SearchProjectionBatchResult> UpsertBatchAsync(
+        IReadOnlyList<SearchProjectionWorkItem> items,
+        ISearchProjectionTransactionGuard guard,
+        CancellationToken cancellationToken);
+}
+
+internal readonly record struct SearchProjectionBatchResult(int BusyRetries);
+
+internal readonly record struct SearchProjectionWorkItem(
+    FileEntity File,
+    string? ExpectedContentHash,
+    string? ExpectedTokenHash,
+    string? NewContentHash,
+    string? TokenHash,
+    SearchIndexSignature Signature,
+    DateTimeOffset? IndexedUtc,
+    string? IndexedTitle);

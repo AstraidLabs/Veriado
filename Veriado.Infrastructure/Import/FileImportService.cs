@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Search;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Veriado.Infrastructure.Import;
 
@@ -27,17 +30,20 @@ public sealed class FileImportService : IFileImportWriter
     private readonly IFileSearchProjection _searchProjection;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly IClock _clock;
+    private readonly ILogger<FileImportService> _logger;
 
     public FileImportService(
         AppDbContext dbContext,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator,
-        IClock clock)
+        IClock clock,
+        ILogger<FileImportService>? logger = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _searchProjection = searchProjection ?? throw new ArgumentNullException(nameof(searchProjection));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _logger = logger ?? NullLogger<FileImportService>.Instance;
     }
 
     public async Task<ImportResult> ImportAsync(
@@ -69,21 +75,31 @@ public sealed class FileImportService : IFileImportWriter
                 slice[i] = items[offset + i];
             }
 
-            var batchResult = await PersistBatchAsync(slice, options, ct).ConfigureAwait(false);
+            var stopwatch = Stopwatch.StartNew();
+            var (batchResult, busyRetries) = await PersistBatchAsync(slice, options, ct).ConfigureAwait(false);
+            stopwatch.Stop();
+
             imported += batchResult.Imported;
             skipped += batchResult.Skipped;
             updated += batchResult.Updated;
 
-            if (options.DetachAfterBatch)
-            {
-                _dbContext.ChangeTracker.Clear();
-            }
+            var elapsedMs = stopwatch.Elapsed.TotalMilliseconds;
+            var itemsPerSecond = stopwatch.Elapsed.TotalSeconds > 0d
+                ? count / stopwatch.Elapsed.TotalSeconds
+                : count;
+
+            _logger.LogInformation(
+                "Import batch persisted {BatchSize} items in {ElapsedMs:F0} ms ({ItemsPerSec:F2} items/s) with {BusyRetries} SQLITE_BUSY retries",
+                count,
+                elapsedMs,
+                itemsPerSecond,
+                busyRetries);
         }
 
         return new ImportResult(imported, skipped, updated);
     }
 
-    private async Task<ImportResult> PersistBatchAsync(
+    private async Task<(ImportResult Result, int BusyRetries)> PersistBatchAsync(
         IReadOnlyList<ImportItem> batch,
         ImportOptions options,
         CancellationToken ct)
@@ -91,7 +107,7 @@ public sealed class FileImportService : IFileImportWriter
         var deduped = Deduplicate(batch);
         if (deduped.Count == 0)
         {
-            return new ImportResult(0, 0, 0);
+            return (new ImportResult(0, 0, 0), 0);
         }
 
         var ids = deduped.Select(item => item.FileId).ToArray();
@@ -99,19 +115,10 @@ public sealed class FileImportService : IFileImportWriter
         var projectionGuard = new DbContextSearchProjectionGuard(_dbContext);
 
         var existingFiles = await _dbContext.Files
+            .AsNoTracking()
             .Where(file => ids.Contains(file.Id))
             .Include(file => file.Validity)
             .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        var existingFileSystemIds = existingFiles
-            .Select(file => file.FileSystemId)
-            .Distinct()
-            .ToArray();
-
-        var existingFileSystems = await _dbContext.FileSystems
-            .Where(fs => existingFileSystemIds.Contains(fs.Id))
-            .ToDictionaryAsync(fs => fs.Id, ct)
             .ConfigureAwait(false);
 
         var imported = 0;
@@ -132,14 +139,6 @@ public sealed class FileImportService : IFileImportWriter
                     skipped++;
                     continue;
                 }
-
-                if (existing.FileSystemId != Guid.Empty
-                    && existingFileSystems.TryGetValue(existing.FileSystemId, out var existingFs))
-                {
-                    _dbContext.Entry(existingFs).State = EntityState.Detached;
-                }
-
-                _dbContext.Entry(existing).State = EntityState.Detached;
                 _dbContext.FileSystems.Update(mapped.FileSystem);
                 _dbContext.Files.Update(mapped.File);
                 updated++;
@@ -157,13 +156,18 @@ public sealed class FileImportService : IFileImportWriter
         if (persisted.Count == 0)
         {
             await transaction.CommitAsync(ct).ConfigureAwait(false);
-            return new ImportResult(imported, skipped, updated);
+            _dbContext.ChangeTracker.Clear();
+            return (new ImportResult(imported, skipped, updated), 0);
         }
 
         await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
+        var busyRetries = 0;
+
         if (options.UpsertFts)
         {
+            var projectionItems = new List<SearchProjectionWorkItem>(persisted.Count);
+
             foreach (var mapped in persisted)
             {
                 ct.ThrowIfCancellationRequested();
@@ -171,45 +175,75 @@ public sealed class FileImportService : IFileImportWriter
                 var expectedContentHash = mapped.File.SearchIndex?.IndexedContentHash;
                 var newContentHash = mapped.File.ContentHash.Value;
 
-                try
-                {
-                    await _searchProjection
-                        .UpsertAsync(
-                            mapped.File,
-                            expectedContentHash,
-                            mapped.File.SearchIndex?.TokenHash,
-                            newContentHash,
-                            signature.TokenHash,
-                            projectionGuard,
-                            ct)
-                        .ConfigureAwait(false);
-                }
-                catch (AnalyzerOrContentDriftException)
-                {
-                    await _searchProjection
-                        .ForceReplaceAsync(
-                            mapped.File,
-                            newContentHash,
-                            signature.TokenHash,
-                            projectionGuard,
-                            ct)
-                        .ConfigureAwait(false);
-                }
-
-                var indexedAt = mapped.SearchMetadata?.IndexedUtc ?? _clock.UtcNow;
-                mapped.File.ConfirmIndexed(
-                    mapped.File.SearchIndex?.SchemaVersion ?? 1,
-                    UtcTimestamp.From(indexedAt),
-                    signature.AnalyzerVersion,
+                projectionItems.Add(new SearchProjectionWorkItem(
+                    mapped.File,
+                    expectedContentHash,
+                    mapped.File.SearchIndex?.TokenHash,
+                    newContentHash,
                     signature.TokenHash,
-                    mapped.SearchMetadata?.IndexedTitle ?? signature.NormalizedTitle);
+                    signature,
+                    mapped.SearchMetadata?.IndexedUtc,
+                    mapped.SearchMetadata?.IndexedTitle));
             }
 
-            await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+            if (projectionItems.Count > 0)
+            {
+                if (_searchProjection is IBatchFileSearchProjection batchProjection)
+                {
+                    var batchResult = await batchProjection
+                        .UpsertBatchAsync(projectionItems, projectionGuard, ct)
+                        .ConfigureAwait(false);
+                    busyRetries = batchResult.BusyRetries;
+                }
+                else
+                {
+                    foreach (var item in projectionItems)
+                    {
+                        try
+                        {
+                            await _searchProjection
+                                .UpsertAsync(
+                                    item.File,
+                                    item.ExpectedContentHash,
+                                    item.ExpectedTokenHash,
+                                    item.NewContentHash,
+                                    item.TokenHash,
+                                    projectionGuard,
+                                    ct)
+                                .ConfigureAwait(false);
+                        }
+                        catch (AnalyzerOrContentDriftException)
+                        {
+                            await _searchProjection
+                                .ForceReplaceAsync(
+                                    item.File,
+                                    item.NewContentHash,
+                                    item.TokenHash,
+                                    projectionGuard,
+                                    ct)
+                                .ConfigureAwait(false);
+                        }
+                    }
+                }
+
+                foreach (var item in projectionItems)
+                {
+                    var indexedAt = item.IndexedUtc ?? _clock.UtcNow;
+                    item.File.ConfirmIndexed(
+                        item.File.SearchIndex?.SchemaVersion ?? 1,
+                        UtcTimestamp.From(indexedAt),
+                        item.Signature.AnalyzerVersion,
+                        item.Signature.TokenHash,
+                        item.IndexedTitle ?? item.Signature.NormalizedTitle);
+                }
+
+                await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
         }
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
-        return new ImportResult(imported, skipped, updated);
+        _dbContext.ChangeTracker.Clear();
+        return (new ImportResult(imported, skipped, updated), busyRetries);
     }
 
     private static IReadOnlyList<ImportItem> Deduplicate(IReadOnlyList<ImportItem> items)
