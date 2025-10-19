@@ -256,6 +256,8 @@ public sealed partial class FileSystemEntity : AggregateRoot
         IsMissing = false;
         MissingSinceUtc = null;
         LastWriteUtc = whenUtc;
+        LastAccessUtc = whenUtc;
+        LastLinkedUtc = whenUtc;
 
         RaiseDomainEvent(new FileSystemContentChanged(Id, Provider, Path, Hash, Size, Mime, ContentVersion, IsEncrypted, whenUtc));
     }

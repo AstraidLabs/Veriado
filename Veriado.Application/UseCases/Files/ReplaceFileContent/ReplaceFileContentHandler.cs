@@ -41,6 +41,14 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
                 return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
+            var fileSystem = await Repository
+                .GetFileSystemAsync(file.FileSystemId, cancellationToken)
+                .ConfigureAwait(false);
+            if (fileSystem is null)
+            {
+                throw new InvalidOperationException($"File system entity '{file.FileSystemId}' was not found.");
+            }
+
             var timestamp = CurrentTimestamp();
             var newHash = FileHash.Compute(request.Content);
             if (newHash == file.ContentHash)
@@ -49,12 +57,27 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
             }
 
             var newSize = ByteSize.From(request.Content.LongLength);
-            var nextVersion = file.LinkedContentVersion.Next();
-            var provider = file.Content?.Provider ?? StorageProvider.Local.ToString();
-            var location = file.Content?.Location ?? Guid.NewGuid().ToString("D");
-            var link = FileContentLink.Create(provider, location, newHash, newSize, nextVersion, timestamp, file.Mime);
+
+            fileSystem.ReplaceContent(
+                fileSystem.Path,
+                newHash,
+                newSize,
+                file.Mime,
+                fileSystem.IsEncrypted,
+                timestamp);
+
+            var link = FileContentLink.Create(
+                fileSystem.Provider.ToString(),
+                fileSystem.Path.Value,
+                fileSystem.Hash,
+                fileSystem.Size,
+                fileSystem.ContentVersion,
+                timestamp,
+                file.Mime);
+
             file.LinkNewContent(link, DomainClock);
-            await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
+            await PersistAsync(file, fileSystem, FilePersistenceOptions.Default, cancellationToken)
+                .ConfigureAwait(false);
             return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
