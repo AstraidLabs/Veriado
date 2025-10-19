@@ -44,12 +44,6 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
-    {
-        ProcessPendingEventsAsync(eventData, CancellationToken.None).GetAwaiter().GetResult();
-        return base.SavedChanges(eventData, result);
-    }
-
     public override async ValueTask<int> SavedChangesAsync(
         SaveChangesCompletedEventData eventData,
         int result,

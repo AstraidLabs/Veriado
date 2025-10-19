@@ -99,18 +99,7 @@ public static class ServiceCollectionExtensions
             var optionsMonitor = sp.GetRequiredService<IOptions<InfrastructureOptions>>();
             var pathResolver = sp.GetRequiredService<ISqlitePathResolver>();
             var logger = sp.GetRequiredService<ILogger<SqliteConnectionStringProvider>>();
-            var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-            var provider = new SqliteConnectionStringProvider(optionsMonitor, pathResolver, logger);
-
-            using (var connection = provider.CreateConnection())
-            {
-                connection.Open();
-                SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
-            }
-
-            var detectorLogger = loggerFactory.CreateLogger("FulltextBootstrap");
-            SqliteFulltextSupportDetector.Detect(optionsMonitor.Value, provider, detectorLogger);
-            return provider;
+            return new SqliteConnectionStringProvider(optionsMonitor, pathResolver, logger);
         });
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
@@ -227,6 +216,7 @@ public static class ServiceCollectionExtensions
             var scopedProvider = scope.ServiceProvider;
             var dbContext = scopedProvider.GetRequiredService<AppDbContext>();
             var loggerFactory = scopedProvider.GetRequiredService<ILoggerFactory>();
+            var connectionProvider = scopedProvider.GetRequiredService<IConnectionStringProvider>();
 
             var providerName = dbContext.Database.ProviderName;
             if (string.IsNullOrWhiteSpace(providerName)
@@ -277,6 +267,15 @@ public static class ServiceCollectionExtensions
 
             if (dbContext.Database.IsSqlite())
             {
+                await using (var connection = connectionProvider.CreateConnection())
+                {
+                    await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    var pragmaLogger = loggerFactory.CreateLogger("SqlitePragmaBootstrap");
+                    await SqlitePragmaHelper
+                        .ApplyAsync(connection, pragmaLogger, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
                 var schemaLogger = loggerFactory.CreateLogger("FulltextSchemaBootstrap");
                 var connection = (SqliteConnection)dbContext.Database.GetDbConnection();
                 var shouldCloseConnection = connection.State != ConnectionState.Open;
@@ -300,6 +299,11 @@ public static class ServiceCollectionExtensions
                     }
                 }
             }
+
+            var detectorLogger = loggerFactory.CreateLogger("FulltextBootstrap");
+            await SqliteFulltextSupportDetector
+                .DetectAsync(options, connectionProvider, detectorLogger, cancellationToken)
+                .ConfigureAwait(false);
 
             await RunDevelopmentFulltextGuardAsync(scopedProvider, dbContext, cancellationToken).ConfigureAwait(false);
             await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
