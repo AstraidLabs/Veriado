@@ -139,10 +139,11 @@ public abstract class FileWriteHandlerBase
                         }
 
                         var signature = _signatureCalculator.Compute(file);
-                        var expectedContentHash = file.SearchIndex?.IndexedContentHash;
+                        var searchState = file.SearchIndex;
+                        var expectedContentHash = searchState?.IndexedContentHash;
+                        var expectedTokenHash = searchState?.TokenHash;
                         var newContentHash = file.ContentHash.Value;
-
-                        var expectedTokenHash = file.SearchIndex?.TokenHash;
+                        var newTokenHash = signature.TokenHash;
 
                         try
                         {
@@ -152,7 +153,7 @@ public abstract class FileWriteHandlerBase
                                     expectedContentHash,
                                     expectedTokenHash,
                                     newContentHash,
-                                    signature.TokenHash,
+                                    newTokenHash,
                                     _projectionScope,
                                     ct)
                                 .ConfigureAwait(false);
@@ -163,17 +164,18 @@ public abstract class FileWriteHandlerBase
                                 .ForceReplaceAsync(
                                     file,
                                     newContentHash,
-                                    signature.TokenHash,
+                                    newTokenHash,
                                     _projectionScope,
                                     ct)
                                 .ConfigureAwait(false);
                         }
 
+                        var schemaVersion = searchState?.SchemaVersion ?? 1;
                         file.ConfirmIndexed(
-                            file.SearchIndex.SchemaVersion,
+                            schemaVersion,
                             CurrentTimestamp(),
                             signature.AnalyzerVersion,
-                            signature.TokenHash,
+                            newTokenHash,
                             signature.NormalizedTitle);
                         await _unitOfWork.SaveChangesAsync(ct).ConfigureAwait(false);
                     },
