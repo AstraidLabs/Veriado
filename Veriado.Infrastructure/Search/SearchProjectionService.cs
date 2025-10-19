@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Veriado.Appl.Abstractions;
@@ -95,15 +94,18 @@ ON CONFLICT(file_id) DO UPDATE SET
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ILogger<SearchProjectionService> _logger;
     private readonly ISearchTelemetry? _telemetry;
+    private readonly ISearchProjectionScope _projectionScope;
 
     public SearchProjectionService(
         DbContext dbContext,
         IAnalyzerFactory analyzerFactory,
+        ISearchProjectionScope projectionScope,
         ILogger<SearchProjectionService>? logger = null,
         ISearchTelemetry? telemetry = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _analyzerFactory = analyzerFactory ?? throw new ArgumentNullException(nameof(analyzerFactory));
+        _projectionScope = projectionScope ?? throw new ArgumentNullException(nameof(projectionScope));
         _logger = logger ?? NullLogger<SearchProjectionService>.Instance;
         _telemetry = telemetry;
     }
@@ -114,13 +116,10 @@ ON CONFLICT(file_id) DO UPDATE SET
         string? expectedTokenHash,
         string? newContentHash,
         string? tokenHash,
-        ISearchProjectionTransactionGuard guard,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
-        ArgumentNullException.ThrowIfNull(guard);
-
-        guard.EnsureActiveTransaction(_dbContext);
+        _projectionScope.EnsureActive();
 
         if (!SqliteFulltextSupport.IsAvailable)
         {
@@ -199,13 +198,10 @@ ON CONFLICT(file_id) DO UPDATE SET
         FileEntity file,
         string? newContentHash,
         string? tokenHash,
-        ISearchProjectionTransactionGuard guard,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
-        ArgumentNullException.ThrowIfNull(guard);
-
-        guard.EnsureActiveTransaction(_dbContext);
+        _projectionScope.EnsureActive();
 
         if (!SqliteFulltextSupport.IsAvailable)
         {
@@ -320,11 +316,9 @@ ON CONFLICT(file_id) DO UPDATE SET
 
     public async Task DeleteAsync(
         Guid fileId,
-        ISearchProjectionTransactionGuard guard,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(guard);
-        guard.EnsureActiveTransaction(_dbContext);
+        _projectionScope.EnsureActive();
 
         if (!SqliteFulltextSupport.IsAvailable)
         {

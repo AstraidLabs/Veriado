@@ -66,7 +66,15 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var signatureCalculator = services.GetRequiredService<ISearchIndexSignatureCalculator>();
         var clock = services.GetRequiredService<IClock>();
         var mapper = new MapperConfiguration(cfg => { }).CreateMapper();
-        var handler = new TestFileWriteHandler(repository, clock, mapper, unitOfWork, projection, signatureCalculator);
+        var projectionScope = services.GetRequiredService<ISearchProjectionScope>();
+        var handler = new TestFileWriteHandler(
+            repository,
+            clock,
+            mapper,
+            unitOfWork,
+            projection,
+            signatureCalculator,
+            projectionScope);
 
         var fileSystem = FileSystemEntityFactory.CreateSample();
         var file = FileEntityFactory.CreateSample(fileSystem.Id);
@@ -138,7 +146,15 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var signatureCalculator = services.GetRequiredService<ISearchIndexSignatureCalculator>();
         var clock = services.GetRequiredService<IClock>();
         var mapper = new MapperConfiguration(cfg => { }).CreateMapper();
-        var handler = new TestFileWriteHandler(repository, clock, mapper, unitOfWork, projection, signatureCalculator);
+        var projectionScope = services.GetRequiredService<ISearchProjectionScope>();
+        var handler = new TestFileWriteHandler(
+            repository,
+            clock,
+            mapper,
+            unitOfWork,
+            projection,
+            signatureCalculator,
+            projectionScope);
 
         var fileSystem = FileSystemEntityFactory.CreateSample();
         var file = FileEntityFactory.CreateSample(fileSystem.Id);
@@ -174,7 +190,6 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
                     initialTokenHash,
                     file.ContentHash.Value,
                     olderSignature.TokenHash,
-                    unitOfWork,
                     CancellationToken.None))
                 .ConfigureAwait(false);
         }
@@ -198,8 +213,9 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
             IMapper mapper,
             IFilePersistenceUnitOfWork unitOfWork,
             IFileSearchProjection searchProjection,
-            ISearchIndexSignatureCalculator signatureCalculator)
-            : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+            ISearchIndexSignatureCalculator signatureCalculator,
+            ISearchProjectionScope projectionScope)
+            : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator, projectionScope)
         {
         }
 

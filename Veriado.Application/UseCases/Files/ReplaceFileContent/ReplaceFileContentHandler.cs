@@ -19,8 +19,9 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
         IMapper mapper,
         IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
-        ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        ISearchIndexSignatureCalculator signatureCalculator,
+        ISearchProjectionScope projectionScope)
+        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator, projectionScope)
     {
         _importPolicy = importPolicy;
     }

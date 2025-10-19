@@ -201,6 +201,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AuditEventProjector>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
 
+        services.AddScoped<ISearchProjectionScope, SearchProjectionScopeEf>();
         services.AddScoped<IFileSearchProjection, SearchProjectionService>();
         services.AddScoped<IFileImportWriter, FileImportService>();
         services.AddScoped<IFileRepository, FileRepository>();

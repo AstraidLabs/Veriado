@@ -19,8 +19,9 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
         IFileStorage fileStorage,
         IFilePersistenceUnitOfWork unitOfWork,
         IFileSearchProjection searchProjection,
-        ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        ISearchIndexSignatureCalculator signatureCalculator,
+        ISearchProjectionScope projectionScope)
+        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator, projectionScope)
     {
         _importPolicy = importPolicy ?? throw new ArgumentNullException(nameof(importPolicy));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
