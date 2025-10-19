@@ -45,28 +45,9 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .HasConversion(Converters.GuidToBlob)
             .IsRequired();
 
-        builder.Property(file => file.ContentHash)
-            .HasColumnName("content_hash")
-            .HasColumnType("TEXT")
-            .HasMaxLength(64)
-            .HasConversion(Converters.FileHashToString)
-            .IsRequired();
-
-        builder.Property(file => file.LinkedContentVersion)
-            .HasColumnName("content_version")
-            .HasColumnType("INTEGER")
-            .HasConversion(Converters.ContentVersionToInt)
-            .IsRequired();
-
         builder.Property(file => file.Title)
             .HasColumnName("title")
             .HasMaxLength(300);
-
-        builder.Property(file => file.Size)
-            .HasColumnName("size_bytes")
-            .HasColumnType("BIGINT")
-            .HasConversion(Converters.ByteSizeToLong)
-            .IsRequired();
 
         builder.Property(file => file.CreatedUtc)
             .HasColumnName("created_utc")
@@ -83,6 +64,46 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
         builder.Property(file => file.ContentRevision)
             .HasColumnName("content_revision")
             .IsRequired();
+
+        builder.OwnsOne(file => file.Content, owned =>
+        {
+            owned.Property(link => link.Provider)
+                .HasColumnName("content_provider")
+                .HasColumnType("TEXT")
+                .HasMaxLength(128);
+
+            owned.Property(link => link.Location)
+                .HasColumnName("content_location")
+                .HasColumnType("TEXT")
+                .HasMaxLength(2048);
+
+            owned.Property(link => link.ContentHash)
+                .HasColumnName("content_hash")
+                .HasColumnType("TEXT")
+                .HasMaxLength(64)
+                .HasConversion(Converters.FileHashToString);
+
+            owned.Property(link => link.Size)
+                .HasColumnName("content_size")
+                .HasColumnType("BIGINT")
+                .HasConversion(Converters.ByteSizeToLong);
+
+            owned.Property(link => link.Mime)
+                .HasColumnName("content_mime")
+                .HasColumnType("TEXT")
+                .HasMaxLength(255)
+                .HasConversion(Converters.NullableMimeTypeToString);
+
+            owned.Property(link => link.Version)
+                .HasColumnName("content_version")
+                .HasColumnType("INTEGER")
+                .HasConversion(Converters.ContentVersionToInt);
+
+            owned.Property(link => link.CreatedUtc)
+                .HasColumnName("content_created_utc")
+                .HasColumnType("TEXT")
+                .HasConversion(Converters.UtcTimestampToString);
+        });
 
         var versionProperty = builder.Property(file => file.Version)
             .HasColumnName("row_version")

@@ -83,6 +83,8 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
                 mime,
                 request.Author,
                 fileSystem.Id,
+                storageResult.Provider.ToString(),
+                storageResult.Path.Value,
                 storageResult.Hash,
                 storageResult.Size,
                 ContentVersion.Initial,

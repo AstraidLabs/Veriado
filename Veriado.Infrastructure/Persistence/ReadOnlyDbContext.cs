@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
+using Veriado.Infrastructure.Persistence.Entities;
 
 namespace Veriado.Infrastructure.Persistence;
 
@@ -31,6 +32,8 @@ public sealed class ReadOnlyDbContext : DbContext
     public DbSet<FileEntity> Files => Set<FileEntity>();
 
     public DbSet<FileSystemEntity> FileSystems => Set<FileSystemEntity>();
+
+    public DbSet<FileContentLinkRow> FileContentLinks => Set<FileContentLinkRow>();
 
     public DbSet<FileAuditRecord> FileAudits => Set<FileAuditRecord>();
 

@@ -77,6 +77,8 @@ public sealed class FileSchemaTests
                 MimeType.From("application/pdf"),
                 "author",
                 fileSystem.Id,
+                fileSystem.Provider.ToString(),
+                fileSystem.Path.Value,
                 FileHash.From(new string('B', 64)),
                 ByteSize.From(2048),
                 ContentVersion.Initial,
@@ -125,12 +127,15 @@ public sealed class FileSchemaTests
                 hardLinkCount: null,
                 alternateDataStreamCount: null);
 
+            var fileSystemId = Guid.NewGuid();
             var file = FileEntity.CreateNew(
                 FileName.From("missing"),
                 FileExtension.From("txt"),
                 MimeType.From("text/plain"),
                 "author",
-                Guid.NewGuid(),
+                fileSystemId,
+                StorageProvider.Local.ToString(),
+                fileSystemId.ToString("D"),
                 FileHash.From(new string('C', 64)),
                 ByteSize.From(512),
                 ContentVersion.Initial,
@@ -179,6 +184,8 @@ public sealed class FileSchemaTests
                 MimeType.From("text/plain"),
                 "author",
                 fileSystem.Id,
+                fileSystem.Provider.ToString(),
+                fileSystem.Path.Value,
                 FileHash.From(new string('D', 64)),
                 ByteSize.From(1024),
                 ContentVersion.Initial,
@@ -191,6 +198,8 @@ public sealed class FileSchemaTests
                 MimeType.From("text/plain"),
                 "author",
                 fileSystem.Id,
+                fileSystem.Provider.ToString(),
+                fileSystem.Path.Value,
                 FileHash.From(new string('E', 64)),
                 ByteSize.From(2048),
                 ContentVersion.Initial,

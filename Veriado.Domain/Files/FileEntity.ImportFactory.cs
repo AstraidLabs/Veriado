@@ -14,6 +14,8 @@ public sealed partial class FileEntity
         MimeType mime,
         string author,
         Guid fileSystemId,
+        string contentProvider,
+        string contentLocation,
         FileHash contentHash,
         ByteSize size,
         ContentVersion linkedContentVersion,
@@ -34,9 +36,6 @@ public sealed partial class FileEntity
             Mime = mime,
             Author = NormalizeAuthor(author),
             FileSystemId = fileSystemId,
-            ContentHash = contentHash,
-            Size = size,
-            LinkedContentVersion = linkedContentVersion,
             ContentRevision = contentRevision,
             CreatedUtc = createdUtc,
             LastModifiedUtc = lastModifiedUtc,
@@ -47,6 +46,15 @@ public sealed partial class FileEntity
             FtsPolicy = ftsPolicy,
             Title = NormalizeOptionalText(title),
         };
+
+        entity.Content = FileContentLink.Create(
+            contentProvider,
+            contentLocation,
+            contentHash,
+            size,
+            linkedContentVersion,
+            createdUtc,
+            mime);
 
         return entity;
     }
