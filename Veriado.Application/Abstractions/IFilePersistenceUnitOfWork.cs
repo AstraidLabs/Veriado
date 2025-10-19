@@ -3,7 +3,7 @@ namespace Veriado.Appl.Abstractions;
 /// <summary>
 /// Represents the write-side persistence unit of work for file aggregates.
 /// </summary>
-public interface IFilePersistenceUnitOfWork : ISearchProjectionTransactionGuard
+public interface IFilePersistenceUnitOfWork
 {
     /// <summary>
     /// Gets a value indicating whether the underlying persistence context is tracking changes.

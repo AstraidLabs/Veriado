@@ -1,3 +1,5 @@
+using Veriado.Appl.Abstractions;
+
 namespace Veriado.Appl.UseCases.Files.SetFileValidity;
 
 /// <summary>
@@ -13,9 +15,10 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
         IClock clock,
         IMapper mapper,
         IFilePersistenceUnitOfWork unitOfWork,
+        ISearchProjectionScope projectionScope,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, projectionScope, searchProjection, signatureCalculator)
     {
     }
 

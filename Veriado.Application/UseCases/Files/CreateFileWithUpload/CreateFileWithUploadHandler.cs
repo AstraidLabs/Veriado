@@ -1,3 +1,5 @@
+using Veriado.Appl.Abstractions;
+
 namespace Veriado.Appl.UseCases.Files.CreateFileWithUpload;
 
 /// <summary>
@@ -18,9 +20,10 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
         IMapper mapper,
         IFileStorage fileStorage,
         IFilePersistenceUnitOfWork unitOfWork,
+        ISearchProjectionScope projectionScope,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, projectionScope, searchProjection, signatureCalculator)
     {
         _importPolicy = importPolicy ?? throw new ArgumentNullException(nameof(importPolicy));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));

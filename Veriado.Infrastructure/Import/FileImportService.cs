@@ -31,18 +31,21 @@ public sealed class FileImportService : IFileImportWriter
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly IClock _clock;
     private readonly ILogger<FileImportService> _logger;
+    private readonly ISearchProjectionScope _projectionScope;
 
     public FileImportService(
         AppDbContext dbContext,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator,
         IClock clock,
+        ISearchProjectionScope projectionScope,
         ILogger<FileImportService>? logger = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _searchProjection = searchProjection ?? throw new ArgumentNullException(nameof(searchProjection));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _projectionScope = projectionScope ?? throw new ArgumentNullException(nameof(projectionScope));
         _logger = logger ?? NullLogger<FileImportService>.Instance;
     }
 
@@ -112,7 +115,7 @@ public sealed class FileImportService : IFileImportWriter
 
         var ids = deduped.Select(item => item.FileId).ToArray();
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var projectionGuard = new DbContextSearchProjectionGuard(_dbContext);
+        _projectionScope.EnsureActive();
 
         var existingFiles = await _dbContext.Files
             .AsNoTracking()
@@ -191,39 +194,48 @@ public sealed class FileImportService : IFileImportWriter
                 if (_searchProjection is IBatchFileSearchProjection batchProjection)
                 {
                     var batchResult = await batchProjection
-                        .UpsertBatchAsync(projectionItems, projectionGuard, ct)
+                        .UpsertBatchAsync(projectionItems, _projectionScope, ct)
                         .ConfigureAwait(false);
                     busyRetries = batchResult.BusyRetries;
                 }
                 else
                 {
-                    foreach (var item in projectionItems)
-                    {
-                        try
-                        {
-                            await _searchProjection
-                                .UpsertAsync(
-                                    item.File,
-                                    item.ExpectedContentHash,
-                                    item.ExpectedTokenHash,
-                                    item.NewContentHash,
-                                    item.TokenHash,
-                                    projectionGuard,
-                                    ct)
-                                .ConfigureAwait(false);
-                        }
-                        catch (AnalyzerOrContentDriftException)
-                        {
-                            await _searchProjection
-                                .ForceReplaceAsync(
-                                    item.File,
-                                    item.NewContentHash,
-                                    item.TokenHash,
-                                    projectionGuard,
-                                    ct)
-                                .ConfigureAwait(false);
-                        }
-                    }
+                    await _projectionScope
+                        .ExecuteAsync(
+                            async scopeCt =>
+                            {
+                                foreach (var item in projectionItems)
+                                {
+                                    scopeCt.ThrowIfCancellationRequested();
+
+                                    try
+                                    {
+                                        await _searchProjection
+                                            .UpsertAsync(
+                                                item.File,
+                                                item.ExpectedContentHash,
+                                                item.ExpectedTokenHash,
+                                                item.NewContentHash,
+                                                item.TokenHash,
+                                                _projectionScope,
+                                                scopeCt)
+                                            .ConfigureAwait(false);
+                                    }
+                                    catch (AnalyzerOrContentDriftException)
+                                    {
+                                        await _searchProjection
+                                            .ForceReplaceAsync(
+                                                item.File,
+                                                item.NewContentHash,
+                                                item.TokenHash,
+                                                _projectionScope,
+                                                scopeCt)
+                                            .ConfigureAwait(false);
+                                    }
+                                }
+                            },
+                            ct)
+                        .ConfigureAwait(false);
                 }
 
                 foreach (var item in projectionItems)

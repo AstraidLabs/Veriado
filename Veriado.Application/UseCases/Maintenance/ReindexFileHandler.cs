@@ -1,3 +1,5 @@
+using Veriado.Appl.Abstractions;
+
 namespace Veriado.Appl.UseCases.Maintenance;
 
 /// <summary>
@@ -13,9 +15,10 @@ public sealed class ReindexFileHandler : FileWriteHandlerBase, IRequestHandler<R
         IClock clock,
         IMapper mapper,
         IFilePersistenceUnitOfWork unitOfWork,
+        ISearchProjectionScope projectionScope,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, projectionScope, searchProjection, signatureCalculator)
     {
     }
 

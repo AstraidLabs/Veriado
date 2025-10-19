@@ -1,3 +1,4 @@
+using Veriado.Appl.Abstractions;
 using Veriado.Appl.Common.Exceptions;
 
 namespace Veriado.Appl.UseCases.Files.Common;
@@ -10,6 +11,7 @@ public abstract class FileWriteHandlerBase
     private readonly IFileRepository _repository;
     private readonly IClock _clock;
     private readonly IFilePersistenceUnitOfWork _unitOfWork;
+    private readonly ISearchProjectionScope _projectionScope;
     private readonly IFileSearchProjection _searchProjection;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
 
@@ -22,6 +24,7 @@ public abstract class FileWriteHandlerBase
         IClock clock,
         IMapper mapper,
         IFilePersistenceUnitOfWork unitOfWork,
+        ISearchProjectionScope projectionScope,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
     {
@@ -29,6 +32,7 @@ public abstract class FileWriteHandlerBase
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         Mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _projectionScope = projectionScope ?? throw new ArgumentNullException(nameof(projectionScope));
         _searchProjection = searchProjection ?? throw new ArgumentNullException(nameof(searchProjection));
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
     }
@@ -120,51 +124,59 @@ public abstract class FileWriteHandlerBase
 
         if (requiresProjection)
         {
-            if (deleteFromProjection)
-            {
-                await _searchProjection.DeleteAsync(file.Id, _unitOfWork, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                var signature = _signatureCalculator.Compute(file);
-                var expectedContentHash = file.SearchIndex?.IndexedContentHash;
-                var newContentHash = file.ContentHash.Value;
+            _projectionScope.EnsureActive();
 
-                var expectedTokenHash = file.SearchIndex?.TokenHash;
+            await _projectionScope
+                .ExecuteAsync(
+                    async ct =>
+                    {
+                        if (deleteFromProjection)
+                        {
+                            await _searchProjection.DeleteAsync(file.Id, _projectionScope, ct).ConfigureAwait(false);
+                            return;
+                        }
 
-                try
-                {
-                    await _searchProjection
-                        .UpsertAsync(
-                            file,
-                            expectedContentHash,
-                            expectedTokenHash,
-                            newContentHash,
+                        var signature = _signatureCalculator.Compute(file);
+                        var expectedContentHash = file.SearchIndex?.IndexedContentHash;
+                        var newContentHash = file.ContentHash.Value;
+
+                        var expectedTokenHash = file.SearchIndex?.TokenHash;
+
+                        try
+                        {
+                            await _searchProjection
+                                .UpsertAsync(
+                                    file,
+                                    expectedContentHash,
+                                    expectedTokenHash,
+                                    newContentHash,
+                                    signature.TokenHash,
+                                    _projectionScope,
+                                    ct)
+                                .ConfigureAwait(false);
+                        }
+                        catch (AnalyzerOrContentDriftException)
+                        {
+                            await _searchProjection
+                                .ForceReplaceAsync(
+                                    file,
+                                    newContentHash,
+                                    signature.TokenHash,
+                                    _projectionScope,
+                                    ct)
+                                .ConfigureAwait(false);
+                        }
+
+                        file.ConfirmIndexed(
+                            file.SearchIndex.SchemaVersion,
+                            CurrentTimestamp(),
+                            signature.AnalyzerVersion,
                             signature.TokenHash,
-                            _unitOfWork,
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                catch (AnalyzerOrContentDriftException)
-                {
-                    await _searchProjection
-                        .ForceReplaceAsync(
-                            file,
-                            newContentHash,
-                            signature.TokenHash,
-                            _unitOfWork,
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                }
-
-                file.ConfirmIndexed(
-                    file.SearchIndex.SchemaVersion,
-                    CurrentTimestamp(),
-                    signature.AnalyzerVersion,
-                    signature.TokenHash,
-                    signature.NormalizedTitle);
-                await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            }
+                            signature.NormalizedTitle);
+                        await _unitOfWork.SaveChangesAsync(ct).ConfigureAwait(false);
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
