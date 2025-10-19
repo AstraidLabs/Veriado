@@ -16,14 +16,13 @@ public sealed class StoragePathTests : IDisposable
         Directory.CreateDirectory(_root);
     }
 
-    [Fact]
-    public void From_WithRelativePathInsideRoot_ReturnsNormalizedStoragePath()
+    [Theory]
+    [MemberData(nameof(GetValidRelativePaths))]
+    public void From_WithValidRelativePath_ReturnsNormalizedStoragePath(string relative, string expected)
     {
-        var relative = Path.Combine("folder", "child", "file.txt");
-
         var storagePath = StoragePath.From(_root, relative);
 
-        Assert.Equal("folder/child/file.txt", storagePath.Value);
+        Assert.Equal(expected, storagePath.Value);
     }
 
     [Theory]
@@ -44,6 +43,15 @@ public sealed class StoragePathTests : IDisposable
         yield return new object[] { "./../outside.txt" };
         yield return new object[] { @"\\server\share\file.txt" };
         yield return new object[] { @"//server/share/file.txt" };
+        yield return new object[] { Path.GetFullPath(Path.Combine(Path.GetTempPath(), "..", "outside.txt")) };
+    }
+
+    public static IEnumerable<object[]> GetValidRelativePaths()
+    {
+        yield return new object[] { Path.Combine("folder", "child", "file.txt"), "folder/child/file.txt" };
+        yield return new object[] { Path.Combine("folder", "..", "sibling", "file.txt"), "sibling/file.txt" };
+        yield return new object[] { Path.Combine(".", "folder", "file.txt"), "folder/file.txt" };
+        yield return new object[] { Path.Combine("folder", ".", "nested", "file.txt"), "folder/nested/file.txt" };
     }
 
     public void Dispose()
