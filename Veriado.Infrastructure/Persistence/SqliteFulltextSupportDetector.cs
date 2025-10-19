@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence.Connections;
 
@@ -8,32 +11,37 @@ namespace Veriado.Infrastructure.Persistence;
 /// </summary>
 internal static class SqliteFulltextSupportDetector
 {
-    public static void Detect(
+    public static async Task DetectAsync(
         InfrastructureOptions options,
         IConnectionStringProvider connectionStringProvider,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(connectionStringProvider);
 
-        var (available, reason) = Probe(connectionStringProvider, logger);
+        var (available, reason) = await ProbeAsync(connectionStringProvider, logger, cancellationToken)
+            .ConfigureAwait(false);
         options.IsFulltextAvailable = available;
         options.FulltextAvailabilityError = reason;
         SqliteFulltextSupport.Update(available, reason);
     }
 
-    private static (bool Available, string? Reason) Probe(IConnectionStringProvider provider, ILogger? logger)
+    private static async Task<(bool Available, string? Reason)> ProbeAsync(
+        IConnectionStringProvider provider,
+        ILogger? logger,
+        CancellationToken cancellationToken)
     {
         try
         {
-            using var connection = provider.CreateConnection();
-            connection.Open();
-            SqlitePragmaHelper.ApplyAsync(connection, cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
+            await using var connection = provider.CreateConnection();
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await SqlitePragmaHelper.ApplyAsync(connection, logger, cancellationToken).ConfigureAwait(false);
 
             using (var moduleCheck = connection.CreateCommand())
             {
                 moduleCheck.CommandText = "SELECT 1 FROM pragma_module_list WHERE name = 'fts5' LIMIT 1;";
-                var result = moduleCheck.ExecuteScalar();
+                var result = await moduleCheck.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                 if (result is null)
                 {
                     return (false, "SQLite build does not include the FTS5 module.");
@@ -45,14 +53,13 @@ internal static class SqliteFulltextSupportDetector
                 "CREATE VIRTUAL TABLE temp.__fts5_probe USING fts5(x, tokenize='unicode61 remove_diacritics 2');";
             try
             {
-                command.ExecuteNonQuery();
+                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 command.CommandText = "DROP TABLE temp.__fts5_probe;";
-                command.ExecuteNonQuery();
+                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-                var inspection = SqliteFulltextSchemaInspector
-                    .InspectAsync(connection, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
+                var inspection = await SqliteFulltextSchemaInspector
+                    .InspectAsync(connection, cancellationToken)
+                    .ConfigureAwait(false);
                 SqliteFulltextSupport.UpdateSchemaSnapshot(inspection.Snapshot);
 
                 if (!inspection.IsValid)
@@ -63,10 +70,9 @@ internal static class SqliteFulltextSupportDetector
 
                     try
                     {
-                        SqliteFulltextSchemaManager
-                            .EnsureUnifiedSchemaAsync(connection, logger, CancellationToken.None)
-                            .GetAwaiter()
-                            .GetResult();
+                        await SqliteFulltextSchemaManager
+                            .EnsureUnifiedSchemaAsync(connection, logger, cancellationToken)
+                            .ConfigureAwait(false);
                     }
                     catch (Exception rebuildEx)
                     {
@@ -74,10 +80,9 @@ internal static class SqliteFulltextSupportDetector
                         return (false, rebuildEx.Message);
                     }
 
-                    inspection = SqliteFulltextSchemaInspector
-                        .InspectAsync(connection, CancellationToken.None)
-                        .GetAwaiter()
-                        .GetResult();
+                    inspection = await SqliteFulltextSchemaInspector
+                        .InspectAsync(connection, cancellationToken)
+                        .ConfigureAwait(false);
                     SqliteFulltextSupport.UpdateSchemaSnapshot(inspection.Snapshot);
 
                     if (!inspection.IsValid)
@@ -93,7 +98,7 @@ internal static class SqliteFulltextSupportDetector
                 try
                 {
                     command.CommandText = "DROP TABLE IF EXISTS temp.__fts5_probe;";
-                    command.ExecuteNonQuery();
+                    await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
                 catch
                 {
