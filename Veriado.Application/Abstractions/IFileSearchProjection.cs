@@ -17,6 +17,22 @@ public interface IFileSearchProjection
     Task UpsertAsync(
         FileEntity file,
         string? expectedContentHash,
+        string? expectedTokenHash,
+        string? newContentHash,
+        string? tokenHash,
+        ISearchProjectionTransactionGuard guard,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Forces the projection entry to be replaced regardless of guard mismatches.
+    /// </summary>
+    /// <param name="file">The aggregate to project.</param>
+    /// <param name="newContentHash">The new content hash to persist.</param>
+    /// <param name="tokenHash">The analyzer token hash captured for the projection.</param>
+    /// <param name="guard">The projection transaction guard.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task ForceReplaceAsync(
+        FileEntity file,
         string? newContentHash,
         string? tokenHash,
         ISearchProjectionTransactionGuard guard,

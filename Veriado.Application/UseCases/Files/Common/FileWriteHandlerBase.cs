@@ -1,3 +1,5 @@
+using Veriado.Appl.Common.Exceptions;
+
 namespace Veriado.Appl.UseCases.Files.Common;
 
 /// <summary>
@@ -128,15 +130,32 @@ public abstract class FileWriteHandlerBase
                 var expectedContentHash = file.SearchIndex?.IndexedContentHash;
                 var newContentHash = file.ContentHash.Value;
 
-                await _searchProjection
-                    .UpsertAsync(
-                        file,
-                        expectedContentHash,
-                        newContentHash,
-                        signature.TokenHash,
-                        _unitOfWork,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                var expectedTokenHash = file.SearchIndex?.TokenHash;
+
+                try
+                {
+                    await _searchProjection
+                        .UpsertAsync(
+                            file,
+                            expectedContentHash,
+                            expectedTokenHash,
+                            newContentHash,
+                            signature.TokenHash,
+                            _unitOfWork,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (AnalyzerOrContentDriftException)
+                {
+                    await _searchProjection
+                        .ForceReplaceAsync(
+                            file,
+                            newContentHash,
+                            signature.TokenHash,
+                            _unitOfWork,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
 
                 file.ConfirmIndexed(
                     file.SearchIndex.SchemaVersion,
