@@ -169,14 +169,31 @@ internal sealed class LocalFileStorage : IFileStorage
     }
 
     private string ResolvePath(string relativePath)
+        => ResolvePath(_rootPath, relativePath);
+
+    private static string ResolvePath(string root, string relativePath)
     {
-        var trimmed = relativePath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var directorySeparator = Path.DirectorySeparatorChar.ToString();
-        var localPath = trimmed
-            .Replace(Path.AltDirectorySeparatorChar.ToString(), directorySeparator, StringComparison.Ordinal)
-            .Replace("\\", directorySeparator, StringComparison.Ordinal);
-        return Path.Combine(_rootPath, localPath);
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(relativePath);
+
+        var normalizedRelative = relativePath
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .Replace('\', Path.DirectorySeparatorChar);
+
+        var rootFull = Path.GetFullPath(root);
+        var full = Path.GetFullPath(Path.Combine(rootFull, normalizedRelative));
+        var rootPrefix = EnsureTrailingSeparator(rootFull);
+
+        if (!full.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new StoragePathViolationException(root, relativePath);
+        }
+
+        return full;
     }
+
+    private static string EnsureTrailingSeparator(string path)
+        => Path.EndsInDirectorySeparator(path) ? path : path + Path.DirectorySeparatorChar;
 
     private static string NormalizePath(string relativePath)
     {
