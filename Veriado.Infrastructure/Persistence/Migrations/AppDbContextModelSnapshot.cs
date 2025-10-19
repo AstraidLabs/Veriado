@@ -59,6 +59,63 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_file", (string)null);
                 });
 
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.Entities.FileContentLinkRow", b =>
+                {
+                    b.Property<byte[]>("FileId")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("file_id");
+
+                    b.Property<int>("ContentVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("content_version");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_hash");
+
+                    b.Property<string>("CreatedUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_utc");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("location");
+
+                    b.Property<string>("Mime")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mime");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("BIGINT")
+                        .HasColumnName("size_bytes");
+
+                    b.HasKey("FileId", "ContentVersion")
+                        .HasName("PK_file_content_link");
+
+                    b.HasIndex("ContentHash")
+                        .HasDatabaseName("idx_file_content_link_hash");
+
+                    b.ToTable("file_content_link", (string)null);
+
+                    b.HasOne("Veriado.Domain.Files.FileEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("FK_file_content_link_files_file_id");
+                });
+
             modelBuilder.Entity("Veriado.Infrastructure.Persistence.Audit.FileLinkAuditRecord", b =>
                 {
                     b.Property<byte[]>("FileId")
@@ -255,19 +312,9 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("author");
 
-                    b.Property<byte[]>("FileSystemId")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("filesystem_id");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("content_hash");
-
-                    b.Property<int>("LinkedContentVersion")
+                    b.Property<int>("ContentRevision")
                         .HasColumnType("INTEGER")
-                        .HasColumnName("content_version");
+                        .HasColumnName("content_revision");
 
                     b.Property<string>("CreatedUtc")
                         .IsRequired()
@@ -284,6 +331,10 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("fts_policy");
+
+                    b.Property<byte[]>("FileSystemId")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("filesystem_id");
 
                     b.Property<bool>("IsReadOnly")
                         .HasColumnType("INTEGER")
@@ -305,10 +356,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
-
-                    b.Property<long>("Size")
-                        .HasColumnType("BIGINT")
-                        .HasColumnName("size_bytes");
 
                     b.Property<string>("Title")
                         .HasMaxLength(300)
@@ -373,6 +420,140 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasConstraintName("FK_files_filesystem_entities_filesystem_id");
 
                     b.ToTable("files", (string)null);
+
+                    b.OwnsOne("Veriado.Domain.Files.FileContentLink", "Content", b1 =>
+                        {
+                            b1.Property<byte[]>("FileEntityId")
+                                .HasColumnType("BLOB");
+
+                            b1.Property<string>("ContentHash")
+                                .HasMaxLength(64)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("content_hash");
+
+                            b1.Property<string>("CreatedUtc")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("content_created_utc");
+
+                            b1.Property<string>("Location")
+                                .HasMaxLength(2048)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("content_location");
+
+                            b1.Property<string>("Mime")
+                                .HasMaxLength(255)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("content_mime");
+
+                            b1.Property<string>("Provider")
+                                .HasMaxLength(128)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("content_provider");
+
+                            b1.Property<long>("Size")
+                                .HasColumnType("BIGINT")
+                                .HasColumnName("content_size");
+
+                            b1.Property<int>("Version")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("content_version");
+
+                            b1.HasKey("FileEntityId");
+
+                            b1.ToTable("files");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FileEntityId");
+                        });
+
+                    b.OwnsOne("Veriado.Domain.Search.SearchIndexState", "SearchIndex", b1 =>
+                        {
+                            b1.Property<byte[]>("FileEntityId")
+                                .HasColumnType("BLOB");
+
+                            b1.Property<string>("AnalyzerVersion")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(32)
+                                .HasColumnType("TEXT")
+                                .HasDefaultValue("v1")
+                                .HasColumnName("fts_analyzer_version");
+
+                            b1.Property<string>("IndexedContentHash")
+                                .HasMaxLength(64)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("fts_indexed_hash");
+
+                            b1.Property<string>("IndexedTitle")
+                                .HasMaxLength(300)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("fts_indexed_title");
+
+                            b1.Property<bool>("IsStale")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("fts_is_stale");
+
+                            b1.Property<string>("LastIndexedUtc")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("fts_last_indexed_utc");
+
+                            b1.Property<int>("SchemaVersion")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER")
+                                .HasDefaultValue(1)
+                                .HasColumnName("fts_schema_version");
+
+                            b1.Property<string>("TokenHash")
+                                .HasMaxLength(64)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("fts_token_hash");
+
+                            b1.HasKey("FileEntityId");
+
+                            b1.ToTable("files");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FileEntityId");
+                        });
+
+                    b.OwnsOne("Veriado.Domain.Files.FileDocumentValidityEntity", "Validity", b1 =>
+                        {
+                            b1.Property<byte[]>("file_id")
+                                .HasColumnType("BLOB")
+                                .HasColumnName("file_id");
+
+                            b1.Property<bool>("HasElectronicCopy")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("has_electronic");
+
+                            b1.Property<bool>("HasPhysicalCopy")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("has_physical");
+
+                            b1.Property<string>("IssuedAt")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("issued_at");
+
+                            b1.Property<string>("ValidUntil")
+                                .IsRequired()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("valid_until");
+
+                            b1.HasKey("file_id");
+
+                            b1.ToTable("files_validity", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("file_id");
+                        });
+
+                    b.Navigation("Content");
+
+                    b.Navigation("SearchIndex")
+                        .IsRequired();
+
+                    b.Navigation("Validity");
                 });
 
             modelBuilder.Entity("Veriado.Domain.Search.DocumentLocationEntity", b =>
@@ -714,96 +895,6 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_fts_write_ahead_enqueued");
 
                     b.ToTable("fts_write_ahead", (string)null);
-                });
-
-            modelBuilder.Entity("Veriado.Domain.Files.FileEntity", b =>
-                {
-                    b.OwnsOne("Veriado.Domain.Search.SearchIndexState", "SearchIndex", b1 =>
-                        {
-                            b1.Property<byte[]>("FileEntityId")
-                                .HasColumnType("BLOB");
-
-                            b1.Property<string>("AnalyzerVersion")
-                                .IsRequired()
-                                .ValueGeneratedOnAdd()
-                                .HasMaxLength(32)
-                                .HasColumnType("TEXT")
-                                .HasDefaultValue("v1")
-                                .HasColumnName("fts_analyzer_version");
-
-                            b1.Property<string>("IndexedContentHash")
-                                .HasMaxLength(64)
-                                .HasColumnType("TEXT")
-                                .HasColumnName("fts_indexed_hash");
-
-                            b1.Property<string>("IndexedTitle")
-                                .HasMaxLength(300)
-                                .HasColumnType("TEXT")
-                                .HasColumnName("fts_indexed_title");
-
-                            b1.Property<bool>("IsStale")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("fts_is_stale");
-
-                            b1.Property<string>("LastIndexedUtc")
-                                .HasColumnType("TEXT")
-                                .HasColumnName("fts_last_indexed_utc");
-
-                            b1.Property<int>("SchemaVersion")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("INTEGER")
-                                .HasDefaultValue(1)
-                                .HasColumnName("fts_schema_version");
-
-                            b1.Property<string>("TokenHash")
-                                .HasMaxLength(64)
-                                .HasColumnType("TEXT")
-                                .HasColumnName("fts_token_hash");
-
-                            b1.HasKey("FileEntityId");
-
-                            b1.ToTable("files");
-
-                            b1.WithOwner()
-                                .HasForeignKey("FileEntityId");
-                        });
-
-                    b.OwnsOne("Veriado.Domain.Files.FileDocumentValidityEntity", "Validity", b1 =>
-                        {
-                            b1.Property<byte[]>("file_id")
-                                .HasColumnType("BLOB")
-                                .HasColumnName("file_id");
-
-                            b1.Property<bool>("HasElectronicCopy")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("has_electronic");
-
-                            b1.Property<bool>("HasPhysicalCopy")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("has_physical");
-
-                            b1.Property<string>("IssuedAt")
-                                .IsRequired()
-                                .HasColumnType("TEXT")
-                                .HasColumnName("issued_at");
-
-                            b1.Property<string>("ValidUntil")
-                                .IsRequired()
-                                .HasColumnType("TEXT")
-                                .HasColumnName("valid_until");
-
-                            b1.HasKey("file_id");
-
-                            b1.ToTable("files_validity", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("file_id");
-                        });
-
-                    b.Navigation("SearchIndex")
-                        .IsRequired();
-
-                    b.Navigation("Validity");
                 });
 
             modelBuilder.Entity("Veriado.Domain.Search.DocumentLocationEntity", b =>

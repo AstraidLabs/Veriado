@@ -1,5 +1,6 @@
 using Veriado.Domain.Files.Events;
 using Veriado.Domain.Metadata;
+using Veriado.Domain.Primitives;
 using Veriado.Domain.Search;
 using Veriado.Domain.Search.Events;
 using Veriado.Domain.ValueObjects;
@@ -23,9 +24,7 @@ public sealed partial class FileEntity : AggregateRoot
         MimeType mime,
         string author,
         Guid fileSystemId,
-        FileHash contentHash,
-        ByteSize size,
-        ContentVersion version,
+        FileContentLink content,
         UtcTimestamp createdUtc,
         FileSystemMetadata systemMetadata,
         string? title)
@@ -36,12 +35,10 @@ public sealed partial class FileEntity : AggregateRoot
         Mime = mime;
         Author = author;
         FileSystemId = fileSystemId;
-        ContentHash = contentHash;
-        Size = size;
+        Content = content;
         CreatedUtc = createdUtc;
         LastModifiedUtc = createdUtc;
-        LinkedContentVersion = version;
-        ContentRevision = version.Value;
+        ContentRevision = content.Version.Value;
         IsReadOnly = false;
         SystemMetadata = systemMetadata;
         Title = NormalizeOptionalText(title);
@@ -65,9 +62,14 @@ public sealed partial class FileEntity : AggregateRoot
     public MimeType Mime { get; private set; }
 
     /// <summary>
+    /// Gets the snapshot describing the linked content.
+    /// </summary>
+    public FileContentLink? Content { get; private set; }
+
+    /// <summary>
     /// Gets the file size.
     /// </summary>
-    public ByteSize Size { get; private set; }
+    public ByteSize Size => Content?.Size ?? default;
 
     /// <summary>
     /// Gets the file author stored in the core metadata.
@@ -100,14 +102,14 @@ public sealed partial class FileEntity : AggregateRoot
     public Guid FileSystemId { get; private set; }
 
     /// <summary>
-    /// Gets the version of the linked file system content.
+    /// Gets the version of the currently linked content.
     /// </summary>
-    public ContentVersion LinkedContentVersion { get; private set; }
+    public ContentVersion LinkedContentVersion => Content?.Version ?? throw new InvalidOperationException("File content has not been linked.");
 
     /// <summary>
     /// Gets the SHA-256 hash of the linked content.
     /// </summary>
-    public FileHash ContentHash { get; private set; }
+    public FileHash ContentHash => Content?.ContentHash ?? throw new InvalidOperationException("File content has not been linked.");
 
     /// <summary>
     /// Gets the optional document validity information.
@@ -150,6 +152,8 @@ public sealed partial class FileEntity : AggregateRoot
         MimeType mime,
         string author,
         Guid fileSystemId,
+        string contentProvider,
+        string contentLocation,
         FileHash contentHash,
         ByteSize size,
         ContentVersion version,
@@ -167,6 +171,15 @@ public sealed partial class FileEntity : AggregateRoot
             hardLinkCount: null,
             alternateDataStreamCount: null);
 
+        var content = FileContentLink.Create(
+            contentProvider,
+            contentLocation,
+            contentHash,
+            size,
+            version,
+            createdUtc,
+            mime);
+
         var entity = new FileEntity(
             Guid.NewGuid(),
             name,
@@ -174,14 +187,12 @@ public sealed partial class FileEntity : AggregateRoot
             mime,
             normalizedAuthor,
             fileSystemId,
-            contentHash,
-            size,
-            version,
+            content,
             createdUtc,
             metadata,
             title);
         entity.RaiseDomainEvent(new FileCreated(entity.Id, entity.Name, entity.Extension, entity.Mime, entity.Author, entity.Size, entity.ContentHash, createdUtc));
-        entity.RaiseDomainEvent(new FileContentLinked(entity.Id, entity.FileSystemId, entity.LinkedContentVersion, entity.ContentHash, entity.Size, entity.Mime, createdUtc));
+        entity.RaiseDomainEvent(new FileContentLinked(entity.Id, entity.FileSystemId, entity.Content!, createdUtc));
         entity.MarkSearchDirty(createdUtc, ReindexReason.Created);
         return entity;
     }
@@ -243,82 +254,72 @@ public sealed partial class FileEntity : AggregateRoot
     }
 
     /// <summary>
-    /// Links the file to the specified file system content, emitting change events when required.
+    /// Links the file to newly created physical content.
     /// </summary>
-    /// <param name="fileSystemId">The identifier of the file system record.</param>
-    /// <param name="hash">The content hash.</param>
-    /// <param name="size">The content size.</param>
-    /// <param name="version">The file system content version.</param>
-    /// <param name="mime">The MIME type detected for the content.</param>
-    /// <param name="whenUtc">The timestamp of the linkage.</param>
-    public void LinkTo(Guid fileSystemId, FileHash hash, ByteSize size, ContentVersion version, MimeType mime, UtcTimestamp whenUtc)
+    /// <param name="link">The immutable snapshot describing the link.</param>
+    /// <param name="clock">The clock used to capture the event timestamp.</param>
+    public void LinkNewContent(FileContentLink link, IClock clock)
     {
+        ArgumentNullException.ThrowIfNull(link);
+        ArgumentNullException.ThrowIfNull(clock);
         EnsureWritable();
 
-        var hasChanges = FileSystemId != fileSystemId
-            || ContentHash != hash
-            || Size != size
-            || LinkedContentVersion != version
-            || Mime != mime;
-
-        if (!hasChanges)
+        if (Content is not null && link.Version.Value <= Content.Version.Value)
         {
-            return;
+            throw new InvalidOperationException("New content link must increase the content version.");
         }
 
-        FileSystemId = fileSystemId;
-        ContentHash = hash;
-        Size = size;
-        LinkedContentVersion = version;
-        ContentRevision = version.Value;
-        Mime = mime;
+        var previousHash = Content?.ContentHash;
+        var occurredAt = UtcTimestamp.From(clock.UtcNow);
 
-        Touch(whenUtc);
-        RaiseDomainEvent(new FileContentRelinked(Id, FileSystemId, LinkedContentVersion, ContentHash, Size, Mime, whenUtc));
-        MarkSearchDirty(whenUtc, ReindexReason.ContentChanged);
+        Content = link;
+        ContentRevision = link.Version.Value;
+        if (link.Mime is MimeType mime && Mime != mime)
+        {
+            Mime = mime;
+        }
+        Touch(occurredAt);
+
+        RaiseDomainEvent(new FileContentLinked(Id, FileSystemId, link, occurredAt));
+
+        if (previousHash is null || previousHash != link.ContentHash)
+        {
+            MarkSearchDirty(occurredAt, ReindexReason.ContentChanged);
+        }
     }
 
     /// <summary>
-    /// Applies an idempotent relink update originating from a file system domain event.
+    /// Relinks the file to an existing content snapshot without changing the version.
     /// </summary>
-    public void RelinkFromFsEvent(Guid fileSystemId, FileHash hash, ByteSize size, ContentVersion version, MimeType mime, UtcTimestamp whenUtc)
+    /// <param name="link">The snapshot of the content link to reuse.</param>
+    /// <param name="clock">The clock used to capture the event timestamp.</param>
+    public void RelinkToExistingContent(FileContentLink link, IClock clock)
     {
-        var changed = false;
+        ArgumentNullException.ThrowIfNull(link);
+        ArgumentNullException.ThrowIfNull(clock);
+        EnsureWritable();
 
-        if (FileSystemId != fileSystemId)
+        if (Content is not null && link.Version.Value < Content.Version.Value)
         {
-            FileSystemId = fileSystemId;
-            changed = true;
+            throw new InvalidOperationException("Cannot relink to content with a lower version.");
         }
 
-        if (ContentHash != hash)
-        {
-            ContentHash = hash;
-            changed = true;
-        }
+        var previousHash = Content?.ContentHash;
+        var occurredAt = UtcTimestamp.From(clock.UtcNow);
 
-        if (Size != size)
-        {
-            Size = size;
-            changed = true;
-        }
-
-        if (LinkedContentVersion != version)
-        {
-            LinkedContentVersion = version;
-            ContentRevision = version.Value;
-            changed = true;
-        }
-
-        if (Mime != mime)
+        Content = link;
+        ContentRevision = link.Version.Value;
+        if (link.Mime is MimeType mime && Mime != mime)
         {
             Mime = mime;
-            changed = true;
         }
+        Touch(occurredAt);
 
-        if (changed)
+        RaiseDomainEvent(new FileContentRelinked(Id, FileSystemId, link, occurredAt));
+
+        if (previousHash is null || previousHash != link.ContentHash)
         {
-            Touch(whenUtc);
+            MarkSearchDirty(occurredAt, ReindexReason.ContentChanged);
         }
     }
 

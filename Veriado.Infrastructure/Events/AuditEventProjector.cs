@@ -100,30 +100,32 @@ internal sealed class AuditEventProjector
                     break;
 
                 case FileContentLinked contentLinked:
+                    var linkedContent = contentLinked.Content;
                     context.FileLinkAudits.Add(new FileLinkAuditRecord
                     {
                         FileId = contentLinked.FileId,
                         FileSystemId = contentLinked.FileSystemId,
                         Action = FileLinkAuditAction.Linked,
-                        Version = contentLinked.Version.Value,
-                        Hash = contentLinked.Hash.Value,
-                        Size = contentLinked.Size.Value,
-                        Mime = contentLinked.Mime.Value,
+                        Version = linkedContent.Version.Value,
+                        Hash = linkedContent.ContentHash.Value,
+                        Size = linkedContent.Size.Value,
+                        Mime = linkedContent.Mime?.Value ?? string.Empty,
                         OccurredUtc = UtcTimestamp.From(contentLinked.OccurredOnUtc),
                     });
                     hasChanges = true;
                     break;
 
                 case FileContentRelinked contentRelinked:
+                    var relinkedContent = contentRelinked.Content;
                     context.FileLinkAudits.Add(new FileLinkAuditRecord
                     {
                         FileId = contentRelinked.FileId,
                         FileSystemId = contentRelinked.FileSystemId,
                         Action = FileLinkAuditAction.Relinked,
-                        Version = contentRelinked.Version.Value,
-                        Hash = contentRelinked.Hash.Value,
-                        Size = contentRelinked.Size.Value,
-                        Mime = contentRelinked.Mime.Value,
+                        Version = relinkedContent.Version.Value,
+                        Hash = relinkedContent.ContentHash.Value,
+                        Size = relinkedContent.Size.Value,
+                        Mime = relinkedContent.Mime?.Value ?? string.Empty,
                         OccurredUtc = UtcTimestamp.From(contentRelinked.OccurredOnUtc),
                     });
                     hasChanges = true;

@@ -11,12 +11,16 @@ public static class FileEntityFactory
     public static FileEntity CreateSample(Guid? fileSystemId = null)
     {
         var resolvedFileSystemId = fileSystemId ?? Guid.NewGuid();
+        var provider = StorageProvider.Local.ToString();
+        var location = resolvedFileSystemId.ToString("D");
         return FileEntity.CreateNew(
             FileName.From("document.pdf"),
             FileExtension.From("pdf"),
             MimeType.From("application/pdf"),
             "Initial Author",
             resolvedFileSystemId,
+            provider,
+            location,
             FileHash.From(new string('A', 64)),
             ByteSize.From(1024),
             ContentVersion.Initial,

@@ -41,12 +41,15 @@ public sealed class CreateFileHandler : FileWriteHandlerBase, IRequestHandler<Cr
             var createdAt = CurrentTimestamp();
             var size = ByteSize.From(request.Content.LongLength);
             var hash = FileHash.Compute(request.Content);
+            var fileSystemId = Guid.NewGuid();
             var file = FileEntity.CreateNew(
                 name,
                 extension,
                 mime,
                 request.Author,
-                Guid.NewGuid(),
+                fileSystemId,
+                StorageProvider.Local.ToString(),
+                fileSystemId.ToString("D"),
                 hash,
                 size,
                 ContentVersion.Initial,

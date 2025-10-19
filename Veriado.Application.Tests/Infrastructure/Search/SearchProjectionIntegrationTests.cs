@@ -87,7 +87,15 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var updateTimestamp = UtcTimestamp.From(DateTimeOffset.UtcNow.AddMinutes(1));
         var newContentHash = FileHash.From(new string('B', 64));
         var newVersion = file.LinkedContentVersion.Next();
-        file.LinkTo(file.FileSystemId, newContentHash, ByteSize.From(2048), newVersion, MimeType.From("text/plain"), updateTimestamp);
+        var newLink = FileContentLink.Create(
+            file.Content?.Provider ?? StorageProvider.Local.ToString(),
+            file.Content?.Location ?? file.FileSystemId.ToString("D"),
+            newContentHash,
+            ByteSize.From(2048),
+            newVersion,
+            updateTimestamp,
+            MimeType.From("text/plain"));
+        file.LinkNewContent(newLink, new FixedClock(updateTimestamp.Value));
         file.UpdateMetadata(MimeType.From("text/plain"), "Updated Author", updateTimestamp);
 
         var newSignature = signatureCalculator.Compute(file);
@@ -166,7 +174,15 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var newerTimestamp = UtcTimestamp.From(DateTimeOffset.UtcNow.AddMinutes(1));
         var newerHash = FileHash.From(new string('C', 64));
         var newerVersion = file.LinkedContentVersion.Next();
-        file.LinkTo(file.FileSystemId, newerHash, ByteSize.From(4096), newerVersion, MimeType.From("application/xml"), newerTimestamp);
+        var newerLink = FileContentLink.Create(
+            file.Content?.Provider ?? StorageProvider.Local.ToString(),
+            file.Content?.Location ?? file.FileSystemId.ToString("D"),
+            newerHash,
+            ByteSize.From(4096),
+            newerVersion,
+            newerTimestamp,
+            MimeType.From("application/xml"));
+        file.LinkNewContent(newerLink, new FixedClock(newerTimestamp.Value));
         file.UpdateMetadata(MimeType.From("application/xml"), "Newer Author", newerTimestamp);
 
         await handler.PersistAsync(file, CancellationToken.None).ConfigureAwait(false);
@@ -177,7 +193,15 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var olderTimestamp = UtcTimestamp.From(DateTimeOffset.UtcNow.AddMinutes(2));
         var olderHash = FileHash.From(new string('D', 64));
         var olderVersion = file.LinkedContentVersion.Next();
-        file.LinkTo(file.FileSystemId, olderHash, ByteSize.From(8192), olderVersion, MimeType.From("application/json"), olderTimestamp);
+        var olderLink = FileContentLink.Create(
+            file.Content?.Provider ?? StorageProvider.Local.ToString(),
+            file.Content?.Location ?? file.FileSystemId.ToString("D"),
+            olderHash,
+            ByteSize.From(8192),
+            olderVersion,
+            olderTimestamp,
+            MimeType.From("application/json"));
+        file.LinkNewContent(olderLink, new FixedClock(olderTimestamp.Value));
         file.UpdateMetadata(MimeType.From("application/json"), "Legacy Author", olderTimestamp);
         var olderSignature = signatureCalculator.Compute(file);
 
@@ -226,5 +250,17 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
 
         public Task PersistAsync(FileEntity file, CancellationToken cancellationToken)
             => PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
+    }
+
+    private sealed class FixedClock : Veriado.Domain.Primitives.IClock
+    {
+        private readonly DateTimeOffset _timestamp;
+
+        public FixedClock(DateTimeOffset timestamp)
+        {
+            _timestamp = timestamp;
+        }
+
+        public DateTimeOffset UtcNow => _timestamp;
     }
 }

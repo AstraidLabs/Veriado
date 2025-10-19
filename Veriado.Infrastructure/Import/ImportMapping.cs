@@ -67,6 +67,8 @@ internal static class ImportMapping
             mime,
             metadata.Author,
             fileSystem.Id,
+            provider.ToString(),
+            path.Value,
             hash,
             size,
             contentVersion,

@@ -29,6 +29,10 @@ internal static class Converters
         mime => mime.Value,
         value => MimeType.From(value));
 
+    public static readonly ValueConverter<MimeType?, string?> NullableMimeTypeToString = new(
+        mime => mime.HasValue ? mime.Value.Value : null,
+        value => string.IsNullOrWhiteSpace(value) ? null : MimeType.From(value));
+
     public static readonly ValueConverter<FileHash, string> FileHashToString = new(
         hash => hash.Value,
         value => FileHash.From(value));

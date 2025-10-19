@@ -1,4 +1,4 @@
-using Veriado.Domain.ValueObjects;
+using Veriado.Domain.Files;
 
 namespace Veriado.Domain.Files.Events;
 
@@ -10,18 +10,12 @@ public sealed class FileContentRelinked : IDomainEvent
     public FileContentRelinked(
         Guid fileId,
         Guid fileSystemId,
-        FileHash hash,
-        ByteSize size,
-        ContentVersion version,
-        MimeType mime,
+        FileContentLink content,
         UtcTimestamp occurredUtc)
     {
         FileId = fileId;
         FileSystemId = fileSystemId;
-        Hash = hash;
-        Size = size;
-        Version = version;
-        Mime = mime;
+        Content = content;
         EventId = Guid.NewGuid();
         OccurredOnUtc = occurredUtc.ToDateTimeOffset();
     }
@@ -30,13 +24,7 @@ public sealed class FileContentRelinked : IDomainEvent
 
     public Guid FileSystemId { get; }
 
-    public FileHash Hash { get; }
-
-    public ByteSize Size { get; }
-
-    public ContentVersion Version { get; }
-
-    public MimeType Mime { get; }
+    public FileContentLink Content { get; }
 
     public Guid EventId { get; }
 

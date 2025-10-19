@@ -88,13 +88,15 @@ public sealed class RelinkFileContentHandler : FileWriteHandlerBase, IRequestHan
                 storageResult.LastAccessUtc,
                 timestamp);
 
-            file.LinkTo(
-                fileSystem.Id,
+            var link = FileContentLink.Create(
+                storageResult.Provider.ToString(),
+                storageResult.Path.Value,
                 storageResult.Hash,
                 storageResult.Size,
                 fileSystem.ContentVersion,
-                storageResult.Mime,
-                timestamp);
+                timestamp,
+                storageResult.Mime);
+            file.RelinkToExistingContent(link, DomainClock);
 
             await PersistAsync(file, fileSystem, FilePersistenceOptions.Default, cancellationToken).ConfigureAwait(false);
             return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));

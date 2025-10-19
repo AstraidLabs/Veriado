@@ -50,7 +50,10 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
 
             var newSize = ByteSize.From(request.Content.LongLength);
             var nextVersion = file.LinkedContentVersion.Next();
-            file.LinkTo(Guid.NewGuid(), newHash, newSize, nextVersion, file.Mime, timestamp);
+            var provider = file.Content?.Provider ?? StorageProvider.Local.ToString();
+            var location = file.Content?.Location ?? Guid.NewGuid().ToString("D");
+            var link = FileContentLink.Create(provider, location, newHash, newSize, nextVersion, timestamp, file.Mime);
+            file.LinkNewContent(link, DomainClock);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);
             return AppResult<FileSummaryDto>.Success(Mapper.Map<FileSummaryDto>(file));
         }

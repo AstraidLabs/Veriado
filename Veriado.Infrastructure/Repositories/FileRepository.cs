@@ -1,12 +1,14 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Domain.Files.Events;
+using Veriado.Infrastructure.Persistence.Entities;
 
 namespace Veriado.Infrastructure.Repositories;
 
 /// <summary>
 /// Provides persistence operations for file aggregates using direct EF Core transactions.
 /// </summary>
-internal sealed class FileRepository : IFileRepository
+internal sealed partial class FileRepository : IFileRepository
 {
     private readonly AppDbContext _db;
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
@@ -82,6 +84,7 @@ internal sealed class FileRepository : IFileRepository
         ArgumentNullException.ThrowIfNull(entity);
         _ = options;
         _db.Files.Add(entity);
+        TrackContentHistory(entity);
         return Task.CompletedTask;
     }
 
@@ -97,6 +100,7 @@ internal sealed class FileRepository : IFileRepository
 
         _db.FileSystems.Add(fileSystem);
         _db.Files.Add(file);
+        TrackContentHistory(file);
         return Task.CompletedTask;
     }
 
@@ -104,6 +108,7 @@ internal sealed class FileRepository : IFileRepository
     {
         ArgumentNullException.ThrowIfNull(entity);
         _ = options;
+        TrackContentHistory(entity);
         return Task.CompletedTask;
     }
 
@@ -116,6 +121,7 @@ internal sealed class FileRepository : IFileRepository
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(fileSystem);
         _ = options;
+        TrackContentHistory(file);
         return Task.CompletedTask;
     }
 
@@ -144,4 +150,52 @@ internal sealed class FileRepository : IFileRepository
     // - Delete: FileRepository.DeleteAsync currently invoked directly (no dedicated handler yet)
     // - Import workflows (ImportService.ImportFileAsync / ImportFolderStreamAsync) orchestrate the create/replace commands above.
 
+}
+
+partial class FileRepository
+{
+    private void TrackContentHistory(FileEntity file)
+    {
+        if (file.Content is null)
+        {
+            return;
+        }
+
+        var entry = _db.Entry(file);
+        var appended = false;
+
+        foreach (var evt in file.DomainEvents.OfType<FileContentLinked>())
+        {
+            AppendContentLink(evt.FileId, evt.Content);
+            appended = true;
+        }
+
+        foreach (var evt in file.DomainEvents.OfType<FileContentRelinked>())
+        {
+            AppendContentLink(evt.FileId, evt.Content);
+            appended = true;
+        }
+
+        if (!appended && entry.State == EntityState.Added)
+        {
+            AppendContentLink(file.Id, file.Content!);
+        }
+    }
+
+    private void AppendContentLink(Guid fileId, FileContentLink link)
+    {
+        var row = new FileContentLinkRow
+        {
+            FileId = fileId,
+            ContentVersion = link.Version.Value,
+            Provider = link.Provider,
+            Location = link.Location,
+            ContentHash = link.ContentHash.Value,
+            SizeBytes = link.Size.Value,
+            Mime = link.Mime?.Value,
+            CreatedUtc = link.CreatedUtc.Value,
+        };
+
+        _db.FileContentLinks.Add(row);
+    }
 }

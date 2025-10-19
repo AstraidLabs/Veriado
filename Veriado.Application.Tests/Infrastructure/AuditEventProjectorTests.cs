@@ -41,7 +41,18 @@ public sealed class AuditEventProjectorTests
             {
                 (fileId, new FileCreated(fileId, FileName.From("contract"), FileExtension.From("pdf"), MimeType.From("application/pdf"), "author", ByteSize.From(1024), hash, timestamp)),
                 (fileId, new FileValidityChanged(fileId, timestamp, timestamp, true, false, timestamp)),
-                (fileId, new FileContentLinked(fileId, fileSystemId, hash, ByteSize.From(1024), ContentVersion.Initial, MimeType.From("application/pdf"), timestamp)),
+                (fileId, new FileContentLinked(
+                    fileId,
+                    fileSystemId,
+                    FileContentLink.Create(
+                        "local",
+                        path.Value,
+                        hash,
+                        ByteSize.From(1024),
+                        ContentVersion.Initial,
+                        timestamp,
+                        MimeType.From("application/pdf")),
+                    timestamp)),
                 (fileSystemId, new FileSystemContentChanged(fileSystemId, StorageProvider.Local, path, hash, ByteSize.From(1024), MimeType.From("application/pdf"), ContentVersion.Initial, false, timestamp)),
                 (fileSystemId, new FileSystemMissingDetected(fileSystemId, path, timestamp, null)),
             };
@@ -58,7 +69,8 @@ public sealed class AuditEventProjectorTests
             Assert.Equal(2, fileAudits.Count);
 
             var linkAudits = await context.FileLinkAudits.ToListAsync().ConfigureAwait(false);
-            Assert.Single(linkAudits);
+            var linkAudit = Assert.Single(linkAudits);
+            Assert.Equal(fileSystemId, linkAudit.FileSystemId);
 
             var fileSystemAudits = await context.FileSystemAudits.ToListAsync().ConfigureAwait(false);
             Assert.Equal(2, fileSystemAudits.Count);

@@ -17,6 +17,8 @@ public abstract class FileWriteHandlerBase
 
     protected IMapper Mapper { get; }
 
+    protected Veriado.Domain.Primitives.IClock DomainClock => new ClockAdapter(_clock);
+
     protected IFileRepository Repository => _repository;
 
     protected FileWriteHandlerBase(
@@ -180,5 +182,16 @@ public abstract class FileWriteHandlerBase
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+    private sealed class ClockAdapter : Veriado.Domain.Primitives.IClock
+    {
+        private readonly IClock _inner;
+
+        public ClockAdapter(IClock inner)
+        {
+            _inner = inner;
+        }
+
+        public DateTimeOffset UtcNow => _inner.UtcNow;
     }
 }

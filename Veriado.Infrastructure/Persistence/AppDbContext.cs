@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
+using Veriado.Infrastructure.Persistence.Entities;
 using Veriado.Infrastructure.Persistence.EventLog;
 
 namespace Veriado.Infrastructure.Persistence;
@@ -29,6 +30,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<FileEntity> Files => Set<FileEntity>();
 
     public DbSet<FileSystemEntity> FileSystems => Set<FileSystemEntity>();
+
+    public DbSet<FileContentLinkRow> FileContentLinks => Set<FileContentLinkRow>();
 
     public DbSet<FileAuditRecord> FileAudits => Set<FileAuditRecord>();
 

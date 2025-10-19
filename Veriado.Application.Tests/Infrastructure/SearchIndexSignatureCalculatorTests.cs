@@ -43,12 +43,15 @@ public sealed class SearchIndexSignatureCalculatorTests
 
         var created = UtcTimestamp.From(new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero));
         var bytes = Encoding.UTF8.GetBytes("Hello metadata");
+        var fileSystemId = Guid.NewGuid();
         var file = FileEntity.CreateNew(
             FileName.From("Výkaz"),
             FileExtension.From("pdf"),
             MimeType.From("application/pdf"),
             "Čeněk",
-            Guid.NewGuid(),
+            fileSystemId,
+            StorageProvider.Local.ToString(),
+            fileSystemId.ToString("D"),
             FileHash.Compute(bytes),
             ByteSize.From(bytes.LongLength),
             ContentVersion.Initial,
