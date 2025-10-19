@@ -145,6 +145,10 @@ ON CONFLICT(file_id) DO UPDATE SET
             ? null
             : tokenHash;
 
+        var contentHashValue = string.IsNullOrWhiteSpace(document.ContentHash)
+            ? storedContentHash
+            : document.ContentHash;
+
         var rowsAffected = await SqliteRetry.ExecuteAsync(
                 () => ExecuteUpsertCoreAsync(
                     document,
@@ -182,11 +186,19 @@ ON CONFLICT(file_id) DO UPDATE SET
 
         if (rowsAffected == 0)
         {
-            var current = await ReadStoredSignaturesAsync(document.FileId, cancellationToken).ConfigureAwait(false);
+            var current = await ReadStoredProjectionAsync(document.FileId, cancellationToken).ConfigureAwait(false);
 
             if (current is not null
                 && EqualsOrdinal(current.StoredContentHash, storedContentHash)
-                && EqualsOrdinal(current.StoredTokenHash, storedTokenHash))
+                && EqualsOrdinal(current.StoredTokenHash, storedTokenHash)
+                && EqualsOrdinal(current.ContentHash, contentHashValue)
+                && EqualsOrdinal(current.Title, normalizedTitle)
+                && EqualsOrdinal(current.Author, normalizedAuthor)
+                && EqualsOrdinal(current.MetadataText, normalizedMetadataText)
+                && EqualsOrdinal(current.MetadataJson, document.MetadataJson)
+                && EqualsOrdinal(current.Mime, document.Mime)
+                && current.CreatedUtc == document.CreatedUtc
+                && current.ModifiedUtc == document.ModifiedUtc)
             {
                 throw new AnalyzerOrContentDriftException();
             }
@@ -418,7 +430,7 @@ ON CONFLICT(file_id) DO UPDATE SET
         command.Parameters.Add("$expected_old_token_hash", SqliteType.Text).Value = (object?)expectedOldTokenHash ?? DBNull.Value;
     }
 
-    private async Task<StoredSignatures?> ReadStoredSignaturesAsync(Guid fileId, CancellationToken cancellationToken)
+    private async Task<StoredProjection?> ReadStoredProjectionAsync(Guid fileId, CancellationToken cancellationToken)
     {
         var sqliteTransaction = GetAmbientTransaction();
         var connection = sqliteTransaction.Connection ?? throw new InvalidOperationException(
@@ -426,7 +438,7 @@ ON CONFLICT(file_id) DO UPDATE SET
 
         await using var command = connection.CreateCommand();
         command.Transaction = sqliteTransaction;
-        command.CommandText = "SELECT stored_content_hash, stored_token_hash FROM search_document WHERE file_id = $file_id LIMIT 1;";
+        command.CommandText = "SELECT title, author, mime, metadata_text, metadata_json, created_utc, modified_utc, content_hash, stored_content_hash, stored_token_hash FROM search_document WHERE file_id = $file_id LIMIT 1;";
         command.Parameters.Add("$file_id", SqliteType.Blob).Value = fileId.ToByteArray();
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -435,15 +447,44 @@ ON CONFLICT(file_id) DO UPDATE SET
             return null;
         }
 
-        var storedContentHash = reader.IsDBNull(0) ? null : reader.GetString(0);
-        var storedTokenHash = reader.IsDBNull(1) ? null : reader.GetString(1);
-        return new StoredSignatures(storedContentHash, storedTokenHash);
+        var title = reader.IsDBNull(0) ? null : reader.GetString(0);
+        var author = reader.IsDBNull(1) ? null : reader.GetString(1);
+        var mime = reader.GetString(2);
+        var metadataText = reader.IsDBNull(3) ? null : reader.GetString(3);
+        var metadataJson = reader.IsDBNull(4) ? null : reader.GetString(4);
+        var createdUtc = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        var modifiedUtc = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        var contentHash = reader.IsDBNull(7) ? null : reader.GetString(7);
+        var storedContentHash = reader.IsDBNull(8) ? null : reader.GetString(8);
+        var storedTokenHash = reader.IsDBNull(9) ? null : reader.GetString(9);
+
+        return new StoredProjection(
+            title,
+            author,
+            mime,
+            metadataText,
+            metadataJson,
+            createdUtc,
+            modifiedUtc,
+            contentHash,
+            storedContentHash,
+            storedTokenHash);
     }
 
     private static bool EqualsOrdinal(string? left, string? right)
         => string.Equals(left, right, StringComparison.Ordinal);
 
-    private sealed record StoredSignatures(string? StoredContentHash, string? StoredTokenHash);
+    private sealed record StoredProjection(
+        string? Title,
+        string? Author,
+        string Mime,
+        string? MetadataText,
+        string? MetadataJson,
+        DateTimeOffset CreatedUtc,
+        DateTimeOffset ModifiedUtc,
+        string? ContentHash,
+        string? StoredContentHash,
+        string? StoredTokenHash);
 
     private void LogSqliteFailure(SqliteException exception, SqliteCommand? command)
     {
