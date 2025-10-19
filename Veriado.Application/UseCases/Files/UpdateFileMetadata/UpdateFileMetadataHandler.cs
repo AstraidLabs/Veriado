@@ -1,3 +1,5 @@
+using Veriado.Appl.Abstractions;
+
 namespace Veriado.Appl.UseCases.Files.UpdateFileMetadata;
 
 /// <summary>
@@ -13,9 +15,10 @@ public sealed class UpdateFileMetadataHandler : FileWriteHandlerBase, IRequestHa
         IClock clock,
         IMapper mapper,
         IFilePersistenceUnitOfWork unitOfWork,
+        ISearchProjectionScope projectionScope,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, projectionScope, searchProjection, signatureCalculator)
     {
     }
 

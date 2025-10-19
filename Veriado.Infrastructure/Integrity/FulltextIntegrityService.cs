@@ -277,7 +277,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     transactionId,
                     batch.Length);
 
-                var projectionGuard = new DbContextSearchProjectionGuard(writeContext);
+                var projectionScope = new SearchProjectionScopeEf(writeContext);
                 IFileSearchProjection projectionService = new SearchProjectionService(
                     writeContext,
                     _analyzerFactory,
@@ -290,7 +290,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                 {
                     try
                     {
-                        if (await ReindexFileAsync(writeContext, projectionService, projectionGuard, fileId, ct)
+                        if (await ReindexFileAsync(writeContext, projectionService, projectionScope, fileId, ct)
                                 .ConfigureAwait(false))
                         {
                             processedCount++;
@@ -361,10 +361,12 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     private async Task<bool> ReindexFileAsync(
         AppDbContext writeContext,
         IFileSearchProjection projectionService,
-        ISearchProjectionTransactionGuard guard,
+        ISearchProjectionScope scope,
         Guid fileId,
         CancellationToken cancellationToken)
     {
+        scope.EnsureActive();
+
         await using var readContext = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var file = await readContext.Files
             .FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken)
@@ -392,7 +394,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     expectedTokenHash,
                     newContentHash,
                     signature.TokenHash,
-                    guard,
+                    scope,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -403,7 +405,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     file,
                     newContentHash,
                     signature.TokenHash,
-                    guard,
+                    scope,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -426,9 +428,9 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
     {
         await using var writeContext = await _writeFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await writeContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var guard = new DbContextSearchProjectionGuard(writeContext);
+        var scope = new SearchProjectionScopeEf(writeContext);
         var projectionService = new SearchProjectionService(writeContext, _analyzerFactory, _projectionLogger, _telemetry);
-        await projectionService.DeleteAsync(fileId, guard, cancellationToken).ConfigureAwait(false);
+        await projectionService.DeleteAsync(fileId, scope, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 

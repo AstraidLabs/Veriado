@@ -1,3 +1,5 @@
+using Veriado.Appl.Abstractions;
+
 namespace Veriado.Appl.UseCases.Files.RelinkFileContent;
 
 /// <summary>
@@ -18,9 +20,10 @@ public sealed class RelinkFileContentHandler : FileWriteHandlerBase, IRequestHan
         IMapper mapper,
         IFileStorage fileStorage,
         IFilePersistenceUnitOfWork unitOfWork,
+        ISearchProjectionScope projectionScope,
         IFileSearchProjection searchProjection,
         ISearchIndexSignatureCalculator signatureCalculator)
-        : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+        : base(repository, clock, mapper, unitOfWork, projectionScope, searchProjection, signatureCalculator)
     {
         _importPolicy = importPolicy ?? throw new ArgumentNullException(nameof(importPolicy));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));

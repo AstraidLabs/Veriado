@@ -20,7 +20,7 @@ public interface IFileSearchProjection
         string? expectedTokenHash,
         string? newContentHash,
         string? tokenHash,
-        ISearchProjectionTransactionGuard guard,
+        ISearchProjectionScope scope,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -35,7 +35,7 @@ public interface IFileSearchProjection
         FileEntity file,
         string? newContentHash,
         string? tokenHash,
-        ISearchProjectionTransactionGuard guard,
+        ISearchProjectionScope scope,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -43,5 +43,5 @@ public interface IFileSearchProjection
     /// </summary>
     /// <param name="fileId">The file identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task DeleteAsync(Guid fileId, ISearchProjectionTransactionGuard guard, CancellationToken cancellationToken);
+    Task DeleteAsync(Guid fileId, ISearchProjectionScope scope, CancellationToken cancellationToken);
 }

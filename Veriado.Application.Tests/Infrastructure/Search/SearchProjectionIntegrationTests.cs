@@ -62,11 +62,19 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var context = services.GetRequiredService<AppDbContext>();
         var repository = services.GetRequiredService<IFileRepository>();
         var unitOfWork = services.GetRequiredService<IFilePersistenceUnitOfWork>();
+        var projectionScope = services.GetRequiredService<ISearchProjectionScope>();
         var projection = services.GetRequiredService<IFileSearchProjection>();
         var signatureCalculator = services.GetRequiredService<ISearchIndexSignatureCalculator>();
         var clock = services.GetRequiredService<IClock>();
         var mapper = new MapperConfiguration(cfg => { }).CreateMapper();
-        var handler = new TestFileWriteHandler(repository, clock, mapper, unitOfWork, projection, signatureCalculator);
+        var handler = new TestFileWriteHandler(
+            repository,
+            clock,
+            mapper,
+            unitOfWork,
+            projectionScope,
+            projection,
+            signatureCalculator);
 
         var fileSystem = FileSystemEntityFactory.CreateSample();
         var file = FileEntityFactory.CreateSample(fileSystem.Id);
@@ -134,11 +142,19 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         var context = services.GetRequiredService<AppDbContext>();
         var repository = services.GetRequiredService<IFileRepository>();
         var unitOfWork = services.GetRequiredService<IFilePersistenceUnitOfWork>();
+        var projectionScope = services.GetRequiredService<ISearchProjectionScope>();
         var projection = services.GetRequiredService<IFileSearchProjection>();
         var signatureCalculator = services.GetRequiredService<ISearchIndexSignatureCalculator>();
         var clock = services.GetRequiredService<IClock>();
         var mapper = new MapperConfiguration(cfg => { }).CreateMapper();
-        var handler = new TestFileWriteHandler(repository, clock, mapper, unitOfWork, projection, signatureCalculator);
+        var handler = new TestFileWriteHandler(
+            repository,
+            clock,
+            mapper,
+            unitOfWork,
+            projectionScope,
+            projection,
+            signatureCalculator);
 
         var fileSystem = FileSystemEntityFactory.CreateSample();
         var file = FileEntityFactory.CreateSample(fileSystem.Id);
@@ -168,13 +184,14 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
         await using (var transaction = await unitOfWork.BeginTransactionAsync(CancellationToken.None).ConfigureAwait(false))
         {
             await unitOfWork.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+            projectionScope.EnsureActive();
             await Assert.ThrowsAsync<StaleSearchProjectionUpdateException>(() => projection.UpsertAsync(
                     file,
                     initialContentHash,
                     initialTokenHash,
                     file.ContentHash.Value,
                     olderSignature.TokenHash,
-                    unitOfWork,
+                    projectionScope,
                     CancellationToken.None))
                 .ConfigureAwait(false);
         }
@@ -197,9 +214,10 @@ public sealed class SearchProjectionIntegrationTests : IAsyncLifetime
             IClock clock,
             IMapper mapper,
             IFilePersistenceUnitOfWork unitOfWork,
+            ISearchProjectionScope projectionScope,
             IFileSearchProjection searchProjection,
             ISearchIndexSignatureCalculator signatureCalculator)
-            : base(repository, clock, mapper, unitOfWork, searchProjection, signatureCalculator)
+            : base(repository, clock, mapper, unitOfWork, projectionScope, searchProjection, signatureCalculator)
         {
         }
 
