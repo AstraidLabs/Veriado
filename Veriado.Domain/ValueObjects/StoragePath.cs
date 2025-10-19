@@ -70,30 +70,68 @@ public sealed class StoragePath : IEquatable<StoragePath>
         }
 
         var sanitizedRelative = NormalizeToPlatformSeparators(trimmedRelative);
-        var combined = Path.Combine(rootFullPath, sanitizedRelative);
-        var fullPath = Path.GetFullPath(combined);
+        var fullPath = Path.GetFullPath(Path.Combine(rootFullPath, sanitizedRelative));
 
         EnsureWithinRoot(rootFullPath, fullPath);
 
         var relativePath = Path.GetRelativePath(rootFullPath, fullPath);
+        if (IsPathOutsideRoot(relativePath))
+        {
+            throw new StoragePathViolationException(rootFullPath, fullPath);
+        }
+
         var normalized = NormalizeForStorage(relativePath);
         return From(normalized);
     }
 
     private static void EnsureWithinRoot(string rootFullPath, string fullPath)
     {
-        var rootWithSeparator = AppendDirectorySeparator(rootFullPath);
-        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(fullPath, rootFullPath, StringComparison.OrdinalIgnoreCase))
+        if (!fullPath.StartsWith(rootFullPath, StringComparison.OrdinalIgnoreCase))
         {
             throw new StoragePathViolationException(rootFullPath, fullPath);
         }
+
+        if (Path.EndsInDirectorySeparator(rootFullPath))
+        {
+            return;
+        }
+
+        var normalizedRoot = TrimTrailingSeparators(rootFullPath);
+        if (!fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new StoragePathViolationException(rootFullPath, fullPath);
+        }
+
+        if (fullPath.Length > normalizedRoot.Length)
+        {
+            var nextChar = fullPath[normalizedRoot.Length];
+            if (!IsDirectorySeparator(nextChar))
+            {
+                throw new StoragePathViolationException(rootFullPath, fullPath);
+            }
+        }
     }
 
-    private static string AppendDirectorySeparator(string path)
-        => Path.EndsInDirectorySeparator(path)
+    private static string TrimTrailingSeparators(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return path;
+        }
+
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return trimmed.Length == 0
             ? path
-            : path + Path.DirectorySeparatorChar;
+            : trimmed;
+    }
+
+    private static bool IsDirectorySeparator(char character)
+        => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar;
+
+    private static bool IsPathOutsideRoot(string relativePath)
+        => relativePath.StartsWith("..", StringComparison.Ordinal)
+            || Path.IsPathRooted(relativePath);
 
     private static string NormalizeToPlatformSeparators(string path)
         => path
