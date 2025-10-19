@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common.Exceptions;
 using Veriado.Application.Import;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Files;
@@ -170,15 +171,30 @@ public sealed class FileImportService : IFileImportWriter
                 var expectedContentHash = mapped.File.SearchIndex?.IndexedContentHash;
                 var newContentHash = mapped.File.ContentHash.Value;
 
-                await _searchProjection
-                    .UpsertAsync(
-                        mapped.File,
-                        expectedContentHash,
-                        newContentHash,
-                        signature.TokenHash,
-                        projectionGuard,
-                        ct)
-                    .ConfigureAwait(false);
+                try
+                {
+                    await _searchProjection
+                        .UpsertAsync(
+                            mapped.File,
+                            expectedContentHash,
+                            mapped.File.SearchIndex?.TokenHash,
+                            newContentHash,
+                            signature.TokenHash,
+                            projectionGuard,
+                            ct)
+                        .ConfigureAwait(false);
+                }
+                catch (AnalyzerOrContentDriftException)
+                {
+                    await _searchProjection
+                        .ForceReplaceAsync(
+                            mapped.File,
+                            newContentHash,
+                            signature.TokenHash,
+                            projectionGuard,
+                            ct)
+                        .ConfigureAwait(false);
+                }
 
                 var indexedAt = mapped.SearchMetadata?.IndexedUtc ?? _clock.UtcNow;
                 mapped.File.ConfirmIndexed(

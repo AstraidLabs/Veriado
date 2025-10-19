@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using Veriado.Appl.Abstractions;
+using Veriado.Appl.Common.Exceptions;
 using Veriado.Appl.Search;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Schema;
@@ -379,17 +380,33 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         var signatureSource = tracked ?? file;
         var signature = _signatureCalculator.Compute(signatureSource);
         var expectedContentHash = tracked?.SearchIndex?.IndexedContentHash ?? file.SearchIndex?.IndexedContentHash;
+        var expectedTokenHash = tracked?.SearchIndex?.TokenHash ?? file.SearchIndex?.TokenHash;
         var newContentHash = file.ContentHash.Value;
 
-        await projectionService
-            .UpsertAsync(
-                file,
-                expectedContentHash,
-                newContentHash,
-                signature.TokenHash,
-                guard,
-                cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            await projectionService
+                .UpsertAsync(
+                    file,
+                    expectedContentHash,
+                    expectedTokenHash,
+                    newContentHash,
+                    signature.TokenHash,
+                    guard,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AnalyzerOrContentDriftException)
+        {
+            await projectionService
+                .ForceReplaceAsync(
+                    file,
+                    newContentHash,
+                    signature.TokenHash,
+                    guard,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         if (tracked is not null)
         {
