@@ -385,9 +385,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         var expectedTokenHash = tracked?.SearchIndex?.TokenHash ?? file.SearchIndex?.TokenHash;
         var newContentHash = file.ContentHash.Value;
 
+        var projected = false;
+
         try
         {
-            await projectionService
+            projected = await projectionService
                 .UpsertAsync(
                     file,
                     expectedContentHash,
@@ -400,7 +402,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
         }
         catch (AnalyzerOrContentDriftException)
         {
-            await projectionService
+            projected = await projectionService
                 .ForceReplaceAsync(
                     file,
                     newContentHash,
@@ -408,6 +410,11 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
                     scope,
                     cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        if (!projected)
+        {
+            return false;
         }
 
         if (tracked is not null)
@@ -421,7 +428,7 @@ internal sealed class FulltextIntegrityService : IFulltextIntegrityService
             return true;
         }
 
-        return false;
+        return projected;
     }
 
     private async Task DeleteProjectionAsync(Guid fileId, CancellationToken cancellationToken)

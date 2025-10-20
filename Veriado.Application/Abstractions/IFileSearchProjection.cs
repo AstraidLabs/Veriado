@@ -14,7 +14,7 @@ public interface IFileSearchProjection
     /// <param name="tokenHash">The analyzer token hash captured for the projection.</param>
     /// <param name="guard">The projection transaction guard.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task UpsertAsync(
+    Task<bool> UpsertAsync(
         FileEntity file,
         string? expectedContentHash,
         string? expectedTokenHash,
@@ -31,7 +31,7 @@ public interface IFileSearchProjection
     /// <param name="tokenHash">The analyzer token hash captured for the projection.</param>
     /// <param name="guard">The projection transaction guard.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    Task ForceReplaceAsync(
+    Task<bool> ForceReplaceAsync(
         FileEntity file,
         string? newContentHash,
         string? tokenHash,

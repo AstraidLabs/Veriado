@@ -191,12 +191,22 @@ public sealed class FileImportService : IFileImportWriter
 
             if (projectionItems.Count > 0)
             {
+                var projectedFiles = new HashSet<Guid>();
+
                 if (_searchProjection is IBatchFileSearchProjection batchProjection)
                 {
                     var batchResult = await batchProjection
                         .UpsertBatchAsync(projectionItems, _projectionScope, ct)
                         .ConfigureAwait(false);
                     busyRetries = batchResult.BusyRetries;
+
+                    if (batchResult.ProjectedItems == projectionItems.Count)
+                    {
+                        foreach (var item in projectionItems)
+                        {
+                            projectedFiles.Add(item.File.Id);
+                        }
+                    }
                 }
                 else
                 {
@@ -210,7 +220,7 @@ public sealed class FileImportService : IFileImportWriter
 
                                     try
                                     {
-                                        await _searchProjection
+                                        var projected = await _searchProjection
                                             .UpsertAsync(
                                                 item.File,
                                                 item.ExpectedContentHash,
@@ -220,10 +230,14 @@ public sealed class FileImportService : IFileImportWriter
                                                 _projectionScope,
                                                 scopeCt)
                                             .ConfigureAwait(false);
+                                        if (projected)
+                                        {
+                                            projectedFiles.Add(item.File.Id);
+                                        }
                                     }
                                     catch (AnalyzerOrContentDriftException)
                                     {
-                                        await _searchProjection
+                                        var projected = await _searchProjection
                                             .ForceReplaceAsync(
                                                 item.File,
                                                 item.NewContentHash,
@@ -231,6 +245,10 @@ public sealed class FileImportService : IFileImportWriter
                                                 _projectionScope,
                                                 scopeCt)
                                             .ConfigureAwait(false);
+                                        if (projected)
+                                        {
+                                            projectedFiles.Add(item.File.Id);
+                                        }
                                     }
                                 }
                             },
@@ -240,6 +258,11 @@ public sealed class FileImportService : IFileImportWriter
 
                 foreach (var item in projectionItems)
                 {
+                    if (!projectedFiles.Contains(item.File.Id))
+                    {
+                        continue;
+                    }
+
                     var indexedAt = item.IndexedUtc ?? _clock.UtcNow;
                     item.File.ConfirmIndexed(
                         item.File.SearchIndex?.SchemaVersion ?? 1,

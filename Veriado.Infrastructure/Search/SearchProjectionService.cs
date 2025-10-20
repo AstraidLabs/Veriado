@@ -112,7 +112,7 @@ ON CONFLICT(file_id) DO UPDATE SET
         _telemetry = telemetry;
     }
 
-    public async Task UpsertAsync(
+    public async Task<bool> UpsertAsync(
         FileEntity file,
         string? expectedContentHash,
         string? expectedTokenHash,
@@ -125,6 +125,8 @@ ON CONFLICT(file_id) DO UPDATE SET
         ArgumentNullException.ThrowIfNull(scope);
 
         scope.EnsureActive();
+
+        var performed = false;
 
         await scope.ExecuteAsync(
             async ct =>
@@ -165,6 +167,8 @@ ON CONFLICT(file_id) DO UPDATE SET
                         ct)
                     .ConfigureAwait(false);
 
+                performed = true;
+
                 if (commandResult.RowsAffected == 0)
                 {
                     throw new AnalyzerOrContentDriftException();
@@ -172,9 +176,11 @@ ON CONFLICT(file_id) DO UPDATE SET
             },
             cancellationToken)
             .ConfigureAwait(false);
+
+        return performed;
     }
 
-    public async Task ForceReplaceAsync(
+    public async Task<bool> ForceReplaceAsync(
         FileEntity file,
         string? newContentHash,
         string? tokenHash,
@@ -185,6 +191,8 @@ ON CONFLICT(file_id) DO UPDATE SET
         ArgumentNullException.ThrowIfNull(scope);
 
         scope.EnsureActive();
+
+        var performed = false;
 
         await scope.ExecuteAsync(
             async ct =>
@@ -218,9 +226,12 @@ ON CONFLICT(file_id) DO UPDATE SET
                         applyGuard: false,
                         ct)
                     .ConfigureAwait(false);
+                performed = true;
             },
             cancellationToken)
             .ConfigureAwait(false);
+
+        return performed;
     }
 
     public async Task<SearchProjectionBatchResult> UpsertBatchAsync(
@@ -233,14 +244,14 @@ ON CONFLICT(file_id) DO UPDATE SET
 
         scope.EnsureActive();
 
-        var result = new SearchProjectionBatchResult(0);
+        var result = new SearchProjectionBatchResult(0, 0);
 
         await scope.ExecuteAsync(
             async ct =>
             {
                 if (!SqliteFulltextSupport.IsAvailable || items.Count == 0)
                 {
-                    result = new SearchProjectionBatchResult(0);
+                    result = new SearchProjectionBatchResult(0, 0);
                     return;
                 }
 
@@ -259,6 +270,8 @@ ON CONFLICT(file_id) DO UPDATE SET
                 EnsureSearchDocumentParameters(forceCommand);
 
                 var busyRetries = 0;
+
+                var projectedCount = 0;
 
                 foreach (var item in items)
                 {
@@ -300,6 +313,7 @@ ON CONFLICT(file_id) DO UPDATE SET
 
                     if (upsertResult.RowsAffected != 0)
                     {
+                        projectedCount++;
                         continue;
                     }
 
@@ -318,9 +332,10 @@ ON CONFLICT(file_id) DO UPDATE SET
                         .ConfigureAwait(false);
 
                     busyRetries += forceResult.BusyRetries;
+                    projectedCount++;
                 }
 
-                result = new SearchProjectionBatchResult(busyRetries);
+                result = new SearchProjectionBatchResult(busyRetries, projectedCount);
             },
             cancellationToken)
             .ConfigureAwait(false);
@@ -637,7 +652,7 @@ internal interface IBatchFileSearchProjection
         CancellationToken cancellationToken);
 }
 
-internal readonly record struct SearchProjectionBatchResult(int BusyRetries);
+internal readonly record struct SearchProjectionBatchResult(int BusyRetries, int ProjectedItems);
 
 internal readonly record struct SearchProjectionWorkItem(
     FileEntity File,
