@@ -145,9 +145,11 @@ public abstract class FileWriteHandlerBase
                         var newContentHash = file.ContentHash.Value;
                         var newTokenHash = signature.TokenHash;
 
+                        var projectionPerformed = false;
+
                         try
                         {
-                            await _searchProjection
+                            projectionPerformed = await _searchProjection
                                 .UpsertAsync(
                                     file,
                                     expectedContentHash,
@@ -160,7 +162,7 @@ public abstract class FileWriteHandlerBase
                         }
                         catch (AnalyzerOrContentDriftException)
                         {
-                            await _searchProjection
+                            projectionPerformed = await _searchProjection
                                 .ForceReplaceAsync(
                                     file,
                                     newContentHash,
@@ -168,6 +170,11 @@ public abstract class FileWriteHandlerBase
                                     _projectionScope,
                                     ct)
                                 .ConfigureAwait(false);
+                        }
+
+                        if (!projectionPerformed)
+                        {
+                            return;
                         }
 
                         var schemaVersion = searchState?.SchemaVersion ?? 1;
