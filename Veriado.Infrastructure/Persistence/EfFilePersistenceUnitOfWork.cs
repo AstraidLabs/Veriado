@@ -35,6 +35,10 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         {
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new FileConcurrencyException("The file was modified by another operation.", ex);
+        }
         catch (DbUpdateException ex) when (IsDuplicateContentHashViolation(ex))
         {
             throw new DuplicateFileContentException("A file with identical content already exists.", ex);

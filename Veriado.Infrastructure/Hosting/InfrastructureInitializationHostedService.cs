@@ -1,8 +1,11 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.DependencyInjection;
 
-namespace Veriado.Services.Infrastructure;
+namespace Veriado.Infrastructure.Hosting;
 
 /// <summary>
 /// Ensures the SQLite infrastructure is initialised when the host starts.

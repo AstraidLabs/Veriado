@@ -163,7 +163,14 @@ public sealed class FileImportService : IFileImportWriter
             return (new ImportResult(imported, skipped, updated), 0);
         }
 
-        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new FileConcurrencyException("The file was modified by another operation during import.", ex);
+        }
 
         var busyRetries = 0;
 
@@ -272,7 +279,14 @@ public sealed class FileImportService : IFileImportWriter
                         item.IndexedTitle ?? item.Signature.NormalizedTitle);
                 }
 
-                await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    throw new FileConcurrencyException("The file was modified by another operation during import.", ex);
+                }
             }
         }
 

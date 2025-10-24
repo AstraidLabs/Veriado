@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Veriado.Mapping.AC;
+using Veriado.Services.Import.Ingestion;
 using Veriado.Services.Import.Internal;
 using Veriado.Services.Maintenance;
 using Veriado.Contracts.Import;
@@ -16,6 +17,7 @@ using Veriado.Appl.Abstractions;
 using Veriado.Appl.UseCases.Files.CheckFileHash;
 using Veriado.Application.Import;
 using ApplicationImportOptions = Veriado.Application.Import.ImportOptions;
+using StreamingImportOptions = Veriado.Services.Import.Ingestion.ImportOptions;
 
 namespace Veriado.Services.Import;
 
@@ -35,6 +37,8 @@ public sealed class ImportService : IImportService
         Path.DirectorySeparatorChar,
         Path.AltDirectorySeparatorChar,
     };
+
+    private static readonly byte[] MinimalContent = new byte[] { 0x00 };
 
     private readonly IMediator _mediator;
     private readonly WriteMappingPipeline _mappingPipeline;
@@ -79,7 +83,13 @@ public sealed class ImportService : IImportService
         var normalized = NormalizeRequest(request);
         var descriptor = string.IsNullOrWhiteSpace(normalized.Name) ? normalized.Extension : normalized.Name;
         var contentHash = ComputeContentHash(normalized.Content);
-        var import = new CreateFileImport(normalized, contentHash);
+
+        await using var import = new CreateFileImport(
+            normalized,
+            contentHash,
+            normalized.Content.LongLength,
+            new MemoryStream(normalized.Content, writable: false));
+
         return await ImportFileInternalAsync(import, descriptor, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -406,7 +416,8 @@ public sealed class ImportService : IImportService
 
                     try
                     {
-                        var createRequest = await CreateRequestFromFileAsync(filePath, options, token).ConfigureAwait(false);
+                        await using var createRequest = await CreateRequestFromFileAsync(filePath, options, token)
+                            .ConfigureAwait(false);
 
                         if (await FileAlreadyExistsAsync(createRequest.ContentHash, token).ConfigureAwait(false))
                         {
@@ -916,13 +927,40 @@ public sealed class ImportService : IImportService
 
         using var scope = BeginScope();
 
-        await using var contentStream = new MemoryStream(command.Content, writable: false);
-        var storageResult = await _fileStorage.SaveAsync(contentStream, cancellationToken).ConfigureAwait(false);
+        if (import.ContentStream.CanSeek)
+        {
+            import.ContentStream.Seek(0, SeekOrigin.Begin);
+        }
+
+        var storageResult = await _fileStorage.SaveAsync(import.ContentStream, cancellationToken).ConfigureAwait(false);
 
         if (!string.Equals(storageResult.Hash.Value, import.ContentHash, StringComparison.Ordinal))
+        {
+            var mismatch = new ApiError(
+                "content_hash_mismatch",
+                "File content changed while it was being read. Please retry the import.",
+                descriptor);
+            LogApiError(descriptor, mismatch);
+            return ApiResponse<Guid>.Failure(mismatch);
+        }
+
+        var importItem = CreateImportItem(fileId, request, mapped, storageResult, import.ContentHash);
+        var importResult = await InvokeImportAsync(importItem, cancellationToken).ConfigureAwait(false);
 
         if (importResult.Imported + importResult.Updated > 0)
         {
+            var followUpCommands = mapped.BuildFollowUpCommands(fileId).ToArray();
+            foreach (var followUp in followUpCommands)
+            {
+                var followUpResult = await _mediator.Send(followUp, cancellationToken).ConfigureAwait(false);
+                if (!followUpResult.IsSuccess)
+                {
+                    var error = ConvertAppError(followUpResult.Error);
+                    LogApiError(descriptor, error);
+                    return ApiResponse<Guid>.Failure(error);
+                }
+            }
+
             return ApiResponse<Guid>.Success(fileId);
         }
 
@@ -984,26 +1022,35 @@ public sealed class ImportService : IImportService
         }
 
         var contentResult = await ReadFileContentAsync(filePath, options, cancellationToken).ConfigureAwait(false);
-        if (maxFileSizeBytes.HasValue && contentResult.Content.LongLength > maxFileSizeBytes.Value)
+        if (maxFileSizeBytes.HasValue && contentResult.Length > maxFileSizeBytes.Value)
         {
-            throw new FileTooLargeException(filePath, contentResult.Content.LongLength, maxFileSizeBytes.Value);
+            await contentResult.Stream.DisposeAsync().ConfigureAwait(false);
+            throw new FileTooLargeException(filePath, contentResult.Length, maxFileSizeBytes.Value);
         }
 
-        var request = NormalizeRequest(new CreateFileRequest
+        try
         {
-            Name = name,
-            Extension = extension,
-            Mime = MimeMap.GetMimeType(extension),
-            Author = author,
-            Content = contentResult.Content,
-            MaxContentLength = maxFileSizeBytes.HasValue && maxFileSizeBytes.Value <= int.MaxValue
-                ? (int?)maxFileSizeBytes.Value
-                : null,
-            SystemMetadata = systemMetadata,
-            IsReadOnly = isReadOnly,
-        });
+            var request = NormalizeRequest(new CreateFileRequest
+            {
+                Name = name,
+                Extension = extension,
+                Mime = MimeMap.GetMimeType(extension),
+                Author = author,
+                Content = MinimalContent,
+                MaxContentLength = maxFileSizeBytes.HasValue && maxFileSizeBytes.Value <= int.MaxValue
+                    ? (int?)maxFileSizeBytes.Value
+                    : null,
+                SystemMetadata = systemMetadata,
+                IsReadOnly = isReadOnly,
+            });
 
-        return new CreateFileImport(request, contentResult.Hash);
+            return new CreateFileImport(request, contentResult.Hash, contentResult.Length, contentResult.Stream);
+        }
+        catch
+        {
+            await contentResult.Stream.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private async Task<FileContentReadResult> ReadFileContentAsync(
@@ -1011,71 +1058,73 @@ public sealed class ImportService : IImportService
         NormalizedImportOptions options,
         CancellationToken cancellationToken)
     {
-        await using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            options.BufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-        if (options.MaxFileSizeBytes.HasValue && stream.Length > options.MaxFileSizeBytes.Value)
-        {
-            throw new FileTooLargeException(filePath, stream.Length, options.MaxFileSizeBytes.Value);
-        }
-
-        if (stream.Length > int.MaxValue)
-        {
-            throw new FileTooLargeException(filePath, stream.Length, int.MaxValue);
-        }
-
-        var size = (int)stream.Length;
-        if (size == 0)
-        {
-            using var emptyHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var emptyHashValue = emptyHash.GetHashAndReset();
-            var emptyHashText = Convert.ToHexString(emptyHashValue);
-            _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", 0, filePath, emptyHashText);
-            return new FileContentReadResult(Array.Empty<byte>(), emptyHashText);
-        }
-
-        var content = new byte[size];
-        var buffer = ArrayPool<byte>.Shared.Rent(options.BufferSize);
-        var offset = 0;
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var streamingOptions = CreateStreamingOptions(options);
+        var stream = await FileOpener
+            .OpenForReadWithRetryAsync(filePath, streamingOptions, _logger, cancellationToken)
+            .ConfigureAwait(false);
 
         try
         {
-            while (offset < size)
+            if (options.MaxFileSizeBytes.HasValue && stream.CanSeek && stream.Length > options.MaxFileSizeBytes.Value)
             {
-                var toRead = Math.Min(buffer.Length, size - offset);
-                var read = await stream.ReadAsync(buffer.AsMemory(0, toRead), cancellationToken).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-
-                buffer.AsSpan(0, read).CopyTo(content.AsSpan(offset));
-                hash.AppendData(buffer, 0, read);
-                offset += read;
+                throw new FileTooLargeException(filePath, stream.Length, options.MaxFileSizeBytes.Value);
             }
+
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = ArrayPool<byte>.Shared.Rent(streamingOptions.BufferSize);
+            long total = 0;
+
+            try
+            {
+                while (true)
+                {
+                    var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
+                        .ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        break;
+                    }
+
+                    hash.AppendData(buffer, 0, read);
+                    total += read;
+
+                    if (options.MaxFileSizeBytes.HasValue && total > options.MaxFileSizeBytes.Value)
+                    {
+                        throw new FileTooLargeException(filePath, total, options.MaxFileSizeBytes.Value);
+                    }
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+
+            if (stream.CanSeek)
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+            }
+
+            var hashText = Convert.ToHexString(hash.GetHashAndReset());
+            _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", total, filePath, hashText);
+
+            return new FileContentReadResult(stream, total, hashText);
         }
-        finally
+        catch
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            await stream.DisposeAsync().ConfigureAwait(false);
+            throw;
         }
-
-        if (offset < size)
-        {
-            Array.Resize(ref content, offset);
-        }
-
-        var hashValue = hash.GetHashAndReset();
-        var hashText = Convert.ToHexString(hashValue);
-        _logger.LogDebug("Read {Length} bytes from {FilePath} (SHA256 {Hash}).", offset, filePath, hashText);
-
-        return new FileContentReadResult(content, hashText);
     }
+
+    private static StreamingImportOptions CreateStreamingOptions(NormalizedImportOptions options)
+        => new()
+        {
+            BufferSize = options.BufferSize,
+            MaxRetryCount = options.FileOpenRetryCount,
+            RetryBaseDelay = options.FileOpenRetryBaseDelay,
+            MaxRetryDelay = options.FileOpenMaxRetryDelay,
+            SharePolicy = options.SharePolicy,
+        };
 
     private CreateFileRequest NormalizeRequest(CreateFileRequest request)
     {
@@ -1375,6 +1424,34 @@ public sealed class ImportService : IImportService
         var keepMetadata = options?.KeepFileSystemMetadata ?? true;
         var setReadOnly = options?.SetReadOnly ?? false;
 
+        var retryCount = options?.FileOpenRetryCount ?? 5;
+        if (retryCount < 0)
+        {
+            retryCount = 0;
+        }
+
+        static TimeSpan NormalizeDelay(int? milliseconds, int fallback)
+        {
+            var value = milliseconds.GetValueOrDefault(fallback);
+            if (value <= 0)
+            {
+                value = fallback;
+            }
+
+            return TimeSpan.FromMilliseconds(value);
+        }
+
+        var baseDelay = NormalizeDelay(options?.FileOpenRetryBaseDelayMilliseconds, 200);
+        var maxDelay = NormalizeDelay(options?.FileOpenRetryMaxDelayMilliseconds, 2000);
+        if (maxDelay < baseDelay)
+        {
+            maxDelay = baseDelay;
+        }
+
+        var sharePolicy = options?.AllowSourceFileDeletion ?? false
+            ? FileOpenSharePolicy.ReadWriteDelete
+            : FileOpenSharePolicy.ReadWrite;
+
         return new NormalizedImportOptions(
             normalizedSearchPattern,
             recursive,
@@ -1387,7 +1464,11 @@ public sealed class ImportService : IImportService
             originalPattern,
             searchPatternSanitized,
             warningMessage,
-            searchPatternResult);
+            searchPatternResult,
+            retryCount,
+            baseDelay,
+            maxDelay,
+            sharePolicy);
     }
 
     private static NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
@@ -1551,7 +1632,14 @@ public sealed class ImportService : IImportService
         return Convert.ToHexString(SHA256.HashData(content));
     }
 
-    private sealed record CreateFileImport(CreateFileRequest Request, string ContentHash);
+    private sealed record CreateFileImport(
+        CreateFileRequest Request,
+        string ContentHash,
+        long ContentLength,
+        Stream ContentStream) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ContentStream.DisposeAsync();
+    }
 
     private ImportItem CreateImportItem(
         Guid fileId,
@@ -1636,7 +1724,7 @@ public sealed class ImportService : IImportService
 
     private sealed record FileEnumerationResult(string[] Files, IReadOnlyList<ImportError> Errors, ImportError? FatalError);
 
-    private sealed record FileContentReadResult(byte[] Content, string Hash);
+    private sealed record FileContentReadResult(Stream Stream, long Length, string Hash);
 
     private sealed class FileTooLargeException : Exception
     {
@@ -1667,7 +1755,11 @@ public sealed class ImportService : IImportService
         string? OriginalSearchPattern,
         bool SearchPatternSanitized,
         string? SearchPatternWarningMessage,
-        SearchPatternResult SearchPatternResult);
+        SearchPatternResult SearchPatternResult,
+        int FileOpenRetryCount,
+        TimeSpan FileOpenRetryBaseDelay,
+        TimeSpan FileOpenMaxRetryDelay,
+        FileOpenSharePolicy SharePolicy);
 
     private readonly record struct SearchPatternResult(
         string Normalized,

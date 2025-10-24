@@ -27,6 +27,31 @@ public sealed record class ImportOptions
         = 64 * 1024;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the source file can be deleted by other processes while it is being imported.
+    /// When enabled, the importer opens files with <c>FileShare.Delete</c> in addition to read/write access.
+    /// </summary>
+    public bool AllowSourceFileDeletion { get; init; }
+        = false;
+
+    /// <summary>
+    /// Gets or sets the maximum number of retries performed when a source file is temporarily locked.
+    /// </summary>
+    public int FileOpenRetryCount { get; init; }
+        = 5;
+
+    /// <summary>
+    /// Gets or sets the initial back-off delay, in milliseconds, applied between retries while opening source files.
+    /// </summary>
+    public int FileOpenRetryBaseDelayMilliseconds { get; init; }
+        = 200;
+
+    /// <summary>
+    /// Gets or sets the maximum back-off delay, in milliseconds, applied when retrying to open source files.
+    /// </summary>
+    public int FileOpenRetryMaxDelayMilliseconds { get; init; }
+        = 2000;
+
+    /// <summary>
     /// Gets or sets the default author applied when file metadata does not specify one.
     /// </summary>
     public string? DefaultAuthor { get; init; }

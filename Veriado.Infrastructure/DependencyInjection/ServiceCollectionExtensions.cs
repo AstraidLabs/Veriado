@@ -15,6 +15,7 @@ using Veriado.Appl.Abstractions;
 using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Events.Handlers;
+using Veriado.Infrastructure.Hosting;
 using Veriado.Infrastructure.Import;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
@@ -201,6 +202,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileReadRepository, FileReadRepository>();
         services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();
 
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InfrastructureInitializationHostedService>());
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
 
