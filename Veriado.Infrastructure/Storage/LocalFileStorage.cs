@@ -1,7 +1,10 @@
 using System;
 using System.Buffers;
 using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using Veriado.Appl.Abstractions;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
@@ -11,7 +14,7 @@ namespace Veriado.Infrastructure.Storage;
 /// <summary>
 /// Provides a simple file-system based implementation of <see cref="IFileStorage"/> for local development scenarios.
 /// </summary>
-internal sealed class LocalFileStorage : IFileStorage
+internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 {
     private const string DefaultMimeType = "application/octet-stream";
     private readonly string _rootPath;
@@ -36,16 +39,61 @@ internal sealed class LocalFileStorage : IFileStorage
         Directory.CreateDirectory(_rootPath);
     }
 
+    public ValueTask<StorageReservation> ReservePathAsync(string? preferredPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var relativePath = string.IsNullOrWhiteSpace(preferredPath)
+            ? BuildRelativePath()
+            : NormalizePath(preferredPath!.Trim());
+
+        var storagePath = StoragePath.From(relativePath);
+        var physicalPath = ResolvePath(storagePath.Value);
+        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
+
+        return ValueTask.FromResult(new StorageReservation(_provider, storagePath));
+    }
+
+    public ValueTask<Stream> OpenWriteAsync(StorageReservation reservation, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var physicalPath = ResolvePath(reservation.Path.Value);
+        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
+
+        Stream stream = new FileStream(
+            physicalPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            81920,
+            useAsync: true);
+
+        return ValueTask.FromResult(stream);
+    }
+
+    public ValueTask<StorageResult> CommitAsync(
+        StorageReservation reservation,
+        StorageCommitContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+        ArgumentNullException.ThrowIfNull(context);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var hash = FileHash.From(context.Sha256);
+        var snapshot = CreateSnapshot(reservation.Path.Value, hash, context.Length);
+        return ValueTask.FromResult(snapshot);
+    }
+
     public async Task<StorageResult> SaveAsync(Stream content, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var relativePath = BuildRelativePath();
-        var physicalPath = ResolvePath(relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
-
-        await using var destination = new FileStream(physicalPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+        var reservation = await ReservePathAsync(preferredPath: null, cancellationToken).ConfigureAwait(false);
+        await using var destination = await OpenWriteAsync(reservation, cancellationToken).ConfigureAwait(false);
         using var incrementalHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = ArrayPool<byte>.Shared.Rent(81920);
         long totalBytes = 0;
@@ -74,7 +122,9 @@ internal sealed class LocalFileStorage : IFileStorage
 
         var hashBytes = incrementalHash.GetHashAndReset();
         var hash = FileHash.From(Convert.ToHexString(hashBytes));
-        return CreateSnapshot(relativePath, hash, totalBytes);
+        var commitContext = new StorageCommitContext(totalBytes, hash.Value, Sha1: null);
+        var snapshot = await CommitAsync(reservation, commitContext, cancellationToken).ConfigureAwait(false);
+        return snapshot;
     }
 
     public Task<StoragePath> MoveAsync(StoragePath from, StoragePath to, CancellationToken cancellationToken)

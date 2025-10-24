@@ -176,7 +176,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IClock, SystemClock>();
         services.AddSingleton<SuggestionMaintenanceService>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
-        services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddSingleton<LocalFileStorage>();
+        services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
+        services.AddSingleton<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
 
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
