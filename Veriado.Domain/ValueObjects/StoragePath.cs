@@ -135,11 +135,11 @@ public sealed class StoragePath : IEquatable<StoragePath>
 
     private static string NormalizeToPlatformSeparators(string path)
         => path
-            .Replace('\', Path.DirectorySeparatorChar)
-            .Replace('/', Path.DirectorySeparatorChar);
+            .Replace("\\", Path.DirectorySeparatorChar.ToString())
+            .Replace("/", Path.DirectorySeparatorChar.ToString());
 
     private static string NormalizeForStorage(string path)
-        => path.Replace('\', '/');
+        => path.Replace("\\", "/");
 
     /// <inheritdoc />
     public override string ToString() => Value;
