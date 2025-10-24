@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Appl.Common.Exceptions;
 using Veriado.Domain.Files.Events;
 using Veriado.Infrastructure.Persistence.Entities;
 
@@ -23,21 +24,35 @@ internal sealed partial class FileRepository : IFileRepository
 
     public async Task<FileEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = await _db.Files
-            .Include(f => f.Validity)
-            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var entity = await _db.Files
+                .Include(f => f.Validity)
+                .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
+                .ConfigureAwait(false);
 
-        return entity;
+            return entity;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("retrieving", ex);
+        }
     }
 
     public async Task<FileSystemEntity?> GetFileSystemAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = await _db.FileSystems
-            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var entity = await _db.FileSystems
+                .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
+                .ConfigureAwait(false);
 
-        return entity;
+            return entity;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("retrieving file system metadata for", ex);
+        }
     }
 
     public async Task<IReadOnlyList<FileEntity>> GetManyAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
@@ -50,13 +65,20 @@ internal sealed partial class FileRepository : IFileRepository
             return Array.Empty<FileEntity>();
         }
 
-        var files = await _db.Files
-            .Include(f => f.Validity)
-            .Where(f => idList.Contains(f.Id))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var files = await _db.Files
+                .Include(f => f.Validity)
+                .Where(f => idList.Contains(f.Id))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-        return files;
+            return files;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("retrieving", ex);
+        }
     }
 
     public async IAsyncEnumerable<FileEntity> StreamAllAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -67,25 +89,47 @@ internal sealed partial class FileRepository : IFileRepository
             .AsAsyncEnumerable()
             .WithCancellation(cancellationToken);
 
-        await foreach (var file in query.ConfigureAwait(false))
+        try
         {
-            yield return file;
+            await foreach (var file in query.ConfigureAwait(false))
+            {
+                yield return file;
+            }
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("streaming", ex);
         }
     }
 
     public async Task<bool> ExistsByHashAsync(FileHash hash, CancellationToken cancellationToken)
     {
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        return await context.Files.AnyAsync(f => f.ContentHash == hash, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await context.Files.AnyAsync(f => f.ContentHash == hash, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("checking the content hash for", ex);
+        }
     }
 
     public Task AddAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         _ = options;
-        _db.Files.Add(entity);
-        TrackContentHistory(entity);
-        return Task.CompletedTask;
+
+        try
+        {
+            _db.Files.Add(entity);
+            TrackContentHistory(entity);
+            return Task.CompletedTask;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("adding", ex);
+        }
     }
 
     public Task AddAsync(
@@ -98,18 +142,33 @@ internal sealed partial class FileRepository : IFileRepository
         ArgumentNullException.ThrowIfNull(fileSystem);
         _ = options;
 
-        _db.FileSystems.Add(fileSystem);
-        _db.Files.Add(file);
-        TrackContentHistory(file);
-        return Task.CompletedTask;
+        try
+        {
+            _db.FileSystems.Add(fileSystem);
+            _db.Files.Add(file);
+            TrackContentHistory(file);
+            return Task.CompletedTask;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("adding", ex);
+        }
     }
 
     public Task UpdateAsync(FileEntity entity, FilePersistenceOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         _ = options;
-        TrackContentHistory(entity);
-        return Task.CompletedTask;
+
+        try
+        {
+            TrackContentHistory(entity);
+            return Task.CompletedTask;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("updating", ex);
+        }
     }
 
     public Task UpdateAsync(
@@ -121,34 +180,35 @@ internal sealed partial class FileRepository : IFileRepository
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(fileSystem);
         _ = options;
-        TrackContentHistory(file);
-        return Task.CompletedTask;
+
+        try
+        {
+            TrackContentHistory(file);
+            return Task.CompletedTask;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("updating", ex);
+        }
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = await _db.Files.FirstOrDefaultAsync(f => f.Id == id, cancellationToken).ConfigureAwait(false);
-        if (entity is null)
+        try
         {
-            return;
+            var entity = await _db.Files.FirstOrDefaultAsync(f => f.Id == id, cancellationToken).ConfigureAwait(false);
+            if (entity is null)
+            {
+                return;
+            }
+
+            _db.Files.Remove(entity);
         }
-
-        _db.Files.Remove(entity);
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("deleting", ex);
+        }
     }
-
-    // TODO(FTS Sync Phase 2): write use-case checklist for synchronous projection integration.
-    // Command → Handler.Handle → Service entry point
-    // - CreateFileCommand → CreateFileHandler.Handle → ImportService.ImportFileAsync
-    // - CreateFileWithUploadCommand → CreateFileWithUploadHandler.Handle → ImportService.ImportFolderStreamAsync
-    // - RenameFileCommand → RenameFileHandler.Handle → FileOperationsService.RenameAsync
-    // - UpdateFileMetadataCommand → UpdateFileMetadataHandler.Handle → FileOperationsService.UpdateMetadataAsync (author/mime)
-    // - SetFileValidityCommand → SetFileValidityHandler.Handle → FileOperationsService.SetValidityAsync
-    // - ClearFileValidityCommand → ClearFileValidityHandler.Handle → FileOperationsService.ClearValidityAsync
-    // - ReplaceFileContentCommand → ReplaceFileContentHandler.Handle → FileOperationsService.ReplaceContentAsync
-    // - RelinkFileContentCommand → RelinkFileContentHandler.Handle → FileOperationsService.ReplaceContentAsync
-    // - ApplySystemMetadataCommand → ApplySystemMetadataHandler.Handle → FileOperationsService.ApplySystemMetadataAsync
-    // - Delete: FileRepository.DeleteAsync currently invoked directly (no dedicated handler yet)
-    // - Import workflows (ImportService.ImportFileAsync / ImportFolderStreamAsync) orchestrate the create/replace commands above.
 
 }
 
@@ -198,4 +258,7 @@ partial class FileRepository
 
         _db.FileContentLinks.Add(row);
     }
+
+    private static FileConcurrencyException CreateConcurrencyException(string operation, Exception innerException)
+        => new($"A concurrency conflict occurred while {operation} the file.", innerException);
 }

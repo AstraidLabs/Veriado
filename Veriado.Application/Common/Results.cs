@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
+using Veriado.Appl.Common.Exceptions;
 
 namespace Veriado.Appl.Common;
 
@@ -139,6 +140,8 @@ public readonly struct AppResult<T>
         {
             ArgumentException or ArgumentNullException or ArgumentOutOfRangeException
                 => Failure(AppError.Validation(defaultMessage ?? exception.Message, new[] { exception.Message })),
+            FileConcurrencyException concurrency
+                => Failure(AppError.Conflict(defaultMessage ?? concurrency.Message)),
             InvalidOperationException
                 => Failure(AppError.Conflict(defaultMessage ?? exception.Message)),
             _ => Failure(AppError.Unexpected(defaultMessage ?? "An unexpected error occurred.")),
