@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Veriado.Domain.Primitives;
@@ -17,7 +18,6 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
     private readonly IDomainEventDispatcher _dispatcher;
     private readonly ILogger<DomainEventsInterceptor> _logger;
     private readonly ConcurrentDictionary<DbContextId, DomainEventBatch> _pending = new();
-    private readonly ConcurrentDictionary<DbContextId, bool> _suppressed = new();
 
     public DomainEventsInterceptor(
         AuditEventProjector auditProjector,
@@ -31,17 +31,25 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
-        CapturePendingEvents(eventData);
+        if (eventData.Context is AppDbContext context)
+        {
+            ProcessDomainEventsAsync(context, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
         return base.SavingChanges(eventData, result);
     }
 
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        CapturePendingEvents(eventData);
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
+        if (eventData.Context is AppDbContext context)
+        {
+            await ProcessDomainEventsAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
     }
 
     public override async ValueTask<int> SavedChangesAsync(
@@ -49,13 +57,21 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         int result,
         CancellationToken cancellationToken = default)
     {
-        await ProcessPendingEventsAsync(eventData, cancellationToken).ConfigureAwait(false);
+        if (eventData.Context is AppDbContext context)
+        {
+            CompletePendingState(context);
+        }
+
         return await base.SavedChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
     }
 
     public override void SaveChangesFailed(DbContextErrorEventData eventData)
     {
-        ResetPendingState(eventData);
+        if (eventData.Context is AppDbContext context)
+        {
+            ResetPendingState(context);
+        }
+
         base.SaveChangesFailed(eventData);
     }
 
@@ -63,30 +79,73 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         DbContextErrorEventData eventData,
         CancellationToken cancellationToken = default)
     {
-        ResetPendingState(eventData);
+        if (eventData.Context is AppDbContext context)
+        {
+            ResetPendingState(context);
+        }
+
         return base.SaveChangesFailedAsync(eventData, cancellationToken);
     }
 
-    private void CapturePendingEvents(DbContextEventData eventData)
+    private async Task ProcessDomainEventsAsync(AppDbContext context, CancellationToken cancellationToken)
     {
-        if (eventData.Context is not AppDbContext context)
-        {
-            return;
-        }
-
         var contextId = context.ContextId;
-        if (_suppressed.ContainsKey(contextId))
+        if (_pending.ContainsKey(contextId))
         {
             return;
         }
 
         var batch = new DomainEventBatch();
-        CaptureAggregateVersions(context, batch);
-        CaptureDomainEvents(context, batch);
+        _pending[contextId] = batch;
 
-        if (batch.HasData)
+        try
         {
-            _pending[contextId] = batch;
+            CaptureAggregateVersions(context, batch);
+
+            while (true)
+            {
+                var newEvents = CaptureDomainEvents(context, batch);
+                if (newEvents.Count == 0)
+                {
+                    break;
+                }
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(
+                        "Dispatching {EventCount} domain events for context {ContextId}",
+                        newEvents.Count,
+                        contextId);
+                }
+
+                var domainEventTuples = newEvents
+                    .Select(evt => (evt.AggregateId, evt.DomainEvent))
+                    .ToList();
+
+                await _dispatcher
+                    .DispatchAsync(context, domainEventTuples.Select(tuple => tuple.DomainEvent).ToList(), cancellationToken)
+                    .ConfigureAwait(false);
+
+                var logs = CreateLogEntries(domainEventTuples);
+                if (logs.Count > 0)
+                {
+                    batch.EventLogs.AddRange(logs);
+                    await context.DomainEventLog.AddRangeAsync(logs, cancellationToken).ConfigureAwait(false);
+                }
+
+                _auditProjector.Project(context, domainEventTuples);
+            }
+
+            if (!batch.HasData)
+            {
+                _pending.TryRemove(contextId, out _);
+            }
+        }
+        catch
+        {
+            RestoreState(context, batch);
+            _pending.TryRemove(contextId, out _);
+            throw;
         }
     }
 
@@ -107,8 +166,10 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         }
     }
 
-    private static void CaptureDomainEvents(AppDbContext context, DomainEventBatch batch)
+    private static List<PendingDomainEvent> CaptureDomainEvents(AppDbContext context, DomainEventBatch batch)
     {
+        var captured = new List<PendingDomainEvent>();
+
         foreach (var entry in context.ChangeTracker.Entries<EntityBase>())
         {
             if (entry.Entity.DomainEvents.Count == 0)
@@ -118,75 +179,18 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
 
             foreach (var domainEvent in entry.Entity.DomainEvents)
             {
-                batch.DomainEvents.Add(new PendingDomainEvent(entry.Entity, entry.Entity.Id, domainEvent));
-            }
-        }
-    }
+                if (!batch.ProcessedEvents.Add(domainEvent))
+                {
+                    continue;
+                }
 
-    private async Task ProcessPendingEventsAsync(SaveChangesCompletedEventData eventData, CancellationToken cancellationToken)
-    {
-        if (eventData.Context is not AppDbContext context)
-        {
-            return;
-        }
-
-        var contextId = context.ContextId;
-        if (_suppressed.TryRemove(contextId, out _))
-        {
-            return;
-        }
-
-        if (!_pending.TryRemove(contextId, out var batch))
-        {
-            return;
-        }
-
-        if (batch.DomainEvents.Count == 0)
-        {
-            return;
-        }
-
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug(
-                "Dispatching {EventCount} domain events for context {ContextId}",
-                batch.DomainEvents.Count,
-                contextId);
-        }
-
-        var domainEventTuples = batch.DomainEvents
-            .Select(evt => (evt.AggregateId, evt.DomainEvent))
-            .ToList();
-
-        var hasAuditChanges = _auditProjector.Project(context, domainEventTuples);
-
-        await _dispatcher
-            .DispatchAsync(context, domainEventTuples.Select(tuple => tuple.DomainEvent).ToList(), cancellationToken)
-            .ConfigureAwait(false);
-
-        var logs = CreateLogEntries(domainEventTuples);
-        if (logs.Count > 0)
-        {
-            await context.DomainEventLog.AddRangeAsync(logs, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (context.ChangeTracker.HasChanges())
-        {
-            try
-            {
-                _suppressed[contextId] = true;
-                await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                _suppressed.TryRemove(contextId, out _);
+                var pending = new PendingDomainEvent(entry.Entity, entry.Entity.Id, domainEvent);
+                batch.DomainEvents.Add(pending);
+                captured.Add(pending);
             }
         }
 
-        foreach (var group in batch.DomainEvents.GroupBy(evt => evt.Source))
-        {
-            group.Key.ClearDomainEvents();
-        }
+        return captured;
     }
 
     private static List<DomainEventLogEntry> CreateLogEntries(IReadOnlyList<(Guid AggregateId, IDomainEvent DomainEvent)> events)
@@ -208,34 +212,68 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         return logs;
     }
 
-    private void ResetPendingState(DbContextEventData eventData)
+    private void CompletePendingState(AppDbContext context)
     {
-        if (eventData.Context is not AppDbContext context)
-        {
-            return;
-        }
-
         var contextId = context.ContextId;
-        _suppressed.TryRemove(contextId, out _);
 
         if (!_pending.TryRemove(contextId, out var batch))
         {
             return;
         }
 
+        foreach (var group in batch.DomainEvents.GroupBy(evt => evt.Source))
+        {
+            group.Key.ClearDomainEvents();
+        }
+    }
+
+    private void ResetPendingState(AppDbContext context)
+    {
+        var contextId = context.ContextId;
+
+        if (!_pending.TryRemove(contextId, out var batch))
+        {
+            return;
+        }
+
+        RestoreState(context, batch);
+    }
+
+    private static void RestoreState(AppDbContext context, DomainEventBatch batch)
+    {
         foreach (var snapshot in batch.AggregateVersions)
         {
             snapshot.Entry.Entity.SetVersion(snapshot.OriginalVersion);
-            snapshot.Entry.Property(root => root.Version).CurrentValue = snapshot.OriginalVersion;
-            snapshot.Entry.Property(root => root.Version).IsModified = false;
+            var versionProperty = snapshot.Entry.Property(root => root.Version);
+            versionProperty.CurrentValue = snapshot.OriginalVersion;
+            versionProperty.IsModified = false;
+        }
+
+        foreach (var log in batch.EventLogs)
+        {
+            var entry = context.Entry(log);
+            if (entry.State == EntityState.Added)
+            {
+                entry.State = EntityState.Detached;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.State = EntityState.Detached;
+            }
         }
     }
 
     private sealed class DomainEventBatch
     {
         public List<PendingDomainEvent> DomainEvents { get; } = new();
+
+        public HashSet<IDomainEvent> ProcessedEvents { get; } = new(ReferenceEqualityComparer.Instance);
+
         public List<AggregateVersionSnapshot> AggregateVersions { get; } = new();
-        public bool HasData => DomainEvents.Count > 0 || AggregateVersions.Count > 0;
+
+        public List<DomainEventLogEntry> EventLogs { get; } = new();
+
+        public bool HasData => DomainEvents.Count > 0 || AggregateVersions.Count > 0 || EventLogs.Count > 0;
     }
 
     private sealed record PendingDomainEvent(EntityBase Source, Guid AggregateId, IDomainEvent DomainEvent);
