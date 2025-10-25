@@ -3,7 +3,7 @@ namespace Veriado.Infrastructure.Persistence.Audit;
 /// <summary>
 /// Represents an audit entry capturing file system level events.
 /// </summary>
-internal sealed class FileSystemAuditRecord
+public sealed class FileSystemAuditRecord
 {
     public Guid FileSystemId { get; set; }
 
@@ -29,7 +29,7 @@ internal sealed class FileSystemAuditRecord
 /// <summary>
 /// Enumerates supported audit actions for file system events.
 /// </summary>
-internal enum FileSystemAuditAction
+public enum FileSystemAuditAction
 {
     ContentChanged,
     Moved,

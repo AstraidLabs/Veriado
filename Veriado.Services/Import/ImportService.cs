@@ -18,6 +18,7 @@ using Veriado.Appl.UseCases.Files.CheckFileHash;
 using Veriado.Application.Import;
 using ApplicationImportOptions = Veriado.Application.Import.ImportOptions;
 using StreamingImportOptions = Veriado.Services.Import.Ingestion.ImportOptions;
+using ContractsImportOptions = Veriado.Contracts.Import.ImportOptions;
 
 namespace Veriado.Services.Import;
 
@@ -145,7 +146,7 @@ public sealed class ImportService : IImportService
     /// <inheritdoc />
     public async IAsyncEnumerable<ImportProgressEvent> ImportFolderStreamAsync(
         string folderPath,
-        ImportOptions? options,
+        ContractsImportOptions? options,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
@@ -1372,7 +1373,7 @@ public sealed class ImportService : IImportService
         => new(filePath, code, message, suggestion, null, _clock.UtcNow);
 
 
-    private static NormalizedImportOptions NormalizeOptions(ImportOptions? options)
+    private static NormalizedImportOptions NormalizeOptions(ContractsImportOptions? options)
     {
         var rawSearchPattern = options?.SearchPattern;
         var searchPatternResult = rawSearchPattern is null
@@ -1473,7 +1474,7 @@ public sealed class ImportService : IImportService
 
     private static NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
     {
-        return NormalizeOptions(new ImportOptions
+        return NormalizeOptions(new ContractsImportOptions
         {
             MaxFileSizeBytes = request.MaxFileSizeBytes,
             MaxDegreeOfParallelism = request.MaxDegreeOfParallelism,

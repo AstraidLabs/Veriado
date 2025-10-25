@@ -652,9 +652,9 @@ internal interface IBatchFileSearchProjection
         CancellationToken cancellationToken);
 }
 
-internal readonly record struct SearchProjectionBatchResult(int BusyRetries, int ProjectedItems);
+public readonly record struct SearchProjectionBatchResult(int BusyRetries, int ProjectedItems);
 
-internal readonly record struct SearchProjectionWorkItem(
+public readonly record struct SearchProjectionWorkItem(
     FileEntity File,
     string? ExpectedContentHash,
     string? ExpectedTokenHash,

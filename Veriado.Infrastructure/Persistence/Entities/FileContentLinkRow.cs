@@ -3,7 +3,7 @@ namespace Veriado.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Represents a persisted snapshot of a file content link used for history tracking.
 /// </summary>
-internal sealed class FileContentLinkRow
+public sealed class FileContentLinkRow
 {
     public Guid FileId { get; set; }
 

@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using Veriado.Domain.Primitives;
 
 namespace Veriado.Infrastructure.Events;

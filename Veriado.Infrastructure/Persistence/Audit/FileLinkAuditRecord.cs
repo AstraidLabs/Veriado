@@ -3,7 +3,7 @@ namespace Veriado.Infrastructure.Persistence.Audit;
 /// <summary>
 /// Represents an audit entry describing logical file linkage to file system resources.
 /// </summary>
-internal sealed class FileLinkAuditRecord
+public sealed class FileLinkAuditRecord
 {
     public Guid FileId { get; set; }
 
@@ -25,7 +25,7 @@ internal sealed class FileLinkAuditRecord
 /// <summary>
 /// Enumerates supported audit actions for file linkage operations.
 /// </summary>
-internal enum FileLinkAuditAction
+public enum FileLinkAuditAction
 {
     Linked,
     Relinked,
