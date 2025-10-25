@@ -3,7 +3,7 @@ namespace Veriado.Infrastructure.Persistence.Audit;
 /// <summary>
 /// Represents a flattened audit row describing high-level file events.
 /// </summary>
-internal sealed class FileAuditRecord
+public sealed class FileAuditRecord
 {
     public Guid FileId { get; set; }
 
@@ -23,7 +23,7 @@ internal sealed class FileAuditRecord
 /// <summary>
 /// Enumerates supported audit actions for file level events.
 /// </summary>
-internal enum FileAuditAction
+public enum FileAuditAction
 {
     Created,
     Renamed,
