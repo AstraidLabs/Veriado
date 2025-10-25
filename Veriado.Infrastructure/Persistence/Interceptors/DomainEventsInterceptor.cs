@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Veriado.Domain.Primitives;
 using Veriado.Infrastructure.Events;
+using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.EventLog;
 
 namespace Veriado.Infrastructure.Persistence.Interceptors;
@@ -134,6 +135,7 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
                 }
 
                 _auditProjector.Project(context, domainEventTuples);
+                CaptureAuditEntries(context, batch);
             }
 
             if (!batch.HasData)
@@ -261,6 +263,31 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
                 entry.State = EntityState.Detached;
             }
         }
+
+        foreach (var auditEntity in batch.AuditEntities)
+        {
+            var entry = context.Entry(auditEntity);
+            if (entry.State != EntityState.Detached)
+            {
+                entry.State = EntityState.Detached;
+            }
+        }
+    }
+
+    private static void CaptureAuditEntries(AppDbContext context, DomainEventBatch batch)
+    {
+        foreach (var entry in context.ChangeTracker.Entries())
+        {
+            if (entry.State != EntityState.Added)
+            {
+                continue;
+            }
+
+            if (entry.Entity is FileAuditRecord or FileLinkAuditRecord or FileSystemAuditRecord)
+            {
+                batch.AuditEntities.Add(entry.Entity);
+            }
+        }
     }
 
     private sealed class DomainEventBatch
@@ -273,7 +300,10 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
 
         public List<DomainEventLogEntry> EventLogs { get; } = new();
 
-        public bool HasData => DomainEvents.Count > 0 || AggregateVersions.Count > 0 || EventLogs.Count > 0;
+        public HashSet<object> AuditEntities { get; } = new(ReferenceEqualityComparer.Instance);
+
+        public bool HasData =>
+            DomainEvents.Count > 0 || AggregateVersions.Count > 0 || EventLogs.Count > 0 || AuditEntities.Count > 0;
     }
 
     private sealed record PendingDomainEvent(EntityBase Source, Guid AggregateId, IDomainEvent DomainEvent);
