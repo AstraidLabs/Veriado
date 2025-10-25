@@ -109,6 +109,50 @@ public sealed class DomainEventsInterceptorTests : IAsyncLifetime
         Assert.Empty(file.DomainEvents);
     }
 
+    [Fact]
+    public async Task FailingHandler_RollsBackTransactionAndAllowsRetry()
+    {
+        await using var context = CreateContext();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var fileSystem = CreateFileSystem();
+        fileSystem.ClearDomainEvents();
+        context.FileSystems.Add(fileSystem);
+
+        var file = FileEntityFactory.CreateSample(fileSystem.Id);
+        context.Files.Add(file);
+
+        var coordinator = _serviceProvider.GetRequiredService<TestSearchIndexCoordinator>();
+        coordinator.Reset();
+        coordinator.ShouldThrow = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync());
+
+        await using (var verificationContext = CreateContext())
+        {
+            Assert.Equal(0, await verificationContext.Files.CountAsync());
+            Assert.Equal(0, await verificationContext.DomainEventLog.CountAsync());
+            Assert.Equal(0, await verificationContext.ReindexQueue.CountAsync());
+        }
+
+        Assert.NotEmpty(file.DomainEvents);
+
+        coordinator.ShouldThrow = false;
+        await context.SaveChangesAsync();
+
+        Assert.Empty(file.DomainEvents);
+        Assert.Equal((ulong)1, file.Version);
+
+        await using (var verificationContext = CreateContext())
+        {
+            Assert.Equal(1, await verificationContext.Files.CountAsync());
+            Assert.Equal(3, await verificationContext.DomainEventLog.CountAsync());
+            Assert.Equal(1, await verificationContext.ReindexQueue.CountAsync());
+        }
+    }
+
     private AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -143,12 +187,23 @@ public sealed class DomainEventsInterceptorTests : IAsyncLifetime
 
         public IReadOnlyList<(Guid FileId, ReindexReason Reason, DateTimeOffset When)> Requests => _requests;
 
+        public bool ShouldThrow { get; set; }
+
         public Task EnqueueAsync(DbContext dbContext, Guid fileId, ReindexReason reason, DateTimeOffset requestedUtc, CancellationToken cancellationToken)
         {
+            if (ShouldThrow)
+            {
+                throw new InvalidOperationException("Coordinator failure");
+            }
+
             _requests.Add((fileId, reason, requestedUtc));
             return Task.CompletedTask;
         }
 
-        public void Reset() => _requests.Clear();
+        public void Reset()
+        {
+            _requests.Clear();
+            ShouldThrow = false;
+        }
     }
 }
