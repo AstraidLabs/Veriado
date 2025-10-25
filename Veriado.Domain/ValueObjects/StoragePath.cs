@@ -134,12 +134,20 @@ public sealed class StoragePath : IEquatable<StoragePath>
             || Path.IsPathRooted(relativePath);
 
     private static string NormalizeToPlatformSeparators(string path)
-        => path
-            .Replace("\\", Path.DirectorySeparatorChar.ToString())
-            .Replace("/", Path.DirectorySeparatorChar.ToString());
+    {
+        var separator = Path.DirectorySeparatorChar.ToString();
+
+        return path
+            .Replace("\\", separator)
+            .Replace("/", separator);
+    }
 
     private static string NormalizeForStorage(string path)
-        => path.Replace("\\", "/");
+    {
+        var separator = Path.DirectorySeparatorChar.ToString();
+
+        return path.Replace(separator, "/");
+    }
 
     /// <inheritdoc />
     public override string ToString() => Value;
