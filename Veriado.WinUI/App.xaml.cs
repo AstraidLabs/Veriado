@@ -5,9 +5,13 @@ using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
 
+using Microsoft.UI.Xaml;
+using WinUIApplication = Microsoft.UI.Xaml.Application;
+using WinUIWindow = Microsoft.UI.Xaml.Window;
+
 namespace Veriado.WinUI;
 
-public partial class App : Application
+public partial class App : WinUIApplication
 {
     private static readonly ILogger<App> BootstrapLogger = LoggerFactory
         .Create(builder => builder.AddProvider(new DebugLoggerProvider()))
@@ -20,7 +24,7 @@ public partial class App : Application
         InitializeComponent();
     }
 
-    public static new App Current => (App)Application.Current;
+    public static new App Current => (App)WinUIApplication.Current;
 
     public static IServiceProvider Services =>
         Current._appHost?.Services
