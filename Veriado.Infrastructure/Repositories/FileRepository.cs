@@ -26,12 +26,19 @@ internal sealed partial class FileRepository : IFileRepository
     {
         try
         {
-            var entity = await _db.Files
+            var tracked = GetTrackedFile(id);
+            if (tracked is not null)
+            {
+                return tracked;
+            }
+
+            await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var entity = await context.Files
                 .Include(f => f.Validity)
                 .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
                 .ConfigureAwait(false);
 
-            return entity;
+            return entity is null ? null : AttachFile(entity);
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -43,11 +50,18 @@ internal sealed partial class FileRepository : IFileRepository
     {
         try
         {
-            var entity = await _db.FileSystems
+            var tracked = GetTrackedFileSystem(id);
+            if (tracked is not null)
+            {
+                return tracked;
+            }
+
+            await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var entity = await context.FileSystems
                 .FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
                 .ConfigureAwait(false);
 
-            return entity;
+            return entity is null ? null : AttachFileSystem(entity);
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -67,13 +81,46 @@ internal sealed partial class FileRepository : IFileRepository
 
         try
         {
-            var files = await _db.Files
-                .Include(f => f.Validity)
-                .Where(f => idList.Contains(f.Id))
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
+            var order = new Dictionary<Guid, int>(idList.Length);
+            for (var index = 0; index < idList.Length; index++)
+            {
+                order[idList[index]] = index;
+            }
 
-            return files;
+            var results = new FileEntity?[idList.Length];
+            var remaining = new HashSet<Guid>(idList);
+
+            foreach (var entry in _db.ChangeTracker.Entries<FileEntity>())
+            {
+                var entity = entry.Entity;
+                if (!remaining.Remove(entity.Id))
+                {
+                    continue;
+                }
+
+                results[order[entity.Id]] = entity;
+            }
+
+            if (remaining.Count > 0)
+            {
+                await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+                var fetched = await context.Files
+                    .Include(f => f.Validity)
+                    .Where(f => remaining.Contains(f.Id))
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                foreach (var entity in fetched)
+                {
+                    remaining.Remove(entity.Id);
+                    results[order[entity.Id]] = AttachFile(entity);
+                }
+            }
+
+            return results
+                .Where(file => file is not null)
+                .Select(file => file!)
+                .ToList();
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -238,6 +285,36 @@ internal sealed partial class FileRepository : IFileRepository
 
 partial class FileRepository
 {
+    private FileEntity? GetTrackedFile(Guid id)
+        => _db.ChangeTracker.Entries<FileEntity>().FirstOrDefault(entry => entry.Entity.Id == id)?.Entity;
+
+    private FileEntity AttachFile(FileEntity entity)
+    {
+        var tracked = GetTrackedFile(entity.Id);
+        if (tracked is not null)
+        {
+            return tracked;
+        }
+
+        _db.Attach(entity);
+        return entity;
+    }
+
+    private FileSystemEntity? GetTrackedFileSystem(Guid id)
+        => _db.ChangeTracker.Entries<FileSystemEntity>().FirstOrDefault(entry => entry.Entity.Id == id)?.Entity;
+
+    private FileSystemEntity AttachFileSystem(FileSystemEntity entity)
+    {
+        var tracked = GetTrackedFileSystem(entity.Id);
+        if (tracked is not null)
+        {
+            return tracked;
+        }
+
+        _db.Attach(entity);
+        return entity;
+    }
+
     private void TrackContentHistory(FileEntity file)
     {
         if (file.Content is null)
