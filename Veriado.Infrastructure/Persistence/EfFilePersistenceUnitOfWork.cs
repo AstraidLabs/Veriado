@@ -22,6 +22,11 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
     public async Task<IFilePersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
     {
+        if (_dbContext.Database.CurrentTransaction is { } existing)
+        {
+            return new NestedEfFilePersistenceTransaction(existing);
+        }
+
         var transaction = await _dbContext.Database
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -84,5 +89,29 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
         public ValueTask DisposeAsync()
             => _transaction.DisposeAsync();
+    }
+
+    private sealed class NestedEfFilePersistenceTransaction : IFilePersistenceTransaction
+    {
+        private readonly IDbContextTransaction _transaction;
+
+        public NestedEfFilePersistenceTransaction(IDbContextTransaction transaction)
+        {
+            _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
+        }
+
+        public Task CommitAsync(CancellationToken cancellationToken)
+        {
+            // Nested transactions rely on the outer transaction's lifetime; committing here would
+            // prematurely complete the underlying transaction.
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            // The underlying transaction is owned elsewhere. Disposing here would interfere with
+            // the outer scope, so the nested wrapper simply no-ops.
+            return ValueTask.CompletedTask;
+        }
     }
 }
