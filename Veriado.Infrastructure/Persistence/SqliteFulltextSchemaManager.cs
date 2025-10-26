@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -42,6 +43,7 @@ internal static class SqliteFulltextSchemaManager
             .ConfigureAwait(false);
         await ExecuteStatementsAsync(connection, SqliteFulltextSchemaSql.CreateStatements, logger, cancellationToken)
             .ConfigureAwait(false);
+        await EnsureSearchDocumentColumnsAsync(connection, logger, cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, SqliteFulltextSchemaSql.PopulateStatement, logger, cancellationToken)
             .ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, SqliteFulltextSchemaSql.RebuildStatement, logger, cancellationToken)
@@ -125,5 +127,47 @@ internal static class SqliteFulltextSchemaManager
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureSearchDocumentColumnsAsync(
+        SqliteConnection connection,
+        ILogger? logger,
+        CancellationToken cancellationToken)
+    {
+        var existingColumns = await GetSearchDocumentColumnsAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        foreach (var (columnName, columnDefinition) in SqliteFulltextSchemaSql.SearchDocumentColumnDefinitions)
+        {
+            if (existingColumns.Contains(columnName))
+            {
+                continue;
+            }
+
+            logger?.LogDebug("Adding missing search_document column: {Column}", columnName);
+
+            var statement = $"ALTER TABLE search_document ADD COLUMN {columnDefinition};";
+            await ExecuteNonQueryAsync(connection, statement, logger, cancellationToken).ConfigureAwait(false);
+            existingColumns.Add(columnName);
+        }
+    }
+
+    private static async Task<HashSet<string>> GetSearchDocumentColumnsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info(search_document);";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!reader.IsDBNull(1))
+            {
+                columns.Add(reader.GetString(1));
+            }
+        }
+
+        return columns;
     }
 }
