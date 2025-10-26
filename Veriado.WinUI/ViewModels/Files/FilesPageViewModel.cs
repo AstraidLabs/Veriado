@@ -327,7 +327,12 @@ public partial class FilesPageViewModel : ViewModelBase
                 return;
             }
 
-            await RefreshAsync(true).ConfigureAwait(false);
+            if (!ReferenceEquals(_searchDebounceSource, cts))
+            {
+                return;
+            }
+
+            await RefreshAsync(true, null, cts).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -362,9 +367,27 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private Task RefreshAsync(bool resetPage) => RefreshAsync(resetPage, null);
 
-    private async Task RefreshAsync(bool resetPage, int? explicitPage)
+    private Task RefreshAsync(bool resetPage, int? explicitPage) => RefreshAsync(resetPage, explicitPage, null);
+
+    private async Task RefreshAsync(bool resetPage, int? explicitPage, CancellationTokenSource? debounceSource)
     {
-        CancelPendingDebounce();
+        if (debounceSource is null)
+        {
+            CancelPendingDebounce();
+        }
+        else
+        {
+            var current = Interlocked.CompareExchange(ref _searchDebounceSource, null, debounceSource);
+            if (!ReferenceEquals(current, debounceSource))
+            {
+                return;
+            }
+
+            if (debounceSource.IsCancellationRequested)
+            {
+                return;
+            }
+        }
 
         var page = explicitPage ?? (resetPage ? 1 : CurrentPage <= 0 ? 1 : CurrentPage);
         if (page <= 0)
