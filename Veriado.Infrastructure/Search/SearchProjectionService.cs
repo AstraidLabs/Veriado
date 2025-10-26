@@ -95,13 +95,13 @@ ON CONFLICT(file_id) DO UPDATE SET
     stored_content_hash = excluded.stored_content_hash,
     stored_token_hash = excluded.stored_token_hash;";
 
-    private readonly DbContext _dbContext;
+    private readonly AppDbContext _dbContext;
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ILogger<SearchProjectionService> _logger;
     private readonly ISearchTelemetry? _telemetry;
 
     public SearchProjectionService(
-        DbContext dbContext,
+        AppDbContext dbContext,
         IAnalyzerFactory analyzerFactory,
         ILogger<SearchProjectionService>? logger = null,
         ISearchTelemetry? telemetry = null)
