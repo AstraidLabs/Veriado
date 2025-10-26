@@ -127,7 +127,11 @@ internal sealed partial class FileRepository : IFileRepository
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await context.Files.AnyAsync(f => f.ContentHash == hash, cancellationToken).ConfigureAwait(false);
+            return await context.Files
+                .AnyAsync(
+                    f => f.Content != null && f.Content.ContentHash == hash,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException ex)
         {
