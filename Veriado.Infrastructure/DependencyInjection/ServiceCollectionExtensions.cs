@@ -31,6 +31,8 @@ using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Appl.Pipeline.Idempotency;
 using Veriado.Appl.Search;
+using ApplicationClock = Veriado.Appl.Abstractions.IClock;
+using DomainClock = Veriado.Domain.Primitives.IClock;
 
 namespace Veriado.Infrastructure.DependencyInjection;
 
@@ -174,7 +176,9 @@ public static class ServiceCollectionExtensions
             builder.AddInterceptors(sp.GetRequiredService<SqlitePragmaInterceptor>());
         });
 
-        services.TryAddSingleton<IClock, SystemClock>();
+        services.TryAddSingleton<SystemClock>();
+        services.TryAddSingleton<ApplicationClock>(sp => sp.GetRequiredService<SystemClock>());
+        services.TryAddSingleton<DomainClock>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<SuggestionMaintenanceService>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
         services.AddSingleton<LocalFileStorage>();
@@ -282,25 +286,25 @@ public static class ServiceCollectionExtensions
                 }
 
                 var schemaLogger = loggerFactory.CreateLogger("FulltextSchemaBootstrap");
-                var connection = (SqliteConnection)dbContext.Database.GetDbConnection();
-                var shouldCloseConnection = connection.State != ConnectionState.Open;
+                var sqliteConnection = (SqliteConnection)dbContext.Database.GetDbConnection();
+                var shouldCloseConnection = sqliteConnection.State != ConnectionState.Open;
 
                 if (shouldCloseConnection)
                 {
-                    await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    await sqliteConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
                 }
 
                 try
                 {
                     await SqliteFulltextSchemaManager
-                        .EnsureUnifiedSchemaAsync(connection, schemaLogger, cancellationToken)
+                        .EnsureUnifiedSchemaAsync(sqliteConnection, schemaLogger, cancellationToken)
                         .ConfigureAwait(false);
                 }
                 finally
                 {
                     if (shouldCloseConnection)
                     {
-                        await connection.CloseAsync().ConfigureAwait(false);
+                        await sqliteConnection.CloseAsync().ConfigureAwait(false);
                     }
                 }
             }

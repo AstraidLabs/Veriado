@@ -86,19 +86,31 @@ internal sealed partial class FileRepository : IFileRepository
         await using var context = await _readFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var query = context.Files
             .Include(f => f.Validity)
-            .AsAsyncEnumerable()
-            .WithCancellation(cancellationToken);
+            .AsAsyncEnumerable();
 
-        try
+        await foreach (var file in StreamAllInternalAsync(query, cancellationToken).ConfigureAwait(false))
         {
-            await foreach (var file in query.ConfigureAwait(false))
-            {
-                yield return file;
-            }
+            yield return file;
         }
-        catch (DbUpdateConcurrencyException ex)
+
+        async IAsyncEnumerable<FileEntity> StreamAllInternalAsync(
+            IAsyncEnumerable<FileEntity> source,
+            [EnumeratorCancellation] CancellationToken ct)
         {
-            throw CreateConcurrencyException("streaming", ex);
+            var configured = source.WithCancellation(ct).ConfigureAwait(false);
+            await using var enumerator = configured.GetAsyncEnumerator();
+
+            try
+            {
+                while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+                {
+                    yield return enumerator.Current;
+                }
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                throw CreateConcurrencyException("streaming", ex);
+            }
         }
     }
 
