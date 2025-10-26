@@ -288,6 +288,12 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("BIGINT")
                         .HasColumnName("size");
 
+                    b.Property<ulong>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("row_version");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Hash")
@@ -362,9 +368,11 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("title");
 
-                    b.Property<int>("Version")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("version");
+                    b.Property<ulong>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("row_version");
 
                     b.ComplexProperty<Dictionary<string, object>>("SystemMetadata", "Veriado.Domain.Files.FileEntity.SystemMetadata#FileSystemMetadata", b1 =>
                         {
