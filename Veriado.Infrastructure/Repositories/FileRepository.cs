@@ -29,6 +29,7 @@ internal sealed partial class FileRepository : IFileRepository
             var tracked = GetTrackedFile(id);
             if (tracked is not null)
             {
+                await EnsureValidityLoadedAsync(tracked, cancellationToken).ConfigureAwait(false);
                 return tracked;
             }
 
@@ -98,6 +99,7 @@ internal sealed partial class FileRepository : IFileRepository
                     continue;
                 }
 
+                await EnsureValidityLoadedAsync(entity, cancellationToken).ConfigureAwait(false);
                 results[order[entity.Id]] = entity;
             }
 
@@ -287,6 +289,15 @@ partial class FileRepository
 {
     private FileEntity? GetTrackedFile(Guid id)
         => _db.ChangeTracker.Entries<FileEntity>().FirstOrDefault(entry => entry.Entity.Id == id)?.Entity;
+
+    private async Task EnsureValidityLoadedAsync(FileEntity entity, CancellationToken cancellationToken)
+    {
+        var reference = _db.Entry(entity).Reference(f => f.Validity);
+        if (!reference.IsLoaded)
+        {
+            await reference.LoadAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     private FileEntity AttachFile(FileEntity entity)
     {
