@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Veriado.Infrastructure.Persistence.Schema;
@@ -59,8 +60,6 @@ internal static class SqliteFulltextSchemaSql
     stored_content_hash TEXT,
     stored_token_hash   TEXT
 );",
-        "ALTER TABLE search_document ADD COLUMN IF NOT EXISTS stored_content_hash TEXT;",
-        "ALTER TABLE search_document ADD COLUMN IF NOT EXISTS stored_token_hash TEXT;",
         "CREATE INDEX IF NOT EXISTS idx_search_document_mime ON search_document(mime);",
         "CREATE INDEX IF NOT EXISTS idx_search_document_modified ON search_document(modified_utc DESC);",
         @"CREATE VIRTUAL TABLE IF NOT EXISTS search_document_fts USING fts5(
@@ -95,4 +94,19 @@ FROM search_document;";
 
     public static string RebuildStatement { get; } =
         "INSERT INTO search_document_fts(search_document_fts) VALUES('rebuild');";
+
+    public static IReadOnlyDictionary<string, string> SearchDocumentColumnDefinitions { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["title"] = "title TEXT",
+            ["author"] = "author TEXT",
+            ["mime"] = "mime TEXT",
+            ["metadata_text"] = "metadata_text TEXT",
+            ["metadata_json"] = "metadata_json TEXT",
+            ["created_utc"] = "created_utc TEXT",
+            ["modified_utc"] = "modified_utc TEXT",
+            ["content_hash"] = "content_hash TEXT",
+            ["stored_content_hash"] = "stored_content_hash TEXT",
+            ["stored_token_hash"] = "stored_token_hash TEXT",
+        };
 }
