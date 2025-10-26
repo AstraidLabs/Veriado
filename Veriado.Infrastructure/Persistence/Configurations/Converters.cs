@@ -86,6 +86,6 @@ internal static class Converters
 
     public static readonly ValueComparer<byte[]> RowVersionComparer = new(
         (left, right) => StructuralComparisons.StructuralEqualityComparer.Equals(left, right),
-        value => value is null ? 0 : StructuralComparisons.StructuralEqualityComparer.GetHashCode(value),
-        value => value is null ? Array.Empty<byte>() : (byte[])value.Clone());
+        value => value == null ? 0 : StructuralComparisons.StructuralEqualityComparer.GetHashCode(value),
+        value => value == null ? Array.Empty<byte>() : (byte[])value.Clone());
 }
