@@ -112,6 +112,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
             .IsConcurrencyToken()
             .ValueGeneratedOnAddOrUpdate();
 
+        versionProperty.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Save);
         versionProperty.Metadata.SetValueComparer(Converters.RowVersionComparer);
 
         builder.Property(file => file.IsReadOnly)

@@ -42,6 +42,7 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
             .IsConcurrencyToken()
             .ValueGeneratedOnAddOrUpdate();
 
+        versionProperty.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Save);
         versionProperty.Metadata.SetValueComparer(Converters.RowVersionComparer);
 
         builder.Property(entity => entity.Size)
