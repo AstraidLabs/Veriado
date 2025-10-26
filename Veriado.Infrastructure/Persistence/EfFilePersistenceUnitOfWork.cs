@@ -1,5 +1,7 @@
+using System.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Common.Exceptions;
@@ -27,11 +29,63 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
             return new NestedEfFilePersistenceTransaction(existing);
         }
 
-        var transaction = await _dbContext.Database
-            .BeginTransactionAsync(cancellationToken)
-            .ConfigureAwait(false);
+        var database = _dbContext.Database;
 
-        return new EfFilePersistenceTransaction(transaction);
+        try
+        {
+            var transaction = await database
+                .BeginTransactionAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return new EfFilePersistenceTransaction(transaction);
+        }
+        catch (InvalidOperationException ex) when (IsPendingLocalSqliteTransaction(database, ex))
+        {
+            await ResetSqliteConnectionAsync(database, cancellationToken).ConfigureAwait(false);
+
+            var transaction = await database
+                .BeginTransactionAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return new EfFilePersistenceTransaction(transaction);
+        }
+
+        static bool IsPendingLocalSqliteTransaction(DatabaseFacade database, InvalidOperationException exception)
+        {
+            if (!database.IsSqlite())
+            {
+                return false;
+            }
+
+            var message = exception.Message;
+            if (string.IsNullOrEmpty(message))
+            {
+                return false;
+            }
+
+            return message.Contains("pending local transaction", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("Transaction property of the command has not been initialized", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static async Task ResetSqliteConnectionAsync(DatabaseFacade database, CancellationToken cancellationToken)
+        {
+            if (database.GetDbConnection() is not SqliteConnection sqliteConnection)
+            {
+                throw new InvalidOperationException("Expected SQLite connection when handling transaction reset.");
+            }
+
+            if (sqliteConnection.State != ConnectionState.Closed)
+            {
+                await sqliteConnection.CloseAsync().ConfigureAwait(false);
+            }
+
+            SqliteConnection.ClearPool(sqliteConnection);
+
+            if (sqliteConnection.State != ConnectionState.Closed)
+            {
+                await sqliteConnection.CloseAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
