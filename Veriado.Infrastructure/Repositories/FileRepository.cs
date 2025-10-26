@@ -286,7 +286,17 @@ internal sealed partial class FileRepository : IFileRepository
 partial class FileRepository
 {
     private FileEntity? GetTrackedFile(Guid id)
-        => _db.ChangeTracker.Entries<FileEntity>().FirstOrDefault(entry => entry.Entity.Id == id)?.Entity;
+    {
+        foreach (var entry in _db.ChangeTracker.Entries())
+        {
+            if (entry.Entity is FileEntity entity && entity.Id == id)
+            {
+                return entity;
+            }
+        }
+
+        return null;
+    }
 
     private FileEntity AttachFile(FileEntity entity)
     {
@@ -301,7 +311,17 @@ partial class FileRepository
     }
 
     private FileSystemEntity? GetTrackedFileSystem(Guid id)
-        => _db.ChangeTracker.Entries<FileSystemEntity>().FirstOrDefault(entry => entry.Entity.Id == id)?.Entity;
+    {
+        foreach (var entry in _db.ChangeTracker.Entries())
+        {
+            if (entry.Entity is FileSystemEntity entity && entity.Id == id)
+            {
+                return entity;
+            }
+        }
+
+        return null;
+    }
 
     private FileSystemEntity AttachFileSystem(FileSystemEntity entity)
     {
