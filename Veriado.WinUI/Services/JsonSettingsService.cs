@@ -34,6 +34,11 @@ public sealed class JsonSettingsService : ISettingsService
             }
 
             await using var stream = File.OpenRead(_settingsPath);
+            if (stream.Length == 0)
+            {
+                return new AppSettings();
+            }
+
             var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
             return settings ?? new AppSettings();
         }
@@ -70,7 +75,14 @@ public sealed class JsonSettingsService : ISettingsService
             if (File.Exists(_settingsPath))
             {
                 await using var readStream = File.OpenRead(_settingsPath);
-                settings = await JsonSerializer.DeserializeAsync<AppSettings>(readStream, SerializerOptions, cancellationToken).ConfigureAwait(false) ?? new AppSettings();
+                if (readStream.Length == 0)
+                {
+                    settings = new AppSettings();
+                }
+                else
+                {
+                    settings = await JsonSerializer.DeserializeAsync<AppSettings>(readStream, SerializerOptions, cancellationToken).ConfigureAwait(false) ?? new AppSettings();
+                }
             }
             else
             {
