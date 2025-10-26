@@ -1,4 +1,5 @@
-using System.Buffers.Binary;
+using System;
+using System.Collections;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -83,27 +84,8 @@ internal static class Converters
             ? Fts5Policy.Default
             : JsonSerializer.Deserialize<Fts5Policy>(json, JsonOptions) ?? Fts5Policy.Default);
 
-    public static readonly ValueConverter<ulong, byte[]> UInt64ToBytes = new(
-        value => ConvertUInt64ToBytes(value),
-        bytes => ConvertBytesToUInt64(bytes));
-
-    public static readonly ValueComparer<ulong> UInt64Comparer = new(
-        (left, right) => left == right,
-        value => value.GetHashCode());
-    private static byte[] ConvertUInt64ToBytes(ulong value)
-    {
-        var buffer = new byte[sizeof(ulong)];
-        BinaryPrimitives.WriteUInt64LittleEndian(buffer, value);
-        return buffer;
-    }
-
-    private static ulong ConvertBytesToUInt64(byte[] bytes)
-    {
-        if (bytes == null || bytes.Length != sizeof(ulong))
-        {
-            return 0UL;
-        }
-
-        return BinaryPrimitives.ReadUInt64LittleEndian(bytes);
-    }
+    public static readonly ValueComparer<byte[]> RowVersionComparer = new(
+        (left, right) => StructuralComparisons.StructuralEqualityComparer.Equals(left, right),
+        value => value is null ? 0 : StructuralComparisons.StructuralEqualityComparer.GetHashCode(value),
+        value => value is null ? Array.Empty<byte>() : (byte[])value.Clone());
 }

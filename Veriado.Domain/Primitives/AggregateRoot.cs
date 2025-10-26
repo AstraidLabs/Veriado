@@ -1,3 +1,5 @@
+using System;
+
 namespace Veriado.Domain.Primitives;
 
 /// <summary>
@@ -8,7 +10,7 @@ public abstract class AggregateRoot : EntityBase
     /// <summary>
     /// Gets the optimistic concurrency token for the aggregate root.
     /// </summary>
-    public ulong Version { get; private set; }
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AggregateRoot"/> class.
@@ -17,15 +19,5 @@ public abstract class AggregateRoot : EntityBase
     protected AggregateRoot(Guid id)
         : base(id)
     {
-    }
-
-    internal void IncrementVersion()
-    {
-        Version++;
-    }
-
-    internal void SetVersion(ulong version)
-    {
-        Version = version;
     }
 }
