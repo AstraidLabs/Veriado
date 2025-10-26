@@ -100,16 +100,24 @@ internal sealed partial class FileRepository : IFileRepository
             var configured = source.WithCancellation(ct).ConfigureAwait(false);
             await using var enumerator = configured.GetAsyncEnumerator();
 
-            try
+            while (true)
             {
-                while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+                bool hasNext;
+                try
                 {
-                    yield return enumerator.Current;
+                    hasNext = await enumerator.MoveNextAsync();
                 }
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                throw CreateConcurrencyException("streaming", ex);
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    throw CreateConcurrencyException("streaming", ex);
+                }
+
+                if (!hasNext)
+                {
+                    yield break;
+                }
+
+                yield return enumerator.Current;
             }
         }
     }
