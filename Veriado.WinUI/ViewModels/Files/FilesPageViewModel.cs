@@ -445,12 +445,18 @@ public partial class FilesPageViewModel : ViewModelBase
             await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
 
             using var timer = new PeriodicTimer(HealthPollingInterval);
-            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+
+            while (await timer.WaitForNextTickAsync().ConfigureAwait(false))
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Intentionally ignored.
         }
