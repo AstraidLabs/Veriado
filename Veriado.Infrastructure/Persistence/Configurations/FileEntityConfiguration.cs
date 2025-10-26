@@ -105,15 +105,14 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
                 .HasConversion(Converters.UtcTimestampToString);
         });
 
-        var versionProperty = builder.Property(file => file.Version)
+        var versionProperty = builder.Property(file => file.RowVersion)
             .HasColumnName("row_version")
             .HasColumnType("BLOB")
-            .HasConversion(Converters.UInt64ToBytes)
             .IsRequired()
             .IsConcurrencyToken()
             .ValueGeneratedOnAddOrUpdate();
 
-        versionProperty.Metadata.SetValueComparer(Converters.UInt64Comparer);
+        versionProperty.Metadata.SetValueComparer(Converters.RowVersionComparer);
 
         builder.Property(file => file.IsReadOnly)
             .HasColumnName("is_read_only")

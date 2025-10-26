@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Veriado.Domain.Primitives;
 using Veriado.Infrastructure.Events;
@@ -100,8 +99,6 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
 
         try
         {
-            CaptureAggregateVersions(context, batch);
-
             while (true)
             {
                 var newEvents = CaptureDomainEvents(context, batch);
@@ -146,23 +143,6 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
             RestoreState(context, batch);
             _pending.TryRemove(contextId, out _);
             throw;
-        }
-    }
-
-    private static void CaptureAggregateVersions(AppDbContext context, DomainEventBatch batch)
-    {
-        foreach (var entry in context.ChangeTracker.Entries<AggregateRoot>())
-        {
-            if (entry.State is not (EntityState.Modified or EntityState.Added))
-            {
-                continue;
-            }
-
-            var versionProperty = entry.Property(root => root.Version);
-            var originalVersion = versionProperty.CurrentValue;
-            batch.AggregateVersions.Add(new AggregateVersionSnapshot(entry, originalVersion));
-            entry.Entity.IncrementVersion();
-            versionProperty.IsModified = true;
         }
     }
 
@@ -241,14 +221,6 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
 
     private static void RestoreState(AppDbContext context, DomainEventBatch batch)
     {
-        foreach (var snapshot in batch.AggregateVersions)
-        {
-            snapshot.Entry.Entity.SetVersion(snapshot.OriginalVersion);
-            var versionProperty = snapshot.Entry.Property(root => root.Version);
-            versionProperty.CurrentValue = snapshot.OriginalVersion;
-            versionProperty.IsModified = false;
-        }
-
         foreach (var log in batch.EventLogs)
         {
             var entry = context.Entry(log);
@@ -269,14 +241,10 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
 
         public HashSet<IDomainEvent> ProcessedEvents { get; } = new(ReferenceEqualityComparer.Instance);
 
-        public List<AggregateVersionSnapshot> AggregateVersions { get; } = new();
-
         public List<DomainEventLogEntry> EventLogs { get; } = new();
 
-        public bool HasData => DomainEvents.Count > 0 || AggregateVersions.Count > 0 || EventLogs.Count > 0;
+        public bool HasData => DomainEvents.Count > 0 || EventLogs.Count > 0;
     }
 
     private sealed record PendingDomainEvent(EntityBase Source, Guid AggregateId, IDomainEvent DomainEvent);
-
-    private sealed record AggregateVersionSnapshot(EntityEntry<AggregateRoot> Entry, ulong OriginalVersion);
 }
