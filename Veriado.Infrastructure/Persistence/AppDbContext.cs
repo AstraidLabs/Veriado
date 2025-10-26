@@ -16,7 +16,7 @@ public sealed class AppDbContext : DbContext
 {
     private readonly InfrastructureOptions _options;
     private readonly ILogger<AppDbContext> _logger;
-    private const string LegacyBaselineMigrationId = "20250927104926_Init";
+    private const string LegacyBaselineMigrationId = "20251026112230_InitialCreate";
 
     public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions, ILogger<AppDbContext> logger)
         : base(options)
