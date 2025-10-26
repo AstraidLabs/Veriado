@@ -44,7 +44,17 @@ internal sealed class DiagnosticsRepository : IDiagnosticsRepository
         string? version;
         if (_options.IsFulltextAvailable)
         {
-            var rawVersion = await GetScalarAsync(connection, "SELECT fts5();", cancellationToken).ConfigureAwait(false);
+            string rawVersion;
+            try
+            {
+                rawVersion = await GetScalarAsync(connection, "SELECT fts5_source_id();", cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (SqliteException)
+            {
+                rawVersion = string.Empty;
+            }
+
             version = string.IsNullOrWhiteSpace(rawVersion) ? null : rawVersion;
         }
         else
