@@ -92,8 +92,15 @@ END;",
 SELECT rowid, title, author, mime, metadata_text, metadata_json
 FROM search_document;";
 
-    public static string RebuildStatement { get; } =
-        "INSERT INTO search_document_fts(search_document_fts) VALUES('rebuild');";
+    public static string OptimizeStatement { get; } =
+        "INSERT INTO search_document_fts(search_document_fts) VALUES('optimize');";
+
+    public static IReadOnlyList<string> ReindexStatements { get; } = new[]
+    {
+        "DELETE FROM search_document_fts;",
+        PopulateStatement,
+        OptimizeStatement,
+    };
 
     public static IReadOnlyDictionary<string, string> SearchDocumentColumnDefinitions { get; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
