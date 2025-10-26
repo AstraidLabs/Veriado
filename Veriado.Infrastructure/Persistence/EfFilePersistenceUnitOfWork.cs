@@ -20,7 +20,30 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
 
-    public bool HasTrackedChanges => _dbContext.ChangeTracker.HasChanges();
+    public bool HasTrackedChanges
+    {
+        get
+        {
+            try
+            {
+                return _dbContext.ChangeTracker.HasChanges();
+            }
+            catch (ObjectDisposedException)
+            {
+                // EF Core disposes the underlying services when the context is disposed. Some
+                // code paths inside ChangeTracker.HasChanges() assume the services are still
+                // available and end up throwing when they are not. A disposed context cannot
+                // have any tracked changes, so report "no changes" in this situation.
+                return false;
+            }
+            catch (NullReferenceException)
+            {
+                // EF Core may throw NullReferenceException when ChangeTracker tries to access
+                // disposed internal services. Treat this the same as a disposed context.
+                return false;
+            }
+        }
+    }
 
     public async Task<IFilePersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
     {
