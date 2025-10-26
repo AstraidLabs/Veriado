@@ -302,40 +302,60 @@ public partial class FilesPageViewModel : ViewModelBase
         var cts = new CancellationTokenSource();
         _searchDebounceSource = cts;
 
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(DebounceDelayMilliseconds, cts.Token).ConfigureAwait(false);
-                cts.Token.ThrowIfCancellationRequested();
-                await RefreshAsync(true).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Intentionally ignored.
-            }
-            finally
-            {
-                if (ReferenceEquals(_searchDebounceSource, cts))
-                {
-                    _searchDebounceSource = null;
-                }
+        _ = DebounceRefreshAsync(cts);
+    }
 
-                cts.Dispose();
+    private async Task DebounceRefreshAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            var delayTask = Task.Delay(DebounceDelayMilliseconds);
+            var cancellationTask = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using (cts.Token.Register(static state =>
+                   ((TaskCompletionSource<object?>)state!).TrySetResult(null), cancellationTask))
+            {
+                var completed = await Task.WhenAny(delayTask, cancellationTask.Task).ConfigureAwait(false);
+                if (completed != delayTask)
+                {
+                    return;
+                }
             }
-        });
+
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await RefreshAsync(true).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Intentionally ignored.
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchDebounceSource, cts))
+            {
+                _searchDebounceSource = null;
+            }
+
+            cts.Dispose();
+        }
     }
 
     private void CancelPendingDebounce()
     {
-        if (_searchDebounceSource is null)
+        var source = Interlocked.Exchange(ref _searchDebounceSource, null);
+        if (source is null)
         {
             return;
         }
 
-        _searchDebounceSource.Cancel();
-        _searchDebounceSource.Dispose();
-        _searchDebounceSource = null;
+        if (!source.IsCancellationRequested)
+        {
+            source.Cancel();
+        }
     }
 
     private Task RefreshAsync() => RefreshAsync(true);
