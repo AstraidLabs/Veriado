@@ -74,9 +74,7 @@ internal sealed class AppHost : IAsyncDisposable
 
         using (var gate = new NamedGlobalMutex(mutexKey))
         {
-            await Task
-                .Run(() => gate.Acquire(TimeSpan.FromSeconds(30)))
-                .ConfigureAwait(false);
+            gate.Acquire(TimeSpan.FromSeconds(30));
             await host.StartAsync().ConfigureAwait(false);
         }
         await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
