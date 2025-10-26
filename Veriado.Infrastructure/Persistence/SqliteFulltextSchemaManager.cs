@@ -46,7 +46,7 @@ internal static class SqliteFulltextSchemaManager
         await EnsureSearchDocumentColumnsAsync(connection, logger, cancellationToken).ConfigureAwait(false);
         await ExecuteNonQueryAsync(connection, SqliteFulltextSchemaSql.PopulateStatement, logger, cancellationToken)
             .ConfigureAwait(false);
-        await ExecuteNonQueryAsync(connection, SqliteFulltextSchemaSql.RebuildStatement, logger, cancellationToken)
+        await ExecuteNonQueryAsync(connection, SqliteFulltextSchemaSql.OptimizeStatement, logger, cancellationToken)
             .ConfigureAwait(false);
 
         var updated = await SqliteFulltextSchemaInspector
@@ -67,10 +67,17 @@ internal static class SqliteFulltextSchemaManager
         return true;
     }
 
-    public static Task<int> ReindexAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)
+    public static async Task<int> ReindexAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        return ExecuteNonQueryAsync(connection, SqliteFulltextSchemaSql.RebuildStatement, logger, cancellationToken);
+        var totalChanges = 0;
+        foreach (var statement in SqliteFulltextSchemaSql.ReindexStatements)
+        {
+            totalChanges += await ExecuteNonQueryAsync(connection, statement, logger, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return totalChanges;
     }
 
     public static Task ApplyFullResetAsync(SqliteConnection connection, ILogger? logger, CancellationToken cancellationToken)

@@ -618,7 +618,7 @@ LIMIT $batchSize;";
 
         await ExecuteStatementsAsync(
                 connection,
-                new[] { SqliteFulltextSchemaSql.RebuildStatement },
+                SqliteFulltextSchemaSql.ReindexStatements.ToArray(),
                 "rebuild",
                 cancellationToken)
             .ConfigureAwait(false);

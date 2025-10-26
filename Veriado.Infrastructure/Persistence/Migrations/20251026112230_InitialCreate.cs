@@ -393,7 +393,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
             }
 
             migrationBuilder.Sql(SqliteFulltextSchemaSql.PopulateStatement);
-            migrationBuilder.Sql(SqliteFulltextSchemaSql.RebuildStatement);
+            migrationBuilder.Sql(SqliteFulltextSchemaSql.OptimizeStatement);
         }
 
         /// <inheritdoc />
