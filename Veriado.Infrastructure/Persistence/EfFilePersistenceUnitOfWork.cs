@@ -27,7 +27,22 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
     {
         get
         {
-            var semaphore = _dbContext.SaveChangesSemaphore;
+            SemaphoreSlim? semaphore;
+
+            try
+            {
+                semaphore = _dbContext.SaveChangesSemaphore;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+
+            if (semaphore is null)
+            {
+                return false;
+            }
+
             var lockAcquired = false;
 
             try
