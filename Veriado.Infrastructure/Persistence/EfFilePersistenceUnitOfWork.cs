@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Common.Exceptions;
 
@@ -15,11 +16,13 @@ namespace Veriado.Infrastructure.Persistence;
 internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 {
     private readonly AppDbContext _dbContext;
+    private readonly ILogger<EfFilePersistenceUnitOfWork> _logger;
     private readonly SemaphoreSlim _saveChangesSemaphore = new(1, 1);
 
-    public EfFilePersistenceUnitOfWork(AppDbContext dbContext)
+    public EfFilePersistenceUnitOfWork(AppDbContext dbContext, ILogger<EfFilePersistenceUnitOfWork> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public bool HasTrackedChanges
@@ -51,7 +54,7 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
     {
         if (_dbContext.Database.CurrentTransaction is { } existing)
         {
-            return new NestedEfFilePersistenceTransaction(existing);
+            return new NestedEfFilePersistenceTransaction(existing, _logger);
         }
 
         var database = _dbContext.Database;
@@ -178,17 +181,20 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
     private sealed class NestedEfFilePersistenceTransaction : IFilePersistenceTransaction
     {
-        private readonly IDbContextTransaction _transaction;
+        private readonly ILogger _logger;
+        private bool _completed;
 
-        public NestedEfFilePersistenceTransaction(IDbContextTransaction transaction)
+        public NestedEfFilePersistenceTransaction(IDbContextTransaction transaction, ILogger logger)
         {
-            _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
+            _ = transaction ?? throw new ArgumentNullException(nameof(transaction));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public Task CommitAsync(CancellationToken cancellationToken)
         {
             // Nested transactions rely on the outer transaction's lifetime; committing here would
             // prematurely complete the underlying transaction.
+            _completed = true;
             return Task.CompletedTask;
         }
 
@@ -196,6 +202,12 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         {
             // The underlying transaction is owned elsewhere. Disposing here would interfere with
             // the outer scope, so the nested wrapper simply no-ops.
+            if (!_completed)
+            {
+                _logger.LogWarning(
+                    "NestedEfFilePersistenceTransaction disposed without Commit — relying on outer transaction. This may hide logical errors in inner scopes.");
+            }
+
             return ValueTask.CompletedTask;
         }
     }

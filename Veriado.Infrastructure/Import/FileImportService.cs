@@ -115,16 +115,30 @@ public sealed class FileImportService : IFileImportWriter
         }
 
         var ids = deduped.Select(item => item.FileId).ToArray();
-        var currentTransaction = _dbContext.Database.CurrentTransaction;
+        var database = _dbContext.Database;
+        var currentTransaction = database.CurrentTransaction;
         var ownsTransaction = currentTransaction is null;
-        IDbContextTransaction? transaction = currentTransaction;
+        IDbContextTransaction? transaction = null;
+        string? savepointName = null;
 
         if (ownsTransaction)
         {
-            transaction = await _dbContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+            transaction = await database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        }
+        else
+        {
+            savepointName = $"import_batch_{Guid.NewGuid():N}";
+            _logger.LogInformation(
+                "PersistBatchAsync running inside ambient transaction; using savepoint '{SavepointName}' and skipping ChangeTracker.Clear().",
+                savepointName);
+            await currentTransaction!
+                .CreateSavepointAsync(savepointName, ct)
+                .ConfigureAwait(false);
         }
 
         _projectionScope.EnsureActive();
+
+        var persisted = new List<MappedImport>(deduped.Count);
 
         try
         {
@@ -138,7 +152,6 @@ public sealed class FileImportService : IFileImportWriter
             var imported = 0;
             var skipped = 0;
             var updated = 0;
-            var persisted = new List<MappedImport>(deduped.Count);
 
             foreach (var item in deduped)
             {
@@ -171,9 +184,22 @@ public sealed class FileImportService : IFileImportWriter
             {
                 if (ownsTransaction)
                 {
-                    await transaction!.CommitAsync(ct).ConfigureAwait(false);
+                    await transaction!
+                        .CommitAsync(ct)
+                        .ConfigureAwait(false);
                 }
-                _dbContext.ChangeTracker.Clear();
+                else if (savepointName is not null)
+                {
+                    await currentTransaction!
+                        .ReleaseSavepointAsync(savepointName, ct)
+                        .ConfigureAwait(false);
+                }
+
+                if (ownsTransaction)
+                {
+                    _dbContext.ChangeTracker.Clear();
+                }
+
                 return (new ImportResult(imported, skipped, updated), 0);
             }
 
@@ -306,16 +332,76 @@ public sealed class FileImportService : IFileImportWriter
 
             if (ownsTransaction)
             {
-                await transaction!.CommitAsync(ct).ConfigureAwait(false);
+                await transaction!
+                    .CommitAsync(ct)
+                    .ConfigureAwait(false);
             }
-            _dbContext.ChangeTracker.Clear();
+            else if (savepointName is not null)
+            {
+                await currentTransaction!
+                    .ReleaseSavepointAsync(savepointName, ct)
+                    .ConfigureAwait(false);
+            }
+
+            if (ownsTransaction)
+            {
+                _dbContext.ChangeTracker.Clear();
+            }
+
             return (new ImportResult(imported, skipped, updated), busyRetries);
+        }
+        catch
+        {
+            if (ownsTransaction)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                }
+            }
+            else if (savepointName is not null)
+            {
+                await currentTransaction!
+                    .RollbackToSavepointAsync(savepointName, ct)
+                    .ConfigureAwait(false);
+            }
+
+            throw;
         }
         finally
         {
+            if (!ownsTransaction)
+            {
+                DetachPersistedEntities(persisted);
+            }
+
             if (ownsTransaction && transaction is not null)
             {
                 await transaction.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    private void DetachPersistedEntities(IReadOnlyCollection<MappedImport> persisted)
+    {
+        if (persisted.Count == 0)
+        {
+            return;
+        }
+
+        var fileIds = new HashSet<Guid>(persisted.Select(item => item.File.Id));
+        var fileSystemIds = new HashSet<Guid>(persisted.Select(item => item.FileSystem.Id));
+
+        foreach (var entry in _dbContext.ChangeTracker.Entries())
+        {
+            switch (entry.Entity)
+            {
+                case FileEntity file when fileIds.Contains(file.Id):
+                    entry.State = EntityState.Detached;
+                    break;
+                case FileSystemEntity fileSystem when fileSystemIds.Contains(fileSystem.Id):
+                    entry.State = EntityState.Detached;
+                    break;
             }
         }
     }
