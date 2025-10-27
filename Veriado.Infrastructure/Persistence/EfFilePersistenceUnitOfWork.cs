@@ -17,8 +17,6 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 {
     private readonly AppDbContext _dbContext;
     private readonly ILogger<EfFilePersistenceUnitOfWork> _logger;
-    private readonly SemaphoreSlim _saveChangesSemaphore = new(1, 1);
-
     public EfFilePersistenceUnitOfWork(AppDbContext dbContext, ILogger<EfFilePersistenceUnitOfWork> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -29,8 +27,14 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
     {
         get
         {
+            var semaphore = _dbContext.SaveChangesSemaphore;
+            var lockAcquired = false;
+
             try
             {
+                semaphore.Wait();
+                lockAcquired = true;
+
                 return _dbContext.ChangeTracker.HasChanges();
             }
             catch (ObjectDisposedException)
@@ -46,6 +50,13 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
                 // EF Core may throw NullReferenceException when ChangeTracker tries to access
                 // disposed internal services. Treat this the same as a disposed context.
                 return false;
+            }
+            finally
+            {
+                if (lockAcquired)
+                {
+                    semaphore.Release();
+                }
             }
         }
     }
@@ -118,10 +129,14 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
-        await _saveChangesSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var semaphore = _dbContext.SaveChangesSemaphore;
+        var lockAcquired = false;
 
         try
         {
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lockAcquired = true;
+
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException ex)
@@ -134,7 +149,10 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         }
         finally
         {
-            _saveChangesSemaphore.Release();
+            if (lockAcquired)
+            {
+                semaphore.Release();
+            }
         }
     }
 
