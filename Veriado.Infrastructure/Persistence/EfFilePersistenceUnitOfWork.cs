@@ -1,4 +1,5 @@
 using System.Data;
+using System.Threading;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -14,6 +15,7 @@ namespace Veriado.Infrastructure.Persistence;
 internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 {
     private readonly AppDbContext _dbContext;
+    private readonly SemaphoreSlim _saveChangesSemaphore = new(1, 1);
 
     public EfFilePersistenceUnitOfWork(AppDbContext dbContext)
     {
@@ -113,6 +115,8 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
+        await _saveChangesSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -124,6 +128,10 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         catch (DbUpdateException ex) when (IsDuplicateContentHashViolation(ex))
         {
             throw new DuplicateFileContentException("A file with identical content already exists.", ex);
+        }
+        finally
+        {
+            _saveChangesSemaphore.Release();
         }
     }
 
