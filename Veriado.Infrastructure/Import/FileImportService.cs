@@ -172,8 +172,8 @@ public sealed class FileImportService : IFileImportWriter
                 if (ownsTransaction)
                 {
                     await transaction!.CommitAsync(ct).ConfigureAwait(false);
+                    _dbContext.ChangeTracker.Clear();
                 }
-                _dbContext.ChangeTracker.Clear();
                 return (new ImportResult(imported, skipped, updated), 0);
             }
 
@@ -307,8 +307,8 @@ public sealed class FileImportService : IFileImportWriter
             if (ownsTransaction)
             {
                 await transaction!.CommitAsync(ct).ConfigureAwait(false);
+                _dbContext.ChangeTracker.Clear();
             }
-            _dbContext.ChangeTracker.Clear();
             return (new ImportResult(imported, skipped, updated), busyRetries);
         }
         finally
