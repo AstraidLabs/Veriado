@@ -27,51 +27,56 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
     {
         get
         {
-            SemaphoreSlim? semaphore;
-
             try
             {
-                semaphore = _dbContext.SaveChangesSemaphore;
-            }
-            catch (ObjectDisposedException)
-            {
-                return false;
-            }
-
-            if (semaphore is null)
-            {
-                return false;
-            }
-
-            var lockAcquired = false;
-
-            try
-            {
-                semaphore.Wait();
-                lockAcquired = true;
-
-                return _dbContext.ChangeTracker.HasChanges();
-            }
-            catch (ObjectDisposedException)
-            {
-                // EF Core disposes the underlying services when the context is disposed. Some
-                // code paths inside ChangeTracker.HasChanges() assume the services are still
-                // available and end up throwing when they are not. A disposed context cannot
-                // have any tracked changes, so report "no changes" in this situation.
-                return false;
-            }
-            catch (NullReferenceException)
-            {
-                // EF Core may throw NullReferenceException when ChangeTracker tries to access
-                // disposed internal services. Treat this the same as a disposed context.
-                return false;
-            }
-            finally
-            {
-                if (lockAcquired)
+                var semaphore = _dbContext.SaveChangesSemaphore;
+                if (semaphore is null)
                 {
-                    semaphore.Release();
+                    return false;
                 }
+
+                var lockAcquired = false;
+
+                try
+                {
+                    semaphore.Wait();
+                    lockAcquired = true;
+
+                    return _dbContext.ChangeTracker.HasChanges();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // EF Core disposes the underlying services when the context is disposed. Some
+                    // code paths inside ChangeTracker.HasChanges() assume the services are still
+                    // available and end up throwing when they are not. A disposed context cannot
+                    // have any tracked changes, so report "no changes" in this situation.
+                    return false;
+                }
+                catch (NullReferenceException)
+                {
+                    // EF Core may throw NullReferenceException when ChangeTracker tries to access
+                    // disposed internal services. Treat this the same as a disposed context.
+                    return false;
+                }
+                finally
+                {
+                    if (lockAcquired)
+                    {
+                        try
+                        {
+                            semaphore.Release();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // The semaphore may be disposed concurrently with this property. If it is,
+                            // there are no tracked changes because the context is no longer usable.
+                        }
+                    }
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
             }
         }
     }
