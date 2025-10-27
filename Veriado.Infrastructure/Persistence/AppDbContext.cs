@@ -166,14 +166,10 @@ public sealed class AppDbContext : DbContext
         }
     }
 
-    protected override void Dispose(bool disposing)
+    public override void Dispose()
     {
-        if (disposing)
-        {
-            DisposeSemaphore();
-        }
-
-        base.Dispose(disposing);
+        DisposeSemaphore();
+        base.Dispose();
     }
 
     public override async ValueTask DisposeAsync()
