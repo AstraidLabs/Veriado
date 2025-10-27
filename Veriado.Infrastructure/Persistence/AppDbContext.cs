@@ -1,6 +1,8 @@
 using System;
 using System.Data;
+using System.Threading;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Veriado.Infrastructure.Persistence.Audit;
 using Veriado.Infrastructure.Persistence.Configurations;
@@ -17,6 +19,9 @@ public sealed class AppDbContext : DbContext
     private readonly InfrastructureOptions _options;
     private readonly ILogger<AppDbContext> _logger;
     private const string LegacyBaselineMigrationId = "20251026112230_InitialCreate";
+    private int _semaphoreDisposed;
+
+    internal SemaphoreSlim SaveChangesSemaphore { get; } = new(1, 1);
 
     public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions, ILogger<AppDbContext> logger)
         : base(options)
@@ -159,5 +164,31 @@ public sealed class AppDbContext : DbContext
         {
             throw new InvalidOperationException("AppDbContext requires Microsoft.Data.Sqlite provider.");
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            DisposeSemaphore();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        DisposeSemaphore();
+        await base.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private void DisposeSemaphore()
+    {
+        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        SaveChangesSemaphore.Dispose();
     }
 }
