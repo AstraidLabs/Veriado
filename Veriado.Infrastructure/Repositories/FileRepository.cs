@@ -13,6 +13,7 @@ internal sealed partial class FileRepository : IFileRepository
 {
     private readonly AppDbContext _db;
     private readonly IDbContextFactory<ReadOnlyDbContext> _readFactory;
+    private readonly object _changeTrackerLock = new();
 
     public FileRepository(
         AppDbContext db,
@@ -90,15 +91,18 @@ internal sealed partial class FileRepository : IFileRepository
             var results = new FileEntity?[idList.Length];
             var remaining = new HashSet<Guid>(idList);
 
-            foreach (var entry in _db.ChangeTracker.Entries<FileEntity>())
+            lock (_changeTrackerLock)
             {
-                var entity = entry.Entity;
-                if (!remaining.Remove(entity.Id))
+                foreach (var entry in _db.ChangeTracker.Entries<FileEntity>())
                 {
-                    continue;
-                }
+                    var entity = entry.Entity;
+                    if (!remaining.Remove(entity.Id))
+                    {
+                        continue;
+                    }
 
-                results[order[entity.Id]] = entity;
+                    results[order[entity.Id]] = entity;
+                }
             }
 
             if (remaining.Count > 0)
@@ -287,6 +291,52 @@ partial class FileRepository
 {
     private FileEntity? GetTrackedFile(Guid id)
     {
+        lock (_changeTrackerLock)
+        {
+            return FindTrackedFile(id);
+        }
+    }
+
+    private FileEntity AttachFile(FileEntity entity)
+    {
+        lock (_changeTrackerLock)
+        {
+            var tracked = FindTrackedFile(entity.Id);
+            if (tracked is not null)
+            {
+                return tracked;
+            }
+
+            _db.Attach(entity);
+            return entity;
+        }
+    }
+
+    private FileSystemEntity? GetTrackedFileSystem(Guid id)
+    {
+        lock (_changeTrackerLock)
+        {
+            return FindTrackedFileSystem(id);
+        }
+    }
+
+    private FileSystemEntity AttachFileSystem(FileSystemEntity entity)
+    {
+        lock (_changeTrackerLock)
+        {
+            var tracked = FindTrackedFileSystem(entity.Id);
+            if (tracked is not null)
+            {
+                return tracked;
+            }
+
+            _db.Attach(entity);
+            return entity;
+        }
+    }
+
+    private FileEntity? FindTrackedFile(Guid id)
+    {
         foreach (var entry in _db.ChangeTracker.Entries())
         {
             if (entry.Entity is FileEntity entity && entity.Id == id)
@@ -298,19 +348,7 @@ partial class FileRepository
         return null;
     }
 
-    private FileEntity AttachFile(FileEntity entity)
-    {
-        var tracked = GetTrackedFile(entity.Id);
-        if (tracked is not null)
-        {
-            return tracked;
-        }
-
-        _db.Attach(entity);
-        return entity;
-    }
-
-    private FileSystemEntity? GetTrackedFileSystem(Guid id)
+    private FileSystemEntity? FindTrackedFileSystem(Guid id)
     {
         foreach (var entry in _db.ChangeTracker.Entries())
         {
@@ -321,18 +359,6 @@ partial class FileRepository
         }
 
         return null;
-    }
-
-    private FileSystemEntity AttachFileSystem(FileSystemEntity entity)
-    {
-        var tracked = GetTrackedFileSystem(entity.Id);
-        if (tracked is not null)
-        {
-            return tracked;
-        }
-
-        _db.Attach(entity);
-        return entity;
     }
 
     private void TrackContentHistory(FileEntity file)
