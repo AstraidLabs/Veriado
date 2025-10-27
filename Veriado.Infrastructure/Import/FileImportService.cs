@@ -108,7 +108,19 @@ public sealed class FileImportService : IFileImportWriter
         ImportOptions options,
         CancellationToken ct)
     {
-        var deduped = Deduplicate(batch);
+        var normalizedBatch = new ImportItem[batch.Count];
+        for (var i = 0; i < batch.Count; i++)
+        {
+            var item = batch[i];
+            if (item.FileId == Guid.Empty)
+            {
+                item = item with { FileId = Guid.NewGuid() };
+            }
+
+            normalizedBatch[i] = item;
+        }
+
+        var deduped = Deduplicate(normalizedBatch);
         if (deduped.Count == 0)
         {
             return (new ImportResult(0, 0, 0), 0);
@@ -195,7 +207,7 @@ public sealed class FileImportService : IFileImportWriter
                         .ConfigureAwait(false);
                 }
 
-                if (ownsTransaction)
+                if (ownsTransaction && options.DetachAfterBatch)
                 {
                     _dbContext.ChangeTracker.Clear();
                 }
@@ -343,7 +355,7 @@ public sealed class FileImportService : IFileImportWriter
                     .ConfigureAwait(false);
             }
 
-            if (ownsTransaction)
+            if (ownsTransaction && options.DetachAfterBatch)
             {
                 _dbContext.ChangeTracker.Clear();
             }
@@ -370,7 +382,7 @@ public sealed class FileImportService : IFileImportWriter
         }
         finally
         {
-            if (!ownsTransaction)
+            if (!ownsTransaction && options.DetachAfterBatch)
             {
                 DetachPersistedEntities(persisted);
             }
@@ -392,16 +404,19 @@ public sealed class FileImportService : IFileImportWriter
         var fileIds = new HashSet<Guid>(persisted.Select(item => item.File.Id));
         var fileSystemIds = new HashSet<Guid>(persisted.Select(item => item.FileSystem.Id));
 
-        foreach (var entry in _dbContext.ChangeTracker.Entries())
+        foreach (var entry in _dbContext.ChangeTracker.Entries<FileEntity>())
         {
-            switch (entry.Entity)
+            if (fileIds.Contains(entry.Entity.Id))
             {
-                case FileEntity file when fileIds.Contains(file.Id):
-                    entry.State = EntityState.Detached;
-                    break;
-                case FileSystemEntity fileSystem when fileSystemIds.Contains(fileSystem.Id):
-                    entry.State = EntityState.Detached;
-                    break;
+                entry.State = EntityState.Detached;
+            }
+        }
+
+        foreach (var entry in _dbContext.ChangeTracker.Entries<FileSystemEntity>())
+        {
+            if (fileSystemIds.Contains(entry.Entity.Id))
+            {
+                entry.State = EntityState.Detached;
             }
         }
     }
