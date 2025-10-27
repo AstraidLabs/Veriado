@@ -197,8 +197,12 @@ internal sealed partial class FileRepository : IFileRepository
 
         try
         {
-            _db.Files.Add(entity);
-            TrackContentHistory(entity);
+            WithChangeTrackerLock(
+                () =>
+                {
+                    _db.Files.Add(entity);
+                    TrackContentHistory(entity);
+                });
             return Task.CompletedTask;
         }
         catch (DbUpdateConcurrencyException ex)
@@ -219,9 +223,13 @@ internal sealed partial class FileRepository : IFileRepository
 
         try
         {
-            _db.FileSystems.Add(fileSystem);
-            _db.Files.Add(file);
-            TrackContentHistory(file);
+            WithChangeTrackerLock(
+                () =>
+                {
+                    _db.FileSystems.Add(fileSystem);
+                    _db.Files.Add(file);
+                    TrackContentHistory(file);
+                });
             return Task.CompletedTask;
         }
         catch (DbUpdateConcurrencyException ex)
@@ -237,7 +245,7 @@ internal sealed partial class FileRepository : IFileRepository
 
         try
         {
-            TrackContentHistory(entity);
+            WithChangeTrackerLock(() => TrackContentHistory(entity));
             return Task.CompletedTask;
         }
         catch (DbUpdateConcurrencyException ex)
@@ -258,7 +266,7 @@ internal sealed partial class FileRepository : IFileRepository
 
         try
         {
-            TrackContentHistory(file);
+            WithChangeTrackerLock(() => TrackContentHistory(file));
             return Task.CompletedTask;
         }
         catch (DbUpdateConcurrencyException ex)
@@ -277,7 +285,7 @@ internal sealed partial class FileRepository : IFileRepository
                 return;
             }
 
-            _db.Files.Remove(entity);
+            WithChangeTrackerLock(() => _db.Files.Remove(entity));
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -289,6 +297,14 @@ internal sealed partial class FileRepository : IFileRepository
 
 partial class FileRepository
 {
+    private void WithChangeTrackerLock(Action action)
+    {
+        lock (_changeTrackerLock)
+        {
+            action();
+        }
+    }
+
     private FileEntity? GetTrackedFile(Guid id)
     {
         lock (_changeTrackerLock)
