@@ -231,32 +231,43 @@
 
                     <controls:ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="contracts:FileSummaryDto">
-                            <Button
+                            <Border
                                 Margin="8"
                                 Padding="12"
                                 CornerRadius="6"
                                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Stretch"
-                                Command="{x:Bind ElementName=PageRoot, Path=ViewModel.OpenDetailCommand, Mode=OneWay}"
-                                CommandParameter="{x:Bind Mode=OneWay}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock
-                                        Text="{x:Bind Name}"
-                                        FontWeight="SemiBold"
-                                        TextWrapping="Wrap" />
-                                    <TextBlock
-                                        Text="{x:Bind Mime}"
-                                        FontSize="12"
-                                        Opacity="0.7"
-                                        TextTrimming="CharacterEllipsis" />
-                                    <TextBlock
-                                        Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
-                                        FontSize="12" />
-                                </StackPanel>
-                            </Button>
+                                HorizontalAlignment="Stretch">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock
+                                            Text="{x:Bind Name}"
+                                            FontWeight="SemiBold"
+                                            TextWrapping="Wrap" />
+                                        <TextBlock
+                                            Text="{x:Bind Mime}"
+                                            FontSize="12"
+                                            Opacity="0.7"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
+                                            FontSize="12" />
+                                    </StackPanel>
+                                    <Button
+                                        x:Uid="FilesPage_ItemDetailButton"
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Content="Detail"
+                                        Command="{x:Bind ElementName=PageRoot, Path=ViewModel.OpenDetailCommand, Mode=OneWay}"
+                                        CommandParameter="{x:Bind Mode=OneWay}" />
+                                </Grid>
+                            </Border>
                         </DataTemplate>
                     </controls:ItemsRepeater.ItemTemplate>
                 </controls:ItemsRepeater>
