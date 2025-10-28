@@ -171,7 +171,8 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         }
         catch (ObjectDisposedException ex)
         {
-            throw new ObjectDisposedException(nameof(AppDbContext), "The underlying DbContext instance has been disposed.", ex);
+            _logger.LogError(ex, "The underlying DbContext instance has been disposed while attempting to save changes.");
+            throw new ObjectDisposedException(nameof(AppDbContext), "The underlying DbContext instance has been disposed.");
         }
         catch (DbUpdateConcurrencyException ex)
         {
