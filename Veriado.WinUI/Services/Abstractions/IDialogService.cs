@@ -2,11 +2,14 @@ namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IDialogService
 {
+    TViewModel CreateViewModel<TViewModel>() where TViewModel : class;
+
     Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel");
     Task ShowInfoAsync(string title, string message);
     Task ShowErrorAsync(string title, string message);
     Task ShowAsync(string title, UIElement content, string primaryButtonText = "OK");
 
+    Task<DialogResult> ShowDialogAsync<TViewModel>(TViewModel viewModel, CancellationToken cancellationToken = default) where TViewModel : class;
     Task<DialogResult> ShowDialogAsync(DialogRequest request, CancellationToken cancellationToken = default);
 }
 

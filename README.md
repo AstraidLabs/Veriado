@@ -35,6 +35,16 @@ Veriado je desktopová aplikace pro katalogizaci dokumentů s plnotextovým vyhl
 - **Veriado.Application.Tests** – integrační testy ověřující doménové události, reindex a konzistenci perzistence.【F:Veriado.Application.Tests/Infrastructure/DomainEventsInterceptorTests.cs†L19-L154】
 - **tools/** – pomocné skripty, např. `fts5-benchmark.csx` pro měření výkonu fulltextu.
 
+## File Detail – architektura & bindingy
+- `FilesPageViewModel.OpenDetailCommand` vytváří viewmodel dialogu přes `IDialogService`, načte detail souboru a po potvrzení vyvolá refresh seznamu.【F:Veriado.WinUI/ViewModels/Files/FilesPageViewModel.cs†L600-L636】
+- `FileDetailDialogViewModel` implementuje `IDialogAware`, spravuje `EditableFileDetailModel` s DataAnnotations validací a orchestruje uložení přes aplikační `IFileService` včetně zobrazení chyb a konfliktů.【F:Veriado.WinUI/ViewModels/Files/FileDetailDialogViewModel.cs†L14-L221】
+- `EditableFileDetailModel` dedikuje validaci a mapování na DTO, řeší datovou konzistenci (platnost, povinná pole) a propaguje chyby do UI pomocí `ObservableValidator`.【F:Veriado.WinUI/ViewModels/Files/EditableFileDetailModel.cs†L1-L178】
+- `FileDetailDialog.xaml` definuje `ContentDialog` s `x:Bind` vazbami, inline výpisem chyb, převodníkem pro datum platnosti a blokem souhrnných metadat.【F:Veriado.WinUI/Views/Files/FileDetailDialog.xaml†L1-L138】
+- `DialogService` rozpozná dialogové viewmodely (`IDialogAware`), přiřadí odpovídající view přes `IDialogViewFactory` a řídí jejich životní cyklus včetně asynchronního zavření.【F:Veriado.WinUI/Services/DialogService.cs†L1-L141】
+- Aplikační `FileService` sjednocuje načtení detailu, přejmenování, update metadat i platnosti a převádí chybové stavy na doménově smysluplné výjimky pro UI.【F:Veriado.Services/Files/FileService.cs†L1-L188】
+- `FileDetailDto` v aplikační vrstvě poskytuje konzistentní přenosový objekt pro detail a editaci dokumentu, včetně verzí a platnosti.【F:Veriado.Application/Files/Contracts/FileDetailDto.cs†L1-L33】
+- `IDialogViewFactory` + `FileDetailDialogFactory` umožňují DI konstruovat ContentDialogy s odpovídajícími viewmodely bez service-locator patternu.【F:Veriado.WinUI/Services/Abstractions/IDialogViewFactory.cs†L1-L12】【F:Veriado.WinUI/Services/DialogFactories/FileDetailDialogFactory.cs†L1-L25】
+
 ## Požadavky
 - .NET 8 SDK
 - Windows 10 19041+ pro běh WinUI klienta (x86/x64/ARM64)

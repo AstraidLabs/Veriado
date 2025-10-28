@@ -7,10 +7,13 @@ using Veriado.Mapping.DependencyInjection;
 using Veriado.Services;
 using Veriado.Services.DependencyInjection;
 using Veriado.WinUI.Services;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Services.DialogFactories;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.ViewModels.Shell;
+using Veriado.WinUI.Views.Files;
 using Veriado.Appl.DependencyInjection;
 using Veriado.WinUI.DependencyInjection;
 
@@ -54,9 +57,13 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IStatusService, StatusService>();
 
                 services.AddSingleton<MainShellViewModel>();
+                services.AddTransient<FileDetailDialogViewModel>();
                 services.AddTransient<FilesPageViewModel>();
                 services.AddTransient<ImportPageViewModel>();
                 services.AddTransient<SettingsPageViewModel>();
+
+                services.AddTransient<FileDetailDialog>();
+                services.AddTransient<IDialogViewFactory, FileDetailDialogFactory>();
 
                 services.AddWinUiShell();
 
