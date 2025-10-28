@@ -29,6 +29,11 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         {
             try
             {
+                if (_dbContext.IsSaveChangesSemaphoreDisposed)
+                {
+                    return false;
+                }
+
                 var semaphore = _dbContext.SaveChangesSemaphore;
                 if (semaphore is null)
                 {
