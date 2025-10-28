@@ -8,9 +8,11 @@ namespace Veriado.Appl.UseCases.Files.SetFileValidity;
 /// <param name="ValidUntilUtc">The timestamp when the document expires.</param>
 /// <param name="HasPhysicalCopy">Indicates whether a physical copy exists.</param>
 /// <param name="HasElectronicCopy">Indicates whether an electronic copy exists.</param>
+/// <param name="ExpectedVersion">The optional optimistic concurrency token.</param>
 public sealed record SetFileValidityCommand(
     Guid FileId,
     DateTimeOffset IssuedAtUtc,
     DateTimeOffset ValidUntilUtc,
     bool HasPhysicalCopy,
-    bool HasElectronicCopy) : IRequest<AppResult<FileSummaryDto>>;
+    bool HasElectronicCopy,
+    int? ExpectedVersion = null) : IRequest<AppResult<FileSummaryDto>>;

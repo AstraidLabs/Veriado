@@ -33,6 +33,11 @@ public sealed class UpdateFileMetadataHandler : FileWriteHandlerBase, IRequestHa
                 return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
+            if (EnsureExpectedVersion(file, request.ExpectedVersion) is { } concurrencyConflict)
+            {
+                return concurrencyConflict;
+            }
+
             MimeType? mime = request.Mime is null ? null : MimeType.From(request.Mime);
             var timestamp = CurrentTimestamp();
             file.UpdateMetadata(mime, request.Author, timestamp);

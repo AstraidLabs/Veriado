@@ -134,7 +134,11 @@ public sealed class WriteMappingPipeline
         UpdateFileMetadataCommand? metadataCommand = null;
         if (mime is not null || request.Author is not null)
         {
-            metadataCommand = new UpdateFileMetadataCommand(request.FileId, mime, request.Author);
+            metadataCommand = new UpdateFileMetadataCommand(
+                request.FileId,
+                mime,
+                request.Author,
+                request.ExpectedVersion);
             var validation = await _updateValidator.ValidateAsync(metadataCommand, cancellationToken).ConfigureAwait(false);
             if (!validation.IsValid)
             {
@@ -143,11 +147,11 @@ public sealed class WriteMappingPipeline
         }
 
         ApplySystemMetadataCommand? systemCommand = systemMetadata is { } metadata
-            ? CreateSystemMetadataCommand(request.FileId, metadata)
+            ? CreateSystemMetadataCommand(request.FileId, metadata, request.ExpectedVersion)
             : null;
 
         SetFileReadOnlyCommand? readOnlyCommand = request.IsReadOnly.HasValue
-            ? new SetFileReadOnlyCommand(request.FileId, request.IsReadOnly.Value)
+            ? new SetFileReadOnlyCommand(request.FileId, request.IsReadOnly.Value, request.ExpectedVersion)
             : null;
 
         if (errors.Count > 0)
@@ -217,7 +221,8 @@ public sealed class WriteMappingPipeline
             issuedResult.Value.Value,
             untilResult.Value.Value,
             request.HasPhysicalCopy,
-            request.HasElectronicCopy);
+            request.HasElectronicCopy,
+            request.ExpectedVersion);
 
         var validation = await _setValidityValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
@@ -235,7 +240,7 @@ public sealed class WriteMappingPipeline
     public async Task<ApiResponse<ClearFileValidityCommand>> MapClearValidityAsync(ClearValidityRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var command = new ClearFileValidityCommand(request.FileId);
+        var command = new ClearFileValidityCommand(request.FileId, request.ExpectedVersion);
         var validation = await _clearValidityValidator.ValidateAsync(command, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
@@ -247,7 +252,10 @@ public sealed class WriteMappingPipeline
         return ApiResponse<ClearFileValidityCommand>.Success(command);
     }
 
-    private static ApplySystemMetadataCommand CreateSystemMetadataCommand(Guid fileId, FileSystemMetadata metadata)
+    private static ApplySystemMetadataCommand CreateSystemMetadataCommand(
+        Guid fileId,
+        FileSystemMetadata metadata,
+        int? expectedVersion)
     {
         return new ApplySystemMetadataCommand(
             fileId,
@@ -257,7 +265,8 @@ public sealed class WriteMappingPipeline
             metadata.LastAccessUtc.Value,
             metadata.OwnerSid,
             metadata.HardLinkCount,
-            metadata.AlternateDataStreamCount);
+            metadata.AlternateDataStreamCount,
+            expectedVersion);
     }
 
     private static void CollectError<T>(ParserResult<T> result, ICollection<ApiError> errors)

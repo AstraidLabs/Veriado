@@ -33,6 +33,11 @@ public sealed class SetFileValidityHandler : FileWriteHandlerBase, IRequestHandl
                 return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
+            if (EnsureExpectedVersion(file, request.ExpectedVersion) is { } concurrencyConflict)
+            {
+                return concurrencyConflict;
+            }
+
             var issued = UtcTimestamp.From(request.IssuedAtUtc);
             var validUntil = UtcTimestamp.From(request.ValidUntilUtc);
             var timestamp = CurrentTimestamp();
