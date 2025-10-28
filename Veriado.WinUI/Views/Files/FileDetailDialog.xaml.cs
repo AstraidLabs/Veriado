@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.ViewModels.Files;
 
@@ -22,7 +23,15 @@ public sealed partial class FileDetailDialog : ContentDialog
         }
 
         args.Cancel = true;
-        await ViewModel.SaveCommand.ExecuteAsync(null);
+
+        try
+        {
+            await ViewModel.SaveCommand.ExecuteAsync(null);
+        }
+        catch (OperationCanceledException)
+        {
+            // No-op: cancellation keeps the dialog open without crashing the app.
+        }
     }
 
     private void OnSecondaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
