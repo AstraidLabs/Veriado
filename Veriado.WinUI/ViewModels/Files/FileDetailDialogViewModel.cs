@@ -1,10 +1,16 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
+using Veriado.Services.Files;
+using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.ViewModels.Base;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -19,7 +25,7 @@ public enum FileDetailDialogState
 
 public partial class FileDetailDialogViewModel : ViewModelBase, INotifyDataErrorInfo
 {
-    private static readonly Regex MimeRegex = new("^[^/\\\\\s]+/[^/\\\s]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MimeRegex = new(@"^[^/\s\\]+/[^/\s\\]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly Guid _fileId;
     private readonly IFileQueryService _fileQueryService;

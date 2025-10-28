@@ -108,26 +108,29 @@
                 </StackPanel>
             </StackPanel>
 
-            <StackPanel x:Name="MetadataSection" Spacing="12" IsEnabled="{Binding IsInteractionEnabled}">
-                <TextBlock FontWeight="SemiBold" Text="Základní vlastnosti" />
-                <TextBox
-                    x:Name="MimeTextBox"
-                    Header="MIME"
-                    Text="{Binding Mime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBox
-                    x:Name="AuthorTextBox"
-                    Header="Autor"
-                    Text="{Binding Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <ToggleSwitch
-                    x:Name="ReadOnlyToggle"
-                    Header="Pouze pro čtení"
-                    IsOn="{Binding IsReadOnly, Mode=TwoWay}" />
-            </StackPanel>
+            <ContentControl IsEnabled="{Binding IsInteractionEnabled}">
+                <StackPanel x:Name="MetadataSection" Spacing="12">
+                    <TextBlock FontWeight="SemiBold" Text="Základní vlastnosti" />
+                    <TextBox
+                        x:Name="MimeTextBox"
+                        Header="MIME"
+                        Text="{Binding Mime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox
+                        x:Name="AuthorTextBox"
+                        Header="Autor"
+                        Text="{Binding Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <ToggleSwitch
+                        x:Name="ReadOnlyToggle"
+                        Header="Pouze pro čtení"
+                        IsOn="{Binding IsReadOnly, Mode=TwoWay}" />
+                </StackPanel>
+            </ContentControl>
 
-            <StackPanel x:Name="ValiditySection" Spacing="12" IsEnabled="{Binding IsInteractionEnabled}">
-                <TextBlock FontWeight="SemiBold" Text="Platnost" />
-                <TextBlock Text="{Binding ValiditySummaryText}" TextWrapping="Wrap" />
-                <Grid ColumnSpacing="12">
+            <ContentControl IsEnabled="{Binding IsInteractionEnabled}">
+                <StackPanel x:Name="ValiditySection" Spacing="12">
+                    <TextBlock FontWeight="SemiBold" Text="Platnost" />
+                    <TextBlock Text="{Binding ValiditySummaryText}" TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
