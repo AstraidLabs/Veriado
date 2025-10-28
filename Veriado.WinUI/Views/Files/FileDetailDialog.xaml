@@ -12,26 +12,78 @@
     </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Padding="12" Spacing="16">
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <Grid ColumnSpacing="12" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <TextBlock
+                    Grid.Column="0"
                     Text="{Binding DisplayName}"
                     FontSize="24"
                     FontWeight="SemiBold"
                     TextWrapping="WrapWholeWords" />
                 <controls:ProgressRing
-                    Width="32"
-                    Height="32"
+                    x:Name="BusyIndicator"
+                    Grid.Column="1"
+                    Width="28"
+                    Height="28"
                     IsActive="{Binding IsBusy}" />
-            </StackPanel>
+            </Grid>
+
+            <CommandBar
+                x:Name="ActionCommandBar"
+                DefaultLabelPosition="Collapsed"
+                IsDynamicOverflowEnabled="False"
+                IsEnabled="{Binding IsInteractionEnabled}">
+                <CommandBar.PrimaryCommands>
+                    <AppBarButton
+                        x:Name="SaveMetadataButton"
+                        Label="Uložit vlastnosti"
+                        Command="{Binding SaveMetadataCommand}">
+                        <AppBarButton.Icon>
+                            <SymbolIcon Symbol="Save" />
+                        </AppBarButton.Icon>
+                        <AppBarButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="S" Modifiers="Control" />
+                        </AppBarButton.KeyboardAccelerators>
+                    </AppBarButton>
+                    <AppBarButton
+                        x:Name="SaveValidityButton"
+                        Label="Uložit platnost"
+                        Command="{Binding SaveValidityCommand}">
+                        <AppBarButton.Icon>
+                            <SymbolIcon Symbol="Save" />
+                        </AppBarButton.Icon>
+                        <AppBarButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="S" Modifiers="Control, Shift" />
+                        </AppBarButton.KeyboardAccelerators>
+                    </AppBarButton>
+                </CommandBar.PrimaryCommands>
+                <CommandBar.SecondaryCommands>
+                    <AppBarButton
+                        x:Name="ClearValidityButton"
+                        Label="Zrušit platnost"
+                        Command="{Binding ClearValidityCommand}">
+                        <AppBarButton.Icon>
+                            <SymbolIcon Symbol="Delete" />
+                        </AppBarButton.Icon>
+                        <AppBarButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="Delete" Modifiers="Control" />
+                        </AppBarButton.KeyboardAccelerators>
+                    </AppBarButton>
+                </CommandBar.SecondaryCommands>
+            </CommandBar>
 
             <controls:InfoBar
+                x:Name="ErrorInfoBar"
                 IsClosable="False"
                 IsOpen="{Binding HasError}"
                 Severity="Error"
                 Title="Chyba"
-                Message="Nastala chyba při provedení operace." />
+                Message="{Binding ErrorMessage}" />
 
-            <StackPanel Spacing="8">
+            <StackPanel x:Name="SummarySection" Spacing="8">
                 <TextBlock FontWeight="SemiBold" Text="Souhrn" />
                 <TextBlock TextWrapping="Wrap" Text="{Binding Title, TargetNullValue='Bez názvu'}" />
                 <StackPanel Orientation="Horizontal" Spacing="4">
@@ -56,60 +108,60 @@
                 </StackPanel>
             </StackPanel>
 
-            <StackPanel Spacing="12">
+            <StackPanel x:Name="MetadataSection" Spacing="12" IsEnabled="{Binding IsInteractionEnabled}">
                 <TextBlock FontWeight="SemiBold" Text="Základní vlastnosti" />
-                <StackPanel Spacing="4">
-                    <TextBlock Text="MIME" />
-                    <TextBox Text="{Binding Mime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </StackPanel>
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Autor" />
-                    <TextBox Text="{Binding Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </StackPanel>
+                <TextBox
+                    x:Name="MimeTextBox"
+                    Header="MIME"
+                    Text="{Binding Mime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox
+                    x:Name="AuthorTextBox"
+                    Header="Autor"
+                    Text="{Binding Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 <ToggleSwitch
+                    x:Name="ReadOnlyToggle"
                     Header="Pouze pro čtení"
                     IsOn="{Binding IsReadOnly, Mode=TwoWay}" />
-                <Button
-                    Content="Uložit vlastnosti"
-                    Command="{Binding SaveMetadataCommand}" />
             </StackPanel>
 
-            <StackPanel Spacing="12">
+            <StackPanel x:Name="ValiditySection" Spacing="12" IsEnabled="{Binding IsInteractionEnabled}">
                 <TextBlock FontWeight="SemiBold" Text="Platnost" />
                 <TextBlock Text="{Binding ValiditySummaryText}" TextWrapping="Wrap" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <StackPanel Spacing="4">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="4">
                         <TextBlock Text="Platí od" />
                         <controls:DatePicker
+                            x:Name="ValidityFromDatePicker"
                             Date="{Binding ValidityIssuedDate, Mode=TwoWay}" />
                         <controls:TimePicker
+                            x:Name="ValidityFromTimePicker"
                             Time="{Binding ValidityIssuedTime, Mode=TwoWay}"
                             ClockIdentifier="24HourClock" />
                     </StackPanel>
-                    <StackPanel Spacing="4">
+                    <StackPanel Grid.Column="1" Spacing="4">
                         <TextBlock Text="Platí do" />
                         <controls:DatePicker
+                            x:Name="ValidityToDatePicker"
                             Date="{Binding ValidityUntilDate, Mode=TwoWay}" />
                         <controls:TimePicker
+                            x:Name="ValidityToTimePicker"
                             Time="{Binding ValidityUntilTime, Mode=TwoWay}"
                             ClockIdentifier="24HourClock" />
                     </StackPanel>
-                </StackPanel>
+                </Grid>
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <CheckBox
+                        x:Name="PhysicalCopyCheckBox"
                         Content="Fyzická kopie"
                         IsChecked="{Binding ValidityHasPhysicalCopy, Mode=TwoWay}" />
                     <CheckBox
+                        x:Name="ElectronicCopyCheckBox"
                         Content="Elektronická kopie"
                         IsChecked="{Binding ValidityHasElectronicCopy, Mode=TwoWay}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button
-                        Content="Uložit platnost"
-                        Command="{Binding SaveValidityCommand}" />
-                    <Button
-                        Content="Zrušit platnost"
-                        Command="{Binding ClearValidityCommand}" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>

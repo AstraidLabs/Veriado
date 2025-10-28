@@ -1,6 +1,5 @@
 using System;
 using Microsoft.UI.Xaml;
-using Veriado.Contracts.Files;
 using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.Views.Files;
@@ -35,11 +34,4 @@ public sealed partial class FilesPage : Page
         return ViewModel.RefreshCommand.ExecuteAsync(null);
     }
 
-    private async void OnOpenDetailClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement fe && fe.DataContext is FileSummaryDto dto)
-        {
-            await ViewModel.OpenDetailCommand.ExecuteAsync(dto);
-        }
-    }
 }

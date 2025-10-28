@@ -31,6 +31,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private readonly IDialogService _dialogService;
     private readonly IExceptionHandler _exceptionHandler;
+    private readonly ITimeFormattingService _timeFormattingService;
     
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
@@ -42,6 +43,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
     private CancellationTokenSource? _detailLoadSource;
+    private bool _isDetailDialogOpen;
 
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
@@ -49,6 +51,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IHealthService healthService,
         IFileOperationsService fileOperationsService,
         IDialogService dialogService,
+        ITimeFormattingService timeFormattingService,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -61,6 +64,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
+        _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
 
         Items = new ObservableCollection<FileSummaryDto>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
@@ -68,7 +72,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
-        _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync);
+        _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync, CanOpenDetail);
         _selectFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteSelectFileAsync);
 
         _suppressTargetPageChange = true;
@@ -585,6 +589,11 @@ public partial class FilesPageViewModel : ViewModelBase
         return $"Probíhá indexace. Nechte aplikaci spuštěnou, dokud se proces nedokončí{suffix}.";
     }
 
+    private bool CanOpenDetail(FileSummaryDto? summary)
+    {
+        return summary is not null && !_isDetailDialogOpen;
+    }
+
     private Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
     {
         if (summary is null)
@@ -594,32 +603,83 @@ public partial class FilesPageViewModel : ViewModelBase
 
         return Dispatcher.EnqueueAsync(async () =>
         {
+            if (_isDetailDialogOpen)
+            {
+                return;
+            }
+
+            _isDetailDialogOpen = true;
+            _openDetailCommand.NotifyCanExecuteChanged();
+
+            using var dialogCts = new CancellationTokenSource();
+
             var detailViewModel = new FileDetailDialogViewModel(
                 summary,
                 _fileQueryService,
                 _fileOperationsService,
+                _timeFormattingService,
                 Messenger,
                 StatusService,
                 Dispatcher,
                 _exceptionHandler);
 
+            var hasPersistedChanges = false;
+
             void OnChangesSaved(object? sender, EventArgs args)
             {
-                _ = RefreshCommand.ExecuteAsync(null);
+                hasPersistedChanges = true;
             }
 
             detailViewModel.ChangesSaved += OnChangesSaved;
 
-            var view = new FileDetailDialog
+            try
             {
-                DataContext = detailViewModel,
-            };
+                await detailViewModel.InitializeAsync(dialogCts.Token);
 
-            _ = detailViewModel.InitializeAsync();
+                if (dialogCts.IsCancellationRequested)
+                {
+                    return;
+                }
 
-            await _dialogService.ShowAsync("Detail souboru", view, "Zavřít").ConfigureAwait(false);
+                var view = new FileDetailDialog
+                {
+                    DataContext = detailViewModel,
+                };
 
-            detailViewModel.ChangesSaved -= OnChangesSaved;
+                var request = new DialogRequest(
+                    "Detail souboru",
+                    view,
+                    "Hotovo",
+                    closeButtonText: "Zrušit",
+                    defaultButton: ContentDialogButton.Primary);
+
+                var result = await _dialogService.ShowDialogAsync(request, dialogCts.Token);
+
+                if (result.IsPrimary && hasPersistedChanges)
+                {
+                    await RefreshCommand.ExecuteAsync(null);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                detailViewModel.TryCancelRunning();
+            }
+            catch (Exception ex)
+            {
+                detailViewModel.TryCancelRunning();
+                var message = _exceptionHandler.Handle(ex);
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    StatusService.Error(message);
+                }
+            }
+            finally
+            {
+                detailViewModel.ChangesSaved -= OnChangesSaved;
+                detailViewModel.TryCancelRunning();
+                _isDetailDialogOpen = false;
+                _openDetailCommand.NotifyCanExecuteChanged();
+            }
         });
     }
 

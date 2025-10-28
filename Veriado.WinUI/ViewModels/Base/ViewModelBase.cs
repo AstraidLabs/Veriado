@@ -51,7 +51,10 @@ public abstract partial class ViewModelBase : ObservableObject
     /// </summary>
     /// <param name="action">The asynchronous work to execute.</param>
     /// <param name="busyMessage">Optional busy indicator message.</param>
-    protected async Task SafeExecuteAsync(Func<CancellationToken, Task> action, string? busyMessage = null)
+    protected async Task SafeExecuteAsync(
+        Func<CancellationToken, Task> action,
+        string? busyMessage = null,
+        CancellationToken cancellationToken = default)
     {
         if (action is null)
         {
@@ -63,7 +66,7 @@ public abstract partial class ViewModelBase : ObservableObject
             return;
         }
 
-        using var cts = new CancellationTokenSource();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _cancellationSource = cts;
 
         await _dispatcher.Enqueue(() =>
@@ -86,6 +89,10 @@ public abstract partial class ViewModelBase : ObservableObject
         {
             await _dispatcher.Enqueue(() => HasError = false);
             _statusService.Info("Operace byla zrušena.");
+            if (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
         }
         catch (Exception ex)
         {
