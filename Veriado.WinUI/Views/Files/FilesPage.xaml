@@ -240,7 +240,8 @@
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch"
-                                Click="OnOpenDetailClick">
+                                Command="{x:Bind ElementName=PageRoot, Path=ViewModel.OpenDetailCommand, Mode=OneWay}"
+                                CommandParameter="{x:Bind Mode=OneWay}">
                                 <StackPanel Spacing="4">
                                     <TextBlock
                                         Text="{x:Bind Name}"

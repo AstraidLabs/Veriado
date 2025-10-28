@@ -37,9 +37,21 @@ public sealed class FileOperationsService : IFileOperationsService
         return ToIdResponse(result);
     }
 
-    public async Task<ApiResponse<Guid>> UpdateMetadataAsync(UpdateMetadataRequest request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> UpdateMetadataAsync(
+        Guid fileId,
+        FileMetadataPatchDto patch,
+        int? expectedVersion,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(patch);
+        var request = new UpdateMetadataRequest
+        {
+            FileId = fileId,
+            Mime = patch.Mime,
+            Author = patch.Author,
+            IsReadOnly = patch.IsReadOnly,
+            ExpectedVersion = expectedVersion,
+        };
         var mapping = await _mappingPipeline.MapUpdateMetadataAsync(request, cancellationToken).ConfigureAwait(false);
         if (!mapping.IsSuccess)
         {
@@ -76,7 +88,11 @@ public sealed class FileOperationsService : IFileOperationsService
         return ToIdResponse(result);
     }
 
-    public async Task<ApiResponse<Guid>> SetValidityAsync(Guid fileId, FileValidityDto validity, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> SetValidityAsync(
+        Guid fileId,
+        FileValidityDto validity,
+        int? expectedVersion,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(validity);
         var request = new SetValidityRequest
@@ -86,6 +102,7 @@ public sealed class FileOperationsService : IFileOperationsService
             ValidUntil = validity.ValidUntil,
             HasElectronicCopy = validity.HasElectronicCopy,
             HasPhysicalCopy = validity.HasPhysicalCopy,
+            ExpectedVersion = expectedVersion,
         };
 
         var mapping = await _mappingPipeline.MapSetValidityAsync(request, cancellationToken).ConfigureAwait(false);
@@ -99,10 +116,13 @@ public sealed class FileOperationsService : IFileOperationsService
         return ToIdResponse(result);
     }
 
-    public async Task<ApiResponse<Guid>> ClearValidityAsync(Guid fileId, CancellationToken cancellationToken)
+    public async Task<ApiResponse<Guid>> ClearValidityAsync(
+        Guid fileId,
+        int? expectedVersion,
+        CancellationToken cancellationToken)
     {
         var mapping = await _mappingPipeline
-            .MapClearValidityAsync(new ClearValidityRequest { FileId = fileId }, cancellationToken)
+            .MapClearValidityAsync(new ClearValidityRequest { FileId = fileId, ExpectedVersion = expectedVersion }, cancellationToken)
             .ConfigureAwait(false);
         if (!mapping.IsSuccess)
         {

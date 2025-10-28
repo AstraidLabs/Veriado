@@ -30,4 +30,9 @@ public sealed class UpdateMetadataRequest
     /// </summary>
     public FileSystemMetadataDto? SystemMetadata { get; init; }
 
+    /// <summary>
+    /// Gets or sets an optional optimistic concurrency token based on the file version.
+    /// </summary>
+    public int? ExpectedVersion { get; init; }
+
 }
