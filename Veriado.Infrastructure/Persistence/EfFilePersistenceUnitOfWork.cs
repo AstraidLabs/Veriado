@@ -159,10 +159,19 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
         try
         {
+            if (_dbContext.IsSaveChangesSemaphoreDisposed)
+            {
+                throw new ObjectDisposedException(nameof(AppDbContext));
+            }
+
             await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockAcquired = true;
 
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            throw new ObjectDisposedException(nameof(AppDbContext), "The underlying DbContext instance has been disposed.", ex);
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -176,7 +185,14 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         {
             if (lockAcquired)
             {
-                semaphore.Release();
+                try
+                {
+                    semaphore.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The semaphore may be disposed concurrently. If so, the DbContext is already unusable.
+                }
             }
         }
     }
