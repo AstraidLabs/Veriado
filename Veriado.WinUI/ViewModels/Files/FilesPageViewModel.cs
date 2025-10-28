@@ -13,7 +13,6 @@ using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
-using Veriado.WinUI.Views.Files;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -24,7 +23,6 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private readonly IFileQueryService _fileQueryService;
     private readonly IHotStateService _hotStateService;
-    private readonly IFileOperationsService _fileOperationsService;
     private readonly IHealthService _healthService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
@@ -43,13 +41,11 @@ public partial class FilesPageViewModel : ViewModelBase
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
     private CancellationTokenSource? _detailLoadSource;
-    private bool _isDetailDialogOpen;
 
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
         IHealthService healthService,
-        IFileOperationsService fileOperationsService,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
         IMessenger messenger,
@@ -61,7 +57,6 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
-        _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
@@ -589,98 +584,41 @@ public partial class FilesPageViewModel : ViewModelBase
         return $"Probíhá indexace. Nechte aplikaci spuštěnou, dokud se proces nedokončí{suffix}.";
     }
 
-    private bool CanOpenDetail(FileSummaryDto? summary)
-    {
-        return summary is not null && !_isDetailDialogOpen;
-    }
+    private static bool CanOpenDetail(FileSummaryDto? summary) => summary is not null;
 
-    private Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
+    private async Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
     {
         if (summary is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return Dispatcher.EnqueueAsync(async () =>
+        using var dialogCts = new CancellationTokenSource();
+
+        try
         {
-            if (_isDetailDialogOpen)
+            var dialogViewModel = _dialogService.CreateViewModel<FileDetailDialogViewModel>();
+            await dialogViewModel.LoadAsync(summary.Id, dialogCts.Token).ConfigureAwait(false);
+
+            var result = await _dialogService.ShowDialogAsync(dialogViewModel, dialogCts.Token).ConfigureAwait(false);
+
+            if (result.IsPrimary)
             {
-                return;
+                await RefreshCommand.ExecuteAsync(null);
             }
-
-            _isDetailDialogOpen = true;
-            _openDetailCommand.NotifyCanExecuteChanged();
-
-            using var dialogCts = new CancellationTokenSource();
-
-            var detailViewModel = new FileDetailDialogViewModel(
-                summary,
-                _fileQueryService,
-                _fileOperationsService,
-                _timeFormattingService,
-                Messenger,
-                StatusService,
-                Dispatcher,
-                _exceptionHandler);
-
-            var hasPersistedChanges = false;
-
-            void OnChangesSaved(object? sender, EventArgs args)
+        }
+        catch (OperationCanceledException)
+        {
+            // Intentionally ignored.
+        }
+        catch (Exception ex)
+        {
+            var message = _exceptionHandler.Handle(ex);
+            if (!string.IsNullOrWhiteSpace(message))
             {
-                hasPersistedChanges = true;
+                StatusService.Error(message);
             }
-
-            detailViewModel.ChangesSaved += OnChangesSaved;
-
-            try
-            {
-                await detailViewModel.InitializeAsync(dialogCts.Token);
-
-                if (dialogCts.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                var view = new FileDetailDialog
-                {
-                    DataContext = detailViewModel,
-                };
-
-                var request = new DialogRequest(
-                    "Detail souboru",
-                    view,
-                    "Hotovo",
-                    closeButtonText: "Zrušit",
-                    defaultButton: ContentDialogButton.Primary);
-
-                var result = await _dialogService.ShowDialogAsync(request, dialogCts.Token);
-
-                if (result.IsPrimary && hasPersistedChanges)
-                {
-                    await RefreshCommand.ExecuteAsync(null);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                detailViewModel.TryCancelRunning();
-            }
-            catch (Exception ex)
-            {
-                detailViewModel.TryCancelRunning();
-                var message = _exceptionHandler.Handle(ex);
-                if (!string.IsNullOrWhiteSpace(message))
-                {
-                    StatusService.Error(message);
-                }
-            }
-            finally
-            {
-                detailViewModel.ChangesSaved -= OnChangesSaved;
-                detailViewModel.TryCancelRunning();
-                _isDetailDialogOpen = false;
-                _openDetailCommand.NotifyCanExecuteChanged();
-            }
-        });
+        }
     }
 
     private async Task ExecuteSelectFileAsync(FileSummaryDto? summary)

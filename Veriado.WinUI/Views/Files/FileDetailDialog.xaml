@@ -1,172 +1,175 @@
-<UserControl
+<ContentDialog
     x:Class="Veriado.WinUI.Views.Files.FileDetailDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:converters="using:Veriado.WinUI.Converters"
-    mc:Ignorable="d">
-    <UserControl.Resources>
+    mc:Ignorable="d"
+    Title="Detail souboru"
+    PrimaryButtonText="Uložit"
+    SecondaryButtonText="Zrušit"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="{x:Bind ViewModel.File != null && !ViewModel.HasErrors && !ViewModel.IsSaving, Mode=OneWay}">
+    <ContentDialog.Resources>
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
-    </UserControl.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="12" Spacing="16">
-            <Grid ColumnSpacing="12" VerticalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <converters:NullableDateTimeOffsetConverter x:Key="NullableDateTimeOffsetConverter" />
+    </ContentDialog.Resources>
+
+    <Grid RowSpacing="16" Width="540">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="12" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Vertical" Spacing="4">
                 <TextBlock
-                    Grid.Column="0"
-                    Text="{Binding DisplayName}"
+                    Text="{x:Bind ViewModel.File.DisplayName, Mode=OneWay}"
                     FontSize="24"
                     FontWeight="SemiBold"
-                    TextWrapping="WrapWholeWords" />
-                <controls:ProgressRing
-                    x:Name="BusyIndicator"
-                    Grid.Column="1"
-                    Width="28"
-                    Height="28"
-                    IsActive="{Binding IsBusy}" />
-            </Grid>
-
-            <CommandBar
-                x:Name="ActionCommandBar"
-                DefaultLabelPosition="Collapsed"
-                IsDynamicOverflowEnabled="False"
-                IsEnabled="{Binding IsInteractionEnabled}">
-                <CommandBar.PrimaryCommands>
-                    <AppBarButton
-                        x:Name="SaveMetadataButton"
-                        Label="Uložit vlastnosti"
-                        Command="{Binding SaveMetadataCommand}">
-                        <AppBarButton.Icon>
-                            <SymbolIcon Symbol="Save" />
-                        </AppBarButton.Icon>
-                        <AppBarButton.KeyboardAccelerators>
-                            <KeyboardAccelerator Key="S" Modifiers="Control" />
-                        </AppBarButton.KeyboardAccelerators>
-                    </AppBarButton>
-                    <AppBarButton
-                        x:Name="SaveValidityButton"
-                        Label="Uložit platnost"
-                        Command="{Binding SaveValidityCommand}">
-                        <AppBarButton.Icon>
-                            <SymbolIcon Symbol="Save" />
-                        </AppBarButton.Icon>
-                        <AppBarButton.KeyboardAccelerators>
-                            <KeyboardAccelerator Key="S" Modifiers="Control, Shift" />
-                        </AppBarButton.KeyboardAccelerators>
-                    </AppBarButton>
-                </CommandBar.PrimaryCommands>
-                <CommandBar.SecondaryCommands>
-                    <AppBarButton
-                        x:Name="ClearValidityButton"
-                        Label="Zrušit platnost"
-                        Command="{Binding ClearValidityCommand}">
-                        <AppBarButton.Icon>
-                            <SymbolIcon Symbol="Delete" />
-                        </AppBarButton.Icon>
-                        <AppBarButton.KeyboardAccelerators>
-                            <KeyboardAccelerator Key="Delete" Modifiers="Control" />
-                        </AppBarButton.KeyboardAccelerators>
-                    </AppBarButton>
-                </CommandBar.SecondaryCommands>
-            </CommandBar>
-
-            <controls:InfoBar
-                x:Name="ErrorInfoBar"
-                IsClosable="False"
-                IsOpen="{Binding HasError}"
-                Severity="Error"
-                Title="Chyba"
-                Message="{Binding ErrorMessage}" />
-
-            <StackPanel x:Name="SummarySection" Spacing="8">
-                <TextBlock FontWeight="SemiBold" Text="Souhrn" />
-                <TextBlock TextWrapping="Wrap" Text="{Binding Title, TargetNullValue='Bez názvu'}" />
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock FontWeight="SemiBold" Text="Velikost:" />
-                    <TextBlock Text="{Binding Size, Converter={StaticResource SizeToHumanConverter}}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock FontWeight="SemiBold" Text="Vytvořeno:" />
-                    <TextBlock Text="{Binding CreatedLocalText}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock FontWeight="SemiBold" Text="Upraveno:" />
-                    <TextBlock Text="{Binding LastModifiedLocalText}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock FontWeight="SemiBold" Text="Indexováno:" />
-                    <TextBlock Text="{Binding LastIndexedLocalText}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock FontWeight="SemiBold" Text="Verze:" />
-                    <TextBlock Text="{Binding Version}" />
-                </StackPanel>
+                    TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind ViewModel.File.MimeType, Mode=OneWay}" />
             </StackPanel>
+            <ProgressRing
+                Grid.Column="1"
+                Width="28"
+                Height="28"
+                IsActive="{x:Bind ViewModel.IsSaving || ViewModel.IsLoading, Mode=OneWay}" />
+        </Grid>
 
-            <ContentControl IsEnabled="{Binding IsInteractionEnabled}">
-                <StackPanel x:Name="MetadataSection" Spacing="12">
-                    <TextBlock FontWeight="SemiBold" Text="Základní vlastnosti" />
+        <ScrollViewer Grid.Row="1" VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="20">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Souhrn" FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Velikost:" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind ViewModel.File.Size, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Vytvořeno:" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind ViewModel.File.CreatedAt, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Upraveno:" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind ViewModel.File.ModifiedAt, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Verze:" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind ViewModel.File.Version, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Metadata" FontWeight="SemiBold" />
                     <TextBox
-                        x:Name="MimeTextBox"
+                        Header="Název souboru"
+                        Text="{x:Bind ViewModel.File.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.FileName)), Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                    FontSize="12"
+                                    Text="{x:Bind}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBox
                         Header="MIME"
-                        Text="{Binding Mime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBox
-                        x:Name="AuthorTextBox"
-                        Header="Autor"
-                        Text="{Binding Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <ToggleSwitch
-                        x:Name="ReadOnlyToggle"
-                        Header="Pouze pro čtení"
-                        IsOn="{Binding IsReadOnly, Mode=TwoWay}" />
-                </StackPanel>
-            </ContentControl>
+                        Text="{x:Bind ViewModel.File.MimeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.MimeType)), Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                    FontSize="12"
+                                    Text="{x:Bind}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-            <ContentControl IsEnabled="{Binding IsInteractionEnabled}">
-                <StackPanel x:Name="ValiditySection" Spacing="12">
-                    <TextBlock FontWeight="SemiBold" Text="Platnost" />
-                    <TextBlock Text="{Binding ValiditySummaryText}" TextWrapping="Wrap" />
-                    <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Spacing="4">
-                        <TextBlock Text="Platí od" />
-                        <controls:DatePicker
-                            x:Name="ValidityFromDatePicker"
-                            Date="{Binding ValidityIssuedDate, Mode=TwoWay}" />
-                        <controls:TimePicker
-                            x:Name="ValidityFromTimePicker"
-                            Time="{Binding ValidityIssuedTime, Mode=TwoWay}"
-                            ClockIdentifier="24HourClock" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="4">
-                        <TextBlock Text="Platí do" />
-                        <controls:DatePicker
-                            x:Name="ValidityToDatePicker"
-                            Date="{Binding ValidityUntilDate, Mode=TwoWay}" />
-                        <controls:TimePicker
-                            x:Name="ValidityToTimePicker"
-                            Time="{Binding ValidityUntilTime, Mode=TwoWay}"
-                            ClockIdentifier="24HourClock" />
-                    </StackPanel>
-                </Grid>
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <CheckBox
-                        x:Name="PhysicalCopyCheckBox"
-                        Content="Fyzická kopie"
-                        IsChecked="{Binding ValidityHasPhysicalCopy, Mode=TwoWay}" />
-                    <CheckBox
-                        x:Name="ElectronicCopyCheckBox"
-                        Content="Elektronická kopie"
-                        IsChecked="{Binding ValidityHasElectronicCopy, Mode=TwoWay}" />
+                    <TextBox
+                        Header="Autor"
+                        Text="{x:Bind ViewModel.File.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.Author)), Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                    FontSize="12"
+                                    Text="{x:Bind}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <ToggleSwitch
+                        Header="Pouze pro čtení"
+                        IsOn="{x:Bind ViewModel.File.IsReadOnly, Mode=TwoWay}"
+                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
                 </StackPanel>
+
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Platnost" FontWeight="SemiBold" />
+                    <Button
+                        Content="Zrušit platnost"
+                        Command="{x:Bind ViewModel.ClearValidityCommand, Mode=OneWay}"
+                        IsEnabled="{x:Bind ViewModel.ClearValidityCommand.CanExecute(null), Mode=OneWay}" />
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Platí od" />
+                            <DatePicker
+                                Date="{x:Bind ViewModel.File.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
+                                IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.ValidFrom)), Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock
+                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                            FontSize="12"
+                                            Text="{x:Bind}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="Platí do" />
+                            <DatePicker
+                                Date="{x:Bind ViewModel.File.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
+                                IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.ValidTo)), Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock
+                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                            FontSize="12"
+                                            Text="{x:Bind}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <InfoBar
+                    IsClosable="False"
+                    IsOpen="{x:Bind ViewModel.ErrorMessage != null, Mode=OneWay}"
+                    Severity="Error"
+                    Title="Chyba"
+                    Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
             </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
-</UserControl>
+        </ScrollViewer>
+    </Grid>
+</ContentDialog>
