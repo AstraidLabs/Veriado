@@ -10,7 +10,7 @@
     PrimaryButtonText="Uložit"
     SecondaryButtonText="Zrušit"
     DefaultButton="Primary"
-    IsPrimaryButtonEnabled="{x:Bind ViewModel.File != null && !ViewModel.HasErrors && !ViewModel.IsSaving, Mode=OneWay}">
+    IsPrimaryButtonEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}">
     <ContentDialog.Resources>
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:NullableDateTimeOffsetConverter x:Key="NullableDateTimeOffsetConverter" />
@@ -29,17 +29,17 @@
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Vertical" Spacing="4">
                 <TextBlock
-                    Text="{x:Bind ViewModel.File.DisplayName, Mode=OneWay}"
+                    Text="{x:Bind ViewModel.File?.DisplayName ?? string.Empty, Mode=OneWay}"
                     FontSize="24"
                     FontWeight="SemiBold"
                     TextWrapping="Wrap" />
-                <TextBlock Text="{x:Bind ViewModel.File.MimeType, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind ViewModel.File?.MimeType ?? string.Empty, Mode=OneWay}" />
             </StackPanel>
             <ProgressRing
                 Grid.Column="1"
                 Width="28"
                 Height="28"
-                IsActive="{x:Bind ViewModel.IsSaving || ViewModel.IsLoading, Mode=OneWay}" />
+                IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
         </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
@@ -48,19 +48,19 @@
                     <TextBlock Text="Souhrn" FontWeight="SemiBold" />
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Velikost:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.Size, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}" />
+                        <TextBlock Text="{x:Bind ViewModel.File?.Size ?? 0, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Vytvořeno:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.CreatedAt, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File is null ? string.Empty : ViewModel.File.CreatedAt.ToString(), Mode=OneWay}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Upraveno:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.ModifiedAt, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File is null ? string.Empty : ViewModel.File.ModifiedAt.ToString(), Mode=OneWay}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Verze:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.Version, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File?.Version ?? 0, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -68,9 +68,9 @@
                     <TextBlock Text="Metadata" FontWeight="SemiBold" />
                     <TextBox
                         Header="Název souboru"
-                        Text="{x:Bind ViewModel.File.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.FileName)), Mode=OneWay}">
+                        Text="{x:Bind ViewModel.File!.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("FileName"), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
                                 <TextBlock
@@ -83,9 +83,9 @@
 
                     <TextBox
                         Header="MIME"
-                        Text="{x:Bind ViewModel.File.MimeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.MimeType)), Mode=OneWay}">
+                        Text="{x:Bind ViewModel.File!.MimeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("MimeType"), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
                                 <TextBlock
@@ -98,9 +98,9 @@
 
                     <TextBox
                         Header="Autor"
-                        Text="{x:Bind ViewModel.File.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.Author)), Mode=OneWay}">
+                        Text="{x:Bind ViewModel.File!.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("Author"), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
                                 <TextBlock
@@ -113,8 +113,8 @@
 
                     <ToggleSwitch
                         Header="Pouze pro čtení"
-                        IsOn="{x:Bind ViewModel.File.IsReadOnly, Mode=TwoWay}"
-                        IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
+                        IsOn="{x:Bind ViewModel.File!.IsReadOnly, Mode=TwoWay}"
+                        IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                 </StackPanel>
 
                 <StackPanel Spacing="12">
@@ -122,7 +122,7 @@
                     <Button
                         Content="Zrušit platnost"
                         Command="{x:Bind ViewModel.ClearValidityCommand, Mode=OneWay}"
-                        IsEnabled="{x:Bind ViewModel.ClearValidityCommand.CanExecute(null), Mode=OneWay}" />
+                        IsEnabled="{x:Bind ViewModel.CanClearValidity, Mode=OneWay}" />
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -131,9 +131,9 @@
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="Platí od" />
                             <DatePicker
-                                Date="{x:Bind ViewModel.File.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
-                                IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
-                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.ValidFrom)), Mode=OneWay}">
+                                Date="{x:Bind ViewModel.File!.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
+                                IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("ValidFrom"), Mode=OneWay}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
                                         <TextBlock
@@ -147,9 +147,9 @@
                         <StackPanel Grid.Column="1" Spacing="4">
                             <TextBlock Text="Platí do" />
                             <DatePicker
-                                Date="{x:Bind ViewModel.File.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
-                                IsEnabled="{x:Bind !ViewModel.IsSaving && !ViewModel.IsLoading, Mode=OneWay}" />
-                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(nameof(ViewModel.File.ValidTo)), Mode=OneWay}">
+                                Date="{x:Bind ViewModel.File!.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
+                                IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("ValidTo"), Mode=OneWay}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
                                         <TextBlock
@@ -165,7 +165,7 @@
 
                 <InfoBar
                     IsClosable="False"
-                    IsOpen="{x:Bind ViewModel.ErrorMessage != null, Mode=OneWay}"
+                    IsOpen="{x:Bind ViewModel.HasErrorMessage, Mode=OneWay}"
                     Severity="Error"
                     Title="Chyba"
                     Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />

@@ -2,15 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using Microsoft.UI.Xaml.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Veriado.Application.Files;
-using Veriado.Application.Files.Contracts;
 using Veriado.Services.Files.Exceptions;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
-using System.Threading;
+
+using FileDetailDto = Veriado.Application.Files.Contracts.FileDetailDto;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -24,15 +25,20 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     private EditableFileDetailModel? _file;
     private FileDetailDto? _snapshot;
     private CancellationTokenSource? _saveCancellation;
+    private bool _isLoading;
+    private bool _isSaving;
+    private string? _errorMessage;
 
     public FileDetailDialogViewModel(IFileService fileService, IDialogService dialogService)
     {
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
 
-        SaveCommand = new AsyncRelayCommand(ExecuteSaveAsync, CanSave);
+        SaveCommand = new AsyncRelayCommand(ExecuteSaveAsync, CanExecuteSave);
         CancelCommand = new RelayCommand(ExecuteCancel, () => !IsSaving);
-        ClearValidityCommand = new RelayCommand(ExecuteClearValidity, CanClearValidity);
+        ClearValidityCommand = new RelayCommand(ExecuteClearValidity, CanExecuteClearValidity);
+
+        File = CreatePlaceholderModel();
     }
 
     public event EventHandler<DialogResult>? CloseRequested;
@@ -42,24 +48,81 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         get => _file;
         private set
         {
+            if (ReferenceEquals(_file, value))
+            {
+                return;
+            }
+
+            if (_file is not null)
+            {
+                _file.PropertyChanged -= OnFilePropertyChanged;
+                _file.ErrorsChanged -= OnFileErrorsChanged;
+            }
+
             if (SetProperty(ref _file, value))
             {
+                if (value is not null)
+                {
+                    value.PropertyChanged += OnFilePropertyChanged;
+                    value.ErrorsChanged += OnFileErrorsChanged;
+                }
+
                 OnPropertyChanged(nameof(HasErrors));
+                OnPropertyChanged(nameof(CanSave));
+                OnPropertyChanged(nameof(CanClearValidity));
                 SaveCommand.NotifyCanExecuteChanged();
+                ClearValidityCommand.NotifyCanExecuteChanged();
             }
         }
     }
 
-    [ObservableProperty]
-    private bool isLoading;
+    public bool IsLoading
+    {
+        get => _isLoading;
+        private set
+        {
+            if (SetProperty(ref _isLoading, value))
+            {
+                OnBusyStateChanged();
+            }
+        }
+    }
 
-    [ObservableProperty]
-    private bool isSaving;
+    public bool IsSaving
+    {
+        get => _isSaving;
+        private set
+        {
+            if (SetProperty(ref _isSaving, value))
+            {
+                OnBusyStateChanged();
+            }
+        }
+    }
 
-    [ObservableProperty]
-    private string? errorMessage;
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        private set
+        {
+            if (SetProperty(ref _errorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasErrorMessage));
+            }
+        }
+    }
 
     public bool HasErrors => File?.HasErrors ?? false;
+
+    public bool HasErrorMessage => !string.IsNullOrEmpty(ErrorMessage);
+
+    public bool IsBusy => IsSaving || IsLoading;
+
+    public bool CanEditFields => !IsBusy;
+
+    public bool CanSave => !IsBusy && File is not null && !HasErrors;
+
+    public bool CanClearValidity => File is { ValidFrom: not null } || File is { ValidTo: not null };
 
     public IAsyncRelayCommand SaveCommand { get; }
 
@@ -116,6 +179,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         File.ResetValidation();
         File.ValidateAll();
         OnPropertyChanged(nameof(HasErrors));
+        OnPropertyChanged(nameof(CanSave));
 
         if (File.HasErrors)
         {
@@ -136,6 +200,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         {
             File.ApplyServerErrors(ex.Errors);
             OnPropertyChanged(nameof(HasErrors));
+            OnPropertyChanged(nameof(CanSave));
             ErrorMessage = ex.Message;
         }
         catch (FileDetailConcurrencyException ex)
@@ -156,13 +221,10 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         finally
         {
             IsSaving = false;
-            CancelCommand.NotifyCanExecuteChanged();
-            SaveCommand.NotifyCanExecuteChanged();
         }
     }
 
-    private bool CanSave()
-        => !IsLoading && !IsSaving && File is not null;
+    private bool CanExecuteSave() => CanSave;
 
     private async Task ExecuteSaveAsync()
     {
@@ -197,17 +259,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     private void Attach(FileDetailDto detail)
     {
         _snapshot = detail;
-        if (File is { } current)
-        {
-            current.PropertyChanged -= OnFilePropertyChanged;
-            current.ErrorsChanged -= OnFileErrorsChanged;
-        }
-
-        var model = EditableFileDetailModel.FromDto(detail);
-        model.PropertyChanged += OnFilePropertyChanged;
-        model.ErrorsChanged += OnFileErrorsChanged;
-        File = model;
-        ClearValidityCommand.NotifyCanExecuteChanged();
+        File = EditableFileDetailModel.FromDto(detail);
     }
 
     private async Task HandleConcurrencyAsync(CancellationToken cancellationToken)
@@ -249,6 +301,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             OnPropertyChanged(nameof(HasErrors));
         }
 
+        OnPropertyChanged(nameof(CanSave));
+        OnPropertyChanged(nameof(CanClearValidity));
         SaveCommand.NotifyCanExecuteChanged();
         ClearValidityCommand.NotifyCanExecuteChanged();
     }
@@ -256,8 +310,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     private void OnFileErrorsChanged(object? sender, DataErrorsChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasErrors));
+        OnPropertyChanged(nameof(CanSave));
         SaveCommand.NotifyCanExecuteChanged();
-        ClearValidityCommand.NotifyCanExecuteChanged();
     }
 
     private void ExecuteClearValidity()
@@ -271,10 +325,34 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         File.ValidTo = null;
         File.ValidateAll();
         OnPropertyChanged(nameof(HasErrors));
+        OnPropertyChanged(nameof(CanSave));
+        OnPropertyChanged(nameof(CanClearValidity));
         SaveCommand.NotifyCanExecuteChanged();
         ClearValidityCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanClearValidity()
-        => File is { ValidFrom: not null } || File is { ValidTo: not null };
+    private bool CanExecuteClearValidity() => CanClearValidity;
+
+    private void OnBusyStateChanged()
+    {
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanEditFields));
+        OnPropertyChanged(nameof(CanSave));
+        CancelCommand.NotifyCanExecuteChanged();
+        SaveCommand.NotifyCanExecuteChanged();
+    }
+    private static EditableFileDetailModel CreatePlaceholderModel()
+    {
+        return EditableFileDetailModel.FromDto(new FileDetailDto
+        {
+            Id = Guid.Empty,
+            FileName = string.Empty,
+            Extension = string.Empty,
+            MimeType = string.Empty,
+            CreatedAt = DateTimeOffset.Now,
+            ModifiedAt = DateTimeOffset.Now,
+            Version = 0,
+            Size = 0,
+        });
+    }
 }
