@@ -33,6 +33,11 @@ public sealed class SetFileReadOnlyHandler : FileWriteHandlerBase, IRequestHandl
                 return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
+            if (EnsureExpectedVersion(file, request.ExpectedVersion) is { } concurrencyConflict)
+            {
+                return concurrencyConflict;
+            }
+
             var timestamp = CurrentTimestamp();
             file.SetReadOnly(request.IsReadOnly, timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);

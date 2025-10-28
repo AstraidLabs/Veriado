@@ -33,6 +33,11 @@ public sealed class ApplySystemMetadataHandler : FileWriteHandlerBase, IRequestH
                 return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
+            if (EnsureExpectedVersion(file, request.ExpectedVersion) is { } concurrencyConflict)
+            {
+                return concurrencyConflict;
+            }
+
             var metadata = new FileSystemMetadata(
                 request.Attributes,
                 UtcTimestamp.From(request.CreatedUtc),

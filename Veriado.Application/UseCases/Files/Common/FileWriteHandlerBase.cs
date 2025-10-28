@@ -192,6 +192,20 @@ public abstract class FileWriteHandlerBase
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    protected static AppResult<FileSummaryDto>? EnsureExpectedVersion(FileEntity file, int? expectedVersion)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        if (!expectedVersion.HasValue)
+        {
+            return null;
+        }
+
+        return file.ContentRevision == expectedVersion.Value
+            ? null
+            : AppResult<FileSummaryDto>.Conflict(
+                "The file was modified by another operation. Please reload the file and try again.");
+    }
     private sealed class ClockAdapter : Veriado.Domain.Primitives.IClock
     {
         private readonly IClock _inner;

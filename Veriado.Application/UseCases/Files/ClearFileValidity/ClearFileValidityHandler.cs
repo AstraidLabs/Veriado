@@ -33,6 +33,11 @@ public sealed class ClearFileValidityHandler : FileWriteHandlerBase, IRequestHan
                 return AppResult<FileSummaryDto>.NotFound($"File '{request.FileId}' was not found.");
             }
 
+            if (EnsureExpectedVersion(file, request.ExpectedVersion) is { } concurrencyConflict)
+            {
+                return concurrencyConflict;
+            }
+
             var timestamp = CurrentTimestamp();
             file.ClearValidity(timestamp);
             await PersistAsync(file, FilePersistenceOptions.Default, cancellationToken);

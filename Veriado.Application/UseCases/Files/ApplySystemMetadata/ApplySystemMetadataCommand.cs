@@ -11,6 +11,7 @@ namespace Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 /// <param name="OwnerSid">The owner security identifier.</param>
 /// <param name="HardLinkCount">The hard link count.</param>
 /// <param name="AlternateDataStreamCount">The ADS count.</param>
+/// <param name="ExpectedVersion">The optional optimistic concurrency token.</param>
 public sealed record ApplySystemMetadataCommand(
     Guid FileId,
     FileAttributesFlags Attributes,
@@ -19,4 +20,5 @@ public sealed record ApplySystemMetadataCommand(
     DateTimeOffset LastAccessUtc,
     string? OwnerSid,
     uint? HardLinkCount,
-    uint? AlternateDataStreamCount) : IRequest<AppResult<FileSummaryDto>>;
+    uint? AlternateDataStreamCount,
+    int? ExpectedVersion = null) : IRequest<AppResult<FileSummaryDto>>;
