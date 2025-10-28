@@ -23,6 +23,9 @@ public sealed class AppDbContext : DbContext
 
     internal SemaphoreSlim SaveChangesSemaphore { get; } = new(1, 1);
 
+    internal bool IsSaveChangesSemaphoreDisposed
+        => Volatile.Read(ref _semaphoreDisposed) != 0;
+
     public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions, ILogger<AppDbContext> logger)
         : base(options)
     {
