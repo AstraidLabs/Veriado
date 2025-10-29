@@ -137,7 +137,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
 
         foreach (var pair in errors)
         {
-            SetErrors(pair.Key ?? string.Empty, pair.Value);
+            SetValidationErrors(pair.Key ?? string.Empty, pair.Value);
         }
     }
 
@@ -145,7 +145,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
     {
         foreach (var member in ValidatedMembers)
         {
-            SetErrors(member, Array.Empty<string>());
+            SetValidationErrors(member, Array.Empty<string>());
         }
     }
 
@@ -184,26 +184,31 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
     {
         if (ValidFrom is null && ValidTo is null)
         {
-            SetErrors(nameof(ValidFrom), Array.Empty<string>());
-            SetErrors(nameof(ValidTo), Array.Empty<string>());
+            SetValidationErrors(nameof(ValidFrom), Array.Empty<string>());
+            SetValidationErrors(nameof(ValidTo), Array.Empty<string>());
             return;
         }
 
         if (ValidFrom is null || ValidTo is null)
         {
-            SetErrors(nameof(ValidFrom), ValidFrom is null ? new[] { "Datum začátku platnosti je povinné." } : Array.Empty<string>());
-            SetErrors(nameof(ValidTo), ValidTo is null ? new[] { "Datum ukončení platnosti je povinné." } : Array.Empty<string>());
+            SetValidationErrors(nameof(ValidFrom), ValidFrom is null ? new[] { "Datum začátku platnosti je povinné." } : Array.Empty<string>());
+            SetValidationErrors(nameof(ValidTo), ValidTo is null ? new[] { "Datum ukončení platnosti je povinné." } : Array.Empty<string>());
             return;
         }
 
         if (ValidFrom > ValidTo)
         {
-            SetErrors(nameof(ValidFrom), new[] { "Začátek platnosti musí být dříve než konec." });
-            SetErrors(nameof(ValidTo), new[] { "Konec platnosti musí být po začátku." });
+            SetValidationErrors(nameof(ValidFrom), new[] { "Začátek platnosti musí být dříve než konec." });
+            SetValidationErrors(nameof(ValidTo), new[] { "Konec platnosti musí být po začátku." });
             return;
         }
 
-        SetErrors(nameof(ValidFrom), Array.Empty<string>());
-        SetErrors(nameof(ValidTo), Array.Empty<string>());
+        SetValidationErrors(nameof(ValidFrom), Array.Empty<string>());
+        SetValidationErrors(nameof(ValidTo), Array.Empty<string>());
+    }
+
+    private void SetValidationErrors(string propertyName, IEnumerable<string> errors)
+    {
+        base.SetErrors(propertyName, errors);
     }
 }

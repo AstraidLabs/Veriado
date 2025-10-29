@@ -269,8 +269,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             "Konflikt při ukládání",
             textBlock,
             "Znovu načíst",
-            secondaryButtonText: "Zavřít",
-            defaultButton: ContentDialogButton.Primary);
+            SecondaryButtonText: "Zavřít",
+            DefaultButton: ContentDialogButton.Primary);
 
         var result = await _dialogService.ShowDialogAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.IsPrimary)
