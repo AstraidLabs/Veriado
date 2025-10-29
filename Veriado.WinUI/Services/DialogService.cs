@@ -112,9 +112,11 @@ public sealed class DialogService : IDialogService
             });
         }
 
-        if (viewModel is IDialogAware aware)
+        var dialogAware = viewModel as IDialogAware;
+
+        if (dialogAware is not null)
         {
-            aware.CloseRequested += RequestClose;
+            dialogAware.CloseRequested += RequestClose;
         }
 
         using var registration = cancellationToken.Register(() =>
@@ -148,9 +150,9 @@ public sealed class DialogService : IDialogService
         }
         finally
         {
-            if (viewModel is IDialogAware aware)
+            if (dialogAware is not null)
             {
-                aware.CloseRequested -= RequestClose;
+                dialogAware.CloseRequested -= RequestClose;
             }
         }
     }
