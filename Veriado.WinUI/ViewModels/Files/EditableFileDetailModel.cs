@@ -12,7 +12,7 @@ namespace Veriado.WinUI.ViewModels.Files;
 /// <summary>
 /// Represents an editable snapshot of a file detail with validation support for the dialog.
 /// </summary>
-public sealed partial class EditableFileDetailModel : ObservableValidator
+public sealed partial class EditableFileDetailModel : ObservableValidator, INotifyDataErrorInfo
 {
     private EditableFileDetailDto _snapshot = null!;
     private readonly Dictionary<string, string[]> _externalErrors = new(StringComparer.Ordinal);
@@ -270,7 +270,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
 
     private void RaiseManualErrorsChanged(string propertyName, bool hadManualErrors)
     {
-        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propertyName));
+        OnErrorsChanged(propertyName);
 
         var hasManualErrors = _externalErrors.Count > 0;
 
@@ -292,7 +292,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
 
         foreach (var key in keys)
         {
-            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(key));
+            OnErrorsChanged(key);
         }
 
         OnPropertyChanged(nameof(HasErrors));
