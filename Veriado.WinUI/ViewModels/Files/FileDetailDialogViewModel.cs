@@ -6,12 +6,12 @@ using System.Threading;
 using Microsoft.UI.Xaml.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Veriado.Application.Files;
+using Veriado.Appl.Files;
+using Veriado.Appl.Files.Contracts;
 using Veriado.Services.Files.Exceptions;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 
-using FileDetailDto = Veriado.Application.Files.Contracts.FileDetailDto;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -23,7 +23,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     private readonly IFileService _fileService;
     private readonly IDialogService _dialogService;
     private EditableFileDetailModel _file = CreatePlaceholderModel();
-    private FileDetailDto? _snapshot;
+    private EditableFileDetailDto? _snapshot;
     private CancellationTokenSource? _saveCancellation;
     private bool _isLoading;
     private bool _isSaving;
@@ -245,7 +245,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         CloseRequested?.Invoke(this, new DialogResult(DialogOutcome.Close));
     }
 
-    private void Attach(FileDetailDto detail)
+    private void Attach(EditableFileDetailDto detail)
     {
         _snapshot = detail;
         File = EditableFileDetailModel.FromDto(detail);
@@ -327,7 +327,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     }
     private static EditableFileDetailModel CreatePlaceholderModel()
     {
-        return EditableFileDetailModel.FromDto(new FileDetailDto
+        return EditableFileDetailModel.FromDto(new EditableFileDetailDto
         {
             Id = Guid.Empty,
             FileName = string.Empty,

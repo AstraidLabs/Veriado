@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using Veriado.Application.Files;
-using Veriado.Application.Files.Contracts;
+using Veriado.Appl.Files;
+using Veriado.Appl.Files.Contracts;
 using Veriado.Contracts.Common;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files.Exceptions;
@@ -22,7 +22,7 @@ public sealed class FileService : IFileService
         _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
     }
 
-    public async Task<FileDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<EditableFileDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken)
     {
         var detail = await _fileQueryService.GetDetailAsync(id, cancellationToken).ConfigureAwait(false);
         if (detail is null)
@@ -33,7 +33,7 @@ public sealed class FileService : IFileService
         return Map(detail);
     }
 
-    public async Task UpdateAsync(FileDetailDto detail, CancellationToken cancellationToken)
+    public async Task UpdateAsync(EditableFileDetailDto detail, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(detail);
 
@@ -68,9 +68,9 @@ public sealed class FileService : IFileService
         await UpdateValidityAsync(current, detail, cancellationToken).ConfigureAwait(false);
     }
 
-    private static FileDetailDto Map(Veriado.Contracts.Files.FileDetailDto detail)
+    private static EditableFileDetailDto Map(Veriado.Contracts.Files.FileDetailDto detail)
     {
-        return new FileDetailDto
+        return new EditableFileDetailDto
         {
             Id = detail.Id,
             FileName = detail.Name,
@@ -87,7 +87,7 @@ public sealed class FileService : IFileService
         };
     }
 
-    private static FileMetadataPatchDto? BuildMetadataPatch(Veriado.Contracts.Files.FileDetailDto current, FileDetailDto desired)
+    private static FileMetadataPatchDto? BuildMetadataPatch(Veriado.Contracts.Files.FileDetailDto current, EditableFileDetailDto desired)
     {
         string? mimePatch = null;
         string? authorPatch = null;
@@ -121,7 +121,7 @@ public sealed class FileService : IFileService
         };
     }
 
-    private async Task UpdateValidityAsync(Veriado.Contracts.Files.FileDetailDto current, FileDetailDto desired, CancellationToken cancellationToken)
+    private async Task UpdateValidityAsync(Veriado.Contracts.Files.FileDetailDto current, EditableFileDetailDto desired, CancellationToken cancellationToken)
     {
         var currentValidity = current.Validity;
         var desiredRange = (ValidFrom: desired.ValidFrom, ValidTo: desired.ValidTo);

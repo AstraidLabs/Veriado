@@ -42,7 +42,7 @@ Veriado je desktopová aplikace pro katalogizaci dokumentů s plnotextovým vyhl
 - `FileDetailDialog.xaml` definuje `ContentDialog` s `x:Bind` vazbami, inline výpisem chyb, převodníkem pro datum platnosti a blokem souhrnných metadat.【F:Veriado.WinUI/Views/Files/FileDetailDialog.xaml†L1-L138】
 - `DialogService` rozpozná dialogové viewmodely (`IDialogAware`), přiřadí odpovídající view přes `IDialogViewFactory` a řídí jejich životní cyklus včetně asynchronního zavření.【F:Veriado.WinUI/Services/DialogService.cs†L1-L141】
 - Aplikační `FileService` sjednocuje načtení detailu, přejmenování, update metadat i platnosti a převádí chybové stavy na doménově smysluplné výjimky pro UI.【F:Veriado.Services/Files/FileService.cs†L1-L188】
-- `FileDetailDto` v aplikační vrstvě poskytuje konzistentní přenosový objekt pro detail a editaci dokumentu, včetně verzí a platnosti.【F:Veriado.Application/Files/Contracts/FileDetailDto.cs†L1-L33】
+- `EditableFileDetailDto` v aplikační vrstvě poskytuje konzistentní přenosový objekt pro detail a editaci dokumentu, včetně verzí a platnosti.【F:Veriado.Application/Files/Contracts/EditableFileDetailDto.cs†L1-L33】
 - `IDialogViewFactory` + `FileDetailDialogFactory` umožňují DI konstruovat ContentDialogy s odpovídajícími viewmodely bez service-locator patternu.【F:Veriado.WinUI/Services/Abstractions/IDialogViewFactory.cs†L1-L12】【F:Veriado.WinUI/Services/DialogFactories/FileDetailDialogFactory.cs†L1-L25】
 
 ## Požadavky

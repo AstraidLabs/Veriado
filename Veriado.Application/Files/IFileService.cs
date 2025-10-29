@@ -1,13 +1,13 @@
-using Veriado.Application.Files.Contracts;
+using Veriado.Appl.Files.Contracts;
 
-namespace Veriado.Application.Files;
+namespace Veriado.Appl.Files;
 
 /// <summary>
 /// Exposes application-level operations for working with editable file details.
 /// </summary>
 public interface IFileService
 {
-    Task<FileDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken);
+    Task<EditableFileDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 
-    Task UpdateAsync(FileDetailDto detail, CancellationToken cancellationToken);
+    Task UpdateAsync(EditableFileDetailDto detail, CancellationToken cancellationToken);
 }

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Veriado.Application.Files.Contracts;
+using Veriado.Appl.Files.Contracts;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -21,7 +21,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
         string.Empty,
     };
 
-    private FileDetailDto _snapshot = null!;
+    private EditableFileDetailDto _snapshot = null!;
 
     private EditableFileDetailModel()
     {
@@ -78,7 +78,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
             || !Nullable.Equals(ValidFrom, _snapshot.ValidFrom)
             || !Nullable.Equals(ValidTo, _snapshot.ValidTo);
 
-    public static EditableFileDetailModel FromDto(FileDetailDto detail)
+    public static EditableFileDetailModel FromDto(EditableFileDetailDto detail)
     {
         ArgumentNullException.ThrowIfNull(detail);
 
@@ -103,9 +103,9 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
         return model;
     }
 
-    public FileDetailDto ToDto()
+    public EditableFileDetailDto ToDto()
     {
-        return new FileDetailDto
+        return new EditableFileDetailDto
         {
             Id = Id,
             FileName = FileName,
@@ -122,7 +122,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
         };
     }
 
-    public void UpdateSnapshot(FileDetailDto detail)
+    public void UpdateSnapshot(EditableFileDetailDto detail)
     {
         ArgumentNullException.ThrowIfNull(detail);
         _snapshot = detail;

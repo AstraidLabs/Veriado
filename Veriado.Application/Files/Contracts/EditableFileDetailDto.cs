@@ -1,9 +1,9 @@
-namespace Veriado.Application.Files.Contracts;
+namespace Veriado.Appl.Files.Contracts;
 
 /// <summary>
 /// Represents an editable snapshot of a file aggregate exposed to the presentation layer.
 /// </summary>
-public sealed class FileDetailDto
+public sealed class EditableFileDetailDto
 {
     public Guid Id { get; init; }
 
