@@ -16,6 +16,21 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 {
     private EditableFileDetailDto _snapshot = null!;
     private readonly Dictionary<string, string[]> _externalErrors = new(StringComparer.Ordinal);
+    private event EventHandler<DataErrorsChangedEventArgs>? _manualErrorsChanged;
+
+    public new event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged
+    {
+        add
+        {
+            base.ErrorsChanged += value;
+            _manualErrorsChanged += value;
+        }
+        remove
+        {
+            base.ErrorsChanged -= value;
+            _manualErrorsChanged -= value;
+        }
+    }
 
     private EditableFileDetailModel()
     {
@@ -270,7 +285,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
     private void RaiseManualErrorsChanged(string propertyName, bool hadManualErrors)
     {
-        OnErrorsChanged(propertyName);
+        _manualErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propertyName));
 
         var hasManualErrors = _externalErrors.Count > 0;
 
@@ -292,7 +307,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
         foreach (var key in keys)
         {
-            OnErrorsChanged(key);
+            _manualErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(key));
         }
 
         OnPropertyChanged(nameof(HasErrors));
