@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Veriado.Appl.DependencyInjection;
-using Veriado.Application.Files;
+using Veriado.Appl.Files;
 using Veriado.Contracts.Search.Abstractions;
 using Veriado.Services.Diagnostics;
 using Veriado.Services.Files;
