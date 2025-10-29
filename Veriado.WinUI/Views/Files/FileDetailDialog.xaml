@@ -70,7 +70,7 @@
                         Header="Název souboru"
                         Text="{x:Bind ViewModel.File.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors('FileName'), Mode=OneWay}">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(&quot;FileName&quot;), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
                                 <TextBlock
@@ -85,7 +85,7 @@
                         Header="MIME"
                         Text="{x:Bind ViewModel.File.MimeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors('MimeType'), Mode=OneWay}">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(&quot;MimeType&quot;), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
                                 <TextBlock
@@ -100,7 +100,7 @@
                         Header="Autor"
                         Text="{x:Bind ViewModel.File.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors('Author'), Mode=OneWay}">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(&quot;Author&quot;), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
                                 <TextBlock
@@ -133,7 +133,7 @@
                             <DatePicker
                                 Date="{x:Bind ViewModel.File.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
-                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors('ValidFrom'), Mode=OneWay}">
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(&quot;ValidFrom&quot;), Mode=OneWay}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
                                         <TextBlock
@@ -149,7 +149,7 @@
                             <DatePicker
                                 Date="{x:Bind ViewModel.File.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
-                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors('ValidTo'), Mode=OneWay}">
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors(&quot;ValidTo&quot;), Mode=OneWay}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
                                         <TextBlock
