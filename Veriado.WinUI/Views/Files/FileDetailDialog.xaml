@@ -29,11 +29,11 @@
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Vertical" Spacing="4">
                 <TextBlock
-                    Text="{x:Bind ViewModel.File?.DisplayName ?? string.Empty, Mode=OneWay}"
+                    Text="{x:Bind ViewModel.File.DisplayName, Mode=OneWay}"
                     FontSize="24"
                     FontWeight="SemiBold"
                     TextWrapping="Wrap" />
-                <TextBlock Text="{x:Bind ViewModel.File?.MimeType ?? string.Empty, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind ViewModel.File.MimeType, Mode=OneWay}" />
             </StackPanel>
             <ProgressRing
                 Grid.Column="1"
@@ -48,19 +48,19 @@
                     <TextBlock Text="Souhrn" FontWeight="SemiBold" />
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Velikost:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File?.Size ?? 0, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.Size, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Vytvořeno:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File is null ? string.Empty : ViewModel.File.CreatedAt.ToString(), Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.CreatedAt.ToString(), Mode=OneWay}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Upraveno:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File is null ? string.Empty : ViewModel.File.ModifiedAt.ToString(), Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.ModifiedAt.ToString(), Mode=OneWay}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Verze:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File?.Version ?? 0, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.Version, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -68,7 +68,7 @@
                     <TextBlock Text="Metadata" FontWeight="SemiBold" />
                     <TextBox
                         Header="Název souboru"
-                        Text="{x:Bind ViewModel.File!.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        Text="{x:Bind ViewModel.File.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                     <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("FileName"), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
@@ -83,7 +83,7 @@
 
                     <TextBox
                         Header="MIME"
-                        Text="{x:Bind ViewModel.File!.MimeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        Text="{x:Bind ViewModel.File.MimeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                     <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("MimeType"), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
@@ -98,7 +98,7 @@
 
                     <TextBox
                         Header="Autor"
-                        Text="{x:Bind ViewModel.File!.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        Text="{x:Bind ViewModel.File.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                     <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("Author"), Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
@@ -113,7 +113,7 @@
 
                     <ToggleSwitch
                         Header="Pouze pro čtení"
-                        IsOn="{x:Bind ViewModel.File!.IsReadOnly, Mode=TwoWay}"
+                        IsOn="{x:Bind ViewModel.File.IsReadOnly, Mode=TwoWay}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                 </StackPanel>
 
@@ -131,7 +131,7 @@
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="Platí od" />
                             <DatePicker
-                                Date="{x:Bind ViewModel.File!.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
+                                Date="{x:Bind ViewModel.File.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("ValidFrom"), Mode=OneWay}">
                                 <ItemsControl.ItemTemplate>
@@ -147,7 +147,7 @@
                         <StackPanel Grid.Column="1" Spacing="4">
                             <TextBlock Text="Platí do" />
                             <DatePicker
-                                Date="{x:Bind ViewModel.File!.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
+                                Date="{x:Bind ViewModel.File.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.GetErrors("ValidTo"), Mode=OneWay}">
                                 <ItemsControl.ItemTemplate>

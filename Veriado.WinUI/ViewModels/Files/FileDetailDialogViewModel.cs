@@ -22,7 +22,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 {
     private readonly IFileService _fileService;
     private readonly IDialogService _dialogService;
-    private EditableFileDetailModel? _file;
+    private EditableFileDetailModel _file = CreatePlaceholderModel();
     private FileDetailDto? _snapshot;
     private CancellationTokenSource? _saveCancellation;
     private bool _isLoading;
@@ -43,11 +43,13 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public event EventHandler<DialogResult>? CloseRequested;
 
-    public EditableFileDetailModel? File
+    public EditableFileDetailModel File
     {
         get => _file;
         private set
         {
+            ArgumentNullException.ThrowIfNull(value);
+
             if (ReferenceEquals(_file, value))
             {
                 return;
@@ -61,11 +63,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
             if (SetProperty(ref _file, value))
             {
-                if (value is not null)
-                {
-                    value.PropertyChanged += OnFilePropertyChanged;
-                    value.ErrorsChanged += OnFileErrorsChanged;
-                }
+                value.PropertyChanged += OnFilePropertyChanged;
+                value.ErrorsChanged += OnFileErrorsChanged;
 
                 OnPropertyChanged(nameof(HasErrors));
                 OnPropertyChanged(nameof(CanSave));
@@ -112,7 +111,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         }
     }
 
-    public bool HasErrors => File?.HasErrors ?? false;
+    public bool HasErrors => File.HasErrors;
 
     public bool HasErrorMessage => !string.IsNullOrEmpty(ErrorMessage);
 
@@ -120,9 +119,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public bool CanEditFields => !IsBusy;
 
-    public bool CanSave => !IsBusy && File is not null && !HasErrors;
+    public bool CanSave => !IsBusy && !HasErrors;
 
-    public bool CanClearValidity => File is { ValidFrom: not null } || File is { ValidTo: not null };
+    public bool CanClearValidity => File.ValidFrom is not null || File.ValidTo is not null;
 
     public IAsyncRelayCommand SaveCommand { get; }
 
@@ -132,11 +131,6 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public IEnumerable<string> GetErrors(string propertyName)
     {
-        if (File is null)
-        {
-            return Array.Empty<string>();
-        }
-
         return File
             .GetErrors(propertyName)
             ?.Cast<object?>()
@@ -171,11 +165,6 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public async Task SaveAsync(CancellationToken cancellationToken)
     {
-        if (File is null)
-        {
-            return;
-        }
-
         File.ResetValidation();
         File.ValidateAll();
         OnPropertyChanged(nameof(HasErrors));
@@ -316,11 +305,6 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     private void ExecuteClearValidity()
     {
-        if (File is null)
-        {
-            return;
-        }
-
         File.ValidFrom = null;
         File.ValidTo = null;
         File.ValidateAll();
