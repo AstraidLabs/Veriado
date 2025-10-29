@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Veriado.Appl.Files.Contracts;
 
@@ -11,17 +14,8 @@ namespace Veriado.WinUI.ViewModels.Files;
 /// </summary>
 public sealed partial class EditableFileDetailModel : ObservableValidator
 {
-    private static readonly string[] ValidatedMembers =
-    {
-        nameof(FileName),
-        nameof(MimeType),
-        nameof(Author),
-        nameof(ValidFrom),
-        nameof(ValidTo),
-        string.Empty,
-    };
-
     private EditableFileDetailDto _snapshot = null!;
+    private readonly Dictionary<string, string[]> _externalErrors = new(StringComparer.Ordinal);
 
     private EditableFileDetailModel()
     {
@@ -69,6 +63,10 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
     public string DisplayName => _snapshot.DisplayName;
 
     public bool HasValidity => ValidFrom is not null && ValidTo is not null;
+
+    public new bool HasErrors => base.HasErrors || _externalErrors.Count > 0;
+
+    bool INotifyDataErrorInfo.HasErrors => HasErrors;
 
     public bool IsDirty
         => !string.Equals(FileName, _snapshot.FileName, StringComparison.Ordinal)
@@ -141,12 +139,36 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
         }
     }
 
+    public new IEnumerable<ValidationResult> GetErrors(string? propertyName = null)
+    {
+        var baseErrors = base.GetErrors(propertyName) ?? Enumerable.Empty<ValidationResult>();
+
+        if (string.IsNullOrEmpty(propertyName))
+        {
+            if (_externalErrors.Count == 0)
+            {
+                return baseErrors;
+            }
+
+            return baseErrors.Concat(
+                _externalErrors.SelectMany(static pair =>
+                    pair.Value.Select(error => new ValidationResult(error, GetMemberNames(pair.Key)))));
+        }
+
+        if (_externalErrors.TryGetValue(propertyName, out var errors) && errors.Length > 0)
+        {
+            return baseErrors.Concat(errors.Select(error => new ValidationResult(error, GetMemberNames(propertyName))));
+        }
+
+        return baseErrors;
+    }
+
+    IEnumerable INotifyDataErrorInfo.GetErrors(string? propertyName) => GetErrors(propertyName);
+
     public void ResetValidation()
     {
-        foreach (var member in ValidatedMembers)
-        {
-            SetValidationErrors(member, Array.Empty<string>());
-        }
+        ClearErrors();
+        ClearExternalErrors();
     }
 
     public void ValidateAll()
@@ -207,8 +229,72 @@ public sealed partial class EditableFileDetailModel : ObservableValidator
         SetValidationErrors(nameof(ValidTo), Array.Empty<string>());
     }
 
-    private void SetValidationErrors(string propertyName, IEnumerable<string> errors)
+    private static IEnumerable<string>? GetMemberNames(string propertyName)
     {
-        base.SetErrors(propertyName, errors);
+        return string.IsNullOrEmpty(propertyName) ? null : new[] { propertyName };
+    }
+
+    private void SetValidationErrors(string? propertyName, IEnumerable<string> errors)
+    {
+        propertyName ??= string.Empty;
+
+        var normalizedErrors = errors?
+            .Where(static error => !string.IsNullOrWhiteSpace(error))
+            .Select(static error => error.Trim())
+            .ToArray()
+            ?? Array.Empty<string>();
+
+        var hadManualErrors = _externalErrors.Count > 0;
+        var propertyHadErrors = _externalErrors.TryGetValue(propertyName, out var existing);
+
+        if (normalizedErrors.Length == 0)
+        {
+            if (!propertyHadErrors)
+            {
+                return;
+            }
+
+            _externalErrors.Remove(propertyName);
+            RaiseManualErrorsChanged(propertyName, hadManualErrors);
+            return;
+        }
+
+        if (propertyHadErrors && existing!.SequenceEqual(normalizedErrors, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        _externalErrors[propertyName] = normalizedErrors;
+        RaiseManualErrorsChanged(propertyName, hadManualErrors);
+    }
+
+    private void RaiseManualErrorsChanged(string propertyName, bool hadManualErrors)
+    {
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propertyName));
+
+        var hasManualErrors = _externalErrors.Count > 0;
+
+        if (hadManualErrors != hasManualErrors)
+        {
+            OnPropertyChanged(nameof(HasErrors));
+        }
+    }
+
+    private void ClearExternalErrors()
+    {
+        if (_externalErrors.Count == 0)
+        {
+            return;
+        }
+
+        var keys = _externalErrors.Keys.ToArray();
+        _externalErrors.Clear();
+
+        foreach (var key in keys)
+        {
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(key));
+        }
+
+        OnPropertyChanged(nameof(HasErrors));
     }
 }
