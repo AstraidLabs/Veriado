@@ -9,6 +9,8 @@ public interface IDialogService
     Task ShowErrorAsync(string title, string message);
     Task ShowAsync(string title, UIElement content, string primaryButtonText = "OK");
 
+    Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog, CancellationToken cancellationToken = default);
+
     Task<DialogResult> ShowDialogAsync<TViewModel>(TViewModel viewModel, CancellationToken cancellationToken = default) where TViewModel : class;
     Task<DialogResult> ShowDialogAsync(DialogRequest request, CancellationToken cancellationToken = default);
 }
