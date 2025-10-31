@@ -265,7 +265,7 @@
                                         VerticalAlignment="Center"
                                         Content="Detail"
                                         Command="{Binding DataContext.OpenDetailCommand, ElementName=PageRoot}"
-                                        CommandParameter="{Binding}" />
+                                        CommandParameter="{x:Bind Mode=OneWay}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
