@@ -1,5 +1,6 @@
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
@@ -24,19 +25,15 @@ public sealed class DialogService : IDialogService
 
     public async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel")
     {
-        var window = _window.GetActiveWindow();
-        var hwnd = _window.GetHwnd(window);
         var dialog = new ContentDialog
         {
             Title = title,
             Content = message,
             PrimaryButtonText = confirmText,
             CloseButtonText = string.IsNullOrWhiteSpace(cancelText) ? null : cancelText,
-            XamlRoot = _window.GetXamlRoot(window),
         };
 
-        WinRT.Interop.InitializeWithWindow.Initialize(dialog, hwnd);
-        var result = await dialog.ShowAsync();
+        var result = await ShowDialogAsync(dialog).ConfigureAwait(false);
         return result == ContentDialogResult.Primary;
     }
 
@@ -90,14 +87,48 @@ public sealed class DialogService : IDialogService
         throw new InvalidOperationException($"No dialog factory registered for view model type '{viewModel.GetType().FullName}'.");
     }
 
+    public async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+
+        var window = _window.GetActiveWindow();
+        if (window.Content is not FrameworkElement rootElement)
+        {
+            throw new InvalidOperationException("Cannot resolve XamlRoot from window.");
+        }
+
+        var xamlRoot = rootElement.XamlRoot
+            ?? throw new InvalidOperationException("Cannot resolve XamlRoot from window.");
+
+        dialog.XamlRoot = xamlRoot;
+        dialog.RequestedTheme = rootElement.ActualTheme;
+
+        using var registration = cancellationToken.Register(() =>
+        {
+            if (dialog.DispatcherQueue.HasThreadAccess)
+            {
+                if (dialog.IsLoaded)
+                {
+                    dialog.Hide();
+                }
+            }
+            else
+            {
+                _ = dialog.DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (dialog.IsLoaded)
+                    {
+                        dialog.Hide();
+                    }
+                });
+            }
+        });
+
+        return await dialog.ShowAsync().AsTask().ConfigureAwait(false);
+    }
+
     private async Task<DialogResult> ShowDialogInternalAsync(ContentDialog dialog, object? viewModel, CancellationToken cancellationToken)
     {
-        var window = _window.GetActiveWindow();
-        var hwnd = _window.GetHwnd(window);
-        dialog.XamlRoot = _window.GetXamlRoot(window);
-
-        WinRT.Interop.InitializeWithWindow.Initialize(dialog, hwnd);
-
         DialogResult? requestedResult = null;
 
         void RequestClose(object? sender, DialogResult result)
@@ -122,18 +153,11 @@ public sealed class DialogService : IDialogService
         using var registration = cancellationToken.Register(() =>
         {
             requestedResult = DialogResult.Canceled();
-            _ = dialog.DispatcherQueue.TryEnqueue(() =>
-            {
-                if (dialog.IsLoaded)
-                {
-                    dialog.Hide();
-                }
-            });
         });
 
         try
         {
-            var result = await dialog.ShowAsync();
+            var result = await ShowDialogAsync(dialog, cancellationToken).ConfigureAwait(false);
 
             if (cancellationToken.IsCancellationRequested)
             {
