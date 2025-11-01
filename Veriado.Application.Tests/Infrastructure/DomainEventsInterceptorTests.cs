@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,6 +79,26 @@ public sealed class DomainEventsInterceptorTests : IAsyncLifetime
         var eventLogs = await context.DomainEventLog.ToListAsync();
         Assert.Equal(3, eventLogs.Count);
         Assert.All(eventLogs, log => Assert.Equal(file.Id.ToString("D"), log.AggregateId));
+    }
+
+    [Fact]
+    public async Task SaveChanges_SynchronousCallThrowsNotSupported()
+    {
+        await using var context = CreateContext();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var fileSystem = CreateFileSystem();
+        fileSystem.ClearDomainEvents();
+        context.FileSystems.Add(fileSystem);
+
+        var file = FileEntityFactory.CreateSample(fileSystem.Id);
+        context.Files.Add(file);
+
+        var exception = Assert.Throws<NotSupportedException>(() => context.SaveChanges());
+
+        Assert.Contains("SaveChangesAsync", exception.Message);
     }
 
     [Fact]

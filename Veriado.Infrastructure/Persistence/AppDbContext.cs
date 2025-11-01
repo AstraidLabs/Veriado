@@ -188,6 +188,16 @@ public sealed class AppDbContext : DbContext
         EnsureSaveChangesSemaphoreInitialized();
     }
 
+    public override int SaveChanges()
+    {
+        throw new NotSupportedException("Synchronous SaveChanges is not supported. Use SaveChangesAsync instead.");
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        throw new NotSupportedException("Synchronous SaveChanges is not supported. Use SaveChangesAsync instead.");
+    }
+
     public override void Dispose()
     {
         DisposeSemaphore();
