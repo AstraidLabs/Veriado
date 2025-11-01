@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
@@ -26,6 +27,19 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         _auditProjector = auditProjector ?? throw new ArgumentNullException(nameof(auditProjector));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public override InterceptionResult<int> SavingChanges(
+        DbContextEventData eventData,
+        InterceptionResult<int> result)
+    {
+        if (eventData.Context is AppDbContext)
+        {
+            throw new NotSupportedException(
+                "Synchronous SaveChanges is not supported. Use SaveChangesAsync to process domain events without risking deadlocks.");
+        }
+
+        return base.SavingChanges(eventData, result);
     }
 
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
