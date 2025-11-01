@@ -86,7 +86,7 @@ public abstract class FileWriteHandlerBase
         }
         else
         {
-            if (!_unitOfWork.HasTrackedChanges
+            if (!await _unitOfWork.HasTrackedChangesAsync(cancellationToken).ConfigureAwait(false)
                 && file.DomainEvents.Count == 0
                 && (fileSystem?.DomainEvents.Count ?? 0) == 0
                 && !file.SearchIndex.IsStale)

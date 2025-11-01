@@ -28,16 +28,6 @@ internal sealed class DomainEventsInterceptor : SaveChangesInterceptor
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
-    {
-        if (eventData.Context is AppDbContext context)
-        {
-            ProcessDomainEventsAsync(context, CancellationToken.None).GetAwaiter().GetResult();
-        }
-
-        return base.SavingChanges(eventData, result);
-    }
-
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
