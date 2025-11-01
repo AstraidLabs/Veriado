@@ -8,7 +8,8 @@ public interface IFilePersistenceUnitOfWork
     /// <summary>
     /// Gets a value indicating whether the underlying persistence context is tracking changes.
     /// </summary>
-    bool HasTrackedChanges { get; }
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task<bool> HasTrackedChangesAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Begins a new transactional scope for subsequent operations.

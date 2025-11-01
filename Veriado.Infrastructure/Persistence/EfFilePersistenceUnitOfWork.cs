@@ -23,66 +23,67 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public bool HasTrackedChanges
+    public async Task<bool> HasTrackedChangesAsync(CancellationToken cancellationToken)
     {
-        get
+        try
         {
-            try
-            {
-                if (_dbContext.IsSaveChangesSemaphoreDisposed)
-                {
-                    return false;
-                }
-
-                var semaphore = _dbContext.SaveChangesSemaphore;
-                if (semaphore is null)
-                {
-                    return false;
-                }
-
-                var lockAcquired = false;
-
-                try
-                {
-                    semaphore.Wait();
-                    lockAcquired = true;
-
-                    return _dbContext.ChangeTracker.HasChanges();
-                }
-                catch (ObjectDisposedException)
-                {
-                    // EF Core disposes the underlying services when the context is disposed. Some
-                    // code paths inside ChangeTracker.HasChanges() assume the services are still
-                    // available and end up throwing when they are not. A disposed context cannot
-                    // have any tracked changes, so report "no changes" in this situation.
-                    return false;
-                }
-                catch (NullReferenceException)
-                {
-                    // EF Core may throw NullReferenceException when ChangeTracker tries to access
-                    // disposed internal services. Treat this the same as a disposed context.
-                    return false;
-                }
-                finally
-                {
-                    if (lockAcquired)
-                    {
-                        try
-                        {
-                            semaphore.Release();
-                        }
-                        catch (ObjectDisposedException)
-                        {
-                            // The semaphore may be disposed concurrently with this property. If it is,
-                            // there are no tracked changes because the context is no longer usable.
-                        }
-                    }
-                }
-            }
-            catch (ObjectDisposedException)
+            if (_dbContext.IsSaveChangesSemaphoreDisposed)
             {
                 return false;
             }
+
+            var semaphore = _dbContext.SaveChangesSemaphore;
+            if (semaphore is null)
+            {
+                return false;
+            }
+
+            var lockAcquired = false;
+
+            try
+            {
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                lockAcquired = true;
+
+                return _dbContext.ChangeTracker.HasChanges();
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            catch (ObjectDisposedException)
+            {
+                // EF Core disposes the underlying services when the context is disposed. Some
+                // code paths inside ChangeTracker.HasChanges() assume the services are still
+                // available and end up throwing when they are not. A disposed context cannot
+                // have any tracked changes, so report "no changes" in this situation.
+                return false;
+            }
+            catch (NullReferenceException)
+            {
+                // EF Core may throw NullReferenceException when ChangeTracker tries to access
+                // disposed internal services. Treat this the same as a disposed context.
+                return false;
+            }
+            finally
+            {
+                if (lockAcquired)
+                {
+                    try
+                    {
+                        semaphore.Release();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // The semaphore may be disposed concurrently with this property. If it is,
+                        // there are no tracked changes because the context is no longer usable.
+                    }
+                }
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
         }
     }
 
