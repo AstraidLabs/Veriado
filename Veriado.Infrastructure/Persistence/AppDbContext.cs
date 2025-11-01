@@ -19,12 +19,7 @@ public sealed class AppDbContext : DbContext
     private readonly InfrastructureOptions _options;
     private readonly ILogger<AppDbContext> _logger;
     private const string LegacyBaselineMigrationId = "20251026112230_InitialCreate";
-    private int _semaphoreDisposed;
-
-    internal SemaphoreSlim SaveChangesSemaphore { get; } = new(1, 1);
-
-    internal bool IsSaveChangesSemaphoreDisposed
-        => Volatile.Read(ref _semaphoreDisposed) != 0;
+    private SemaphoreSlim? _saveChangesSemaphore = new(1, 1);
 
     public AppDbContext(DbContextOptions<AppDbContext> options, InfrastructureOptions infrastructureOptions, ILogger<AppDbContext> logger)
         : base(options)
@@ -32,6 +27,7 @@ public sealed class AppDbContext : DbContext
         _options = infrastructureOptions;
         _logger = logger;
         EnsureSqliteProvider();
+        EnsureSaveChangesSemaphoreInitialized();
         _logger.LogInformation("ResolvedDbPath = {DatabasePath}", _options.DbPath);
     }
 
@@ -169,6 +165,29 @@ public sealed class AppDbContext : DbContext
         }
     }
 
+    internal bool IsSaveChangesSemaphoreDisposed
+        => Volatile.Read(ref _saveChangesSemaphore) is null;
+
+    internal SemaphoreSlim SaveChangesSemaphore
+    {
+        get
+        {
+            var semaphore = Volatile.Read(ref _saveChangesSemaphore);
+            if (semaphore is null)
+            {
+                throw new ObjectDisposedException(nameof(AppDbContext));
+            }
+
+            return semaphore;
+        }
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        EnsureSaveChangesSemaphoreInitialized();
+    }
+
     public override void Dispose()
     {
         DisposeSemaphore();
@@ -181,13 +200,24 @@ public sealed class AppDbContext : DbContext
         await base.DisposeAsync().ConfigureAwait(false);
     }
 
-    private void DisposeSemaphore()
+    private void EnsureSaveChangesSemaphoreInitialized()
     {
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) != 0)
+        if (Volatile.Read(ref _saveChangesSemaphore) is not null)
         {
             return;
         }
 
-        SaveChangesSemaphore.Dispose();
+        var semaphore = new SemaphoreSlim(1, 1);
+        var existing = Interlocked.CompareExchange(ref _saveChangesSemaphore, semaphore, null);
+        if (existing is not null)
+        {
+            semaphore.Dispose();
+        }
+    }
+
+    private void DisposeSemaphore()
+    {
+        var semaphore = Interlocked.Exchange(ref _saveChangesSemaphore, null);
+        semaphore?.Dispose();
     }
 }
