@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.ViewModels.Startup;
@@ -22,6 +23,12 @@ public partial class App : WinUIApplication
     public App()
     {
         InitializeComponent();
+
+        var czechCulture = CultureInfo.GetCultureInfo("cs-CZ");
+        CultureInfo.DefaultThreadCurrentCulture = czechCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = czechCulture;
+        CultureInfo.CurrentCulture = czechCulture;
+        CultureInfo.CurrentUICulture = czechCulture;
     }
 
     public static new App Current => (App)WinUIApplication.Current;
