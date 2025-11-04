@@ -180,9 +180,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             IsSaving = true;
             ErrorMessage = null;
             var dto = File.ToDto();
-            await _fileService.UpdateAsync(dto, cancellationToken).ConfigureAwait(false);
-            _snapshot = dto;
-            File.UpdateSnapshot(dto);
+            var updated = await _fileService.UpdateAsync(dto, cancellationToken).ConfigureAwait(false);
+            _snapshot = updated;
+            File = EditableFileDetailModel.FromDto(updated);
             CloseRequested?.Invoke(this, new DialogResult(DialogOutcome.Primary));
         }
         catch (FileDetailValidationException ex)
