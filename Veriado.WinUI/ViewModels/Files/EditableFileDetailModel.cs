@@ -139,8 +139,23 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
     {
         ArgumentNullException.ThrowIfNull(detail);
         _snapshot = detail;
-        Version = detail.Version;
+
+        Id = detail.Id;
+        Extension = detail.Extension;
+        FileName = detail.FileName;
+        MimeType = detail.MimeType;
+        Author = detail.Author;
+        IsReadOnly = detail.IsReadOnly;
+        Size = detail.Size;
+        CreatedAt = detail.CreatedAt;
         ModifiedAt = detail.ModifiedAt;
+        Version = detail.Version;
+        ValidFrom = detail.ValidFrom;
+        ValidTo = detail.ValidTo;
+
+        ResetValidation();
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(IsDirty));
     }
 
     public void ApplyServerErrors(IReadOnlyDictionary<string, string[]> errors)

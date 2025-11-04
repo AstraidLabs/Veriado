@@ -9,5 +9,5 @@ public interface IFileService
 {
     Task<EditableFileDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 
-    Task UpdateAsync(EditableFileDetailDto detail, CancellationToken cancellationToken);
+    Task<EditableFileDetailDto> UpdateAsync(EditableFileDetailDto detail, CancellationToken cancellationToken);
 }

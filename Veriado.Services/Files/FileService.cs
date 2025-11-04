@@ -33,7 +33,7 @@ public sealed class FileService : IFileService
         return Map(detail);
     }
 
-    public async Task UpdateAsync(EditableFileDetailDto detail, CancellationToken cancellationToken)
+    public async Task<EditableFileDetailDto> UpdateAsync(EditableFileDetailDto detail, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(detail);
 
@@ -66,6 +66,11 @@ public sealed class FileService : IFileService
         }
 
         await UpdateValidityAsync(current, detail, cancellationToken).ConfigureAwait(false);
+
+        current = await _fileQueryService.GetDetailAsync(detail.Id, cancellationToken).ConfigureAwait(false)
+            ?? throw new FileDetailNotFoundException(detail.Id);
+
+        return Map(current);
     }
 
     private static EditableFileDetailDto Map(Veriado.Contracts.Files.FileDetailDto detail)
