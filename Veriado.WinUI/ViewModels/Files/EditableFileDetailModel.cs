@@ -6,12 +6,23 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Veriado.Appl.Files.Contracts;
+using Veriado.WinUI.ViewModels.Validation;
+using DataAnnotationsValidationResult = System.ComponentModel.DataAnnotations.ValidationResult;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
 /// <summary>
 /// Represents an editable snapshot of a file detail with validation support for the dialog.
 /// </summary>
+[Flags]
+public enum FileValidationScope
+{
+    None = 0,
+    Metadata = 1,
+    Validity = 2,
+    All = Metadata | Validity,
+}
+
 public sealed partial class EditableFileDetailModel : ObservableValidator, INotifyDataErrorInfo
 {
     private EditableFileDetailDto _snapshot = null!;
@@ -169,9 +180,9 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
         }
     }
 
-    public new IEnumerable<ValidationResult> GetErrors(string? propertyName = null)
+    public new IEnumerable<DataAnnotationsValidationResult> GetErrors(string? propertyName = null)
     {
-        var baseErrors = base.GetErrors(propertyName) ?? Enumerable.Empty<ValidationResult>();
+        var baseErrors = base.GetErrors(propertyName) ?? Enumerable.Empty<DataAnnotationsValidationResult>();
 
         if (string.IsNullOrEmpty(propertyName))
         {
@@ -182,12 +193,12 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
             return baseErrors.Concat(
                 _externalErrors.SelectMany(static pair =>
-                    pair.Value.Select(error => new ValidationResult(error, GetMemberNames(pair.Key)))));
+                    pair.Value.Select(error => new DataAnnotationsValidationResult(error, GetMemberNames(pair.Key)))));
         }
 
         if (_externalErrors.TryGetValue(propertyName, out var errors) && errors.Length > 0)
         {
-            return baseErrors.Concat(errors.Select(error => new ValidationResult(error, GetMemberNames(propertyName))));
+            return baseErrors.Concat(errors.Select(error => new DataAnnotationsValidationResult(error, GetMemberNames(propertyName))));
         }
 
         return baseErrors;
@@ -201,11 +212,32 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
         ClearExternalErrors();
     }
 
-    public void ValidateAll()
+    public void ValidateAll() => Validate(FileValidationScope.All);
+
+    public ValidationResult Validate(FileValidationScope scope)
     {
-        ValidateAllProperties();
-        ValidateValidityRange();
+        var result = new ValidationResult();
+
+        if (scope.HasFlag(FileValidationScope.Metadata))
+        {
+            ValidateProperty(FileName, nameof(FileName));
+            ValidateProperty(MimeType, nameof(MimeType));
+            ValidateAuthor();
+
+            AddPropertyErrors(result, nameof(FileName));
+            AddPropertyErrors(result, nameof(MimeType));
+            AddPropertyErrors(result, nameof(Author));
+        }
+
+        if (scope.HasFlag(FileValidationScope.Validity))
+        {
+            ValidateValidityRange(result);
+        }
+
+        return result;
     }
+
+    public ValidationResult Validate() => Validate(FileValidationScope.All);
 
     partial void OnFileNameChanged(string value)
     {
@@ -219,7 +251,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
     partial void OnAuthorChanged(string? value)
     {
-        ValidateProperty(value, nameof(Author));
+        ValidateAuthor();
     }
 
     partial void OnValidFromChanged(DateTimeOffset? value)
@@ -232,7 +264,21 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
         ValidateValidityRange();
     }
 
-    private void ValidateValidityRange()
+    private void ValidateAuthor()
+    {
+        ValidateProperty(Author, nameof(Author));
+
+        if (string.IsNullOrWhiteSpace(Author))
+        {
+            SetValidationErrors(nameof(Author), new[] { "Author cannot be null or whitespace." });
+        }
+        else
+        {
+            SetValidationErrors(nameof(Author), Array.Empty<string>());
+        }
+    }
+
+    private void ValidateValidityRange(ValidationResult? result = null)
     {
         if (ValidFrom is null && ValidTo is null)
         {
@@ -243,20 +289,44 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
         if (ValidFrom is null || ValidTo is null)
         {
-            SetValidationErrors(nameof(ValidFrom), ValidFrom is null ? new[] { "Datum začátku platnosti je povinné." } : Array.Empty<string>());
-            SetValidationErrors(nameof(ValidTo), ValidTo is null ? new[] { "Datum ukončení platnosti je povinné." } : Array.Empty<string>());
+            const string message = "Both validity dates must be set.";
+            SetValidationErrors(nameof(ValidFrom), new[] { message });
+            SetValidationErrors(nameof(ValidTo), new[] { message });
+            result?.AddError(nameof(ValidFrom), message);
+            result?.AddError(nameof(ValidTo), message);
             return;
         }
 
         if (ValidFrom > ValidTo)
         {
-            SetValidationErrors(nameof(ValidFrom), new[] { "Začátek platnosti musí být dříve než konec." });
-            SetValidationErrors(nameof(ValidTo), new[] { "Konec platnosti musí být po začátku." });
+            const string message = "Valid from cannot be after valid to.";
+            SetValidationErrors(nameof(ValidFrom), new[] { message });
+            SetValidationErrors(nameof(ValidTo), new[] { message });
+            result?.AddError(nameof(ValidFrom), message);
+            result?.AddError(nameof(ValidTo), message);
             return;
         }
 
         SetValidationErrors(nameof(ValidFrom), Array.Empty<string>());
         SetValidationErrors(nameof(ValidTo), Array.Empty<string>());
+        if (result is not null)
+        {
+            AddPropertyErrors(result, nameof(ValidFrom));
+            AddPropertyErrors(result, nameof(ValidTo));
+        }
+    }
+
+    private void ValidateValidityRange() => ValidateValidityRange(null);
+
+    private void AddPropertyErrors(ValidationResult result, string propertyName)
+    {
+        foreach (var error in GetErrors(propertyName))
+        {
+            if (!string.IsNullOrWhiteSpace(error?.ErrorMessage))
+            {
+                result.AddError(propertyName, error!.ErrorMessage!);
+            }
+        }
     }
 
     private static IEnumerable<string>? GetMemberNames(string propertyName)
