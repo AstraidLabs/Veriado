@@ -204,8 +204,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             ErrorMessage = null;
             var request = BuildUpdateRequestFromScope(scope);
             var updated = await _fileService.UpdateAsync(request, cancellationToken).ConfigureAwait(false);
-            _snapshot = updated;
-            File.UpdateSnapshot(updated);
+            var normalized = NormalizeDetail(updated);
+            _snapshot = normalized;
+            File.UpdateSnapshot(normalized);
             CloseRequested?.Invoke(this, new DialogResult(DialogOutcome.Primary));
         }
         catch (FileDetailValidationException ex)
@@ -271,8 +272,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     private void Attach(EditableFileDetailDto detail)
     {
-        _snapshot = detail;
-        File = EditableFileDetailModel.FromDto(detail);
+        var normalized = NormalizeDetail(detail);
+        _snapshot = normalized;
+        File = EditableFileDetailModel.FromDto(normalized);
     }
 
     private async Task HandleConcurrencyAsync(CancellationToken cancellationToken)
@@ -417,7 +419,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             FileName = scope.HasFlag(FileValidationScope.Metadata) ? current.FileName : original.FileName,
             Extension = original.Extension,
             MimeType = scope.HasFlag(FileValidationScope.Metadata) ? current.MimeType : original.MimeType,
-            Author = scope.HasFlag(FileValidationScope.Metadata) ? current.Author : original.Author,
+            Author = scope.HasFlag(FileValidationScope.Metadata)
+                ? EditableFileDetailModel.NormalizeAuthor(current.Author)
+                : EditableFileDetailModel.NormalizeAuthor(original.Author),
             IsReadOnly = scope.HasFlag(FileValidationScope.Metadata) ? current.IsReadOnly : original.IsReadOnly,
             Size = original.Size,
             CreatedAt = original.CreatedAt,
@@ -425,6 +429,25 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             Version = original.Version,
             ValidFrom = scope.HasFlag(FileValidationScope.Validity) ? current.ValidFrom : original.ValidFrom,
             ValidTo = scope.HasFlag(FileValidationScope.Validity) ? current.ValidTo : original.ValidTo,
+        };
+    }
+
+    private static EditableFileDetailDto NormalizeDetail(EditableFileDetailDto detail)
+    {
+        return new EditableFileDetailDto
+        {
+            Id = detail.Id,
+            FileName = detail.FileName,
+            Extension = detail.Extension,
+            MimeType = detail.MimeType,
+            Author = EditableFileDetailModel.NormalizeAuthor(detail.Author),
+            IsReadOnly = detail.IsReadOnly,
+            Size = detail.Size,
+            CreatedAt = detail.CreatedAt,
+            ModifiedAt = detail.ModifiedAt,
+            Version = detail.Version,
+            ValidFrom = detail.ValidFrom,
+            ValidTo = detail.ValidTo,
         };
     }
 

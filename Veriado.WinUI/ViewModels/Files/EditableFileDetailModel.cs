@@ -114,7 +114,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             Extension = detail.Extension,
             fileName = detail.FileName,
             mimeType = detail.MimeType,
-            author = detail.Author,
+            author = NormalizeAuthor(detail.Author),
             isReadOnly = detail.IsReadOnly,
             size = detail.Size,
             createdAt = detail.CreatedAt,
@@ -136,7 +136,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             FileName = FileName,
             Extension = Extension,
             MimeType = MimeType,
-            Author = Author,
+            Author = NormalizeAuthor(Author),
             IsReadOnly = IsReadOnly,
             Size = Size,
             CreatedAt = CreatedAt,
@@ -156,7 +156,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
         Extension = detail.Extension;
         FileName = detail.FileName;
         MimeType = detail.MimeType;
-        Author = detail.Author;
+        Author = NormalizeAuthor(detail.Author);
         IsReadOnly = detail.IsReadOnly;
         Size = detail.Size;
         CreatedAt = detail.CreatedAt;
@@ -252,6 +252,14 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
     partial void OnAuthorChanged(string? value)
     {
+        var normalized = NormalizeAuthor(value);
+
+        if (!string.Equals(value, normalized, StringComparison.Ordinal))
+        {
+            author = normalized;
+            OnPropertyChanged(nameof(Author));
+        }
+
         ValidateAuthor();
     }
 
@@ -268,15 +276,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
     private void ValidateAuthor()
     {
         ValidateProperty(Author, nameof(Author));
-
-        if (string.IsNullOrWhiteSpace(Author))
-        {
-            SetValidationErrors(nameof(Author), new[] { "Author cannot be null or whitespace." });
-        }
-        else
-        {
-            SetValidationErrors(nameof(Author), Array.Empty<string>());
-        }
+        SetValidationErrors(nameof(Author), Array.Empty<string>());
     }
 
     private void ValidateValidityRange(ValidationResult? result = null)
@@ -397,5 +397,15 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
         }
 
         OnPropertyChanged(nameof(HasErrors));
+    }
+    internal static string? NormalizeAuthor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
     }
 }
