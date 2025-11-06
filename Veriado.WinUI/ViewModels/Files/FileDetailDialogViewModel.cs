@@ -119,7 +119,24 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public bool CanEditFields => !IsBusy;
 
-    public bool CanSave => !IsBusy && !HasErrors;
+    public bool CanSave
+    {
+        get
+        {
+            if (IsBusy)
+            {
+                return false;
+            }
+
+            var scope = GetValidationScope();
+            if (scope == FileValidationScope.None)
+            {
+                return false;
+            }
+
+            return !HasScopeErrors(scope);
+        }
+    }
 
     public bool CanClearValidity => File.ValidFrom is not null || File.ValidTo is not null;
 
@@ -165,12 +182,18 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public async Task SaveAsync(CancellationToken cancellationToken)
     {
-        File.ResetValidation();
-        File.ValidateAll();
+        var scope = GetValidationScope();
+        var validation = File.Validate(scope);
         OnPropertyChanged(nameof(HasErrors));
         OnPropertyChanged(nameof(CanSave));
+        SaveCommand.NotifyCanExecuteChanged();
 
-        if (File.HasErrors)
+        if (!validation.IsValid)
+        {
+            return;
+        }
+
+        if (scope == FileValidationScope.None)
         {
             return;
         }
@@ -179,10 +202,10 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         {
             IsSaving = true;
             ErrorMessage = null;
-            var dto = File.ToDto();
-            var updated = await _fileService.UpdateAsync(dto, cancellationToken).ConfigureAwait(false);
+            var request = BuildUpdateRequestFromScope(scope);
+            var updated = await _fileService.UpdateAsync(request, cancellationToken).ConfigureAwait(false);
             _snapshot = updated;
-            File = EditableFileDetailModel.FromDto(updated);
+            File.UpdateSnapshot(updated);
             CloseRequested?.Invoke(this, new DialogResult(DialogOutcome.Primary));
         }
         catch (FileDetailValidationException ex)
@@ -190,6 +213,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             File.ApplyServerErrors(ex.Errors);
             OnPropertyChanged(nameof(HasErrors));
             OnPropertyChanged(nameof(CanSave));
+            SaveCommand.NotifyCanExecuteChanged();
             ErrorMessage = ex.Message;
         }
         catch (FileDetailConcurrencyException ex)
@@ -307,7 +331,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     {
         File.ValidFrom = null;
         File.ValidTo = null;
-        File.ValidateAll();
+        File.Validate(FileValidationScope.Validity);
         OnPropertyChanged(nameof(HasErrors));
         OnPropertyChanged(nameof(CanSave));
         OnPropertyChanged(nameof(CanClearValidity));
@@ -316,6 +340,93 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     }
 
     private bool CanExecuteClearValidity() => CanClearValidity;
+
+    private FileValidationScope GetValidationScope()
+    {
+        if (_snapshot is null)
+        {
+            return FileValidationScope.None;
+        }
+
+        var scope = FileValidationScope.None;
+
+        if (!string.Equals(File.FileName, _snapshot.FileName, StringComparison.Ordinal))
+        {
+            scope |= FileValidationScope.Metadata;
+        }
+
+        if (!string.Equals(File.MimeType, _snapshot.MimeType, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(File.Author ?? string.Empty, _snapshot.Author ?? string.Empty, StringComparison.Ordinal)
+            || File.IsReadOnly != _snapshot.IsReadOnly)
+        {
+            scope |= FileValidationScope.Metadata;
+        }
+
+        if (!Nullable.Equals(File.ValidFrom, _snapshot.ValidFrom)
+            || !Nullable.Equals(File.ValidTo, _snapshot.ValidTo))
+        {
+            scope |= FileValidationScope.Validity;
+        }
+
+        return scope;
+    }
+
+    private bool HasScopeErrors(FileValidationScope scope)
+    {
+        if (scope == FileValidationScope.None)
+        {
+            return false;
+        }
+
+        if (scope.HasFlag(FileValidationScope.Metadata)
+            && (HasErrorsForProperty(nameof(EditableFileDetailModel.FileName))
+                || HasErrorsForProperty(nameof(EditableFileDetailModel.MimeType))
+                || HasErrorsForProperty(nameof(EditableFileDetailModel.Author))))
+        {
+            return true;
+        }
+
+        if (scope.HasFlag(FileValidationScope.Validity)
+            && (HasErrorsForProperty(nameof(EditableFileDetailModel.ValidFrom))
+                || HasErrorsForProperty(nameof(EditableFileDetailModel.ValidTo))))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool HasErrorsForProperty(string propertyName)
+    {
+        return File.GetErrors(propertyName)?.Any() ?? false;
+    }
+
+    private EditableFileDetailDto BuildUpdateRequestFromScope(FileValidationScope scope)
+    {
+        if (_snapshot is null)
+        {
+            throw new InvalidOperationException("File detail has not been loaded.");
+        }
+
+        var original = _snapshot;
+        var current = File;
+
+        return new EditableFileDetailDto
+        {
+            Id = current.Id,
+            FileName = scope.HasFlag(FileValidationScope.Metadata) ? current.FileName : original.FileName,
+            Extension = original.Extension,
+            MimeType = scope.HasFlag(FileValidationScope.Metadata) ? current.MimeType : original.MimeType,
+            Author = scope.HasFlag(FileValidationScope.Metadata) ? current.Author : original.Author,
+            IsReadOnly = scope.HasFlag(FileValidationScope.Metadata) ? current.IsReadOnly : original.IsReadOnly,
+            Size = original.Size,
+            CreatedAt = original.CreatedAt,
+            ModifiedAt = original.ModifiedAt,
+            Version = original.Version,
+            ValidFrom = scope.HasFlag(FileValidationScope.Validity) ? current.ValidFrom : original.ValidFrom,
+            ValidTo = scope.HasFlag(FileValidationScope.Validity) ? current.ValidTo : original.ValidTo,
+        };
+    }
 
     private void OnBusyStateChanged()
     {
