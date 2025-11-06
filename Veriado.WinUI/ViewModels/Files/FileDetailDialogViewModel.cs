@@ -69,6 +69,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
                 OnPropertyChanged(nameof(HasErrors));
                 OnPropertyChanged(nameof(CanSave));
                 OnPropertyChanged(nameof(CanClearValidity));
+                NotifyErrorCollectionsChanged();
                 SaveCommand.NotifyCanExecuteChanged();
                 ClearValidityCommand.NotifyCanExecuteChanged();
             }
@@ -140,6 +141,16 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     public bool CanClearValidity => File.ValidFrom is not null || File.ValidTo is not null;
 
+    public IEnumerable<string> FileNameErrors => GetErrors(nameof(EditableFileDetailModel.FileName));
+
+    public IEnumerable<string> MimeTypeErrors => GetErrors(nameof(EditableFileDetailModel.MimeType));
+
+    public IEnumerable<string> AuthorErrors => GetErrors(nameof(EditableFileDetailModel.Author));
+
+    public IEnumerable<string> ValidFromErrors => GetErrors(nameof(EditableFileDetailModel.ValidFrom));
+
+    public IEnumerable<string> ValidToErrors => GetErrors(nameof(EditableFileDetailModel.ValidTo));
+
     public IAsyncRelayCommand SaveCommand { get; }
 
     public IRelayCommand CancelCommand { get; }
@@ -186,6 +197,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         var validation = File.Validate(scope);
         OnPropertyChanged(nameof(HasErrors));
         OnPropertyChanged(nameof(CanSave));
+        NotifyErrorCollectionsChanged();
         SaveCommand.NotifyCanExecuteChanged();
 
         if (!validation.IsValid)
@@ -214,6 +226,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             File.ApplyServerErrors(ex.Errors);
             OnPropertyChanged(nameof(HasErrors));
             OnPropertyChanged(nameof(CanSave));
+            NotifyErrorCollectionsChanged();
             SaveCommand.NotifyCanExecuteChanged();
             ErrorMessage = ex.Message;
         }
@@ -326,6 +339,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     {
         OnPropertyChanged(nameof(HasErrors));
         OnPropertyChanged(nameof(CanSave));
+        NotifyErrorCollectionsChanged(e.PropertyName);
         SaveCommand.NotifyCanExecuteChanged();
     }
 
@@ -336,6 +350,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         File.Validate(FileValidationScope.Validity);
         OnPropertyChanged(nameof(HasErrors));
         OnPropertyChanged(nameof(CanSave));
+        NotifyErrorCollectionsChanged(nameof(EditableFileDetailModel.ValidFrom));
+        NotifyErrorCollectionsChanged(nameof(EditableFileDetailModel.ValidTo));
         OnPropertyChanged(nameof(CanClearValidity));
         SaveCommand.NotifyCanExecuteChanged();
         ClearValidityCommand.NotifyCanExecuteChanged();
@@ -458,6 +474,40 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         OnPropertyChanged(nameof(CanSave));
         CancelCommand.NotifyCanExecuteChanged();
         SaveCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyErrorCollectionsChanged(string? propertyName = null)
+    {
+        if (string.IsNullOrEmpty(propertyName))
+        {
+            OnPropertyChanged(nameof(FileNameErrors));
+            OnPropertyChanged(nameof(MimeTypeErrors));
+            OnPropertyChanged(nameof(AuthorErrors));
+            OnPropertyChanged(nameof(ValidFromErrors));
+            OnPropertyChanged(nameof(ValidToErrors));
+            return;
+        }
+
+        if (string.Equals(propertyName, nameof(EditableFileDetailModel.FileName), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(FileNameErrors));
+        }
+        else if (string.Equals(propertyName, nameof(EditableFileDetailModel.MimeType), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(MimeTypeErrors));
+        }
+        else if (string.Equals(propertyName, nameof(EditableFileDetailModel.Author), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(AuthorErrors));
+        }
+        else if (string.Equals(propertyName, nameof(EditableFileDetailModel.ValidFrom), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(ValidFromErrors));
+        }
+        else if (string.Equals(propertyName, nameof(EditableFileDetailModel.ValidTo), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(ValidToErrors));
+        }
     }
     private static EditableFileDetailModel CreatePlaceholderModel()
     {
