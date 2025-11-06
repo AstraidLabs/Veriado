@@ -34,7 +34,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
 
-        SaveCommand = new AsyncRelayCommand(ExecuteSaveAsync, CanExecuteSave);
+        SaveCommand = new AsyncRelayCommand(ExecuteSaveCommandAsync, CanExecuteSave);
         CancelCommand = new RelayCommand(ExecuteCancel, () => !IsSaving);
         ClearValidityCommand = new RelayCommand(ExecuteClearValidity, CanExecuteClearValidity);
 
@@ -191,7 +191,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         }
     }
 
-    public async Task SaveAsync(CancellationToken cancellationToken)
+    public async Task<bool> SaveAsync(CancellationToken cancellationToken)
     {
         var scope = GetValidationScope();
         var validation = File.Validate(scope);
@@ -202,12 +202,12 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
         if (!validation.IsValid)
         {
-            return;
+            return false;
         }
 
         if (scope == FileValidationScope.None)
         {
-            return;
+            return false;
         }
 
         try
@@ -220,6 +220,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             _snapshot = normalized;
             File.UpdateSnapshot(normalized);
             CloseRequested?.Invoke(this, new DialogResult(DialogOutcome.Primary));
+            return true;
         }
         catch (FileDetailValidationException ex)
         {
@@ -229,21 +230,25 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             NotifyErrorCollectionsChanged();
             SaveCommand.NotifyCanExecuteChanged();
             ErrorMessage = ex.Message;
+            return false;
         }
         catch (FileDetailConcurrencyException ex)
         {
             ErrorMessage = ex.Message;
             await HandleConcurrencyAsync(cancellationToken).ConfigureAwait(false);
+            return false;
         }
         catch (FileDetailServiceException ex)
         {
             ErrorMessage = ex.Message;
             await _dialogService.ShowErrorAsync("Uložení selhalo", ex.Message).ConfigureAwait(false);
+            return false;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ErrorMessage = ex.Message;
             await _dialogService.ShowErrorAsync("Uložení selhalo", ex.Message).ConfigureAwait(false);
+            return false;
         }
         finally
         {
@@ -253,23 +258,28 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     private bool CanExecuteSave() => CanSave;
 
-    private async Task ExecuteSaveAsync()
+    public async Task<bool> ExecuteSaveAsync()
     {
         if (IsSaving)
         {
-            return;
+            return false;
         }
 
         using var cts = new CancellationTokenSource();
         _saveCancellation = cts;
         try
         {
-            await SaveAsync(cts.Token).ConfigureAwait(false);
+            return await SaveAsync(cts.Token).ConfigureAwait(false);
         }
         finally
         {
             _saveCancellation = null;
         }
+    }
+
+    private async Task ExecuteSaveCommandAsync()
+    {
+        _ = await ExecuteSaveAsync().ConfigureAwait(false);
     }
 
     private void ExecuteCancel()

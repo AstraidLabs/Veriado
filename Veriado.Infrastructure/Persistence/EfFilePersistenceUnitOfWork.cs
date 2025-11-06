@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Threading;
 using Microsoft.Data.Sqlite;
@@ -13,14 +14,38 @@ namespace Veriado.Infrastructure.Persistence;
 /// <summary>
 /// Provides an EF Core-backed implementation of <see cref="IFilePersistenceUnitOfWork"/>.
 /// </summary>
-internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
+internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, IDisposable
 {
     private readonly AppDbContext _dbContext;
     private readonly ILogger<EfFilePersistenceUnitOfWork> _logger;
+    private readonly Guid _contextInstanceId;
+    private bool _disposed;
     public EfFilePersistenceUnitOfWork(AppDbContext dbContext, ILogger<EfFilePersistenceUnitOfWork> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _contextInstanceId = _dbContext.ContextId.InstanceId;
+        if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace("EfFilePersistenceUnitOfWork created for context {ContextId}.", _contextInstanceId);
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace("EfFilePersistenceUnitOfWork disposed for context {ContextId}.", _contextInstanceId);
+        }
+
+        GC.SuppressFinalize(this);
     }
 
     public async Task<bool> HasTrackedChangesAsync(CancellationToken cancellationToken)
@@ -154,6 +179,10 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
     {
         SemaphoreSlim? semaphore = null;
         var lockAcquired = false;
+        if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace("EfFilePersistenceUnitOfWork BeforeSave for context {ContextId}.", _contextInstanceId);
+        }
 
         try
         {
@@ -194,6 +223,11 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
                 {
                     // The semaphore may be disposed concurrently. If so, the DbContext is already unusable.
                 }
+            }
+
+            if (_logger.IsEnabled(LogLevel.Trace))
+            {
+                _logger.LogTrace("EfFilePersistenceUnitOfWork AfterSave for context {ContextId}.", _contextInstanceId);
             }
         }
     }

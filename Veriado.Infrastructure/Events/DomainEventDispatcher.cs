@@ -1,5 +1,7 @@
+using System;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Veriado.Domain.Primitives;
 
 namespace Veriado.Infrastructure.Events;
@@ -22,28 +24,38 @@ internal sealed class DomainEventDispatcher : IDomainEventDispatcher
             return;
         }
 
-        using var scope = _scopeFactory.CreateScope();
-        var provider = scope.ServiceProvider;
-
-        foreach (var domainEvent in domainEvents)
+        var scopeId = Guid.NewGuid();
+        _logger.LogTrace("Creating domain event handler scope {ScopeId} for {EventCount} events.", scopeId, domainEvents.Count);
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogTrace("Domain event handler scope {ScopeId} created.", scopeId);
+            var provider = scope.ServiceProvider;
 
-            var handlerEnumerableType = typeof(IEnumerable<>).MakeGenericType(typeof(IDomainEventHandler<>).MakeGenericType(domainEvent.GetType()));
-            if (provider.GetService(handlerEnumerableType) is not IEnumerable<object> handlers)
+            foreach (var domainEvent in domainEvents)
             {
-                if (_logger.IsEnabled(LogLevel.Debug))
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var handlerEnumerableType = typeof(IEnumerable<>).MakeGenericType(typeof(IDomainEventHandler<>).MakeGenericType(domainEvent.GetType()));
+                if (provider.GetService(handlerEnumerableType) is not IEnumerable<object> handlers)
                 {
-                    _logger.LogDebug("No handlers registered for domain event {EventType}", domainEvent.GetType().FullName);
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug("No handlers registered for domain event {EventType}", domainEvent.GetType().FullName);
+                    }
+
+                    continue;
                 }
 
-                continue;
+                foreach (var handler in handlers)
+                {
+                    await InvokeHandlerAsync(handler, dbContext, domainEvent, cancellationToken).ConfigureAwait(false);
+                }
             }
-
-            foreach (var handler in handlers)
-            {
-                await InvokeHandlerAsync(handler, dbContext, domainEvent, cancellationToken).ConfigureAwait(false);
-            }
+        }
+        finally
+        {
+            _logger.LogTrace("Disposing domain event handler scope {ScopeId}.", scopeId);
         }
     }
 
