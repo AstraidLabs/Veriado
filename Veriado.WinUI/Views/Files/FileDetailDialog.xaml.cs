@@ -22,7 +22,10 @@ public sealed partial class FileDetailDialog : ContentDialog
         }
 
         args.Cancel = true;
-        await ViewModel.SaveCommand.ExecuteAsync(null);
+        if (await ViewModel.ExecuteSaveAsync())
+        {
+            sender.Hide();
+        }
     }
 
     private void OnSecondaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
