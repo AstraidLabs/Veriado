@@ -33,10 +33,6 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
             }
 
             var semaphore = _dbContext.SaveChangesSemaphore;
-            if (semaphore is null)
-            {
-                return false;
-            }
 
             var lockAcquired = false;
 
@@ -49,7 +45,8 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
             }
             catch (OperationCanceledException)
             {
-                return false;
+                cancellationToken.ThrowIfCancellationRequested();
+                throw;
             }
             catch (ObjectDisposedException)
             {
@@ -175,7 +172,7 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         catch (ObjectDisposedException ex)
         {
             _logger.LogError(ex, "The underlying DbContext instance has been disposed while attempting to save changes.");
-            throw new ObjectDisposedException(nameof(AppDbContext), "The underlying DbContext instance has been disposed.");
+            throw;
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -257,6 +254,7 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         {
             // Nested transactions rely on the outer transaction's lifetime; committing here would
             // prematurely complete the underlying transaction.
+            cancellationToken.ThrowIfCancellationRequested();
             _completed = true;
             return Task.CompletedTask;
         }
