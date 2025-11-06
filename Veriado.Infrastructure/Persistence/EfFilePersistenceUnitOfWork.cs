@@ -155,7 +155,7 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
-        var semaphore = _dbContext.SaveChangesSemaphore;
+        SemaphoreSlim? semaphore = null;
         var lockAcquired = false;
 
         try
@@ -164,6 +164,8 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
             {
                 throw new ObjectDisposedException(nameof(AppDbContext));
             }
+
+            semaphore = _dbContext.SaveChangesSemaphore;
 
             await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockAcquired = true;
@@ -185,7 +187,7 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork
         }
         finally
         {
-            if (lockAcquired)
+            if (lockAcquired && semaphore is not null)
             {
                 try
                 {
