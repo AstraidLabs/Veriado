@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Veriado.Appl.Files.Contracts;
 using Veriado.WinUI.ViewModels.Validation;
 using DataAnnotationsValidationResult = System.ComponentModel.DataAnnotations.ValidationResult;
+using ValidationResult = Veriado.WinUI.ViewModels.Validation.ValidationResult;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
