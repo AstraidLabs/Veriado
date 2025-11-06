@@ -60,6 +60,7 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
     [ObservableProperty]
     [Required(ErrorMessage = "MIME typ je povinný.")]
     [StringLength(200, MinimumLength = 1, ErrorMessage = "MIME typ nesmí být delší než 200 znaků.")]
+    [RegularExpression(@"^\s*[^/\s]+/[^/\s]+\s*$", ErrorMessage = "MIME typ musí být ve formátu type/subtype.")]
     private string mimeType = string.Empty;
 
     [ObservableProperty]

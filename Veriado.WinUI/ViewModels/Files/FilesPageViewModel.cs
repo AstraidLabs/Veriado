@@ -181,6 +181,11 @@ public partial class FilesPageViewModel : ViewModelBase
     [ObservableProperty]
     private string? detailErrorMessage;
 
+    [ObservableProperty]
+    private string? mimeFilterErrorMessage;
+
+    public bool HasMimeFilterError => !string.IsNullOrEmpty(MimeFilterErrorMessage);
+
     public double TargetPageMaximum
     {
         get
@@ -242,6 +247,25 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         _hotStateService.LastQuery = value;
         DebounceRefresh();
+    }
+
+    partial void OnMimeFilterChanged(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            MimeFilterErrorMessage = null;
+            return;
+        }
+
+        var trimmed = value.Trim();
+        MimeFilterErrorMessage = trimmed.Contains('/')
+            ? null
+            : "MIME filtr musí obsahovat oddělovač '/'.";
+    }
+
+    partial void OnMimeFilterErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasMimeFilterError));
     }
 
     partial void OnTargetPageChanged(double value)
@@ -365,6 +389,12 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         CancelPendingDebounce();
 
+        if (!string.IsNullOrEmpty(MimeFilterErrorMessage))
+        {
+            await Dispatcher.Enqueue(() => StatusText = "Opravte chybu ve filtru MIME.").ConfigureAwait(false);
+            return;
+        }
+
         var page = explicitPage ?? (resetPage ? 1 : CurrentPage <= 0 ? 1 : CurrentPage);
         if (page <= 0)
         {
@@ -392,6 +422,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private async Task ClearFiltersAsync()
     {
+        SearchText = null;
         ExtensionFilter = null;
         MimeFilter = null;
         AuthorFilter = null;
@@ -407,6 +438,7 @@ public partial class FilesPageViewModel : ViewModelBase
         CreatedToFilter = null;
         ModifiedFromFilter = null;
         ModifiedToFilter = null;
+        MimeFilterErrorMessage = null;
 
         UpdatePaginationState(0, 0, 0, 0);
 
@@ -417,6 +449,10 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         var extension = string.IsNullOrWhiteSpace(ExtensionFilter) ? null : ExtensionFilter.Trim();
         var mime = string.IsNullOrWhiteSpace(MimeFilter) ? null : MimeFilter.Trim();
+        if (mime is not null && !mime.Contains('/'))
+        {
+            mime = null;
+        }
         var author = string.IsNullOrWhiteSpace(AuthorFilter) ? null : AuthorFilter.Trim();
         var version = ParseVersion(VersionFilter);
 

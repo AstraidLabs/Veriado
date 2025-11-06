@@ -35,9 +35,12 @@
 
             <Grid x:Uid="FilesPage_SearchRow" Grid.Row="0">
                 <AutoSuggestBox
+                    x:Name="SearchAutoSuggestBox"
                     x:Uid="FilesPage_SearchBox"
                     PlaceholderText="Hledat soubory"
-                    Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    QuerySubmitted="OnSearchQuerySubmitted"
+                    SuggestionRequested="OnSearchSuggestionRequested" />
             </Grid>
 
             <ScrollViewer
@@ -53,11 +56,17 @@
                             <TextBox
                                 x:Uid="FilesPage_ExtensionTextBox"
                                 PlaceholderText="Přípona"
+                                MaxLength="16"
                                 Text="{x:Bind ViewModel.ExtensionFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
                                 x:Uid="FilesPage_MimeTextBox"
                                 PlaceholderText="MIME"
                                 Text="{x:Bind ViewModel.MimeFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <controls:InfoBar
+                                IsClosable="False"
+                                IsOpen="{x:Bind ViewModel.HasMimeFilterError, Mode=OneWay}"
+                                Message="{x:Bind ViewModel.MimeFilterErrorMessage, Mode=OneWay}"
+                                Severity="Error" />
                             <TextBox
                                 x:Uid="FilesPage_AuthorTextBox"
                                 PlaceholderText="Autor"
