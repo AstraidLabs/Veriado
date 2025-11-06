@@ -40,7 +40,7 @@
                     PlaceholderText="Hledat soubory"
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     QuerySubmitted="OnSearchQuerySubmitted"
-                    SuggestionRequested="OnSearchSuggestionRequested" />
+                    TextChanged="OnSearchTextChanged" />
             </Grid>
 
             <ScrollViewer

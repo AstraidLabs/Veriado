@@ -44,9 +44,12 @@ public sealed partial class FilesPage : Page
         return ViewModel.RefreshCommand.ExecuteAsync(null);
     }
 
-    private async void OnSearchSuggestionRequested(AutoSuggestBox sender, AutoSuggestBoxSuggestionRequestedEventArgs args)
+    private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        var deferral = args.Request.GetDeferral();
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            return;
+        }
 
         try
         {
@@ -70,7 +73,7 @@ public sealed partial class FilesPage : Page
                 return;
             }
 
-            var query = args.QueryText?.Trim();
+            var query = sender.Text?.Trim();
             IEnumerable<string> filtered = suggestions;
 
             if (!string.IsNullOrEmpty(query))
@@ -87,10 +90,6 @@ public sealed partial class FilesPage : Page
         catch
         {
             sender.ItemsSource = Array.Empty<string>();
-        }
-        finally
-        {
-            deferral.Complete();
         }
     }
 
