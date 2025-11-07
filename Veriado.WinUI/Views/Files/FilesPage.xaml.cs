@@ -7,20 +7,20 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Veriado.Contracts.Files;
+using Veriado.WinUI.Resources;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Files;
-using Windows.UI;
 
 namespace Veriado.WinUI.Views.Files;
 
 public sealed partial class FilesPage : Page
 {
-    private static readonly SolidColorBrush ExpiredBackgroundBrush = new(Colors.Red);
-    private static readonly SolidColorBrush ExpiringSoonBackgroundBrush = new(Colors.Orange);
-    private static readonly SolidColorBrush ExpiringLaterBackgroundBrush = new(Colors.Yellow);
-    private static readonly SolidColorBrush LongTermBackgroundBrush = new(Colors.Gray);
-    private static readonly SolidColorBrush LightForegroundBrush = new(Colors.White);
-    private static readonly SolidColorBrush DarkForegroundBrush = new(Colors.Black);
+    private static SolidColorBrush ExpiredBackgroundBrush => AppColorPalette.ValidityExpiredBackgroundBrush;
+    private static SolidColorBrush ExpiringSoonBackgroundBrush => AppColorPalette.ValidityExpiringSoonBackgroundBrush;
+    private static SolidColorBrush ExpiringLaterBackgroundBrush => AppColorPalette.ValidityExpiringLaterBackgroundBrush;
+    private static SolidColorBrush LongTermBackgroundBrush => AppColorPalette.ValidityLongTermBackgroundBrush;
+    private static SolidColorBrush LightForegroundBrush => AppColorPalette.ValidityLightForegroundBrush;
+    private static SolidColorBrush DarkForegroundBrush => AppColorPalette.ValidityDarkForegroundBrush;
 
     private readonly IFilesSearchSuggestionsProvider _suggestionsProvider;
     private readonly IServerClock _serverClock;

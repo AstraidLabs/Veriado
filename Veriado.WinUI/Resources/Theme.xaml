@@ -10,6 +10,12 @@
       <Color x:Key="AppNavigationBackgroundColor">#FFF0F2F7</Color>
       <Color x:Key="AppNavigationForegroundColor">#FF101820</Color>
       <Color x:Key="AppTextPrimaryColor">#FF1B1F23</Color>
+      <Color x:Key="AppValidityExpiredBackgroundColor">#FFD13438</Color>
+      <Color x:Key="AppValidityExpiringSoonBackgroundColor">#FFF1C21B</Color>
+      <Color x:Key="AppValidityExpiringLaterBackgroundColor">#FF8BC34A</Color>
+      <Color x:Key="AppValidityLongTermBackgroundColor">#FFE5E7EB</Color>
+      <Color x:Key="AppValidityLightForegroundColor">#FFFFFFFF</Color>
+      <Color x:Key="AppValidityDarkForegroundColor">#FF1B1F23</Color>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <Color x:Key="AppAccentColor">#FF4CC2FF</Color>
@@ -18,6 +24,12 @@
       <Color x:Key="AppNavigationBackgroundColor">#FF2C313C</Color>
       <Color x:Key="AppNavigationForegroundColor">#FFE7ECF4</Color>
       <Color x:Key="AppTextPrimaryColor">#FFE7ECF4</Color>
+      <Color x:Key="AppValidityExpiredBackgroundColor">#FFB3261E</Color>
+      <Color x:Key="AppValidityExpiringSoonBackgroundColor">#FFE6B400</Color>
+      <Color x:Key="AppValidityExpiringLaterBackgroundColor">#FF4CAF50</Color>
+      <Color x:Key="AppValidityLongTermBackgroundColor">#FF3A3D45</Color>
+      <Color x:Key="AppValidityLightForegroundColor">#FFFFFFFF</Color>
+      <Color x:Key="AppValidityDarkForegroundColor">#FFE7ECF4</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
@@ -27,4 +39,10 @@
   <SolidColorBrush x:Key="AppNavigationBackgroundBrush" Color="{ThemeResource AppNavigationBackgroundColor}" />
   <SolidColorBrush x:Key="AppNavigationForegroundBrush" Color="{ThemeResource AppNavigationForegroundColor}" />
   <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="{ThemeResource AppTextPrimaryColor}" />
+  <SolidColorBrush x:Key="AppValidityExpiredBackgroundBrush" Color="{ThemeResource AppValidityExpiredBackgroundColor}" />
+  <SolidColorBrush x:Key="AppValidityExpiringSoonBackgroundBrush" Color="{ThemeResource AppValidityExpiringSoonBackgroundColor}" />
+  <SolidColorBrush x:Key="AppValidityExpiringLaterBackgroundBrush" Color="{ThemeResource AppValidityExpiringLaterBackgroundColor}" />
+  <SolidColorBrush x:Key="AppValidityLongTermBackgroundBrush" Color="{ThemeResource AppValidityLongTermBackgroundColor}" />
+  <SolidColorBrush x:Key="AppValidityLightForegroundBrush" Color="{ThemeResource AppValidityLightForegroundColor}" />
+  <SolidColorBrush x:Key="AppValidityDarkForegroundBrush" Color="{ThemeResource AppValidityDarkForegroundColor}" />
 </ResourceDictionary>
