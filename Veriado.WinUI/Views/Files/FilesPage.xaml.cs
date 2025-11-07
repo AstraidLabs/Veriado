@@ -1,23 +1,45 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Veriado.Contracts.Files;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Files;
+using Windows.UI;
 
 namespace Veriado.WinUI.Views.Files;
 
 public sealed partial class FilesPage : Page
 {
+    private static readonly SolidColorBrush ExpiredBackgroundBrush = new(Colors.Red);
+    private static readonly SolidColorBrush ExpiringSoonBackgroundBrush = new(Colors.Orange);
+    private static readonly SolidColorBrush ExpiringLaterBackgroundBrush = new(Colors.Yellow);
+    private static readonly SolidColorBrush LongTermBackgroundBrush = new(Colors.Gray);
+    private static readonly SolidColorBrush LightForegroundBrush = new(Colors.White);
+    private static readonly SolidColorBrush DarkForegroundBrush = new(Colors.Black);
+
     private readonly IFilesSearchSuggestionsProvider _suggestionsProvider;
+    private readonly IServerClock _serverClock;
+    private readonly DispatcherTimer _validityRefreshTimer;
     private CancellationTokenSource? _suggestionRequestSource;
 
-    public FilesPage(FilesPageViewModel viewModel, IFilesSearchSuggestionsProvider suggestionsProvider)
+    public FilesPage(
+        FilesPageViewModel viewModel,
+        IFilesSearchSuggestionsProvider suggestionsProvider,
+        IServerClock serverClock)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _suggestionsProvider = suggestionsProvider ?? throw new ArgumentNullException(nameof(suggestionsProvider));
+        _serverClock = serverClock ?? throw new ArgumentNullException(nameof(serverClock));
+        _validityRefreshTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(1),
+        };
+        _validityRefreshTimer.Tick += OnValidityRefreshTimerTick;
         DataContext = ViewModel;
         InitializeComponent();
         Loaded += OnLoaded;
@@ -29,14 +51,21 @@ public sealed partial class FilesPage : Page
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+        _validityRefreshTimer.Start();
+        UpdateValidityBadges();
         ViewModel.StartHealthMonitoring();
         await ExecuteInitialRefreshAsync().ConfigureAwait(true);
+        UpdateValidityBadges();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         ViewModel.StopHealthMonitoring();
         CancelSuggestionRequest();
+        if (_validityRefreshTimer.IsEnabled)
+        {
+            _validityRefreshTimer.Stop();
+        }
     }
 
     private Task ExecuteInitialRefreshAsync()
@@ -122,4 +151,106 @@ public sealed partial class FilesPage : Page
         source.Dispose();
     }
 
+    public Visibility GetValidityVisibility(FileSummaryDto? file)
+    {
+        return file?.Validity is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public string GetValidityText(FileSummaryDto? file)
+    {
+        if (!TryGetDaysRemaining(file, out var daysRemaining))
+        {
+            return string.Empty;
+        }
+
+        if (daysRemaining < 0)
+        {
+            return "Platnost skončila";
+        }
+
+        if (daysRemaining == 0)
+        {
+            return "Dnes končí";
+        }
+
+        return $"Zbývá {daysRemaining} dní";
+    }
+
+    public Brush GetValidityBackgroundBrush(FileSummaryDto? file)
+    {
+        if (!TryGetDaysRemaining(file, out var daysRemaining))
+        {
+            return LongTermBackgroundBrush;
+        }
+
+        if (daysRemaining <= 0)
+        {
+            return ExpiredBackgroundBrush;
+        }
+
+        if (daysRemaining <= 7)
+        {
+            return ExpiringSoonBackgroundBrush;
+        }
+
+        if (daysRemaining <= 30)
+        {
+            return ExpiringLaterBackgroundBrush;
+        }
+
+        return LongTermBackgroundBrush;
+    }
+
+    public Brush GetValidityForegroundBrush(FileSummaryDto? file)
+    {
+        if (!TryGetDaysRemaining(file, out var daysRemaining))
+        {
+            return DarkForegroundBrush;
+        }
+
+        if (daysRemaining <= 7)
+        {
+            return LightForegroundBrush;
+        }
+
+        return DarkForegroundBrush;
+    }
+
+    public string? GetValidityTooltip(FileSummaryDto? file)
+    {
+        if (file?.Validity is not { } validity)
+        {
+            return null;
+        }
+
+        var culture = CultureInfo.CurrentCulture;
+        var issued = validity.IssuedAtUtc.ToLocalTime();
+        var validUntil = validity.ValidUntilUtc.ToLocalTime();
+        return $"Platnost: {issued.ToString("d", culture)} – {validUntil.ToString("d", culture)}";
+    }
+
+    public bool TryGetDaysRemaining(FileSummaryDto? file, out int daysRemaining)
+    {
+        daysRemaining = 0;
+
+        if (file?.Validity is not { } validity)
+        {
+            return false;
+        }
+
+        var now = _serverClock.NowLocal.Date;
+        var validUntil = validity.ValidUntilUtc.ToLocalTime().Date;
+        daysRemaining = (validUntil - now).Days;
+        return true;
+    }
+
+    private void OnValidityRefreshTimerTick(object? sender, object e)
+    {
+        UpdateValidityBadges();
+    }
+
+    private void UpdateValidityBadges()
+    {
+        Bindings?.Update();
+    }
 }
