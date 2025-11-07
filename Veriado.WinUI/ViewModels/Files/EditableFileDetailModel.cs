@@ -289,19 +289,9 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             return;
         }
 
-        if (ValidFrom is null || ValidTo is null)
+        if (ValidFrom is not null && ValidTo is not null && ValidFrom > ValidTo)
         {
-            const string message = "Both validity dates must be set.";
-            SetValidationErrors(nameof(ValidFrom), new[] { message });
-            SetValidationErrors(nameof(ValidTo), new[] { message });
-            result?.AddError(nameof(ValidFrom), message);
-            result?.AddError(nameof(ValidTo), message);
-            return;
-        }
-
-        if (ValidFrom > ValidTo)
-        {
-            const string message = "Valid from cannot be after valid to.";
+            const string message = "Platnost od nesmí být později než platnost do.";
             SetValidationErrors(nameof(ValidFrom), new[] { message });
             SetValidationErrors(nameof(ValidTo), new[] { message });
             result?.AddError(nameof(ValidFrom), message);
