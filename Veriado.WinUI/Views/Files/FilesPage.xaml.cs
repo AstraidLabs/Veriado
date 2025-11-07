@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Veriado.Contracts.Files;
-using Veriado.WinUI.Resources;
+using Veriado.WinUI.Helpers;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Files;
 
@@ -15,13 +15,6 @@ namespace Veriado.WinUI.Views.Files;
 
 public sealed partial class FilesPage : Page
 {
-    private static SolidColorBrush ExpiredBackgroundBrush => AppColorPalette.ValidityExpiredBackgroundBrush;
-    private static SolidColorBrush ExpiringSoonBackgroundBrush => AppColorPalette.ValidityExpiringSoonBackgroundBrush;
-    private static SolidColorBrush ExpiringLaterBackgroundBrush => AppColorPalette.ValidityExpiringLaterBackgroundBrush;
-    private static SolidColorBrush LongTermBackgroundBrush => AppColorPalette.ValidityLongTermBackgroundBrush;
-    private static SolidColorBrush LightForegroundBrush => AppColorPalette.ValidityLightForegroundBrush;
-    private static SolidColorBrush DarkForegroundBrush => AppColorPalette.ValidityDarkForegroundBrush;
-
     private readonly IFilesSearchSuggestionsProvider _suggestionsProvider;
     private readonly IServerClock _serverClock;
     private readonly DispatcherTimer _validityRefreshTimer;
@@ -158,62 +151,24 @@ public sealed partial class FilesPage : Page
 
     public string GetValidityText(FileSummaryDto? file)
     {
-        if (!TryGetDaysRemaining(file, out var daysRemaining))
+        if (!FileValidityHelper.TryGetBadge(file?.Validity, _serverClock.NowLocal, out var badge))
         {
             return string.Empty;
         }
 
-        if (daysRemaining < 0)
-        {
-            return "Platnost skončila";
-        }
-
-        if (daysRemaining == 0)
-        {
-            return "Dnes končí";
-        }
-
-        return $"Zbývá {daysRemaining} dní";
+        return badge.Text;
     }
 
     public Brush GetValidityBackgroundBrush(FileSummaryDto? file)
     {
-        if (!TryGetDaysRemaining(file, out var daysRemaining))
-        {
-            return LongTermBackgroundBrush;
-        }
-
-        if (daysRemaining <= 0)
-        {
-            return ExpiredBackgroundBrush;
-        }
-
-        if (daysRemaining <= 7)
-        {
-            return ExpiringSoonBackgroundBrush;
-        }
-
-        if (daysRemaining <= 30)
-        {
-            return ExpiringLaterBackgroundBrush;
-        }
-
-        return LongTermBackgroundBrush;
+        var badge = FileValidityHelper.GetBadge(file?.Validity, _serverClock.NowLocal);
+        return badge.Background;
     }
 
     public Brush GetValidityForegroundBrush(FileSummaryDto? file)
     {
-        if (!TryGetDaysRemaining(file, out var daysRemaining))
-        {
-            return DarkForegroundBrush;
-        }
-
-        if (daysRemaining <= 7)
-        {
-            return LightForegroundBrush;
-        }
-
-        return DarkForegroundBrush;
+        var badge = FileValidityHelper.GetBadge(file?.Validity, _serverClock.NowLocal);
+        return badge.Foreground;
     }
 
     public string? GetValidityTooltip(FileSummaryDto? file)
@@ -233,15 +188,14 @@ public sealed partial class FilesPage : Page
     {
         daysRemaining = 0;
 
-        if (file?.Validity is not { } validity)
+        if (FileValidityHelper.TryGetBadge(file?.Validity, _serverClock.NowLocal, out var badge)
+            && badge.DaysRemaining is { } remaining)
         {
-            return false;
+            daysRemaining = remaining;
+            return true;
         }
 
-        var now = _serverClock.NowLocal.Date;
-        var validUntil = validity.ValidUntil.ToLocalTime().Date;
-        daysRemaining = (validUntil - now).Days;
-        return true;
+        return false;
     }
 
     private void OnValidityRefreshTimerTick(object? sender, object e)
