@@ -254,10 +254,26 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Spacing="4">
-                                        <TextBlock
-                                            Text="{x:Bind Name}"
-                                            FontWeight="SemiBold"
-                                            TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock
+                                                Text="{x:Bind Name}"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap"
+                                                VerticalAlignment="Center" />
+                                            <Border
+                                                Padding="6,2"
+                                                CornerRadius="4"
+                                                VerticalAlignment="Center"
+                                                Visibility="{x:Bind PageRoot.GetValidityVisibility(this), Mode=OneWay}"
+                                                Background="{x:Bind PageRoot.GetValidityBackgroundBrush(this), Mode=OneWay}"
+                                                ToolTipService.ToolTip="{x:Bind PageRoot.GetValidityTooltip(this), Mode=OneWay}">
+                                                <TextBlock
+                                                    Text="{x:Bind PageRoot.GetValidityText(this), Mode=OneWay}"
+                                                    FontSize="12"
+                                                    Foreground="{x:Bind PageRoot.GetValidityForegroundBrush(this), Mode=OneWay}"
+                                                    TextWrapping="WrapWholeWords" />
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock
                                             Text="{x:Bind Mime}"
                                             FontSize="12"
