@@ -224,8 +224,8 @@ public sealed partial class FilesPage : Page
         }
 
         var culture = CultureInfo.CurrentCulture;
-        var issued = validity.IssuedAtUtc.ToLocalTime();
-        var validUntil = validity.ValidUntilUtc.ToLocalTime();
+        var issued = validity.IssuedAt.ToLocalTime();
+        var validUntil = validity.ValidUntil.ToLocalTime();
         return $"Platnost: {issued.ToString("d", culture)} – {validUntil.ToString("d", culture)}";
     }
 
@@ -239,7 +239,7 @@ public sealed partial class FilesPage : Page
         }
 
         var now = _serverClock.NowLocal.Date;
-        var validUntil = validity.ValidUntilUtc.ToLocalTime().Date;
+        var validUntil = validity.ValidUntil.ToLocalTime().Date;
         daysRemaining = (validUntil - now).Days;
         return true;
     }
