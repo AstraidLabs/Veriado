@@ -18,6 +18,9 @@ public sealed class ValidityInfo
     {
         HasValidity = validFrom.HasValue && validTo.HasValue;
         DaysRemaining = HasValidity ? ValidityHelper.ComputeDaysRemaining(referenceTime, validTo) : null;
+        DaysRemainingDisplay = DaysRemaining.HasValue
+            ? CzechPluralization.FormatDays(DaysRemaining.Value)
+            : null;
         Status = ValidityHelper.ComputeStatus(DaysRemaining);
         Tooltip = ValidityHelper.BuildTooltip(validFrom, validTo, DaysRemaining);
     }
@@ -25,6 +28,8 @@ public sealed class ValidityInfo
     public bool HasValidity { get; }
 
     public int? DaysRemaining { get; }
+
+    public string? DaysRemainingDisplay { get; }
 
     public ValidityStatus Status { get; }
 

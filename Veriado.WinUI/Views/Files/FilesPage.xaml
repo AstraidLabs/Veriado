@@ -264,19 +264,22 @@
 
                                         <Border
                                             Grid.Column="0"
-                                            Width="36"
-                                            Height="36"
+                                            MinWidth="36"
+                                            MinHeight="36"
+                                            Padding="4"
                                             CornerRadius="8"
                                             Background="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
                                             Visibility="{x:Bind Validity.DaysRemaining, Mode=OneWay, Converter={StaticResource NullToCollapsed}}"
                                             ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
                                             AutomationProperties.Name="{x:Bind Validity.Tooltip, Mode=OneWay}">
                                             <TextBlock
-                                                Text="{x:Bind Validity.DaysRemaining}"
+                                                Text="{x:Bind Validity.DaysRemainingDisplay}"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
+                                                TextAlignment="Center"
+                                                TextWrapping="WrapWholeWords"
                                                 FontWeight="SemiBold"
-                                                FontSize="14"
+                                                FontSize="12"
                                                 Foreground="White" />
                                         </Border>
 
