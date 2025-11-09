@@ -12,20 +12,23 @@ namespace Veriado.WinUI.Views.Files;
 public sealed partial class FilesPage : Page
 {
     private readonly IFilesSearchSuggestionsProvider _suggestionsProvider;
+    private readonly IServerClock _serverClock;
     private readonly DispatcherTimer _validityRefreshTimer;
     private CancellationTokenSource? _suggestionRequestSource;
 
     public FilesPage(
         FilesPageViewModel viewModel,
-        IFilesSearchSuggestionsProvider suggestionsProvider)
+        IFilesSearchSuggestionsProvider suggestionsProvider,
+        IServerClock serverClock)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _suggestionsProvider = suggestionsProvider ?? throw new ArgumentNullException(nameof(suggestionsProvider));
+        _serverClock = serverClock ?? throw new ArgumentNullException(nameof(serverClock));
         _validityRefreshTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMinutes(1),
         };
-        _validityRefreshTimer.Tick += OnValidityRefreshTimerTick;
+        _validityRefreshTimer.Tick += OnValidityTick;
         DataContext = ViewModel;
         InitializeComponent();
         Loaded += OnLoaded;
@@ -38,10 +41,10 @@ public sealed partial class FilesPage : Page
     {
         Loaded -= OnLoaded;
         _validityRefreshTimer.Start();
-        UpdateValidityBadges();
+        RefreshValidityIndicators();
         ViewModel.StartHealthMonitoring();
         await ExecuteInitialRefreshAsync().ConfigureAwait(true);
-        UpdateValidityBadges();
+        RefreshValidityIndicators();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -137,13 +140,14 @@ public sealed partial class FilesPage : Page
         source.Dispose();
     }
 
-    private void OnValidityRefreshTimerTick(object? sender, object e)
+    private void OnValidityTick(object? sender, object e)
     {
-        UpdateValidityBadges();
+        RefreshValidityIndicators();
     }
 
-    private void UpdateValidityBadges()
+    private void RefreshValidityIndicators()
     {
-        ViewModel.RefreshValidityStates();
+        var now = _serverClock.NowLocal;
+        ViewModel.RefreshValidityStates(now);
     }
 }
