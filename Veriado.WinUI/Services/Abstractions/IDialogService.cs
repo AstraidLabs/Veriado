@@ -1,8 +1,10 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IDialogService
 {
-    TViewModel CreateViewModel<TViewModel>() where TViewModel : class;
+    DialogViewModelScope<TViewModel> CreateViewModel<TViewModel>() where TViewModel : class;
 
     Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel");
     Task ShowInfoAsync(string title, string message);
@@ -13,6 +15,21 @@ public interface IDialogService
 
     Task<DialogResult> ShowDialogAsync<TViewModel>(TViewModel viewModel, CancellationToken cancellationToken = default) where TViewModel : class;
     Task<DialogResult> ShowDialogAsync(DialogRequest request, CancellationToken cancellationToken = default);
+}
+
+public sealed class DialogViewModelScope<TViewModel> : IAsyncDisposable where TViewModel : class
+{
+    private readonly AsyncServiceScope _scope;
+
+    internal DialogViewModelScope(AsyncServiceScope scope, TViewModel viewModel)
+    {
+        _scope = scope;
+        ViewModel = viewModel;
+    }
+
+    public TViewModel ViewModel { get; }
+
+    public ValueTask DisposeAsync() => _scope.DisposeAsync();
 }
 
 public sealed record DialogRequest(

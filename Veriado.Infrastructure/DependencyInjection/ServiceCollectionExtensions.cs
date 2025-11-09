@@ -146,14 +146,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISearchIndexCoordinator, SearchIndexCoordinator>();
         services.AddSingleton<IDomainEventHandler<SearchReindexRequested>, SearchReindexRequestedHandler>();
 
-        services.AddDbContextPool<AppDbContext>((sp, builder) =>
+        services.AddDbContext<AppDbContext>((sp, builder) =>
         {
             var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
             builder.UseSqlite(connectionProvider.ConnectionString, sqlite => sqlite.CommandTimeout(30));
             builder.AddInterceptors(
                 sp.GetRequiredService<SqlitePragmaInterceptor>(),
                 sp.GetRequiredService<DomainEventsInterceptor>());
-        }, poolSize: 128);
+        });
         services.AddDbContextFactory<AppDbContext>((sp, builder) =>
         {
             var connectionProvider = sp.GetRequiredService<IConnectionStringProvider>();
@@ -202,6 +202,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileImportWriter, FileImportService>();
         services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IFilePersistenceUnitOfWork, EfFilePersistenceUnitOfWork>();
+        services.AddTransient<IFactoryFilePersistenceUnitOfWork, FactoryFilePersistenceUnitOfWork>();
         services.AddScoped<IReadOnlyFileContextFactory, ReadOnlyFileContextFactory>();
         services.AddScoped<IFileReadRepository, FileReadRepository>();
         services.AddSingleton<IDiagnosticsRepository, DiagnosticsRepository>();

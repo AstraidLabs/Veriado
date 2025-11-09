@@ -646,7 +646,8 @@ public partial class FilesPageViewModel : ViewModelBase
 
         try
         {
-            var dialogViewModel = _dialogService.CreateViewModel<FileDetailDialogViewModel>();
+            await using var dialogScope = _dialogService.CreateViewModel<FileDetailDialogViewModel>();
+            var dialogViewModel = dialogScope.ViewModel;
             await dialogViewModel.LoadAsync(summary.Id, dialogCts.Token).ConfigureAwait(false);
 
             var result = await _dialogService.ShowDialogAsync(dialogViewModel, dialogCts.Token).ConfigureAwait(false);

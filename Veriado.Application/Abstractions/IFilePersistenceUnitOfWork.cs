@@ -1,3 +1,5 @@
+using System;
+
 namespace Veriado.Appl.Abstractions;
 
 /// <summary>
@@ -22,6 +24,13 @@ public interface IFilePersistenceUnitOfWork
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     Task SaveChangesAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Represents a unit of work that owns its underlying persistence context and must be disposed by the caller.
+/// </summary>
+public interface IFactoryFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, IAsyncDisposable
+{
 }
 
 /// <summary>
