@@ -29,6 +29,10 @@ public sealed class EditableFileDetailDto
 
     public DateTimeOffset? ValidTo { get; init; }
 
+    public bool HasPhysicalCopy { get; init; }
+
+    public bool HasElectronicCopy { get; init; }
+
     public bool HasValidity => ValidFrom is not null && ValidTo is not null;
 
     public string DisplayName => string.IsNullOrWhiteSpace(Extension)

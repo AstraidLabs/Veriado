@@ -161,6 +161,44 @@
                             </ItemsControl>
                         </StackPanel>
                     </Grid>
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <ToggleSwitch
+                                Header="Fyzická kopie"
+                                IsOn="{x:Bind ViewModel.File.HasPhysicalCopy, Mode=TwoWay}"
+                                IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.PhysicalCopyErrors, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock
+                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                            FontSize="12"
+                                            Text="{x:Bind}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <ToggleSwitch
+                                Header="Elektronická kopie"
+                                IsOn="{x:Bind ViewModel.File.HasElectronicCopy, Mode=TwoWay}"
+                                IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.ElectronicCopyErrors, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock
+                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                            FontSize="12"
+                                            Text="{x:Bind}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
 
                 <InfoBar

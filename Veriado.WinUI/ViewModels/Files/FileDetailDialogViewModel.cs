@@ -139,7 +139,10 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         }
     }
 
-    public bool CanClearValidity => File.ValidFrom is not null || File.ValidTo is not null;
+    public bool CanClearValidity => File.ValidFrom is not null
+        || File.ValidTo is not null
+        || File.HasPhysicalCopy
+        || File.HasElectronicCopy;
 
     public IEnumerable<string> FileNameErrors => GetErrors(nameof(EditableFileDetailModel.FileName));
 
@@ -150,6 +153,10 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     public IEnumerable<string> ValidFromErrors => GetErrors(nameof(EditableFileDetailModel.ValidFrom));
 
     public IEnumerable<string> ValidToErrors => GetErrors(nameof(EditableFileDetailModel.ValidTo));
+
+    public IEnumerable<string> PhysicalCopyErrors => GetErrors(nameof(EditableFileDetailModel.HasPhysicalCopy));
+
+    public IEnumerable<string> ElectronicCopyErrors => GetErrors(nameof(EditableFileDetailModel.HasElectronicCopy));
 
     public IAsyncRelayCommand SaveCommand { get; }
 
@@ -357,11 +364,15 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
     {
         File.ValidFrom = null;
         File.ValidTo = null;
+        File.HasPhysicalCopy = false;
+        File.HasElectronicCopy = false;
         File.Validate(FileValidationScope.Validity);
         OnPropertyChanged(nameof(HasErrors));
         OnPropertyChanged(nameof(CanSave));
         NotifyErrorCollectionsChanged(nameof(EditableFileDetailModel.ValidFrom));
         NotifyErrorCollectionsChanged(nameof(EditableFileDetailModel.ValidTo));
+        NotifyErrorCollectionsChanged(nameof(EditableFileDetailModel.HasPhysicalCopy));
+        NotifyErrorCollectionsChanged(nameof(EditableFileDetailModel.HasElectronicCopy));
         OnPropertyChanged(nameof(CanClearValidity));
         SaveCommand.NotifyCanExecuteChanged();
         ClearValidityCommand.NotifyCanExecuteChanged();
@@ -391,7 +402,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         }
 
         if (!Nullable.Equals(File.ValidFrom, _snapshot.ValidFrom)
-            || !Nullable.Equals(File.ValidTo, _snapshot.ValidTo))
+            || !Nullable.Equals(File.ValidTo, _snapshot.ValidTo)
+            || File.HasPhysicalCopy != _snapshot.HasPhysicalCopy
+            || File.HasElectronicCopy != _snapshot.HasElectronicCopy)
         {
             scope |= FileValidationScope.Validity;
         }
@@ -416,7 +429,9 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
         if (scope.HasFlag(FileValidationScope.Validity)
             && (HasErrorsForProperty(nameof(EditableFileDetailModel.ValidFrom))
-                || HasErrorsForProperty(nameof(EditableFileDetailModel.ValidTo))))
+                || HasErrorsForProperty(nameof(EditableFileDetailModel.ValidTo))
+                || HasErrorsForProperty(nameof(EditableFileDetailModel.HasPhysicalCopy))
+                || HasErrorsForProperty(nameof(EditableFileDetailModel.HasElectronicCopy))))
         {
             return true;
         }
@@ -455,6 +470,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             Version = original.Version,
             ValidFrom = scope.HasFlag(FileValidationScope.Validity) ? current.ValidFrom : original.ValidFrom,
             ValidTo = scope.HasFlag(FileValidationScope.Validity) ? current.ValidTo : original.ValidTo,
+            HasPhysicalCopy = scope.HasFlag(FileValidationScope.Validity) ? current.HasPhysicalCopy : original.HasPhysicalCopy,
+            HasElectronicCopy = scope.HasFlag(FileValidationScope.Validity) ? current.HasElectronicCopy : original.HasElectronicCopy,
         };
     }
 
@@ -474,6 +491,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             Version = detail.Version,
             ValidFrom = detail.ValidFrom,
             ValidTo = detail.ValidTo,
+            HasPhysicalCopy = detail.HasPhysicalCopy,
+            HasElectronicCopy = detail.HasElectronicCopy,
         };
     }
 
@@ -495,6 +514,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             OnPropertyChanged(nameof(AuthorErrors));
             OnPropertyChanged(nameof(ValidFromErrors));
             OnPropertyChanged(nameof(ValidToErrors));
+            OnPropertyChanged(nameof(PhysicalCopyErrors));
+            OnPropertyChanged(nameof(ElectronicCopyErrors));
             return;
         }
 
@@ -518,6 +539,14 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         {
             OnPropertyChanged(nameof(ValidToErrors));
         }
+        else if (string.Equals(propertyName, nameof(EditableFileDetailModel.HasPhysicalCopy), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(PhysicalCopyErrors));
+        }
+        else if (string.Equals(propertyName, nameof(EditableFileDetailModel.HasElectronicCopy), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(ElectronicCopyErrors));
+        }
     }
     private static EditableFileDetailModel CreatePlaceholderModel()
     {
@@ -531,6 +560,8 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             ModifiedAt = DateTimeOffset.Now,
             Version = 0,
             Size = 0,
+            HasPhysicalCopy = false,
+            HasElectronicCopy = false,
         });
     }
 }

@@ -89,6 +89,8 @@ public sealed class FileService : IFileService
             Version = detail.Version,
             ValidFrom = detail.Validity?.IssuedAt,
             ValidTo = detail.Validity?.ValidUntil,
+            HasPhysicalCopy = detail.Validity?.HasPhysicalCopy ?? false,
+            HasElectronicCopy = detail.Validity?.HasElectronicCopy ?? false,
         };
     }
 
@@ -129,9 +131,15 @@ public sealed class FileService : IFileService
     private async Task UpdateValidityAsync(Veriado.Contracts.Files.FileDetailDto current, EditableFileDetailDto desired, CancellationToken cancellationToken)
     {
         var currentValidity = current.Validity;
-        var desiredRange = (ValidFrom: desired.ValidFrom, ValidTo: desired.ValidTo);
+        var desiredRange = (
+            ValidFrom: desired.ValidFrom,
+            ValidTo: desired.ValidTo,
+            HasPhysicalCopy: desired.HasPhysicalCopy,
+            HasElectronicCopy: desired.HasElectronicCopy);
 
-        if (desiredRange.ValidFrom is null || desiredRange.ValidTo is null)
+        var hasDesiredRange = desiredRange.ValidFrom is not null && desiredRange.ValidTo is not null;
+
+        if (!hasDesiredRange)
         {
             if (currentValidity is null)
             {
@@ -147,7 +155,9 @@ public sealed class FileService : IFileService
 
         if (currentValidity is not null
             && currentValidity.IssuedAt == desiredRange.ValidFrom
-            && currentValidity.ValidUntil == desiredRange.ValidTo)
+            && currentValidity.ValidUntil == desiredRange.ValidTo
+            && currentValidity.HasPhysicalCopy == desiredRange.HasPhysicalCopy
+            && currentValidity.HasElectronicCopy == desiredRange.HasElectronicCopy)
         {
             return;
         }
@@ -155,8 +165,8 @@ public sealed class FileService : IFileService
         var validity = new FileValidityDto(
             desiredRange.ValidFrom.Value,
             desiredRange.ValidTo.Value,
-            currentValidity?.HasPhysicalCopy ?? false,
-            currentValidity?.HasElectronicCopy ?? false);
+            desiredRange.HasPhysicalCopy,
+            desiredRange.HasElectronicCopy);
 
         await EnsureSuccessAsync(
             await _fileOperationsService
