@@ -258,15 +258,15 @@
 
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="32" />
+                                            <ColumnDefinition Width="48" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
 
                                         <Border
                                             Grid.Column="0"
-                                            Width="24"
-                                            Height="24"
-                                            CornerRadius="6"
+                                            Width="36"
+                                            Height="36"
+                                            CornerRadius="8"
                                             Background="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
                                             Visibility="{x:Bind Validity.DaysRemaining, Mode=OneWay, Converter={StaticResource NullToCollapsed}}"
                                             ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
@@ -276,7 +276,7 @@
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
                                                 FontWeight="SemiBold"
-                                                FontSize="12"
+                                                FontSize="14"
                                                 Foreground="White" />
                                         </Border>
 
