@@ -51,6 +51,10 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             {
                 await RunAuditAsync(stoppingToken).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (OperationCanceledException)
             {
                 throw;
