@@ -16,15 +16,24 @@ public sealed partial class FileDetailDialog : ContentDialog
 
     private async void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
-        if (ViewModel is null)
+        var viewModel = ViewModel;
+        if (viewModel is null)
         {
             return;
         }
 
         args.Cancel = true;
-        if (await ViewModel.ExecuteSaveAsync())
+        var deferral = args.GetDeferral();
+        try
         {
-            sender.Hide();
+            if (await viewModel.ExecuteSaveAsync())
+            {
+                sender.Hide();
+            }
+        }
+        finally
+        {
+            deferral.Complete();
         }
     }
 

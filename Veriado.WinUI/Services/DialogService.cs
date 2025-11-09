@@ -11,17 +11,27 @@ public sealed class DialogService : IDialogService
 {
     private readonly IWindowProvider _window;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IReadOnlyList<IDialogViewFactory> _factories;
 
-    public DialogService(IWindowProvider window, IServiceProvider serviceProvider, IEnumerable<IDialogViewFactory> factories)
+    public DialogService(
+        IWindowProvider window,
+        IServiceProvider serviceProvider,
+        IEnumerable<IDialogViewFactory> factories,
+        IServiceScopeFactory scopeFactory)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _factories = factories?.ToArray() ?? throw new ArgumentNullException(nameof(factories));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     }
 
-    public TViewModel CreateViewModel<TViewModel>() where TViewModel : class
-        => _serviceProvider.GetRequiredService<TViewModel>();
+    public DialogViewModelScope<TViewModel> CreateViewModel<TViewModel>() where TViewModel : class
+    {
+        var scope = _scopeFactory.CreateAsyncScope();
+        var viewModel = scope.ServiceProvider.GetRequiredService<TViewModel>();
+        return new DialogViewModelScope<TViewModel>(scope, viewModel);
+    }
 
     public async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK", string cancelText = "Cancel")
     {

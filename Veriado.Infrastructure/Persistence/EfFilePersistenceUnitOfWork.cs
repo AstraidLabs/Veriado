@@ -14,20 +14,39 @@ namespace Veriado.Infrastructure.Persistence;
 /// <summary>
 /// Provides an EF Core-backed implementation of <see cref="IFilePersistenceUnitOfWork"/>.
 /// </summary>
-internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, IDisposable
+internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, IDisposable, IAsyncDisposable
 {
     private readonly AppDbContext _dbContext;
     private readonly ILogger<EfFilePersistenceUnitOfWork> _logger;
     private readonly Guid _contextInstanceId;
+    private readonly int _contextHash;
+    private readonly bool _ownsContext;
     private bool _disposed;
-    public EfFilePersistenceUnitOfWork(AppDbContext dbContext, ILogger<EfFilePersistenceUnitOfWork> logger)
+    public EfFilePersistenceUnitOfWork(
+        AppDbContext dbContext,
+        ILogger<EfFilePersistenceUnitOfWork> logger,
+        bool ownsContext = false)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _ownsContext = ownsContext;
         _contextInstanceId = _dbContext.ContextId.InstanceId;
-        if (_logger.IsEnabled(LogLevel.Trace))
+        _contextHash = _dbContext.GetHashCode();
+        if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogTrace("EfFilePersistenceUnitOfWork created for context {ContextId}.", _contextInstanceId);
+            _logger.LogDebug(
+                "EfFilePersistenceUnitOfWork created for context {ContextId} (hash {ContextHash}, ownsContext: {OwnsContext}).",
+                _contextInstanceId,
+                _contextHash,
+                _ownsContext);
+        }
+        else if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace(
+                "EfFilePersistenceUnitOfWork created for context {ContextId} (hash {ContextHash}, ownsContext: {OwnsContext}).",
+                _contextInstanceId,
+                _contextHash,
+                _ownsContext);
         }
     }
 
@@ -40,9 +59,28 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, 
 
         _disposed = true;
 
-        if (_logger.IsEnabled(LogLevel.Trace))
+        LogDisposal("synchronously");
+        if (_ownsContext)
         {
-            _logger.LogTrace("EfFilePersistenceUnitOfWork disposed for context {ContextId}.", _contextInstanceId);
+            _dbContext.Dispose();
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        LogDisposal("asynchronously");
+
+        if (_ownsContext)
+        {
+            await _dbContext.DisposeAsync().ConfigureAwait(false);
         }
 
         GC.SuppressFinalize(this);
@@ -181,7 +219,10 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, 
         var lockAcquired = false;
         if (_logger.IsEnabled(LogLevel.Trace))
         {
-            _logger.LogTrace("EfFilePersistenceUnitOfWork BeforeSave for context {ContextId}.", _contextInstanceId);
+            _logger.LogTrace(
+                "EfFilePersistenceUnitOfWork BeforeSave for context {ContextId} (hash {ContextHash}).",
+                _contextInstanceId,
+                _contextHash);
         }
 
         try
@@ -227,8 +268,33 @@ internal sealed class EfFilePersistenceUnitOfWork : IFilePersistenceUnitOfWork, 
 
             if (_logger.IsEnabled(LogLevel.Trace))
             {
-                _logger.LogTrace("EfFilePersistenceUnitOfWork AfterSave for context {ContextId}.", _contextInstanceId);
+                _logger.LogTrace(
+                    "EfFilePersistenceUnitOfWork AfterSave for context {ContextId} (hash {ContextHash}).",
+                    _contextInstanceId,
+                    _contextHash);
             }
+        }
+    }
+
+    private void LogDisposal(string mode)
+    {
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "EfFilePersistenceUnitOfWork disposed {Mode} for context {ContextId} (hash {ContextHash}, ownsContext: {OwnsContext}).",
+                mode,
+                _contextInstanceId,
+                _contextHash,
+                _ownsContext);
+        }
+        else if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace(
+                "EfFilePersistenceUnitOfWork disposed {Mode} for context {ContextId} (hash {ContextHash}, ownsContext: {OwnsContext}).",
+                mode,
+                _contextInstanceId,
+                _contextHash,
+                _ownsContext);
         }
     }
 
