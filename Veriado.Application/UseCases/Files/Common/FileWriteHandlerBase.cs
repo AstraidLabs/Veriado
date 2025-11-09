@@ -61,6 +61,15 @@ public abstract class FileWriteHandlerBase
         CancellationToken cancellationToken)
         => PersistInternalAsync(file, fileSystem, addFirst: false, options, cancellationToken);
 
+    protected async Task DeleteAsync(FileEntity file, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        await _repository.DeleteAsync(file.Id, cancellationToken).ConfigureAwait(false);
+        await CommitAsync(file, fileSystem: null, requiresProjection: true, deleteFromProjection: true, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private async Task PersistInternalAsync(
         FileEntity file,
         FileSystemEntity? fileSystem,

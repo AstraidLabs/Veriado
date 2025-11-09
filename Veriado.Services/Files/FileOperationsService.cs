@@ -1,5 +1,6 @@
 using Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 using Veriado.Appl.UseCases.Files.ClearFileValidity;
+using Veriado.Appl.UseCases.Files.DeleteFile;
 using Veriado.Appl.UseCases.Files.ReplaceFileContent;
 using Veriado.Appl.UseCases.Files.RenameFile;
 using Veriado.Appl.UseCases.Files.SetFileReadOnly;
@@ -176,6 +177,18 @@ public sealed class FileOperationsService : IFileOperationsService
         var result = await _mediator.Send(command, cancellationToken).ConfigureAwait(false);
         return ToIdResponse(result);
     }
+
+    public async Task<ApiResponse<Guid>> DeleteAsync(Guid fileId, CancellationToken cancellationToken)
+    {
+        if (fileId == Guid.Empty)
+        {
+            return ApiResponse<Guid>.Failure(ApiError.ForValue(nameof(fileId), "File identifier must be a non-empty GUID."));
+        }
+
+        using var scope = BeginScope();
+        var result = await _mediator.Send(new DeleteFileCommand(fileId), cancellationToken).ConfigureAwait(false);
+        return ToIdResponse(result);
+    }
     private ApiResponse<Guid> ValidationFailure(IReadOnlyList<ApiError> errors)
     {
         if (errors.Count == 0)
@@ -191,6 +204,17 @@ public sealed class FileOperationsService : IFileOperationsService
         if (result.IsSuccess)
         {
             return ApiResponse<Guid>.Success(result.Value.Id);
+        }
+
+        var error = ConvertAppError(result.Error);
+        return ApiResponse<Guid>.Failure(error);
+    }
+
+    private static ApiResponse<Guid> ToIdResponse(AppResult<Guid> result)
+    {
+        if (result.IsSuccess)
+        {
+            return ApiResponse<Guid>.Success(result.Value);
         }
 
         var error = ConvertAppError(result.Error);

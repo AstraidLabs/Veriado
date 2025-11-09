@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Veriado.Appl.Files;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
@@ -24,6 +25,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IFileQueryService _fileQueryService;
     private readonly IHotStateService _hotStateService;
     private readonly IHealthService _healthService;
+    private readonly IFileService _fileService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
@@ -38,6 +40,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly AsyncRelayCommand<FileSummaryDto?> _openDetailCommand;
     private readonly AsyncRelayCommand<FileSummaryDto?> _selectFileCommand;
+    private readonly AsyncRelayCommand<FileSummaryDto?> _deleteFileCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
@@ -47,6 +50,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IFileQueryService fileQueryService,
         IHotStateService hotStateService,
         IHealthService healthService,
+        IFileService fileService,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
         IServerClock serverClock,
@@ -59,6 +63,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileQueryService = fileQueryService ?? throw new ArgumentNullException(nameof(fileQueryService));
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
+        _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
@@ -72,6 +77,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
         _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync, CanOpenDetail);
         _selectFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteSelectFileAsync);
+        _deleteFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteDeleteFileAsync, CanDeleteFile);
 
         _suppressTargetPageChange = true;
         TargetPage = 1;
@@ -94,6 +100,8 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand<FileSummaryDto?> OpenDetailCommand => _openDetailCommand;
 
     public IAsyncRelayCommand<FileSummaryDto?> SelectFileCommand => _selectFileCommand;
+
+    public IAsyncRelayCommand<FileSummaryDto?> DeleteFileCommand => _deleteFileCommand;
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
@@ -640,6 +648,8 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private static bool CanOpenDetail(FileSummaryDto? summary) => summary is not null;
 
+    private static bool CanDeleteFile(FileSummaryDto? summary) => summary is not null;
+
     private async Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
     {
         if (summary is null)
@@ -674,6 +684,45 @@ public partial class FilesPageViewModel : ViewModelBase
                 StatusService.Error(message);
             }
         }
+    }
+
+    private async Task ExecuteDeleteFileAsync(FileSummaryDto? summary)
+    {
+        if (summary is null)
+        {
+            return;
+        }
+
+        var confirmed = await _dialogService
+            .ConfirmAsync(
+                "Smazat soubor",
+                $"Opravdu chcete smazat soubor \"{summary.Name}\"?",
+                "Smazat",
+                "Zrušit")
+            .ConfigureAwait(false);
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        var deleted = false;
+        await SafeExecuteAsync(
+            async cancellationToken =>
+            {
+                await _fileService.DeleteAsync(summary.Id, cancellationToken).ConfigureAwait(false);
+                deleted = true;
+            },
+            "Mazání souboru...")
+            .ConfigureAwait(false);
+
+        if (!deleted)
+        {
+            return;
+        }
+
+        await Dispatcher.Enqueue(() => ClearDetailState()).ConfigureAwait(false);
+        await RefreshCommand.ExecuteAsync(null);
     }
 
     private async Task ExecuteSelectFileAsync(FileSummaryDto? summary)
