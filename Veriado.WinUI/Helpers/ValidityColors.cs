@@ -13,5 +13,5 @@ public static class ValidityColors
 
     public static SolidColorBrush Expired { get; } = new(Color.FromArgb(0xFF, 0xD9, 0x2F, 0x2F));
 
-    public static SolidColorBrush Transparent { get; } = new(Colors.Transparent);
+    public static SolidColorBrush Transparent { get; } = new(Color.FromArgb(0x00, 0x00, 0x00, 0x00));
 }
