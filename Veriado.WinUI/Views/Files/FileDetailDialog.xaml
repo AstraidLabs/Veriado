@@ -6,6 +6,9 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
+    x:Name="RootDialog"
+    MinWidth="360"
+    MaxWidth="920"
     Title="Detail souboru"
     PrimaryButtonText="Uložit"
     SecondaryButtonText="Zrušit"
@@ -16,11 +19,49 @@
         <converters:NullableDateTimeOffsetConverter x:Key="NullableDateTimeOffsetConverter" />
     </ContentDialog.Resources>
 
-    <Grid RowSpacing="16" Width="720">
+    <Grid x:Name="LayoutRoot" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="WidthStates">
+                <VisualState x:Name="Narrow">
+                    <VisualState.Setters>
+                        <Setter Target="ValidityColumnLeft.Width" Value="*" />
+                        <Setter Target="ValidityColumnRight.Width" Value="0" />
+                        <Setter Target="ValidityValidFromPanel.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="ValidityValidToPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="ValidityValidToPanel.(Grid.Row)" Value="1" />
+                        <Setter Target="ValidityValidToPanel.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="CopiesColumnLeft.Width" Value="*" />
+                        <Setter Target="CopiesColumnRight.Width" Value="0" />
+                        <Setter Target="CopiesPhysicalPanel.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="CopiesElectronicPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="CopiesElectronicPanel.(Grid.Row)" Value="1" />
+                        <Setter Target="CopiesElectronicPanel.(Grid.ColumnSpan)" Value="2" />
+                    </VisualState.Setters>
+                </VisualState>
+
+                <VisualState x:Name="Wide">
+                    <VisualState.Setters>
+                        <Setter Target="ValidityColumnLeft.Width" Value="Auto" />
+                        <Setter Target="ValidityColumnRight.Width" Value="*" />
+                        <Setter Target="ValidityValidFromPanel.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="ValidityValidToPanel.(Grid.Column)" Value="1" />
+                        <Setter Target="ValidityValidToPanel.(Grid.Row)" Value="0" />
+                        <Setter Target="ValidityValidToPanel.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="CopiesColumnLeft.Width" Value="*" />
+                        <Setter Target="CopiesColumnRight.Width" Value="*" />
+                        <Setter Target="CopiesPhysicalPanel.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="CopiesElectronicPanel.(Grid.Column)" Value="1" />
+                        <Setter Target="CopiesElectronicPanel.(Grid.Row)" Value="0" />
+                        <Setter Target="CopiesElectronicPanel.(Grid.ColumnSpan)" Value="1" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
 
         <Grid Grid.Row="0" ColumnSpacing="12" VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
@@ -33,7 +74,7 @@
                     FontSize="24"
                     FontWeight="SemiBold"
                     TextWrapping="Wrap" />
-                <TextBlock Text="{x:Bind ViewModel.File.MimeType, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind ViewModel.File.MimeType, Mode=OneWay}" TextWrapping="Wrap" />
             </StackPanel>
             <ProgressRing
                 Grid.Column="1"
@@ -42,25 +83,31 @@
                 IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
         </Grid>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="20">
+        <ScrollViewer
+            Grid.Row="1"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto"
+            ZoomMode="Disabled">
+            <StackPanel Spacing="20" Padding="16">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Souhrn" FontWeight="SemiBold" />
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Velikost:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.Size, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}" />
+                        <TextBlock
+                            Text="{x:Bind ViewModel.File.Size, Mode=OneWay, Converter={StaticResource SizeToHumanConverter}}"
+                            TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Vytvořeno:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.CreatedAt.ToString(), Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.CreatedAt.ToString(), Mode=OneWay}" TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Upraveno:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.ModifiedAt.ToString(), Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.ModifiedAt.ToString(), Mode=OneWay}" TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Verze:" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.File.Version, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.File.Version, Mode=OneWay}" TextWrapping="Wrap" />
                     </StackPanel>
                 </StackPanel>
 
@@ -76,7 +123,8 @@
                                 <TextBlock
                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                     FontSize="12"
-                                    Text="{x:Bind}" />
+                                    Text="{x:Bind}"
+                                    TextWrapping="Wrap" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -91,7 +139,8 @@
                                 <TextBlock
                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                     FontSize="12"
-                                    Text="{x:Bind}" />
+                                    Text="{x:Bind}"
+                                    TextWrapping="Wrap" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -106,13 +155,15 @@
                                 <TextBlock
                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                     FontSize="12"
-                                    Text="{x:Bind}" />
+                                    Text="{x:Bind}"
+                                    TextWrapping="Wrap" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
                     <ToggleSwitch
                         Header="Pouze pro čtení"
+                        MinWidth="200"
                         IsOn="{x:Bind ViewModel.File.IsReadOnly, Mode=TwoWay}"
                         IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                 </StackPanel>
@@ -123,14 +174,19 @@
                         Content="Zrušit platnost"
                         Command="{x:Bind ViewModel.ClearValidityCommand, Mode=OneWay}"
                         IsEnabled="{x:Bind ViewModel.CanClearValidity, Mode=OneWay}" />
-                    <Grid ColumnSpacing="12">
+                    <Grid x:Name="ValidityGrid" ColumnSpacing="12" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition x:Name="ValidityColumnLeft" Width="Auto" />
+                            <ColumnDefinition x:Name="ValidityColumnRight" Width="*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="4">
+                        <StackPanel x:Name="ValidityValidFromPanel" Grid.Column="0" Grid.Row="0" Spacing="4">
                             <TextBlock Text="Platí od" />
                             <DatePicker
+                                MinWidth="200"
                                 Date="{x:Bind ViewModel.File.ValidFrom, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.ValidFromErrors, Mode=OneWay}">
@@ -139,14 +195,16 @@
                                         <TextBlock
                                             Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                             FontSize="12"
-                                            Text="{x:Bind}" />
+                                            Text="{x:Bind}"
+                                            TextWrapping="Wrap" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="4">
+                        <StackPanel x:Name="ValidityValidToPanel" Grid.Column="1" Grid.Row="0" Spacing="4">
                             <TextBlock Text="Platí do" />
                             <DatePicker
+                                MinWidth="200"
                                 Date="{x:Bind ViewModel.File.ValidTo, Mode=TwoWay, Converter={StaticResource NullableDateTimeOffsetConverter}, UpdateSourceTrigger=PropertyChanged}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.ValidToErrors, Mode=OneWay}">
@@ -155,20 +213,26 @@
                                         <TextBlock
                                             Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                             FontSize="12"
-                                            Text="{x:Bind}" />
+                                            Text="{x:Bind}"
+                                            TextWrapping="Wrap" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
                     </Grid>
-                    <Grid ColumnSpacing="12">
+                    <Grid x:Name="CopiesGrid" ColumnSpacing="12" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition x:Name="CopiesColumnLeft" Width="*" />
+                            <ColumnDefinition x:Name="CopiesColumnRight" Width="*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="4">
+                        <StackPanel x:Name="CopiesPhysicalPanel" Grid.Column="0" Grid.Row="0" Spacing="4">
                             <ToggleSwitch
                                 Header="Fyzická kopie"
+                                MinWidth="200"
                                 IsOn="{x:Bind ViewModel.File.HasPhysicalCopy, Mode=TwoWay}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.PhysicalCopyErrors, Mode=OneWay}">
@@ -177,14 +241,16 @@
                                         <TextBlock
                                             Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                             FontSize="12"
-                                            Text="{x:Bind}" />
+                                            Text="{x:Bind}"
+                                            TextWrapping="Wrap" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="4">
+                        <StackPanel x:Name="CopiesElectronicPanel" Grid.Column="1" Grid.Row="0" Spacing="4">
                             <ToggleSwitch
                                 Header="Elektronická kopie"
+                                MinWidth="200"
                                 IsOn="{x:Bind ViewModel.File.HasElectronicCopy, Mode=TwoWay}"
                                 IsEnabled="{x:Bind ViewModel.CanEditFields, Mode=OneWay}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.ElectronicCopyErrors, Mode=OneWay}">
@@ -193,7 +259,8 @@
                                         <TextBlock
                                             Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                             FontSize="12"
-                                            Text="{x:Bind}" />
+                                            Text="{x:Bind}"
+                                            TextWrapping="Wrap" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
