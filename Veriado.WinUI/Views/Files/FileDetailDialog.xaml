@@ -46,12 +46,12 @@
 
                 <VisualState x:Name="Wide">
                     <VisualState.Setters>
-                        <Setter Target="ValidityColumnLeft.Width" Value="Auto" />
-                        <Setter Target="ValidityColumnRight.Width" Value="*" />
-                        <Setter Target="ValidityValidFromPanel.(Grid.ColumnSpan)" Value="1" />
-                        <Setter Target="ValidityValidToPanel.(Grid.Column)" Value="1" />
-                        <Setter Target="ValidityValidToPanel.(Grid.Row)" Value="0" />
-                        <Setter Target="ValidityValidToPanel.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="ValidityColumnLeft.Width" Value="*" />
+                        <Setter Target="ValidityColumnRight.Width" Value="0" />
+                        <Setter Target="ValidityValidFromPanel.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="ValidityValidToPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="ValidityValidToPanel.(Grid.Row)" Value="1" />
+                        <Setter Target="ValidityValidToPanel.(Grid.ColumnSpan)" Value="2" />
                         <Setter Target="CopiesColumnLeft.Width" Value="*" />
                         <Setter Target="CopiesColumnRight.Width" Value="*" />
                         <Setter Target="CopiesPhysicalPanel.(Grid.ColumnSpan)" Value="1" />
@@ -180,10 +180,15 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition x:Name="ValidityColumnLeft" Width="Auto" />
-                            <ColumnDefinition x:Name="ValidityColumnRight" Width="*" />
+                            <ColumnDefinition x:Name="ValidityColumnLeft" Width="*" />
+                            <ColumnDefinition x:Name="ValidityColumnRight" Width="0" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel x:Name="ValidityValidFromPanel" Grid.Column="0" Grid.Row="0" Spacing="4">
+                        <StackPanel
+                            x:Name="ValidityValidFromPanel"
+                            Grid.Column="0"
+                            Grid.Row="0"
+                            Grid.ColumnSpan="2"
+                            Spacing="4">
                             <TextBlock Text="Platí od" />
                             <DatePicker
                                 MinWidth="200"
@@ -201,7 +206,12 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
-                        <StackPanel x:Name="ValidityValidToPanel" Grid.Column="1" Grid.Row="0" Spacing="4">
+                        <StackPanel
+                            x:Name="ValidityValidToPanel"
+                            Grid.Column="0"
+                            Grid.Row="1"
+                            Grid.ColumnSpan="2"
+                            Spacing="4">
                             <TextBlock Text="Platí do" />
                             <DatePicker
                                 MinWidth="200"
