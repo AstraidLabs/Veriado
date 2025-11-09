@@ -8,12 +8,17 @@
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:views="using:Veriado.WinUI.Views.Files"
     xmlns:converters="using:Veriado.WinUI.Converters"
-    xmlns:contracts="using:Veriado.Contracts.Files"
+    xmlns:viewModels="using:Veriado.WinUI.ViewModels.Files"
     mc:Ignorable="d">
     <Page.Resources>
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
         <converters:NullableLongToDoubleConverter x:Key="NullableLongToDoubleConverter" />
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
+        <converters:ValidityToTextConverter x:Key="ValidityToTextConverter" />
+        <converters:ValidityToTooltipConverter x:Key="ValidityToTooltipConverter" />
+        <converters:ValidityToBackgroundBrushConverter x:Key="ValidityToBackgroundBrushConverter" />
+        <converters:ValidityToForegroundBrushConverter x:Key="ValidityToForegroundBrushConverter" />
+        <converters:ValidityToVisibilityConverter x:Key="ValidityToVisibilityConverter" />
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="16" ColumnSpacing="24">
@@ -239,7 +244,7 @@
                     </controls:ItemsRepeater.Layout>
 
                     <controls:ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="contracts:FileSummaryDto">
+                        <DataTemplate x:DataType="viewModels:FileSummaryItemViewModel">
                             <Border
                                 Margin="8"
                                 Padding="12"
@@ -256,7 +261,7 @@
                                     <StackPanel Spacing="4">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <TextBlock
-                                                Text="{x:Bind Name}"
+                                                Text="{x:Bind Dto.Name}"
                                                 FontWeight="SemiBold"
                                                 TextWrapping="Wrap"
                                                 VerticalAlignment="Center" />
@@ -264,23 +269,23 @@
                                                 Padding="6,2"
                                                 CornerRadius="4"
                                                 VerticalAlignment="Center"
-                                                Visibility="{x:Bind PageRoot.GetValidityVisibility(this), Mode=OneWay}"
-                                                Background="{x:Bind PageRoot.GetValidityBackgroundBrush(this), Mode=OneWay}"
-                                                ToolTipService.ToolTip="{x:Bind PageRoot.GetValidityTooltip(this), Mode=OneWay}">
+                                                Visibility="{x:Bind ValidityState, Converter={StaticResource ValidityToVisibilityConverter}}"
+                                                Background="{x:Bind ValidityState, Converter={StaticResource ValidityToBackgroundBrushConverter}}"
+                                                ToolTipService.ToolTip="{x:Bind ValidityState, Converter={StaticResource ValidityToTooltipConverter}, ConverterParameter=ValidityTooltipContext}">
                                                 <TextBlock
-                                                    Text="{x:Bind PageRoot.GetValidityText(this), Mode=OneWay}"
+                                                    Text="{x:Bind ValidityState, Converter={StaticResource ValidityToTextConverter}, ConverterParameter=ValidityDaysRemaining}"
                                                     FontSize="12"
-                                                    Foreground="{x:Bind PageRoot.GetValidityForegroundBrush(this), Mode=OneWay}"
+                                                    Foreground="{x:Bind ValidityState, Converter={StaticResource ValidityToForegroundBrushConverter}}"
                                                     TextWrapping="WrapWholeWords" />
                                             </Border>
                                         </StackPanel>
                                         <TextBlock
-                                            Text="{x:Bind Mime}"
+                                            Text="{x:Bind Dto.Mime}"
                                             FontSize="12"
                                             Opacity="0.7"
                                             TextTrimming="CharacterEllipsis" />
                                         <TextBlock
-                                            Text="{x:Bind Size, Converter={StaticResource SizeToHumanConverter}}"
+                                            Text="{x:Bind Dto.Size, Converter={StaticResource SizeToHumanConverter}}"
                                             FontSize="12" />
                                     </StackPanel>
                                     <Button
@@ -290,7 +295,7 @@
                                         VerticalAlignment="Center"
                                         Content="Detail"
                                         Command="{Binding DataContext.OpenDetailCommand, ElementName=PageRoot}"
-                                        CommandParameter="{x:Bind Mode=OneWay}" />
+                                        CommandParameter="{x:Bind Dto}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
