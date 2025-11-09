@@ -267,8 +267,8 @@
                                             Width="24"
                                             Height="24"
                                             CornerRadius="6"
-                                            Background="{Binding Validity.Status, Converter={StaticResource StatusToBrush}}"
-                                            Visibility="{Binding Validity.DaysRemaining, Converter={StaticResource NullToCollapsed}}"
+                                            Background="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
+                                            Visibility="{x:Bind Validity.DaysRemaining, Mode=OneWay, Converter={StaticResource NullToCollapsed}}"
                                             ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
                                             AutomationProperties.Name="{x:Bind Validity.Tooltip, Mode=OneWay}">
                                             <TextBlock
