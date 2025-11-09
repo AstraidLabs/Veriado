@@ -64,7 +64,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
         _serverClock = serverClock ?? throw new ArgumentNullException(nameof(serverClock));
 
-        Items = new ObservableCollection<FileSummaryItemViewModel>();
+        Items = new ObservableCollection<FileListItemModel>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
 
@@ -81,7 +81,7 @@ public partial class FilesPageViewModel : ViewModelBase
         SearchText = _hotStateService.LastQuery;
     }
 
-    public ObservableCollection<FileSummaryItemViewModel> Items { get; }
+    public ObservableCollection<FileListItemModel> Items { get; }
 
     public IAsyncRelayCommand RefreshCommand { get; }
 
@@ -428,7 +428,7 @@ public partial class FilesPageViewModel : ViewModelBase
                 Items.Clear();
                 foreach (var item in result.Items)
                 {
-                    Items.Add(new FileSummaryItemViewModel(item, referenceTime));
+                    Items.Add(new FileListItemModel(item, referenceTime));
                 }
 
                 RefreshValidityStates(referenceTime);

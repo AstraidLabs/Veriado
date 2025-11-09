@@ -241,7 +241,7 @@
                     </controls:ItemsRepeater.Layout>
 
                     <controls:ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="viewModels:FileSummaryItemViewModel">
+                        <DataTemplate x:DataType="viewModels:FileListItemModel">
                             <Border
                                 Margin="8"
                                 Padding="12"
@@ -267,28 +267,12 @@
                                             Width="24"
                                             Height="24"
                                             CornerRadius="6"
-                                            Background="{x:Bind ValidityStatus, Converter={StaticResource StatusToBrush}}"
-                                            Visibility="{x:Bind DaysRemaining, Converter={StaticResource NullToCollapsed}}">
-                                            <Border.ToolTipService.ToolTip>
-                                                <ToolTip>
-                                                    <TextBlock>
-                                                        <Run Text="Platné: " />
-                                                        <Run Text="{x:Bind ValidFrom, Mode=OneWay, StringFormat='{}{0:dd.MM.yyyy}'}" />
-                                                        <Run Text=" – " />
-                                                        <Run Text="{x:Bind ValidTo, Mode=OneWay, StringFormat='{}{0:dd.MM.yyyy}'}" />
-                                                        <Run Text=" (" />
-                                                        <Run Text="{x:Bind DaysRemaining}" />
-                                                        <Run Text=" dní zbývá)" />
-                                                    </TextBlock>
-                                                </ToolTip>
-                                            </Border.ToolTipService.ToolTip>
-                                            <AutomationProperties.Name>
-                                                <x:Bind
-                                                    Mode="OneWay"
-                                                    Path="string.Format(&quot;Platnost: {0:dd.MM.yyyy} – {1:dd.MM.yyyy}, zbývá {2} dní&quot;, ValidFrom, ValidTo, DaysRemaining ?? 0)" />
-                                            </AutomationProperties.Name>
+                                            Background="{Binding Validity.Status, Converter={StaticResource StatusToBrush}}"
+                                            Visibility="{Binding Validity.DaysRemaining, Converter={StaticResource NullToCollapsed}}"
+                                            ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
+                                            AutomationProperties.Name="{x:Bind Validity.Tooltip, Mode=OneWay}">
                                             <TextBlock
-                                                Text="{x:Bind DaysRemaining}"
+                                                Text="{x:Bind Validity.DaysRemaining}"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
                                                 FontWeight="SemiBold"
