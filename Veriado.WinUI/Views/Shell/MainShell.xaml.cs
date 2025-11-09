@@ -1,7 +1,10 @@
 using System.ComponentModel;
 using System.Linq;
+using Microsoft.UI.Windowing;
 using Veriado.WinUI.Navigation;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Shell;
+using WinRT.Interop;
 
 namespace Veriado.WinUI.Views.Shell;
 
@@ -9,16 +12,21 @@ public sealed partial class MainShell : Window, INavigationHost
 {
     private readonly MainShellViewModel _viewModel;
     private readonly INavigationService _navigationService;
+    private readonly IDialogService _dialogService;
+    private AppWindow? _appWindow;
 
-    public MainShell(MainShellViewModel viewModel, INavigationService navigationService)
+    public MainShell(MainShellViewModel viewModel, INavigationService navigationService, IDialogService dialogService)
     {
         InitializeComponent();
 
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
 
         RootNavigation.DataContext = _viewModel;
         _navigationService.AttachHost(this);
+
+        InitializeWindowing();
 
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         RootNavigation.Loaded += OnLoaded;
@@ -36,18 +44,65 @@ public sealed partial class MainShell : Window, INavigationHost
         RootNavigation.Loaded -= OnLoaded;
         _viewModel.Initialize();
         UpdateNavigationSelection(_viewModel.CurrentPage);
+
+        if (_appWindow is null)
+        {
+            InitializeWindowing();
+        }
     }
 
     private void OnClosed(object sender, WindowEventArgs e)
     {
         Closed -= OnClosed;
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+
+        if (_appWindow is not null)
+        {
+            _appWindow.Closing -= OnAppWindowClosing;
+            _appWindow = null;
+        }
     }
 
     private void OnNavigationViewItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
         var tag = args.InvokedItemContainer?.Tag as string;
         _viewModel.NavigateToTag(tag);
+    }
+
+    private void InitializeWindowing()
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+            _appWindow = AppWindow.GetFromWindowId(windowId);
+            _appWindow.Closing += OnAppWindowClosing;
+        }
+        catch
+        {
+            _appWindow = null;
+        }
+    }
+
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        var deferral = args.GetDeferral();
+
+        try
+        {
+            var confirmed = await _dialogService
+                .ConfirmAsync("Ukončit aplikaci?", "Opravdu si přejete ukončit aplikaci?", "Ukončit", "Zůstat")
+                .ConfigureAwait(true);
+
+            if (!confirmed)
+            {
+                args.Cancel = true;
+            }
+        }
+        finally
+        {
+            deferral.Complete();
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
