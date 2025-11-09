@@ -30,6 +30,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IDialogService _dialogService;
     private readonly IExceptionHandler _exceptionHandler;
     private readonly ITimeFormattingService _timeFormattingService;
+    private readonly IServerClock _serverClock;
     
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
@@ -48,6 +49,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IHealthService healthService,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
+        IServerClock serverClock,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -60,8 +62,9 @@ public partial class FilesPageViewModel : ViewModelBase
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
+        _serverClock = serverClock ?? throw new ArgumentNullException(nameof(serverClock));
 
-        Items = new ObservableCollection<FileSummaryDto>();
+        Items = new ObservableCollection<FileSummaryItemViewModel>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
 
@@ -78,7 +81,7 @@ public partial class FilesPageViewModel : ViewModelBase
         SearchText = _hotStateService.LastQuery;
     }
 
-    public ObservableCollection<FileSummaryDto> Items { get; }
+    public ObservableCollection<FileSummaryItemViewModel> Items { get; }
 
     public IAsyncRelayCommand RefreshCommand { get; }
 
@@ -196,6 +199,15 @@ public partial class FilesPageViewModel : ViewModelBase
             }
 
             return 1;
+        }
+    }
+
+    public void RefreshValidityStates()
+    {
+        var referenceTime = _serverClock.NowLocal;
+        foreach (var item in Items)
+        {
+            item.UpdateValidity(referenceTime);
         }
     }
 
@@ -408,10 +420,11 @@ public partial class FilesPageViewModel : ViewModelBase
 
             await Dispatcher.Enqueue(() =>
             {
+                var referenceTime = _serverClock.NowLocal;
                 Items.Clear();
                 foreach (var item in result.Items)
                 {
-                    Items.Add(item);
+                    Items.Add(new FileSummaryItemViewModel(item, referenceTime));
                 }
 
                 UpdateSelection(result.Items);
