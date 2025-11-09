@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Threading;
 using Microsoft.UI.Xaml;
@@ -15,6 +16,7 @@ public sealed partial class FilesPage : Page
     private readonly IServerClock _serverClock;
     private readonly DispatcherTimer _validityRefreshTimer;
     private CancellationTokenSource? _suggestionRequestSource;
+    private bool _itemsCollectionHooked;
 
     public FilesPage(
         FilesPageViewModel viewModel,
@@ -30,6 +32,7 @@ public sealed partial class FilesPage : Page
         };
         _validityRefreshTimer.Tick += OnValidityTick;
         DataContext = ViewModel;
+        HookItemsCollection();
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -55,6 +58,7 @@ public sealed partial class FilesPage : Page
         {
             _validityRefreshTimer.Stop();
         }
+        UnhookItemsCollection();
     }
 
     private Task ExecuteInitialRefreshAsync()
@@ -149,5 +153,48 @@ public sealed partial class FilesPage : Page
     {
         var now = _serverClock.NowLocal;
         ViewModel.RefreshValidityStates(now);
+    }
+
+    private void HookItemsCollection()
+    {
+        if (_itemsCollectionHooked)
+        {
+            return;
+        }
+
+        if (ViewModel.Items is INotifyCollectionChanged observable)
+        {
+            observable.CollectionChanged += OnItemsCollectionChanged;
+            _itemsCollectionHooked = true;
+        }
+    }
+
+    private void UnhookItemsCollection()
+    {
+        if (!_itemsCollectionHooked)
+        {
+            return;
+        }
+
+        if (ViewModel.Items is INotifyCollectionChanged observable)
+        {
+            observable.CollectionChanged -= OnItemsCollectionChanged;
+        }
+
+        _itemsCollectionHooked = false;
+    }
+
+    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is null || e.NewItems.Count == 0)
+        {
+            return;
+        }
+
+        var now = _serverClock.NowLocal;
+        foreach (var item in e.NewItems.OfType<FileListItemModel>())
+        {
+            item.RecomputeValidity(now);
+        }
     }
 }
