@@ -31,11 +31,11 @@ public sealed class ValidityToTooltipConverter : IValueConverter
 
     private static ValidityTooltipContext ExtractContext(object parameter)
     {
-        return parameter switch
+        if (parameter is ValidityTooltipContext context)
         {
-            ValidityTooltipContext context => context,
-            ValidityTooltipContext? nullable when nullable.HasValue => nullable.Value,
-            _ => default,
-        };
+            return context;
+        }
+
+        return default;
     }
 }
