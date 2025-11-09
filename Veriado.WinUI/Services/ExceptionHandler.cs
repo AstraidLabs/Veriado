@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Common;
+using Veriado.Services.Files.Exceptions;
 
 namespace Veriado.WinUI.Services;
 
@@ -21,6 +22,18 @@ public sealed class ExceptionHandler : IExceptionHandler
             var message = BuildValidationMessage(validationException);
             _logger.LogWarning(exception, "Validation failure in view model execution.");
             return message;
+        }
+
+        if (exception is FileDetailNotFoundException notFound)
+        {
+            _logger.LogInformation(exception, "Requested file was not found.");
+            return notFound.Message;
+        }
+
+        if (exception is FileDetailServiceException serviceException)
+        {
+            _logger.LogError(exception, "File detail service operation failed.");
+            return serviceException.Message;
         }
 
         if (exception is OperationCanceledException)

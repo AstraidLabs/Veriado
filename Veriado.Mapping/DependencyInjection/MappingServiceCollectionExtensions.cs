@@ -6,8 +6,10 @@ using Microsoft.Extensions.Hosting;
 using Veriado.Appl.UseCases.Files.ApplySystemMetadata;
 using Veriado.Appl.UseCases.Files.ClearFileValidity;
 using Veriado.Appl.UseCases.Files.CreateFile;
+using Veriado.Appl.UseCases.Files.DeleteFile;
 using Veriado.Appl.UseCases.Files.RenameFile;
 using Veriado.Appl.UseCases.Files.ReplaceFileContent;
+using Veriado.Appl.UseCases.Files.SetFileReadOnly;
 using Veriado.Appl.UseCases.Files.Validation;
 using Veriado.Mapping.AC;
 using Veriado.Mapping.Profiles;
@@ -44,6 +46,7 @@ public static class MappingServiceCollectionExtensions
         services.AddTransient<IValidator<ClearFileValidityCommand>, ClearFileValidityCommandValidator>();
         services.AddTransient<IValidator<ApplySystemMetadataCommand>, ApplySystemMetadataCommandValidator>();
         services.AddTransient<IValidator<SetFileReadOnlyCommand>, SetFileReadOnlyCommandValidator>();
+        services.AddTransient<IValidator<DeleteFileCommand>, DeleteFileCommandValidator>();
 
         // tvoje pipeline (ponechávám dle tvého projektu)
         services.AddTransient<WriteMappingPipeline>();

@@ -297,14 +297,23 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Button
-                                        x:Uid="FilesPage_ItemDetailButton"
+                                    <StackPanel
                                         Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        Spacing="8"
                                         HorizontalAlignment="Right"
-                                        VerticalAlignment="Center"
-                                        Content="Detail"
-                                        Command="{Binding DataContext.OpenDetailCommand, ElementName=PageRoot}"
-                                        CommandParameter="{x:Bind Dto}" />
+                                        VerticalAlignment="Center">
+                                        <Button
+                                            x:Uid="FilesPage_ItemDetailButton"
+                                            Content="Detail"
+                                            Command="{Binding DataContext.OpenDetailCommand, ElementName=PageRoot}"
+                                            CommandParameter="{x:Bind Dto}" />
+                                        <Button
+                                            x:Uid="FilesPage_ItemDeleteButton"
+                                            Content="Smazat"
+                                            Command="{Binding DataContext.DeleteFileCommand, ElementName=PageRoot}"
+                                            CommandParameter="{x:Bind Dto}" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>

@@ -73,6 +73,27 @@ public sealed class FileService : IFileService
         return Map(current);
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var response = await _fileOperationsService.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        if (response.IsSuccess)
+        {
+            return;
+        }
+
+        if (response.Errors.Count == 0)
+        {
+            throw new FileDetailServiceException("Unexpected failure while deleting the file.");
+        }
+
+        if (response.Errors.Any(IsNotFound))
+        {
+            throw new FileDetailNotFoundException(id);
+        }
+
+        EnsureSuccessCore(response.IsSuccess, response.Errors);
+    }
+
     private static EditableFileDetailDto Map(Veriado.Contracts.Files.FileDetailDto detail)
     {
         return new EditableFileDetailDto
@@ -234,4 +255,7 @@ public sealed class FileService : IFileService
 
     private static bool IsConflict(ApiError error)
         => string.Equals(error.Code, "conflict", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsNotFound(ApiError error)
+        => string.Equals(error.Code, "not_found", StringComparison.OrdinalIgnoreCase);
 }

@@ -26,4 +26,6 @@ public interface IFileOperationsService
     Task<ApiResponse<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, CancellationToken cancellationToken);
 
     Task<ApiResponse<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken);
+
+    Task<ApiResponse<Guid>> DeleteAsync(Guid fileId, CancellationToken cancellationToken);
 }
