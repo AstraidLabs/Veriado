@@ -30,11 +30,11 @@ public sealed class ValidityToTextConverter : IValueConverter
 
     private static string FormatRemaining(object parameter)
     {
-        return parameter switch
+        if (parameter is int days)
         {
-            int days => $"Zbývá {days} dní",
-            int? days when days.HasValue => $"Zbývá {days.Value} dní",
-            _ => string.Empty,
-        };
+            return $"Zbývá {days} dní";
+        }
+
+        return string.Empty;
     }
 }
