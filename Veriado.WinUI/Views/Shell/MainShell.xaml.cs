@@ -86,23 +86,26 @@ public sealed partial class MainShell : Window, INavigationHost
 
     private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        var deferral = args.GetDeferral();
+        args.Cancel = true;
 
-        try
+        if (_appWindow is null)
         {
-            var confirmed = await _dialogService
-                .ConfirmAsync("Ukončit aplikaci?", "Opravdu si přejete ukončit aplikaci?", "Ukončit", "Zůstat")
-                .ConfigureAwait(true);
+            return;
+        }
 
-            if (!confirmed)
-            {
-                args.Cancel = true;
-            }
-        }
-        finally
+        _appWindow.Closing -= OnAppWindowClosing;
+
+        var confirmed = await _dialogService
+            .ConfirmAsync("Ukončit aplikaci?", "Opravdu si přejete ukončit aplikaci?", "Ukončit", "Zůstat")
+            .ConfigureAwait(true);
+
+        if (confirmed)
         {
-            deferral.Complete();
+            Close();
+            return;
         }
+
+        _appWindow.Closing += OnAppWindowClosing;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
