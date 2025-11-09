@@ -693,13 +693,7 @@ public partial class FilesPageViewModel : ViewModelBase
             return;
         }
 
-        var confirmed = await _dialogService
-            .ConfirmAsync(
-                "Smazat soubor",
-                $"Opravdu chcete smazat soubor \"{summary.Name}\"?",
-                "Smazat",
-                "Zrušit")
-            .ConfigureAwait(false);
+        var confirmed = await ConfirmFileDeletionAsync(summary).ConfigureAwait(false);
 
         if (!confirmed)
         {
@@ -723,6 +717,19 @@ public partial class FilesPageViewModel : ViewModelBase
 
         await Dispatcher.Enqueue(() => ClearDetailState()).ConfigureAwait(false);
         await RefreshCommand.ExecuteAsync(null);
+    }
+
+    private Task<bool> ConfirmFileDeletionAsync(FileSummaryDto summary)
+    {
+        var fileDisplayName = string.IsNullOrWhiteSpace(summary.Extension)
+            ? summary.Name
+            : $"{summary.Name}.{summary.Extension}";
+
+        return _dialogService.ConfirmAsync(
+            "Smazat soubor",
+            $"Opravdu chcete smazat soubor \"{fileDisplayName}\"?",
+            "Smazat",
+            "Zrušit");
     }
 
     private async Task ExecuteSelectFileAsync(FileSummaryDto? summary)
