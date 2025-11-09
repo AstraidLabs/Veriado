@@ -1,3 +1,5 @@
+using System;
+
 namespace Veriado.Contracts.Files;
 
 /// <summary>
@@ -16,5 +18,5 @@ public sealed record FileValidityDto(
     /// <summary>
     /// Gets the total number of days in the validity range.
     /// </summary>
-    public double DaysTotal => (ValidUntil - IssuedAt).TotalDays;
+    public double DaysTotal => Math.Max(0d, (ValidUntil - IssuedAt).TotalDays);
 }

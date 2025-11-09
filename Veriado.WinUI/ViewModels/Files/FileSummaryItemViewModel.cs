@@ -44,7 +44,8 @@ public partial class FileSummaryItemViewModel : ObservableObject
 
     public void UpdateValidity(DateTimeOffset referenceTime)
     {
-        if (Dto.Validity is { } validity)
+        if (Dto.Validity is { } validity
+            && validity.ValidUntil >= validity.IssuedAt)
         {
             var issuedAt = validity.IssuedAt.ToLocalTime();
             var validUntil = validity.ValidUntil.ToLocalTime();

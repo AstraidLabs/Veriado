@@ -19,7 +19,8 @@ public static class FileValidityHelper
     /// <returns><see langword="true"/> if the badge represents a valid window; otherwise <see langword="false"/>.</returns>
     public static bool TryGetBadge(FileValidityDto? validity, DateTimeOffset referenceTime, out FileValidityBadge badge)
     {
-        if (validity is null)
+        if (validity is null
+            || validity.ValidUntil < validity.IssuedAt)
         {
             badge = FileValidityBadge.None;
             return false;

@@ -88,6 +88,12 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
     [ObservableProperty]
     private DateTimeOffset? validTo;
 
+    [ObservableProperty]
+    private bool hasPhysicalCopy;
+
+    [ObservableProperty]
+    private bool hasElectronicCopy;
+
     public string DisplayName => _snapshot.DisplayName;
 
     public bool HasValidity => ValidFrom is not null && ValidTo is not null;
@@ -102,7 +108,9 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             || !string.Equals(Author, _snapshot.Author, StringComparison.Ordinal)
             || IsReadOnly != _snapshot.IsReadOnly
             || !Nullable.Equals(ValidFrom, _snapshot.ValidFrom)
-            || !Nullable.Equals(ValidTo, _snapshot.ValidTo);
+            || !Nullable.Equals(ValidTo, _snapshot.ValidTo)
+            || HasPhysicalCopy != _snapshot.HasPhysicalCopy
+            || HasElectronicCopy != _snapshot.HasElectronicCopy;
 
     public static EditableFileDetailModel FromDto(EditableFileDetailDto detail)
     {
@@ -123,6 +131,8 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             version = detail.Version,
             validFrom = detail.ValidFrom,
             validTo = detail.ValidTo,
+            hasPhysicalCopy = detail.HasPhysicalCopy,
+            hasElectronicCopy = detail.HasElectronicCopy,
         };
 
         model.ResetValidation();
@@ -145,6 +155,8 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             Version = Version,
             ValidFrom = ValidFrom,
             ValidTo = ValidTo,
+            HasPhysicalCopy = HasPhysicalCopy,
+            HasElectronicCopy = HasElectronicCopy,
         };
     }
 
@@ -165,6 +177,8 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
         Version = detail.Version;
         ValidFrom = detail.ValidFrom;
         ValidTo = detail.ValidTo;
+        HasPhysicalCopy = detail.HasPhysicalCopy;
+        HasElectronicCopy = detail.HasElectronicCopy;
 
         ResetValidation();
         OnPropertyChanged(nameof(DisplayName));
@@ -266,10 +280,22 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
     partial void OnValidFromChanged(DateTimeOffset? value)
     {
+        OnPropertyChanged(nameof(HasValidity));
         ValidateValidityRange();
     }
 
     partial void OnValidToChanged(DateTimeOffset? value)
+    {
+        OnPropertyChanged(nameof(HasValidity));
+        ValidateValidityRange();
+    }
+
+    partial void OnHasPhysicalCopyChanged(bool value)
+    {
+        ValidateValidityRange();
+    }
+
+    partial void OnHasElectronicCopyChanged(bool value)
     {
         ValidateValidityRange();
     }
@@ -284,8 +310,36 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
     {
         if (ValidFrom is null && ValidTo is null)
         {
+            if (HasPhysicalCopy || HasElectronicCopy)
+            {
+                const string message = "Pro nastavení kopií je nutné zadat platnost dokumentu.";
+                SetValidationErrors(nameof(ValidFrom), new[] { message });
+                SetValidationErrors(nameof(ValidTo), new[] { message });
+                SetValidationErrors(nameof(HasPhysicalCopy), new[] { message });
+                SetValidationErrors(nameof(HasElectronicCopy), new[] { message });
+                result?.AddError(nameof(ValidFrom), message);
+                result?.AddError(nameof(ValidTo), message);
+                result?.AddError(nameof(HasPhysicalCopy), message);
+                result?.AddError(nameof(HasElectronicCopy), message);
+                return;
+            }
+
             SetValidationErrors(nameof(ValidFrom), Array.Empty<string>());
             SetValidationErrors(nameof(ValidTo), Array.Empty<string>());
+            SetValidationErrors(nameof(HasPhysicalCopy), Array.Empty<string>());
+            SetValidationErrors(nameof(HasElectronicCopy), Array.Empty<string>());
+            return;
+        }
+
+        if (ValidFrom is null || ValidTo is null)
+        {
+            const string message = "Platnost musí mít vyplněné datum od i datum do.";
+            SetValidationErrors(nameof(ValidFrom), new[] { message });
+            SetValidationErrors(nameof(ValidTo), new[] { message });
+            SetValidationErrors(nameof(HasPhysicalCopy), Array.Empty<string>());
+            SetValidationErrors(nameof(HasElectronicCopy), Array.Empty<string>());
+            result?.AddError(nameof(ValidFrom), message);
+            result?.AddError(nameof(ValidTo), message);
             return;
         }
 
@@ -294,6 +348,8 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
             const string message = "Platnost od nesmí být později než platnost do.";
             SetValidationErrors(nameof(ValidFrom), new[] { message });
             SetValidationErrors(nameof(ValidTo), new[] { message });
+            SetValidationErrors(nameof(HasPhysicalCopy), Array.Empty<string>());
+            SetValidationErrors(nameof(HasElectronicCopy), Array.Empty<string>());
             result?.AddError(nameof(ValidFrom), message);
             result?.AddError(nameof(ValidTo), message);
             return;
@@ -301,10 +357,14 @@ public sealed partial class EditableFileDetailModel : ObservableValidator, INoti
 
         SetValidationErrors(nameof(ValidFrom), Array.Empty<string>());
         SetValidationErrors(nameof(ValidTo), Array.Empty<string>());
+        SetValidationErrors(nameof(HasPhysicalCopy), Array.Empty<string>());
+        SetValidationErrors(nameof(HasElectronicCopy), Array.Empty<string>());
         if (result is not null)
         {
             AddPropertyErrors(result, nameof(ValidFrom));
             AddPropertyErrors(result, nameof(ValidTo));
+            AddPropertyErrors(result, nameof(HasPhysicalCopy));
+            AddPropertyErrors(result, nameof(HasElectronicCopy));
         }
     }
 
