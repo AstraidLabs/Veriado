@@ -38,9 +38,9 @@ public static class ValidityHelper
 
         return string.Format(
             CultureInfo.CurrentCulture,
-            "Platné: {0} – {1} ({2} dní zbývá)",
+            "Platné: {0} – {1} (zbývá {2})",
             from.Value.ToString(DateFormats.ShortDate, CultureInfo.CurrentCulture),
             to.Value.ToString(DateFormats.ShortDate, CultureInfo.CurrentCulture),
-            days.Value);
+            CzechPluralization.FormatDays(days.Value));
     }
 }

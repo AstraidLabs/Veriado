@@ -82,7 +82,7 @@ public static class FileValidityHelper
             FileValidityStatus.None => string.Empty,
             FileValidityStatus.Expired => "Platnost skončila",
             FileValidityStatus.ExpiringToday => "Dnes končí",
-            _ => $"Zbývá {daysRemaining} dní",
+            _ => $"Zbývá {CzechPluralization.FormatDays(daysRemaining)}",
         };
     }
 
