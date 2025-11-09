@@ -14,11 +14,8 @@
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
         <converters:NullableLongToDoubleConverter x:Key="NullableLongToDoubleConverter" />
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
-        <converters:ValidityToTextConverter x:Key="ValidityToTextConverter" />
-        <converters:ValidityToTooltipConverter x:Key="ValidityToTooltipConverter" />
-        <converters:ValidityToBackgroundBrushConverter x:Key="ValidityToBackgroundBrushConverter" />
-        <converters:ValidityToForegroundBrushConverter x:Key="ValidityToForegroundBrushConverter" />
-        <converters:ValidityToVisibilityConverter x:Key="ValidityToVisibilityConverter" />
+        <converters:ValidityStatusToBrushConverter x:Key="StatusToBrush" />
+        <converters:NullToCollapsedConverter x:Key="NullToCollapsed" />
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="16" ColumnSpacing="24">
@@ -258,36 +255,64 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="4">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
+
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="32" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border
+                                            Grid.Column="0"
+                                            Width="24"
+                                            Height="24"
+                                            CornerRadius="6"
+                                            Background="{x:Bind ValidityStatus, Converter={StaticResource StatusToBrush}}"
+                                            Visibility="{x:Bind DaysRemaining, Converter={StaticResource NullToCollapsed}}">
+                                            <Border.ToolTipService.ToolTip>
+                                                <ToolTip>
+                                                    <TextBlock>
+                                                        <Run Text="Platné: " />
+                                                        <Run Text="{x:Bind ValidFrom, Mode=OneWay, StringFormat='{}{0:dd.MM.yyyy}'}" />
+                                                        <Run Text=" – " />
+                                                        <Run Text="{x:Bind ValidTo, Mode=OneWay, StringFormat='{}{0:dd.MM.yyyy}'}" />
+                                                        <Run Text=" (" />
+                                                        <Run Text="{x:Bind DaysRemaining}" />
+                                                        <Run Text=" dní zbývá)" />
+                                                    </TextBlock>
+                                                </ToolTip>
+                                            </Border.ToolTipService.ToolTip>
+                                            <AutomationProperties.Name>
+                                                <x:Bind
+                                                    Mode="OneWay"
+                                                    Path="string.Format(&quot;Platnost: {0:dd.MM.yyyy} – {1:dd.MM.yyyy}, zbývá {2} dní&quot;, ValidFrom, ValidTo, DaysRemaining ?? 0)" />
+                                            </AutomationProperties.Name>
+                                            <TextBlock
+                                                Text="{x:Bind DaysRemaining}"
+                                                VerticalAlignment="Center"
+                                                HorizontalAlignment="Center"
+                                                FontWeight="SemiBold"
+                                                FontSize="12"
+                                                Foreground="White" />
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" Spacing="4">
                                             <TextBlock
                                                 Text="{x:Bind Dto.Name}"
                                                 FontWeight="SemiBold"
                                                 TextWrapping="Wrap"
                                                 VerticalAlignment="Center" />
-                                            <Border
-                                                Padding="6,2"
-                                                CornerRadius="4"
-                                                VerticalAlignment="Center"
-                                                Visibility="{x:Bind ValidityState, Converter={StaticResource ValidityToVisibilityConverter}}"
-                                                Background="{x:Bind ValidityState, Converter={StaticResource ValidityToBackgroundBrushConverter}}"
-                                                ToolTipService.ToolTip="{x:Bind ValidityState, Converter={StaticResource ValidityToTooltipConverter}, ConverterParameter=ValidityTooltipContext}">
-                                                <TextBlock
-                                                    Text="{x:Bind ValidityState, Converter={StaticResource ValidityToTextConverter}, ConverterParameter=ValidityDaysRemaining}"
-                                                    FontSize="12"
-                                                    Foreground="{x:Bind ValidityState, Converter={StaticResource ValidityToForegroundBrushConverter}}"
-                                                    TextWrapping="WrapWholeWords" />
-                                            </Border>
+                                            <TextBlock
+                                                Text="{x:Bind Dto.Mime}"
+                                                FontSize="12"
+                                                Opacity="0.7"
+                                                TextTrimming="CharacterEllipsis" />
+                                            <TextBlock
+                                                Text="{x:Bind Dto.Size, Converter={StaticResource SizeToHumanConverter}}"
+                                                FontSize="12" />
                                         </StackPanel>
-                                        <TextBlock
-                                            Text="{x:Bind Dto.Mime}"
-                                            FontSize="12"
-                                            Opacity="0.7"
-                                            TextTrimming="CharacterEllipsis" />
-                                        <TextBlock
-                                            Text="{x:Bind Dto.Size, Converter={StaticResource SizeToHumanConverter}}"
-                                            FontSize="12" />
-                                    </StackPanel>
+                                    </Grid>
+
                                     <Button
                                         x:Uid="FilesPage_ItemDetailButton"
                                         Grid.Column="1"

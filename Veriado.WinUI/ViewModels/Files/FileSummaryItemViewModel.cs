@@ -4,108 +4,91 @@ using Veriado.Contracts.Files;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
-public enum ValidityState
+public enum ValidityStatus
 {
     None,
+    Ok,
+    Upcoming,
+    Soon,
     Expired,
-    ExpiringToday,
-    ExpiringSoon,
-    ExpiringLater,
-    LongTerm,
 }
-
-public readonly record struct ValidityTooltipContext(DateTimeOffset? IssuedAt, DateTimeOffset? ValidUntil);
 
 public partial class FileSummaryItemViewModel : ObservableObject
 {
     public FileSummaryItemViewModel(FileSummaryDto dto, DateTimeOffset referenceTime)
     {
         Dto = dto ?? throw new ArgumentNullException(nameof(dto));
-        UpdateValidity(referenceTime);
+        RecomputeValidity(referenceTime);
     }
 
     public FileSummaryDto Dto { get; }
 
-    public bool HasValidity => ValidityState != ValidityState.None;
+    public bool HasValidity => ValidFrom.HasValue && ValidTo.HasValue;
 
-    public ValidityTooltipContext ValidityTooltipContext => new(ValidityIssuedAt, ValidityValidUntil);
-
-    [ObservableProperty]
-    private ValidityState validityState;
-
-    [ObservableProperty]
-    private int? validityDaysRemaining;
-
-    [ObservableProperty]
-    private DateTimeOffset? validityIssuedAt;
-
-    [ObservableProperty]
-    private DateTimeOffset? validityValidUntil;
-
-    public void UpdateValidity(DateTimeOffset referenceTime)
+    private DateTimeOffset? _validFrom;
+    public DateTimeOffset? ValidFrom
     {
-        if (Dto.Validity is { } validity
-            && validity.ValidUntil >= validity.IssuedAt)
+        get => _validFrom;
+        private set
         {
-            var issuedAt = validity.IssuedAt.ToLocalTime();
-            var validUntil = validity.ValidUntil.ToLocalTime();
-
-            ValidityIssuedAt = issuedAt;
-            ValidityValidUntil = validUntil;
-
-            var referenceDate = referenceTime.ToLocalTime().Date;
-            var validUntilDate = validUntil.Date;
-            var daysRemaining = (validUntilDate - referenceDate).Days;
-
-            ValidityDaysRemaining = daysRemaining;
-            ValidityState = DetermineState(daysRemaining);
-        }
-        else
-        {
-            ValidityIssuedAt = null;
-            ValidityValidUntil = null;
-            ValidityDaysRemaining = null;
-            ValidityState = ValidityState.None;
+            if (SetProperty(ref _validFrom, value))
+            {
+                OnPropertyChanged(nameof(HasValidity));
+            }
         }
     }
 
-    private static ValidityState DetermineState(int daysRemaining)
+    private DateTimeOffset? _validTo;
+    public DateTimeOffset? ValidTo
     {
-        if (daysRemaining < 0)
+        get => _validTo;
+        private set
         {
-            return ValidityState.Expired;
+            if (SetProperty(ref _validTo, value))
+            {
+                OnPropertyChanged(nameof(HasValidity));
+            }
         }
-
-        if (daysRemaining == 0)
-        {
-            return ValidityState.ExpiringToday;
-        }
-
-        if (daysRemaining <= 7)
-        {
-            return ValidityState.ExpiringSoon;
-        }
-
-        if (daysRemaining <= 30)
-        {
-            return ValidityState.ExpiringLater;
-        }
-
-        return ValidityState.LongTerm;
     }
 
-    partial void OnValidityStateChanged(ValidityState value)
+    private int? _daysRemaining;
+    public int? DaysRemaining
     {
-        OnPropertyChanged(nameof(HasValidity));
+        get => _daysRemaining;
+        private set => SetProperty(ref _daysRemaining, value);
     }
 
-    partial void OnValidityIssuedAtChanged(DateTimeOffset? value)
+    private ValidityStatus _validityStatus;
+    public ValidityStatus ValidityStatus
     {
-        OnPropertyChanged(nameof(ValidityTooltipContext));
+        get => _validityStatus;
+        private set => SetProperty(ref _validityStatus, value);
     }
 
-    partial void OnValidityValidUntilChanged(DateTimeOffset? value)
+    public void RecomputeValidity(DateTimeOffset now)
     {
-        OnPropertyChanged(nameof(ValidityTooltipContext));
+        if (Dto.Validity is not { } validity || validity.ValidUntil < validity.IssuedAt)
+        {
+            ValidFrom = null;
+            ValidTo = null;
+            DaysRemaining = null;
+            ValidityStatus = ValidityStatus.None;
+            return;
+        }
+
+        var validFrom = validity.IssuedAt.ToLocalTime();
+        var validTo = validity.ValidUntil.ToLocalTime();
+
+        ValidFrom = validFrom;
+        ValidTo = validTo;
+
+        var referenceDate = now.ToLocalTime().Date;
+        var days = (validTo.Date - referenceDate).Days;
+        DaysRemaining = days;
+
+        ValidityStatus = days <= 0 ? ValidityStatus.Expired
+                       : days <= 7 ? ValidityStatus.Soon
+                       : days <= 30 ? ValidityStatus.Upcoming
+                       : ValidityStatus.Ok;
     }
 }

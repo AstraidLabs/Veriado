@@ -204,10 +204,14 @@ public partial class FilesPageViewModel : ViewModelBase
 
     public void RefreshValidityStates()
     {
-        var referenceTime = _serverClock.NowLocal;
+        RefreshValidityStates(_serverClock.NowLocal);
+    }
+
+    public void RefreshValidityStates(DateTimeOffset referenceTime)
+    {
         foreach (var item in Items)
         {
-            item.UpdateValidity(referenceTime);
+            item.RecomputeValidity(referenceTime);
         }
     }
 
@@ -427,6 +431,7 @@ public partial class FilesPageViewModel : ViewModelBase
                     Items.Add(new FileSummaryItemViewModel(item, referenceTime));
                 }
 
+                RefreshValidityStates(referenceTime);
                 UpdateSelection(result.Items);
                 UpdatePaginationState(result.Page, result.TotalPages, result.TotalCount, result.Items.Count);
             }).ConfigureAwait(false);
