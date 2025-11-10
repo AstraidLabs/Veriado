@@ -194,7 +194,7 @@ public sealed partial class FilesPage : Page
         var now = _serverClock.NowLocal;
         foreach (var item in e.NewItems.OfType<FileListItemModel>())
         {
-            item.RecomputeValidity(now);
+            item.RecomputeValidity(now, ViewModel.ValidityThresholds);
         }
     }
 }

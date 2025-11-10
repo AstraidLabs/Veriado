@@ -1,5 +1,6 @@
 using System;
 using Veriado.WinUI.Helpers;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -14,14 +15,18 @@ public enum ValidityStatus
 
 public sealed class ValidityInfo
 {
-    public ValidityInfo(DateTimeOffset? validFrom, DateTimeOffset? validTo, DateTimeOffset referenceTime)
+    public ValidityInfo(
+        DateTimeOffset? validFrom,
+        DateTimeOffset? validTo,
+        DateTimeOffset referenceTime,
+        ValidityThresholds thresholds)
     {
         HasValidity = validFrom.HasValue && validTo.HasValue;
         DaysRemaining = HasValidity ? ValidityHelper.ComputeDaysRemaining(referenceTime, validTo) : null;
         DaysRemainingDisplay = DaysRemaining.HasValue
             ? CzechPluralization.FormatDays(DaysRemaining.Value)
             : null;
-        Status = ValidityHelper.ComputeStatus(DaysRemaining);
+        Status = ValidityHelper.ComputeStatus(DaysRemaining, thresholds);
         Tooltip = ValidityHelper.BuildTooltip(validFrom, validTo, DaysRemaining);
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -45,6 +46,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
     private CancellationTokenSource? _detailLoadSource;
+    private ValidityThresholds _validityThresholds;
 
     public FilesPageViewModel(
         IFileQueryService fileQueryService,
@@ -85,7 +87,14 @@ public partial class FilesPageViewModel : ViewModelBase
 
         PageSize = Math.Clamp(_hotStateService.PageSize <= 0 ? DefaultPageSize : _hotStateService.PageSize, 1, 200);
         SearchText = _hotStateService.LastQuery;
+        _validityThresholds = _hotStateService.ValidityThresholds;
+        if (_hotStateService is INotifyPropertyChanged observable)
+        {
+            observable.PropertyChanged += OnHotStatePropertyChanged;
+        }
     }
+
+    public ValidityThresholds ValidityThresholds => _validityThresholds;
 
     public ObservableCollection<FileListItemModel> Items { get; }
 
@@ -219,7 +228,7 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         foreach (var item in Items)
         {
-            item.RecomputeValidity(referenceTime);
+            item.RecomputeValidity(referenceTime, _validityThresholds);
         }
     }
 
@@ -436,7 +445,7 @@ public partial class FilesPageViewModel : ViewModelBase
                 Items.Clear();
                 foreach (var item in result.Items)
                 {
-                    Items.Add(new FileListItemModel(item, referenceTime));
+                    Items.Add(new FileListItemModel(item, referenceTime, _validityThresholds));
                 }
 
                 RefreshValidityStates(referenceTime);
@@ -517,6 +526,22 @@ public partial class FilesPageViewModel : ViewModelBase
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+    }
+
+    private void OnHotStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IHotStateService.ValidityRedThresholdDays)
+            or nameof(IHotStateService.ValidityOrangeThresholdDays)
+            or nameof(IHotStateService.ValidityGreenThresholdDays)
+            or nameof(IHotStateService.ValidityThresholds))
+        {
+            var updated = _hotStateService.ValidityThresholds;
+            if (updated != _validityThresholds)
+            {
+                _validityThresholds = updated;
+                RefreshValidityStates(_serverClock.NowLocal);
+            }
+        }
     }
 
     private async Task MonitorHealthStatusAsync(CancellationToken cancellationToken)

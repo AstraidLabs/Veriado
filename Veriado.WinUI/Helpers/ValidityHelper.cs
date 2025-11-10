@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Files;
 
 namespace Veriado.WinUI.Helpers;
@@ -16,17 +17,31 @@ public static class ValidityHelper
         return (validTo.Value.Date - now.Date).Days;
     }
 
-    public static ValidityStatus ComputeStatus(int? daysRemaining)
+    public static ValidityStatus ComputeStatus(int? daysRemaining, ValidityThresholds thresholds)
     {
         if (!daysRemaining.HasValue)
         {
             return ValidityStatus.None;
         }
 
-        return daysRemaining.Value <= 0 ? ValidityStatus.Expired
-            : daysRemaining.Value <= 7 ? ValidityStatus.Soon
-            : daysRemaining.Value <= 30 ? ValidityStatus.Upcoming
-            : ValidityStatus.Ok;
+        var days = daysRemaining.Value;
+
+        if (days <= 0)
+        {
+            return ValidityStatus.Expired;
+        }
+
+        if (days <= thresholds.RedDays)
+        {
+            return ValidityStatus.Soon;
+        }
+
+        if (days <= thresholds.OrangeDays)
+        {
+            return ValidityStatus.Upcoming;
+        }
+
+        return ValidityStatus.Ok;
     }
 
     public static string? BuildTooltip(DateTimeOffset? from, DateTimeOffset? to, int? days)
