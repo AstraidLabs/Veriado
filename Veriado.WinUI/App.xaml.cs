@@ -2,10 +2,13 @@ using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.WinUI.Helpers;
+using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
 
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using WinUIApplication = Microsoft.UI.Xaml.Application;
 using WinUIWindow = Microsoft.UI.Xaml.Window;
@@ -19,6 +22,8 @@ public partial class App : WinUIApplication
         .CreateLogger<App>();
 
     private AppHost? _appHost;
+    private AppWindow? _appWindow;
+    private IShutdownOrchestrator? _shutdownOrchestrator;
 
     public App()
     {
@@ -95,10 +100,18 @@ public partial class App : WinUIApplication
             var themeService = services.GetRequiredService<IThemeService>();
             await themeService.InitializeAsync().ConfigureAwait(true);
 
+            _shutdownOrchestrator = services.GetRequiredService<IShutdownOrchestrator>();
+
             shell.Activate();
             shell.Closed += OnWindowClosed;
 
             MainWindow = shell;
+
+            _appWindow = shell.TryGetAppWindow();
+            if (_appWindow is not null)
+            {
+                _appWindow.Closing += OnAppWindowClosing;
+            }
 
             return true;
         }
@@ -140,20 +153,70 @@ public partial class App : WinUIApplication
         (logger ?? BootstrapLogger).LogError(exception, "Application startup failed.");
     }
 
-    private async void OnWindowClosed(object sender, WindowEventArgs e)
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        var deferral = args.GetDeferral();
+
+        try
+        {
+            var orchestrator = _shutdownOrchestrator;
+            if (orchestrator is null)
+            {
+                args.Cancel = false;
+                return;
+            }
+
+            var result = await orchestrator
+                .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
+                .ConfigureAwait(true);
+
+            args.Cancel = !result.IsAllowed;
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
+            args.Cancel = false;
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
+
+    private void OnWindowClosed(object sender, WindowEventArgs e)
     {
         if (sender is Window window)
         {
             window.Closed -= OnWindowClosed;
         }
 
-        if (_appHost is not null)
+        if (_appWindow is not null)
         {
-            await _appHost.DisposeAsync().ConfigureAwait(false);
-            _appHost = null;
+            _appWindow.Closing -= OnAppWindowClosing;
+            _appWindow = null;
+        }
+
+        var host = _appHost;
+        _appHost = null;
+
+        if (host is not null)
+        {
+            _ = DisposeHostAsync(host);
         }
 
         MainWindow = null;
+    }
+
+    private static async Task DisposeHostAsync(AppHost host)
+    {
+        try
+        {
+            await host.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogError(ex, "Best-effort host disposal failed after window closed.");
+        }
     }
 
     private sealed class DebugLoggerProvider : ILoggerProvider
