@@ -24,6 +24,7 @@ public partial class App : WinUIApplication
     private AppHost? _appHost;
     private AppWindow? _appWindow;
     private IShutdownOrchestrator? _shutdownOrchestrator;
+    private bool _isAppWindowShutdownInProgress;
 
     public App()
     {
@@ -110,6 +111,7 @@ public partial class App : WinUIApplication
             _appWindow = shell.TryGetAppWindow();
             if (_appWindow is not null)
             {
+                _isAppWindowShutdownInProgress = false;
                 _appWindow.Closing += OnAppWindowClosing;
             }
 
@@ -153,33 +155,45 @@ public partial class App : WinUIApplication
         (logger ?? BootstrapLogger).LogError(exception, "Application startup failed.");
     }
 
-    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        var deferral = args.GetDeferral();
-
-        try
+        if (_isAppWindowShutdownInProgress)
         {
-            var orchestrator = _shutdownOrchestrator;
-            if (orchestrator is null)
-            {
-                args.Cancel = false;
-                return;
-            }
-
-            var result = await orchestrator
-                .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
-                .ConfigureAwait(true);
-
-            args.Cancel = !result.IsAllowed;
-        }
-        catch (Exception ex)
-        {
-            BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
             args.Cancel = false;
+            return;
         }
-        finally
+
+        var orchestrator = _shutdownOrchestrator;
+        if (orchestrator is null)
         {
-            deferral.Complete();
+            args.Cancel = false;
+            return;
+        }
+
+        args.Cancel = true;
+
+        HandleAppWindowClosingAsync(sender, orchestrator);
+
+        async void HandleAppWindowClosingAsync(AppWindow window, IShutdownOrchestrator shutdownOrchestrator)
+        {
+            try
+            {
+                var result = await shutdownOrchestrator
+                    .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
+                    .ConfigureAwait(true);
+
+                if (result.IsAllowed)
+                {
+                    _isAppWindowShutdownInProgress = true;
+                    window.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
+                _isAppWindowShutdownInProgress = true;
+                window.Close();
+            }
         }
     }
 
