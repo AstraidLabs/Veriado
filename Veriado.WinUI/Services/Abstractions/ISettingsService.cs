@@ -12,6 +12,9 @@ public interface ISettingsService
 public sealed class AppSettings
 {
     public const int DefaultPageSize = 50;
+    public const int DefaultValidityRedThresholdDays = 0;
+    public const int DefaultValidityOrangeThresholdDays = 7;
+    public const int DefaultValidityGreenThresholdDays = 30;
 
     public AppTheme Theme { get; set; } = AppTheme.Default;
 
@@ -24,6 +27,8 @@ public sealed class AppSettings
         = null;
 
     public ImportPreferences Import { get; set; } = new();
+
+    public ValidityPreferences Validity { get; set; } = new();
 }
 
 public sealed class ImportPreferences
@@ -50,5 +55,17 @@ public sealed class ImportPreferences
         = null;
 
     public bool? AutoExportLog { get; set; }
+        = null;
+}
+
+public sealed class ValidityPreferences
+{
+    public int? RedThresholdDays { get; set; }
+        = null;
+
+    public int? OrangeThresholdDays { get; set; }
+        = null;
+
+    public int? GreenThresholdDays { get; set; }
         = null;
 }

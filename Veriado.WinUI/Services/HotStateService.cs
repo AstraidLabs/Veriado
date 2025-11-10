@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 
@@ -9,6 +10,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     private readonly ILogger<HotStateService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _initialized;
+    private ValidityThresholds _validityThresholds = ValidityThresholds.Default;
 
     [ObservableProperty]
     private string? lastQuery;
@@ -43,6 +45,26 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     [ObservableProperty]
     private bool importAutoExportLog;
 
+    public ValidityThresholds ValidityThresholds => _validityThresholds;
+
+    public int ValidityRedThresholdDays
+    {
+        get => _validityThresholds.RedDays;
+        set => UpdateValidityThresholds(red: value);
+    }
+
+    public int ValidityOrangeThresholdDays
+    {
+        get => _validityThresholds.OrangeDays;
+        set => UpdateValidityThresholds(orange: value);
+    }
+
+    public int ValidityGreenThresholdDays
+    {
+        get => _validityThresholds.GreenDays;
+        set => UpdateValidityThresholds(green: value);
+    }
+
     public HotStateService(
         ISettingsService settingsService,
         IStatusService statusService,
@@ -76,6 +98,13 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                 ? import.MaxFileSizeMegabytes
                 : null;
             importAutoExportLog = import.AutoExportLog ?? false;
+
+            var validity = settings.Validity ?? new ValidityPreferences();
+            var normalizedThresholds = ValidityThresholds.Normalize(
+                validity.RedThresholdDays ?? AppSettings.DefaultValidityRedThresholdDays,
+                validity.OrangeThresholdDays ?? AppSettings.DefaultValidityOrangeThresholdDays,
+                validity.GreenThresholdDays ?? AppSettings.DefaultValidityGreenThresholdDays);
+            SetValidityThresholds(normalizedThresholds, persist: false);
 
             OnPropertyChanged(nameof(ImportRecursive));
             OnPropertyChanged(nameof(ImportKeepFsMetadata));
@@ -142,6 +171,35 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         PersistAsync();
     }
 
+    private void UpdateValidityThresholds(int? red = null, int? orange = null, int? green = null)
+    {
+        var normalized = ValidityThresholds.Normalize(
+            red ?? _validityThresholds.RedDays,
+            orange ?? _validityThresholds.OrangeDays,
+            green ?? _validityThresholds.GreenDays);
+
+        SetValidityThresholds(normalized, persist: true);
+    }
+
+    private void SetValidityThresholds(ValidityThresholds thresholds, bool persist)
+    {
+        if (_validityThresholds == thresholds)
+        {
+            return;
+        }
+
+        _validityThresholds = thresholds;
+        OnPropertyChanged(nameof(ValidityThresholds));
+        OnPropertyChanged(nameof(ValidityRedThresholdDays));
+        OnPropertyChanged(nameof(ValidityOrangeThresholdDays));
+        OnPropertyChanged(nameof(ValidityGreenThresholdDays));
+
+        if (persist)
+        {
+            PersistAsync();
+        }
+    }
+
     private void PersistAsync()
     {
         if (!_initialized)
@@ -193,6 +251,11 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                         ? ImportMaxFileSizeMegabytes
                         : null;
                     settings.Import.AutoExportLog = ImportAutoExportLog;
+
+                    settings.Validity ??= new ValidityPreferences();
+                    settings.Validity.RedThresholdDays = ValidityRedThresholdDays;
+                    settings.Validity.OrangeThresholdDays = ValidityOrangeThresholdDays;
+                    settings.Validity.GreenThresholdDays = ValidityGreenThresholdDays;
                 }).ConfigureAwait(false);
             }
             finally

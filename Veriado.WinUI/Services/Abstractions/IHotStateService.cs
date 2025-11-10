@@ -24,5 +24,13 @@ public interface IHotStateService
 
     bool ImportAutoExportLog { get; set; }
 
+    ValidityThresholds ValidityThresholds { get; }
+
+    int ValidityRedThresholdDays { get; set; }
+
+    int ValidityOrangeThresholdDays { get; set; }
+
+    int ValidityGreenThresholdDays { get; set; }
+
     Task InitializeAsync(CancellationToken cancellationToken = default);
 }

@@ -25,6 +25,29 @@
             PlaceholderText="Cesta ke složce"
             Text="{Binding LastFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
+        <TextBlock Text="Platnost dokumentů" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0" />
+
+        <controls:NumberBox
+            Header="Červený odznak (dní)"
+            Minimum="0"
+            SmallChange="1"
+            SpinButtonPlacementMode="Compact"
+            Value="{Binding ValidityRedThreshold, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+        <controls:NumberBox
+            Header="Oranžový odznak (dní)"
+            Minimum="0"
+            SmallChange="1"
+            SpinButtonPlacementMode="Compact"
+            Value="{Binding ValidityOrangeThreshold, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+        <controls:NumberBox
+            Header="Zelený odznak (dní)"
+            Minimum="0"
+            SmallChange="1"
+            SpinButtonPlacementMode="Compact"
+            Value="{Binding ValidityGreenThreshold, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
         <Button Content="Použít motiv" Command="{Binding ApplyThemeCommand}" />
     </StackPanel>
 </Page>

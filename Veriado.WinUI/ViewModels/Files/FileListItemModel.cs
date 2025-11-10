@@ -1,11 +1,14 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Veriado.Contracts.Files;
+using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
 public sealed partial class FileListItemModel : ObservableObject
 {
+    private ValidityThresholds _validityThresholds;
+
     private static (DateTimeOffset? from, DateTimeOffset? to) NormalizeValidity(FileValidityDto? validity)
     {
         if (validity is null)
@@ -24,13 +27,14 @@ public sealed partial class FileListItemModel : ObservableObject
         return (validFrom, validTo);
     }
 
-    public FileListItemModel(FileSummaryDto dto, DateTimeOffset referenceTime)
+    public FileListItemModel(FileSummaryDto dto, DateTimeOffset referenceTime, ValidityThresholds thresholds)
     {
         Dto = dto ?? throw new ArgumentNullException(nameof(dto));
         var (from, to) = NormalizeValidity(dto.Validity);
         ValidFrom = from;
         ValidTo = to;
-        Validity = new ValidityInfo(ValidFrom, ValidTo, referenceTime);
+        _validityThresholds = thresholds;
+        Validity = new ValidityInfo(ValidFrom, ValidTo, referenceTime, _validityThresholds);
     }
 
     public FileSummaryDto Dto { get; }
@@ -47,8 +51,13 @@ public sealed partial class FileListItemModel : ObservableObject
         private set => SetProperty(ref _validity, value);
     }
 
-    public void RecomputeValidity(DateTimeOffset referenceTime)
+    public void RecomputeValidity(DateTimeOffset referenceTime, ValidityThresholds? thresholds = null)
     {
-        Validity = new ValidityInfo(ValidFrom, ValidTo, referenceTime);
+        if (thresholds.HasValue)
+        {
+            _validityThresholds = thresholds.Value;
+        }
+
+        Validity = new ValidityInfo(ValidFrom, ValidTo, referenceTime, _validityThresholds);
     }
 }
