@@ -185,14 +185,14 @@ public partial class App : WinUIApplication
                 if (result.IsAllowed)
                 {
                     _isAppWindowShutdownInProgress = true;
-                    window.Close();
+                    MainWindow?.Close();
                 }
             }
             catch (Exception ex)
             {
                 BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
                 _isAppWindowShutdownInProgress = true;
-                window.Close();
+                MainWindow?.Close();
             }
         }
     }
