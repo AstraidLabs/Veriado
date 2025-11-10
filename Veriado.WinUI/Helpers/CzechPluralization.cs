@@ -14,6 +14,11 @@ internal static class CzechPluralization
         var absoluteValue = Math.Abs(days);
         var remainder100 = absoluteValue % 100;
 
+        if (absoluteValue == 1)
+        {
+            return "den";
+        }
+
         if (remainder100 is >= 11 and <= 14)
         {
             return "dní";
@@ -21,7 +26,6 @@ internal static class CzechPluralization
 
         return (absoluteValue % 10) switch
         {
-            1 => "den",
             2 or 3 or 4 => "dny",
             _ => "dní",
         };
