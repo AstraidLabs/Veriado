@@ -1,3 +1,5 @@
+using Veriado.Contracts.Files;
+
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IHotStateService
