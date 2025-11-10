@@ -20,7 +20,7 @@ public static class FileValidityHelper
     /// <returns><see langword="true"/> if the badge represents a valid window; otherwise <see langword="false"/>.</returns>
     public static bool TryGetBadge(FileValidityDto? validity, DateTimeOffset referenceTime, out FileValidityBadge badge)
     {
-        return TryGetBadge(validity, referenceTime, ValidityThresholds.Default, out badge);
+        return TryGetBadge(validity, referenceTime, AppSettings.CreateDefaultValidityThresholds(), out badge);
     }
 
     /// <summary>
@@ -44,15 +44,20 @@ public static class FileValidityHelper
             return false;
         }
 
-        var referenceDate = referenceTime.ToLocalTime().Date;
-        var validUntilDate = validity.ValidUntil.ToLocalTime().Date;
-        var daysRemaining = (validUntilDate - referenceDate).Days;
-        var status = DetermineStatus(daysRemaining, thresholds);
-        var text = CreateText(status, daysRemaining);
-        var background = SelectBackground(status, daysRemaining, thresholds);
-        var foreground = SelectForeground(status, daysRemaining, thresholds);
+        var daysRemaining = ValidityComputation.ComputeDaysRemaining(referenceTime, validity.ValidUntil);
+        if (!daysRemaining.HasValue)
+        {
+            badge = FileValidityBadge.None;
+            return false;
+        }
 
-        badge = new FileValidityBadge(status, daysRemaining, text, background, foreground);
+        var days = daysRemaining.Value;
+        var status = ValidityComputation.ComputeStatus(daysRemaining, thresholds);
+        var text = CreateText(status, days);
+        var background = SelectBackground(status);
+        var foreground = SelectForeground(status);
+
+        badge = new FileValidityBadge(status, days, text, background, foreground);
         return true;
     }
 
@@ -64,7 +69,7 @@ public static class FileValidityHelper
     /// <returns>The computed badge metadata.</returns>
     public static FileValidityBadge GetBadge(FileValidityDto? validity, DateTimeOffset referenceTime)
     {
-        return GetBadge(validity, referenceTime, ValidityThresholds.Default);
+        return GetBadge(validity, referenceTime, AppSettings.CreateDefaultValidityThresholds());
     }
 
     /// <summary>
@@ -83,34 +88,9 @@ public static class FileValidityHelper
         return badge;
     }
 
-    private static FileValidityStatus DetermineStatus(int daysRemaining, ValidityThresholds thresholds)
+    private static string CreateText(ValidityStatus status, int daysRemaining)
     {
-        if (daysRemaining < 0)
-        {
-            return FileValidityStatus.Expired;
-        }
-
-        if (daysRemaining <= thresholds.RedDays)
-        {
-            return FileValidityStatus.ExpiringToday;
-        }
-
-        if (daysRemaining <= thresholds.OrangeDays)
-        {
-            return FileValidityStatus.ExpiringSoon;
-        }
-
-        if (daysRemaining <= thresholds.GreenDays)
-        {
-            return FileValidityStatus.ExpiringLater;
-        }
-
-        return FileValidityStatus.LongTerm;
-    }
-
-    private static string CreateText(FileValidityStatus status, int daysRemaining)
-    {
-        if (status == FileValidityStatus.None)
+        if (status == ValidityStatus.None)
         {
             return string.Empty;
         }
@@ -125,36 +105,29 @@ public static class FileValidityHelper
             return "Dnes končí";
         }
 
-        return status switch
-        {
-            _ => $"Zbývá {CzechPluralization.FormatDays(daysRemaining)}",
-        };
+        return $"Zbývá {CzechPluralization.FormatDays(daysRemaining)}";
     }
 
-    private static Brush SelectBackground(FileValidityStatus status, int daysRemaining, ValidityThresholds thresholds)
+    private static Brush SelectBackground(ValidityStatus status)
     {
         return status switch
         {
-            FileValidityStatus.Expired => AppColorPalette.ValidityExpiredBackgroundBrush,
-            FileValidityStatus.ExpiringToday => AppColorPalette.ValidityExpiredBackgroundBrush,
-            FileValidityStatus.ExpiringSoon when daysRemaining <= thresholds.RedDays
-                => AppColorPalette.ValidityExpiredBackgroundBrush,
-            FileValidityStatus.ExpiringSoon => AppColorPalette.ValidityExpiringSoonBackgroundBrush,
-            FileValidityStatus.ExpiringLater => AppColorPalette.ValidityExpiringLaterBackgroundBrush,
-            FileValidityStatus.LongTerm => AppColorPalette.ValidityLongTermBackgroundBrush,
+            ValidityStatus.Expired => AppColorPalette.ValidityExpiredBackgroundBrush,
+            ValidityStatus.ExpiringToday => AppColorPalette.ValidityExpiredBackgroundBrush,
+            ValidityStatus.ExpiringSoon => AppColorPalette.ValidityExpiringSoonBackgroundBrush,
+            ValidityStatus.ExpiringLater => AppColorPalette.ValidityExpiringLaterBackgroundBrush,
+            ValidityStatus.LongTerm => AppColorPalette.ValidityLongTermBackgroundBrush,
             _ => AppColorPalette.ValidityLongTermBackgroundBrush,
         };
     }
 
-    private static Brush SelectForeground(FileValidityStatus status, int daysRemaining, ValidityThresholds thresholds)
+    private static Brush SelectForeground(ValidityStatus status)
     {
         return status switch
         {
-            FileValidityStatus.Expired => AppColorPalette.ValidityLightForegroundBrush,
-            FileValidityStatus.ExpiringToday => AppColorPalette.ValidityLightForegroundBrush,
-            FileValidityStatus.ExpiringSoon when daysRemaining <= thresholds.RedDays
-                => AppColorPalette.ValidityLightForegroundBrush,
-            FileValidityStatus.ExpiringSoon => AppColorPalette.ValidityLightForegroundBrush,
+            ValidityStatus.Expired => AppColorPalette.ValidityLightForegroundBrush,
+            ValidityStatus.ExpiringToday => AppColorPalette.ValidityLightForegroundBrush,
+            ValidityStatus.ExpiringSoon => AppColorPalette.ValidityLightForegroundBrush,
             _ => AppColorPalette.ValidityDarkForegroundBrush,
         };
     }
@@ -169,7 +142,7 @@ public static class FileValidityHelper
 /// <param name="Background">The brush used for the badge background.</param>
 /// <param name="Foreground">The brush used for the badge foreground.</param>
 public sealed record FileValidityBadge(
-    FileValidityStatus Status,
+    ValidityStatus Status,
     int? DaysRemaining,
     string Text,
     Brush Background,
@@ -178,51 +151,15 @@ public sealed record FileValidityBadge(
     /// <summary>
     /// Gets a value indicating whether the badge represents a defined validity range.
     /// </summary>
-    public bool HasValidity => Status != FileValidityStatus.None;
+    public bool HasValidity => Status != ValidityStatus.None;
 
     /// <summary>
     /// Gets the placeholder badge used when no validity information is available.
     /// </summary>
     public static FileValidityBadge None { get; } = new(
-        FileValidityStatus.None,
+        ValidityStatus.None,
         null,
         string.Empty,
         AppColorPalette.ValidityLongTermBackgroundBrush,
         AppColorPalette.ValidityDarkForegroundBrush);
-}
-
-/// <summary>
-/// Enumerates the possible validity statuses used for UI rendering.
-/// </summary>
-public enum FileValidityStatus
-{
-    /// <summary>
-    /// No validity information is available.
-    /// </summary>
-    None,
-
-    /// <summary>
-    /// The document validity has already expired.
-    /// </summary>
-    Expired,
-
-    /// <summary>
-    /// The document expires within the configured red threshold.
-    /// </summary>
-    ExpiringToday,
-
-    /// <summary>
-    /// The document expires within the configured orange threshold.
-    /// </summary>
-    ExpiringSoon,
-
-    /// <summary>
-    /// The document expires within the configured green threshold.
-    /// </summary>
-    ExpiringLater,
-
-    /// <summary>
-    /// The document validity extends beyond the configured green threshold.
-    /// </summary>
-    LongTerm,
 }

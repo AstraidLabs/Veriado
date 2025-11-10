@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Veriado.Contracts.Files;
 using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
@@ -10,7 +11,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     private readonly ILogger<HotStateService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _initialized;
-    private ValidityThresholds _validityThresholds = ValidityThresholds.Default;
+    private ValidityThresholds _validityThresholds = AppSettings.CreateDefaultValidityThresholds();
 
     [ObservableProperty]
     private string? lastQuery;
@@ -100,10 +101,11 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             importAutoExportLog = import.AutoExportLog ?? false;
 
             var validity = settings.Validity ?? new ValidityPreferences();
+            var defaults = AppSettings.CreateDefaultValidityThresholds();
             var normalizedThresholds = ValidityThresholds.Normalize(
-                validity.RedThresholdDays ?? AppSettings.DefaultValidityRedThresholdDays,
-                validity.OrangeThresholdDays ?? AppSettings.DefaultValidityOrangeThresholdDays,
-                validity.GreenThresholdDays ?? AppSettings.DefaultValidityGreenThresholdDays);
+                validity.RedThresholdDays ?? defaults.RedDays,
+                validity.OrangeThresholdDays ?? defaults.OrangeDays,
+                validity.GreenThresholdDays ?? defaults.GreenDays);
             SetValidityThresholds(normalizedThresholds, persist: false);
 
             OnPropertyChanged(nameof(ImportRecursive));

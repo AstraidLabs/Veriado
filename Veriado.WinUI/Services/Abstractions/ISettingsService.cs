@@ -1,3 +1,5 @@
+using Veriado.Contracts.Files;
+
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface ISettingsService
@@ -15,6 +17,12 @@ public sealed class AppSettings
     public const int DefaultValidityRedThresholdDays = 0;
     public const int DefaultValidityOrangeThresholdDays = 7;
     public const int DefaultValidityGreenThresholdDays = 30;
+
+    public static ValidityThresholds CreateDefaultValidityThresholds() =>
+        ValidityThresholds.Normalize(
+            DefaultValidityRedThresholdDays,
+            DefaultValidityOrangeThresholdDays,
+            DefaultValidityGreenThresholdDays);
 
     public AppTheme Theme { get; set; } = AppTheme.Default;
 
