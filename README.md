@@ -1,70 +1,155 @@
 # Veriado
 
-Veriado je desktopová aplikace pro katalogizaci dokumentů s plnotextovým vyhledáváním. WinUI klient běží nad aplikační vrstvou postavenou na MediatR, ukládá metadata do SQLite a udržuje FTS5 index. Tento přehled shrnuje hlavní schopnosti řešení, architekturu a kroky potřebné pro lokální spuštění.
+> "Pořádek v dokumentech, klid v práci."
 
-## Klíčové funkce
+![version](https://img.shields.io/badge/version-TODO-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-blueviolet) ![dotnet-8](https://img.shields.io/badge/.NET-8.0-512BD4) ![winui](https://img.shields.io/badge/WinUI-desktop-9F3CFE)
 
-### Správa katalogu souborů
-- Agregát `FileEntity` uchovává kompletní metadata dokumentu, vazbu na binární obsah a stav fulltextového indexu včetně platnosti dokumentu a systémových metadat.【F:Veriado.Domain/Files/FileEntity.cs†L10-L198】
-- `FileOperationsService` mapuje volání z UI na validační pipeline a MediatR příkazy – podporuje přejmenování, úpravy metadat, nastavení režimu jen pro čtení, platnosti dokumentu i aplikaci systémových metadat z NTFS.【F:Veriado.Services/Files/FileOperationsService.cs†L11-L158】
-- `FileQueryService` zprostředkuje stránkované gridy, detail souboru i práci s historií/oblíbenými dotazy tak, aby UI nemuselo přistupovat přímo k handlerům.【F:Veriado.Services/Files/FileQueryService.cs†L7-L68】
+Veriado je desktopová aplikace pro firemní katalogizaci dokumentů, která kombinuje plnotextové vyhledávání s pečlivou správou metadat a platnosti. Je určena pro týmy, které potřebují mít důležité smlouvy, směrnice a záznamy okamžitě po ruce. Aplikace šetří čas díky rychlému vyhledávání a uloženým filtrům, hlídá platnost dokumentů a tím minimalizuje rizika. Díky lokálnímu provozu bez serveru přináší nízké provozní náklady a rychlé nasazení.
 
-### Fulltextové vyhledávání
-- `SearchFacade` sestavuje FTS5 dotazy, provádí je nad indexem a ukládá historii i oblíbené filtry pro opětovné použití.【F:Veriado.Services/Search/SearchFacade.cs†L9-L99】
-- Infrastruktura registruje služby pro analyzér tokenů, historii hledání, oblíbené dotazy i údržbu indexu při startu hostitele.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L115-L199】
+## Obsah
+- [Pro firmy](#pro-firmy)
+- [Přehled funkcí](#přehled-funkcí)
+- [Typické scénáře](#typické-scenáře)
+- [Rychlý start](#rychlý-start)
+- [Pro ICT/IT](#pro-ictit)
+- [Konfigurace](#konfigurace)
+- [Práce s daty a import](#práce-s-daty-a-import)
+- [Zdravotní kontrola a údržba](#zdravotní-kontrola-a-údržba)
+- [Snímky obrazovky](#snímky-obrazovky)
+- [Roadmap](#roadmap)
+- [Nápověda a podpora](#nápověda-a-podpora)
+- [Přispívání](#přispívání)
+- [Licence](#licence)
+- [Poznámky k značce a logu](#poznámky-k-značce-a-logu)
+- [FAQ](#faq)
+- [Proč Veriado](#proč-veriado)
 
-### Import dokumentů
-- `ImportPageViewModel` řídí hromadný import složek v UI, sleduje průběh, podporuje filtr chyb, export logu a obnovu posledního nastavení z hot-state úložiště.【F:Veriado.WinUI/ViewModels/Import/ImportPageViewModel.cs†L17-L199】
-- `ImportService` provádí paralelní zpracování souborů se sdíleným kanálem průběhu, detekcí duplicit, opravou FTS indexu a přerušitelným během.【F:Veriado.Services/Import/ImportService.cs†L320-L520】
+## Pro firmy
+Rychle najdu vše důležité: plnotextové vyhledávání reaguje během vteřin a uložené filtry zkracují cestu k nejčastějším dotazům. Pořádek a kontrola platnosti: systém hlídá expiraci dokumentů, zaznamenává změny a nabízí historii úprav. Méně ruční práce: hromadný import, automatické třídění a předvyplněná metadata šetří hodiny manuálních zásahů. Jednoduché ovládání: moderní WinUI prostředí se přizpůsobí preferencím uživatelů a pamatuje jejich volby. Nízké náklady a rychlé nasazení: běží lokálně bez serveru, nasazení trvá jen pár minut. Výsledek? Méně času stráveného hledáním, nižší náklady na správu dokumentů a spokojenější tým.
 
-### Údržba a diagnostika
-- `MaintenanceService` zapouzdřuje příkazy pro vacuum/optimalizaci databáze, ověření a opravy FTS indexu i reindex po změně schématu.【F:Veriado.Services/Maintenance/MaintenanceService.cs†L5-L39】
-- `HealthService` vrací diagnostiku infrastruktury a statistiku indexu, kterou WinUI klient zobrazuje v přehledech stavu.【F:Veriado.Services/Diagnostics/HealthService.cs†L6-L26】
+## Přehled funkcí
+- **Fulltextové vyhledávání (FTS)** – okamžité nalezení textu v dokumentech včetně morfologického rozšíření.
+- **Uložené dotazy a oblíbené filtry** – personalizované přehledy, které stačí jednou nastavit a příště jen otevřít.
+- **Evidence platnosti dokumentů** – sledování expirace, upozornění a reporty pro včasné prodloužení.
+- **Verze a auditovatelnost změn** – každá úprava se ukládá s historií a komentářem.
+- **Hromadný import složek/archivů** – import tisíců souborů najednou s doplněním metadat.
+- **Zdravotní panel, vacuum/reindex** – přehled kondice databáze a samoobslužné údržbové akce.
+- **Personalizace (filtry, zobrazení, motiv)** – uživatelé si přizpůsobí vzhled, sloupce i výchozí filtrování.
+- **Offline/lokální provoz** – vše běží na pracovním počítači, bez závislosti na externí infrastruktuře.
 
-### Hostování WinUI aplikace
-- `AppHost` sestaví `IHost`, registruje služby UI, aplikační a infrastrukturní vrstvu, zajistí migraci databáze pod mutexem a inicializuje hot-state po startu.【F:Veriado.WinUI/AppHost.cs†L19-L137】
-- `SqlitePathResolver` udržuje jednotné určení cesty k databázi, vytváří úložiště při prvním spuštění a podporuje design-time přepis cesty přes proměnnou prostředí.【F:Veriado.Infrastructure/Persistence/Connections/SqlitePathResolver.cs†L7-L92】
+## Typické scénáře
+- **Digitalizace a archivace** – hromadně importujte tisíce dokumentů včetně metadat a připojených popisů.
+- **Compliance / audity** – připravte uložené dotazy pro opakované kontroly platnosti a úplnosti dokumentace.
+- **Proaktivní údržba** – sledujte zdravotní statistiky, plánujte reindex nebo vacuum a držte databázi v kondici.
 
-## Struktura řešení
-- **Veriado.Domain** – doménové agregáty, hodnotové objekty a doménové události související se soubory a fulltextem.【F:Veriado.Domain/Files/FileEntity.cs†L10-L198】
-- **Veriado.Application** – MediatR handlery, validační pipeline a ambientní kontext požadavku; registruje se přes `AddApplication`.
-- **Veriado.Infrastructure** – přístup k SQLite/EF Core, FTS5, úložišti souborů a infrastrukturním health-checkům.【F:Veriado.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs†L55-L199】
-- **Veriado.Mapping** – DTO-to-command mapping s FluentValidation pro zápisové operace.【F:Veriado.Mapping/AC/WriteMappingPipeline.cs†L16-L166】
-- **Veriado.Services** – façade vrstva pro WinUI (soubory, import, údržba, diagnostika).【F:Veriado.Services/Files/FileOperationsService.cs†L11-L158】
-- **Veriado.WinUI** – desktopový klient (MVVM) postavený na Windows App SDK a CommunityToolkit.
-- **Veriado.Application.Tests** – integrační testy ověřující doménové události, reindex a konzistenci perzistence.【F:Veriado.Application.Tests/Infrastructure/DomainEventsInterceptorTests.cs†L19-L154】
-- **tools/** – pomocné skripty, např. `fts5-benchmark.csx` pro měření výkonu fulltextu.
+## Rychlý start
+**Požadavky:** Windows 10 nebo 11, .NET 8 Runtime/SDK, uživatelská práva pro instalaci.
 
-## File Detail – architektura & bindingy
-- `FilesPageViewModel.OpenDetailCommand` vytváří viewmodel dialogu přes `IDialogService`, načte detail souboru a po potvrzení vyvolá refresh seznamu.【F:Veriado.WinUI/ViewModels/Files/FilesPageViewModel.cs†L600-L636】
-- `FileDetailDialogViewModel` implementuje `IDialogAware`, spravuje `EditableFileDetailModel` s DataAnnotations validací a orchestruje uložení přes aplikační `IFileService` včetně zobrazení chyb a konfliktů.【F:Veriado.WinUI/ViewModels/Files/FileDetailDialogViewModel.cs†L14-L221】
-- `EditableFileDetailModel` dedikuje validaci a mapování na DTO, řeší datovou konzistenci (platnost, povinná pole) a propaguje chyby do UI pomocí `ObservableValidator`.【F:Veriado.WinUI/ViewModels/Files/EditableFileDetailModel.cs†L1-L178】
-- `FileDetailDialog.xaml` definuje `ContentDialog` s `x:Bind` vazbami, inline výpisem chyb, převodníkem pro datum platnosti a blokem souhrnných metadat.【F:Veriado.WinUI/Views/Files/FileDetailDialog.xaml†L1-L138】
-- `DialogService` rozpozná dialogové viewmodely (`IDialogAware`), přiřadí odpovídající view přes `IDialogViewFactory` a řídí jejich životní cyklus včetně asynchronního zavření.【F:Veriado.WinUI/Services/DialogService.cs†L1-L141】
-- Aplikační `FileService` sjednocuje načtení detailu, přejmenování, update metadat i platnosti a převádí chybové stavy na doménově smysluplné výjimky pro UI.【F:Veriado.Services/Files/FileService.cs†L1-L188】
-- `EditableFileDetailDto` v aplikační vrstvě poskytuje konzistentní přenosový objekt pro detail a editaci dokumentu, včetně verzí a platnosti.【F:Veriado.Application/Files/Contracts/EditableFileDetailDto.cs†L1-L33】
-- `IDialogViewFactory` + `FileDetailDialogFactory` umožňují DI konstruovat ContentDialogy s odpovídajícími viewmodely bez service-locator patternu.【F:Veriado.WinUI/Services/Abstractions/IDialogViewFactory.cs†L1-L12】【F:Veriado.WinUI/Services/DialogFactories/FileDetailDialogFactory.cs†L1-L25】
+```powershell
+# volitelně: instalace .NET 8
+dotnet --info
 
-## Požadavky
-- .NET 8 SDK
-- Windows 10 19041+ pro běh WinUI klienta (x86/x64/ARM64)
-- SQLite 3 (distribuováno přes Microsoft.Data.Sqlite)
+# stažení balíčku (TODO: doplnit odkaz)
+# rozbalení a spuštění
+Veriado.Setup.exe
+```
 
-## Lokální spuštění
-1. Obnovte závislosti: `dotnet restore`.
-2. Sestavte solution (WinUI projekt vyžaduje Windows SDK): `dotnet build Veriado.sln`.
-3. Spusťte testy aplikační vrstvy: `dotnet test Veriado.sln`.
-4. Pro spuštění klienta na Windows otevřete `Veriado.sln` ve Visual Studio 2022 (17.10+) nebo použijte `dotnet build` + `AppInstaller` pro MSIX z `Veriado.WinUI`.
+**První spuštění:** zvolte nebo vytvořte katalog, spusťte první import složky a ověřte základní vyhledávání.
 
-Při prvním startu `AppHost` vyhodnotí cestu k databázi, vytvoří potřebné složky a spustí migrace. Cestu lze přepsat v `appsettings.json` (`Infrastructure:DbPath`) nebo proměnnou `VERIADO_DESIGNTIME_DB_PATH` pro design-time nástroje.【F:Veriado.WinUI/AppHost.cs†L70-L82】【F:Veriado.Infrastructure/Persistence/Connections/SqlitePathResolver.cs†L34-L78】
+**Demo data:** TODO odkázat na balíček s ukázkovými dokumenty.
 
-## Testování
-Testovací projekt `Veriado.Application.Tests` ověřuje šíření doménových událostí, rollback při selhání handleru i konzistenci logů a reindexační fronty.【F:Veriado.Application.Tests/Infrastructure/DomainEventsInterceptorTests.cs†L50-L154】 Spustíte jej příkazem `dotnet test` (viz výše).
+## Pro ICT/IT
+**Platforma:** .NET 8, WinUI desktop, lokální SQLite s fulltextovým modulem FTS5.
 
-## Další zdroje
-- [`docs/application-overview.md`](docs/application-overview.md) – funkční scénáře a tok UI.
-- [`docs/architecture-review.md`](docs/architecture-review.md) – detailní architektonické poznámky a doporučení.
-- [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md) – poznámky k aktualizacím fulltextového schématu.
+**Architektura vrstev:**
+- **Domain** – doménové agregáty, hodnotové objekty a události.
+- **Application** – MediatR handlery, validační/logovací pipeline, `AmbientRequestContext`.
+- **Mapping** – mapování DTO ↔ příkazy, validace vstupů.
+- **Infrastructure** – přístup k SQLite, repozitáře, transakce a správa souborů.
+- **Services** – služby pro zdraví, údržbu, import a adaptéry pro UI.
+- **WinUI klient** – desktopové rozhraní s `HotState` pro per-user personalizaci.
+
+**Klíčové komponenty:**
+- `FileEntity` – metadata dokumentu, verze, platnost, stav indexace.
+- `FileOperationsService` – editace, přejmenování, synchronizace NTFS metadat a validace.
+- `SearchFacade` – správa FTS dotazů, historie a oblíbených filtrů.
+- `MaintenanceService`, `HealthService` – diagnostika, vacuum, reindex, metriky.
+- Transakční repozitář + domain event log – agregát a události v jedné transakci.
+
+**Bezpečnost a audit:** oddělený binární obsah od metadat, auditovatelná historie změn, připravené háčky pro napojení na DLP.
+
+**Integrace a rozšiřitelnost:** otevřená architektura připravená na SSO, DLP, ERP – bez proprietárních závislostí.
+
+**Požadavky na provoz:** bez serveru, nízké nároky na CPU/RAM, možnost provozu na noteboocích i VDI.
+
+## Konfigurace
+- **Umístění katalogu/databáze:** volba při prvním spuštění, možnost přemapovat v nastavení.
+- **Nastavení indexace:** plánovaná reindexace, limity importu, frekvence vacuum – dostupné v administračním panelu.
+- **Logování:** úroveň logů a cílová složka definovatelná v konfiguračním souboru.
+- **Uživatelské preference (HotState):** motiv aplikace, velikost stránky výsledků, výchozí filtry uložené per uživatel.
+
+## Práce s daty a import
+1. Otevřete modul importu a zvolte složku nebo archiv ke zpracování.
+2. Mapujte pole na metadata (např. platnost, typ dokumentu) a spusťte import.
+3. Sledujte průběh, řešte chyby pomocí filtru neúspěšných položek, případně opakujte pouze chybové položky.
+
+Metadata se ukládají spolu s historií úprav; chyby importu se logují s detailním popisem a návrhem nápravy. Doporučujeme udržovat složky podle agendy (např. smlouvy, certifikace) a používat konzistentní názvy souborů pro snadnější mapování.
+
+## Zdravotní kontrola a údržba
+Zdravotní panel zobrazuje stav databáze, velikost indexu, počty dokumentů podle platnosti a poslední údržbové akce. Údržbové akce zahrnují reindex pro obnovu fulltextu, vacuum pro optimalizaci dat a diagnostiku pro kontrolu integrity. Doporučujeme je spouštět po velkém importu nebo při poklesu výkonu vyhledávání.
+
+## Snímky obrazovky
+- ![Ukázka vyhledávání](./docs/screenshots/search.png) – TODO doplnit aktuální snímek vyhledávacího rozhraní.
+- ![Platnost dokumentů](./docs/screenshots/validity.png) – TODO doplnit snímek přehledu platnosti.
+- ![Zdravotní panel](./docs/screenshots/health.png) – TODO doplnit snímek zdravotní konzole.
+
+## Roadmap
+- Rozšíření integračních konektorů (SSO, DLP, ERP).
+- Pokročilé reporty a exporty pro compliance.
+- Automatizované připomínky platnosti přes e-mail.
+- TODO odkázat na GitHub Issues/Projects pro aktuální plán.
+
+## Nápověda a podpora
+- **Chyby a incidenty:** nahlaste přes GitHub Issues s šablonou „Bug report“.
+- **Požadavky na funkce:** použijte šablonu „Feature request“.
+- **Kontakt:** TODO doplnit e-mail nebo webový formulář.
+
+## Přispívání
+1. Forkněte repozitář a vytvořte feature branch (`feature/jmeno-funkce`).
+2. Dodržujte konvence commitů (např. `feat:`, `fix:`, `docs:`) a připojte popis změny.
+3. Před PR ověřte build a testy, vyplňte checklist v šabloně PR.
+4. Respektujte stávající code style (viz poznámky v adresáři `docs/`).
 
 ## Licence
-Projekt je licencován pod MIT licencí (viz `LICENSE.txt`).
+Projekt je licencován pod MIT licencí – viz [LICENSE.txt](LICENSE.txt).
+
+## Poznámky k značce a logu
+Logo a název používejte v souladu s brand guidelines (TODO odkázat na dokument). Vektorové logo je k dispozici v souboru `./docs/brand/veriado-logo.svg`.
+
+## FAQ
+**Potřebuji server?**
+Ne, Veriado běží lokálně na pracovním počítači bez potřeby serverové infrastruktury.
+
+**Jak rychle to nasadíme?**
+Stačí stáhnout instalační balíček a během několika minut máte funkční katalog.
+
+**Lze importovat celé adresáře?**
+Ano, hromadný import podporuje celé složky i archivy se zachováním struktury.
+
+**Jak funguje vyhledávání?**
+Používá SQLite FTS5, takže vyhledává v obsahu i metadatech a reaguje během vteřin.
+
+**Umí to hlídat platnost dokumentů?**
+Ano, u každého dokumentu je evidence platnosti a upozornění na expiraci.
+
+**Jak řešíte bezpečnost a audit?**
+Metadata a binární obsah jsou odděleny, změny se logují s historií a připravenými audity.
+
+**Co když chci integraci se SSO/ERP?**
+Architektura je připravena pro napojení na SSO a ERP, integrace lze doplnit přes rozšiřující služby.
+
+## Proč Veriado
+- Úspora času díky rychlému vyhledávání a uloženým filtrům.
+- Nízké TCO díky lokálnímu provozu bez serveru.
+- Jednoduché užívání s personalizovaným rozhraním.
+- Silná auditovatelnost, evidence platnosti a historie změn.
