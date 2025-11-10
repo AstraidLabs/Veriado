@@ -9,6 +9,7 @@ using Veriado.Services.DependencyInjection;
 using Veriado.WinUI.Services;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Services.DialogFactories;
+using Veriado.WinUI.Services.Shutdown;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
 using Veriado.WinUI.ViewModels.Settings;
@@ -22,6 +23,7 @@ namespace Veriado.WinUI;
 internal sealed class AppHost : IAsyncDisposable
 {
     private readonly IHost _host;
+    private bool _disposed;
 
     private AppHost(IHost host)
     {
@@ -52,6 +54,10 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<IHotStateService, HotStateService>();
                 services.AddSingleton<INavigationService, NavigationService>();
                 services.AddSingleton<IDialogService, DialogService>();
+                services.AddSingleton<IConfirmService, ConfirmService>();
+                services.AddSingleton<HostShutdownService>();
+                services.AddSingleton<IHostShutdownService>(static sp => sp.GetRequiredService<HostShutdownService>());
+                services.AddSingleton<IShutdownOrchestrator, ShutdownOrchestrator>();
                 services.AddSingleton<ITimeFormattingService, TimeFormattingService>();
                 services.AddSingleton<IServerClock, ServerClock>();
                 services.AddSingleton<IPickerService, PickerService>();
@@ -76,6 +82,8 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
+        host.Services.GetRequiredService<HostShutdownService>().Initialize(host);
+
         var pathResolver = host.Services.GetRequiredService<ISqlitePathResolver>();
         var databasePath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
         pathResolver.EnsureStorageExists(databasePath);
@@ -92,8 +100,37 @@ internal sealed class AppHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _host.StopAsync().ConfigureAwait(false);
-        _host.Dispose();
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        try
+        {
+            await _host.StopAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // Ignore errors during best-effort shutdown.
+        }
+
+        try
+        {
+            if (_host is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                _host.Dispose();
+            }
+        }
+        catch
+        {
+            // Ignore errors during best-effort shutdown.
+        }
     }
 
     private static string BuildMigrationMutexKey(string databasePath)
