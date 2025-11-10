@@ -31,12 +31,12 @@ public static class ValidityHelper
             return ValidityStatus.Expired;
         }
 
-        if (days <= thresholds.RedDays)
+        if (days <= thresholds.OrangeDays)
         {
             return ValidityStatus.Soon;
         }
 
-        if (days <= thresholds.OrangeDays)
+        if (days <= thresholds.GreenDays)
         {
             return ValidityStatus.Upcoming;
         }
