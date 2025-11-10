@@ -33,7 +33,15 @@ public sealed class DeleteFileHandler : FileWriteHandlerBase, IRequestHandler<De
                 return AppResult<Guid>.NotFound($"File '{request.FileId}' was not found.");
             }
 
-            await DeleteAsync(file, cancellationToken).ConfigureAwait(false);
+            var fileSystem = await Repository
+                .GetFileSystemAsync(file.FileSystemId, cancellationToken)
+                .ConfigureAwait(false);
+            if (fileSystem is null)
+            {
+                throw new InvalidOperationException($"File system entity '{file.FileSystemId}' was not found.");
+            }
+
+            await DeleteAsync(file, fileSystem, cancellationToken).ConfigureAwait(false);
             return AppResult<Guid>.Success(request.FileId);
         }
         catch (OperationCanceledException)
