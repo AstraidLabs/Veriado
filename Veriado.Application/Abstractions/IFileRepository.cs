@@ -83,4 +83,11 @@ public interface IFileRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Deletes the file-system aggregate with the provided identifier.
+    /// </summary>
+    /// <param name="id">The identifier of the file-system entity to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task DeleteFileSystemAsync(Guid id, CancellationToken cancellationToken);
+
 }

@@ -293,6 +293,24 @@ internal sealed partial class FileRepository : IFileRepository
         }
     }
 
+    public async Task DeleteFileSystemAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var entity = await _db.FileSystems.FirstOrDefaultAsync(f => f.Id == id, cancellationToken).ConfigureAwait(false);
+            if (entity is null)
+            {
+                return;
+            }
+
+            WithChangeTrackerLock(() => _db.FileSystems.Remove(entity));
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw CreateConcurrencyException("deleting file system metadata for", ex);
+        }
+    }
+
 }
 
 partial class FileRepository
