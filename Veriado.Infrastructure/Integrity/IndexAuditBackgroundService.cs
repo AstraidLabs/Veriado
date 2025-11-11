@@ -62,29 +62,49 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         _logger.LogInformation("Index audit service started. Interval={Interval}, IterationTimeout={IterationTimeout}, Jitter≤{Jitter}.",
             interval, iterationTimeout, jitter);
 
-        await InitialJitterAsync(jitter, stoppingToken).ConfigureAwait(false);
-
+        // VŠE dovnitř try – ať neuteče cancel/ODE mimo ExecuteAsync
         using var timer = new PeriodicTimer(interval);
+
+        // Volitelně: při zrušení tokenu rovnou dispose timeru → WaitForNextTickAsync skončí ODE
+        using var _ = stoppingToken.Register(static state => ((PeriodicTimer)state!).Dispose(), timer);
 
         try
         {
+            try
+            {
+                await InitialJitterAsync(jitter, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                if (stoppingToken.IsCancellationRequested)
+                    _logger.LogDebug("Index audit service stopping during initial jitter.");
+                return;
+            }
+
             while (true)
             {
                 bool tick;
                 try
                 {
-                    // TADY dřív padalo na ř. 75:
+                    // ř. 76 dřív padal – nově chytáme i ODE
                     tick = await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                catch (OperationCanceledException)
                 {
-                    _logger.LogDebug("Index audit service stopping due to host cancellation.");
-                    break; // čistý shutdown bez error logu
+                    // Graceful stop přes token
+                    if (stoppingToken.IsCancellationRequested)
+                        _logger.LogDebug("Index audit service stopping due to host cancellation.");
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Timer byl zrušen během awaitu (během shutdownu) – také graceful stop
+                    _logger.LogDebug("Index audit service stopping because timer was disposed.");
+                    break;
                 }
 
-                if (!tick) break; // timer byl ukončen
+                if (!tick) break; // timer ukončen
 
-                // jedna iterace – vlastní kód, klidně s per-iter timeoutem
                 await RunAuditIterationSafeAsync(iterationTimeout, stoppingToken).ConfigureAwait(false);
             }
         }
