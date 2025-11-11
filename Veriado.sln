@@ -3,6 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.14.36429.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado", "Veriado.WinUI\Veriado.csproj", "{DD7E39A9-548E-4BF2-918B-FFB26FF05BA0}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A238B7DB-438E-4502-A0E1-068306307A3A} = {A238B7DB-438E-4502-A0E1-068306307A3A}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veriado.Domain", "Veriado.Domain\Veriado.Domain.csproj", "{86B8F682-4E4A-4E11-804A-3513C85B8ADB}"
 EndProject
