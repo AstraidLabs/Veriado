@@ -144,4 +144,8 @@ public sealed class InfrastructureOptions
     private int _healthWorkerStallMs = DefaultHealthWorkerStallMs;
     private int _integrityBatchSize = DefaultIntegrityBatchSize;
     private int _integrityTimeSliceMs = DefaultIntegrityTimeSliceMs;
+
+    public TimeSpan IndexAuditIterationTimeout { get; set; } = TimeSpan.Zero; // novì podporováno (fallback 10 min)
+    public TimeSpan IndexAuditJitter { get; set; } = TimeSpan.Zero;           // novì podporováno (fallback 3 min)
 }
+

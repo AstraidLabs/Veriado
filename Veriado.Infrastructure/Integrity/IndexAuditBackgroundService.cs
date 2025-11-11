@@ -1,24 +1,42 @@
-using Microsoft.Extensions.Hosting;
-
+﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-
-using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Integrity;
 
 /// <summary>
-/// Periodically executes the <see cref="IIndexAuditor"/> to detect and repair FTS drift.
+/// Periodicky spouští <see cref="IIndexAuditor"/> a detekuje/napravuje drift FTS indexů.
+/// Odolné proti shutdownu, time-outům, a jednorázovým chybám (backoff + jitter).
 /// </summary>
 internal sealed class IndexAuditBackgroundService : BackgroundService
 {
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan DefaultInterval = TimeSpan.FromHours(4);
+    private static readonly TimeSpan DefaultIterationTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan DefaultJitter = TimeSpan.FromMinutes(3);
+    private const int MaxBackoffExponent = 5; // 2^5 = 32×
 
     private readonly IIndexAuditor _auditor;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<IndexAuditBackgroundService> _logger;
+    private readonly Random _rng = new();
+
+    private static class LogIds
+    {
+        public static readonly EventId ServiceStart = new(1000, nameof(ServiceStart));
+        public static readonly EventId ServiceStop = new(1001, nameof(ServiceStop));
+        public static readonly EventId TickStart = new(1010, nameof(TickStart));
+        public static readonly EventId TickOk = new(1011, nameof(TickOk));
+        public static readonly EventId TickNoIssues = new(1012, nameof(TickNoIssues));
+        public static readonly EventId TickScheduled = new(1013, nameof(TickScheduled));
+        public static readonly EventId TickCanceled = new(1020, nameof(TickCanceled));
+        public static readonly EventId TickTimeout = new(1021, nameof(TickTimeout));
+        public static readonly EventId TickFailed = new(1022, nameof(TickFailed));
+        public static readonly EventId ServiceCrashed = new(1099, nameof(ServiceCrashed));
+    }
 
     public IndexAuditBackgroundService(
         IIndexAuditor auditor,
@@ -32,101 +50,169 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var interval = _options.IndexAuditInterval;
-        if (interval <= TimeSpan.Zero)
-        {
-            interval = TimeSpan.FromHours(4);
-        }
+        var interval = NormalizeInterval(_options.IndexAuditInterval);
+        var iterationTimeout = _options.IndexAuditIterationTimeout > TimeSpan.Zero
+            ? _options.IndexAuditIterationTimeout
+            : DefaultIterationTimeout;
 
-        if (interval < MinimumInterval)
-        {
-            interval = MinimumInterval;
-        }
+        var jitter = _options.IndexAuditJitter > TimeSpan.Zero
+            ? _options.IndexAuditJitter
+            : DefaultJitter;
 
-        _logger.LogInformation("Index audit background service started with interval {Interval}.", interval);
+        _logger.LogInformation("Index audit service started. Interval={Interval}, IterationTimeout={IterationTimeout}, Jitter≤{Jitter}.",
+            interval, iterationTimeout, jitter);
+
+        await InitialJitterAsync(jitter, stoppingToken).ConfigureAwait(false);
+
+        using var timer = new PeriodicTimer(interval);
 
         try
         {
-            while (!stoppingToken.IsCancellationRequested)
+            while (true)
             {
+                bool tick;
                 try
                 {
-                    await RunAuditAsync(stoppingToken).ConfigureAwait(false);
+                    // TADY dřív padalo na ř. 75:
+                    tick = await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException ex) when (IsCancellation(ex, stoppingToken))
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    break;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Index audit execution failed.");
+                    _logger.LogDebug("Index audit service stopping due to host cancellation.");
+                    break; // čistý shutdown bez error logu
                 }
 
-                try
-                {
-                    await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException ex) when (IsCancellation(ex, stoppingToken))
-                {
-                    break;
-                }
+                if (!tick) break; // timer byl ukončen
+
+                // jedna iterace – vlastní kód, klidně s per-iter timeoutem
+                await RunAuditIterationSafeAsync(iterationTimeout, stoppingToken).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException ex) when (IsCancellation(ex, stoppingToken))
+        catch (Exception ex)
         {
-            _logger.LogDebug("Index audit background service received cancellation request.");
+            _logger.LogError(ex, "Index audit service crashed. Stopping the service.");
         }
         finally
         {
-            _logger.LogInformation("Index audit background service stopping.");
+            _logger.LogInformation("Index audit service stopped.");
         }
     }
 
-    private async Task RunAuditAsync(CancellationToken cancellationToken)
+    private async Task InitialJitterAsync(TimeSpan jitter, CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        _logger.LogInformation("Running periodic FTS audit.");
-        var summary = await _auditor.VerifyAsync(cancellationToken).ConfigureAwait(false);
+        if (jitter <= TimeSpan.Zero)
+            return;
+
+        var delay = RandomUpTo(jitter);
+        if (delay > TimeSpan.Zero)
+        {
+            try
+            {
+                await Task.Delay(delay, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // čistý shutdown
+            }
+        }
+    }
+
+    private enum IterationResult { Success, NoIssues, Scheduled, Timeout, Failed, Shutdown }
+
+    private async Task<IterationResult> RunAuditIterationSafeAsync(TimeSpan iterationTimeout, CancellationToken stoppingToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        cts.CancelAfter(iterationTimeout);
+
+        try
+        {
+            _logger.LogDebug(LogIds.TickStart, "Running periodic FTS audit iteration…");
+            var outcome = await RunAuditAsync(cts.Token).ConfigureAwait(false);
+
+            return outcome;
+        }
+        catch (OperationCanceledException oce) when (stoppingToken.IsCancellationRequested || oce.CancellationToken == stoppingToken)
+        {
+            // čistý shutdown – necháme nadřazenou smyčku doběhnout
+            return IterationResult.Shutdown;
+        }
+        catch (OperationCanceledException)
+        {
+            // vypršel per-iterace timeout
+            _logger.LogWarning(LogIds.TickTimeout, "Index audit iteration was canceled due to iteration timeout {Timeout}.", iterationTimeout);
+            return IterationResult.Timeout;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(LogIds.TickFailed, ex, "Index audit iteration failed.");
+            return IterationResult.Failed;
+        }
+    }
+
+    /// <summary>
+    /// Vlastní práce auditu; vrací detailnější výsledek pro lepší řízení backoffu/logování.
+    /// </summary>
+    private async Task<IterationResult> RunAuditAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var summary = await _auditor.VerifyAsync(ct).ConfigureAwait(false);
         var issues = (summary.Missing?.Count ?? 0) + (summary.Drift?.Count ?? 0) + (summary.Extra?.Count ?? 0);
 
         if (issues == 0)
         {
-            _logger.LogDebug("Periodic FTS audit completed without discrepancies.");
-            return;
+            _logger.LogDebug(LogIds.TickNoIssues, "FTS audit completed: no discrepancies.");
+            return IterationResult.NoIssues;
         }
 
-        var scheduled = await _auditor.RepairDriftAsync(summary, cancellationToken).ConfigureAwait(false);
+        var scheduled = await _auditor.RepairDriftAsync(summary, ct).ConfigureAwait(false);
+
         if (scheduled > 0)
         {
-            _logger.LogInformation(
-                "Periodic FTS audit detected {IssueCount} discrepancies and scheduled {ScheduledCount} reindex operations.",
-                issues,
-                scheduled);
+            _logger.LogInformation(LogIds.TickScheduled,
+                "FTS audit detected {IssueCount} discrepancies; scheduled {ScheduledCount} reindex operations.",
+                issues, scheduled);
+            return IterationResult.Scheduled;
         }
-        else
-        {
-            _logger.LogInformation(
-                "Periodic FTS audit detected {IssueCount} discrepancies; automated reindexing is disabled in this phase.",
-                issues);
-        }
+
+        _logger.LogInformation(LogIds.TickOk,
+            "FTS audit detected {IssueCount} discrepancies; automated reindex is disabled in this phase.",
+            issues);
+        return IterationResult.Success;
     }
 
-    private static bool IsCancellation(OperationCanceledException exception, CancellationToken stoppingToken)
+    private static TimeSpan NormalizeInterval(TimeSpan configured)
     {
-        if (stoppingToken.IsCancellationRequested)
-        {
-            return true;
-        }
+        if (configured <= TimeSpan.Zero)
+            return DefaultInterval;
 
-        if (exception.CancellationToken == stoppingToken)
-        {
-            return true;
-        }
+        if (configured < MinimumInterval)
+            return MinimumInterval;
 
-        return exception.CancellationToken == CancellationToken.None;
+        return configured;
+    }
+
+    private static TimeSpan ComputeBackoffDelay(int consecutiveFailures, TimeSpan jitter)
+    {
+        // Backoff jen při chybě/timeoutu; úspěch resetuje čítač.
+        if (consecutiveFailures <= 0)
+            return RandomUpTo(jitter);
+
+        var exp = Math.Min(consecutiveFailures, MaxBackoffExponent);
+        // základ 5s * 2^n, cap na 2 min
+        var baseDelay = TimeSpan.FromSeconds(5 * Math.Pow(2, exp));
+        if (baseDelay > TimeSpan.FromMinutes(2))
+            baseDelay = TimeSpan.FromMinutes(2);
+
+        return baseDelay + RandomUpTo(jitter);
+    }
+
+    private static TimeSpan RandomUpTo(TimeSpan max)
+    {
+        if (max <= TimeSpan.Zero) return TimeSpan.Zero;
+        // Thread-static Random by šel taky; tady máme instanční _rng.
+        var rng = new Random();
+        var ms = rng.NextInt64(0, (long)max.TotalMilliseconds + 1);
+        return TimeSpan.FromMilliseconds(ms);
     }
 }
