@@ -106,15 +106,30 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         var delay = RandomUpTo(jitter);
         if (delay > TimeSpan.Zero)
         {
-            try
-            {
-                await Task.Delay(delay, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                // čistý shutdown
-            }
+            await DelayWithCancellationAsync(delay, ct).ConfigureAwait(false);
         }
+    }
+
+    private static async Task DelayWithCancellationAsync(TimeSpan delay, CancellationToken ct)
+    {
+        if (!ct.CanBeCanceled)
+        {
+            await Task.Delay(delay).ConfigureAwait(false);
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+            return;
+
+        var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var registration = ct.Register(static state =>
+        {
+            var tcs = (TaskCompletionSource<object?>)state!;
+            tcs.TrySetResult(null);
+        }, completion);
+
+        await Task.WhenAny(Task.Delay(delay), completion.Task).ConfigureAwait(false);
     }
 
     private enum IterationResult { Success, NoIssues, Scheduled, Timeout, Failed, Shutdown }
