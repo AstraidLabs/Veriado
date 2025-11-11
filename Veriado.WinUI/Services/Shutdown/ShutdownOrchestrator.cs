@@ -143,14 +143,14 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         {
             _logger.LogWarning("Host stop operation timed out after {Timeout}.", StopTimeout);
         }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogDebug(ex, "Host stop operation skipped because the host was not initialized.");
-            return true;
-        }
         catch (ObjectDisposedException ex)
         {
             _logger.LogDebug(ex, "Host stop operation skipped because the host was already disposed.");
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogDebug(ex, "Host stop operation skipped because the host was not initialized.");
             return true;
         }
         catch (Exception ex)
@@ -169,14 +169,14 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
             _logger.LogDebug("Host disposed successfully.");
             return true;
         }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogDebug(ex, "Host dispose operation skipped because the host was not initialized.");
-            return true;
-        }
         catch (ObjectDisposedException ex)
         {
             _logger.LogDebug(ex, "Host dispose operation skipped because the host was already disposed.");
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogDebug(ex, "Host dispose operation skipped because the host was not initialized.");
             return true;
         }
         catch (Exception ex)
