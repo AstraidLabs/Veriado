@@ -53,7 +53,7 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                 {
                     await RunAuditAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                catch (OperationCanceledException ex) when (IsCancellation(ex, stoppingToken))
                 {
                     break;
                 }
@@ -70,13 +70,13 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                 {
                     await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                catch (OperationCanceledException ex) when (IsCancellation(ex, stoppingToken))
                 {
                     break;
                 }
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (IsCancellation(ex, stoppingToken))
         {
             _logger.LogDebug("Index audit background service received cancellation request.");
         }
@@ -113,5 +113,20 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                 "Periodic FTS audit detected {IssueCount} discrepancies; automated reindexing is disabled in this phase.",
                 issues);
         }
+    }
+
+    private static bool IsCancellation(OperationCanceledException exception, CancellationToken stoppingToken)
+    {
+        if (stoppingToken.IsCancellationRequested)
+        {
+            return true;
+        }
+
+        if (exception.CancellationToken == stoppingToken)
+        {
+            return true;
+        }
+
+        return exception.CancellationToken == CancellationToken.None;
     }
 }
