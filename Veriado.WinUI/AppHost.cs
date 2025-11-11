@@ -1,5 +1,9 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.DependencyInjection;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Options;
@@ -23,11 +27,16 @@ namespace Veriado.WinUI;
 internal sealed class AppHost : IAsyncDisposable
 {
     private readonly IHost _host;
+    private readonly HostShutdownService _hostShutdownService;
+    private readonly ILogger<AppHost> _logger;
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
     private bool _disposed;
 
-    private AppHost(IHost host)
+    private AppHost(IHost host, HostShutdownService hostShutdownService, ILogger<AppHost> logger)
     {
         _host = host;
+        _hostShutdownService = hostShutdownService;
+        _logger = logger;
     }
 
     public IServiceProvider Services => _host.Services;
@@ -82,7 +91,8 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
-        host.Services.GetRequiredService<HostShutdownService>().Initialize(host);
+        var hostShutdownService = host.Services.GetRequiredService<HostShutdownService>();
+        hostShutdownService.Initialize(host);
 
         var pathResolver = host.Services.GetRequiredService<ISqlitePathResolver>();
         var databasePath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
@@ -95,7 +105,8 @@ internal sealed class AppHost : IAsyncDisposable
             await host.StartAsync().ConfigureAwait(false);
         }
         await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
-        return new AppHost(host);
+        var logger = host.Services.GetRequiredService<ILogger<AppHost>>();
+        return new AppHost(host, hostShutdownService, logger);
     }
 
     public async ValueTask DisposeAsync()
@@ -107,13 +118,36 @@ internal sealed class AppHost : IAsyncDisposable
 
         _disposed = true;
 
-        try
+        if (!_hostShutdownService.IsStopCompleted)
         {
-            await _host.StopAsync().ConfigureAwait(false);
+            using var stopCts = new CancellationTokenSource(StopTimeout);
+
+            try
+            {
+                await _host.StopAsync(stopCts.Token).ConfigureAwait(false);
+                _logger.LogDebug("Host stopped successfully from AppHost.");
+            }
+            catch (OperationCanceledException)
+            {
+                if (stopCts.IsCancellationRequested)
+                {
+                    _logger.LogWarning("AppHost stop timed out after {Timeout}.", StopTimeout);
+                }
+                else
+                {
+                    _logger.LogInformation("AppHost stop canceled via caller token.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AppHost failed to stop the host.");
+            }
         }
-        catch
+
+        if (_hostShutdownService.IsDisposeCompleted)
         {
-            // Ignore errors during best-effort shutdown.
+            _logger.LogDebug("AppHost skip dispose because host was already released by orchestrator.");
+            return;
         }
 
         try
@@ -126,10 +160,12 @@ internal sealed class AppHost : IAsyncDisposable
             {
                 _host.Dispose();
             }
+
+            _logger.LogDebug("Host disposed successfully from AppHost.");
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors during best-effort shutdown.
+            _logger.LogError(ex, "AppHost failed to dispose the host.");
         }
     }
 

@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.Services.Abstractions;
@@ -8,6 +11,8 @@ internal sealed class HostShutdownService : IHostShutdownService
 {
     private readonly ILogger<HostShutdownService> _logger;
     private IHost? _host;
+    private volatile bool _stopCompleted;
+    private volatile bool _disposeCompleted;
 
     public HostShutdownService(ILogger<HostShutdownService> logger)
     {
@@ -22,12 +27,21 @@ internal sealed class HostShutdownService : IHostShutdownService
         {
             throw new InvalidOperationException("The host has already been initialized.");
         }
+
+        Volatile.Write(ref _stopCompleted, false);
+        Volatile.Write(ref _disposeCompleted, false);
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public bool IsStopCompleted => Volatile.Read(ref _stopCompleted);
+
+    public bool IsDisposeCompleted => Volatile.Read(ref _disposeCompleted);
+
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
         var host = _host ?? throw new InvalidOperationException("The host has not been initialized.");
-        return host.StopAsync(cancellationToken);
+
+        await host.StopAsync(cancellationToken).ConfigureAwait(false);
+        Volatile.Write(ref _stopCompleted, true);
     }
 
     public async ValueTask DisposeAsync()
@@ -39,13 +53,26 @@ internal sealed class HostShutdownService : IHostShutdownService
             return;
         }
 
-        if (host is IAsyncDisposable asyncDisposable)
+        try
         {
-            await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            if (host is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                host.Dispose();
+            }
+
+            var previous = Interlocked.CompareExchange(ref _host, null, host);
+            if (ReferenceEquals(previous, host) || previous is null)
+            {
+                Volatile.Write(ref _disposeCompleted, true);
+            }
         }
-        else
+        catch
         {
-            host.Dispose();
+            throw;
         }
     }
 }
