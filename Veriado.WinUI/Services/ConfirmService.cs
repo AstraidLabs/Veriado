@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,7 +8,7 @@ namespace Veriado.WinUI.Services;
 
 public sealed class ConfirmService : IConfirmService
 {
-    private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(30);
 
     private readonly IWindowProvider _windowProvider;
     private readonly ILogger<ConfirmService> _logger;
@@ -29,15 +30,15 @@ public sealed class ConfirmService : IConfirmService
         {
             if (!_windowProvider.TryGetWindow(out var window) || window?.Content is not FrameworkElement root)
             {
-                _logger.LogDebug("Confirmation dialog skipped because no active window content is available.");
-                return true;
+                _logger.LogWarning("Confirmation dialog unavailable because no active window content is present.");
+                return false;
             }
 
             var xamlRoot = root.XamlRoot;
             if (xamlRoot is null)
             {
                 _logger.LogWarning("Confirmation dialog skipped because XamlRoot is not available.");
-                return true;
+                return false;
             }
 
             var dialog = new ContentDialog
@@ -62,18 +63,18 @@ public sealed class ConfirmService : IConfirmService
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
             {
                 _logger.LogWarning("Confirmation dialog timed out after {Timeout}.", DialogTimeout);
-                return true;
+                return false;
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Confirmation dialog canceled via token; allowing shutdown to proceed.");
-                return true;
+                _logger.LogInformation("Confirmation dialog canceled via token; treating as rejection.");
+                return false;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Confirmation dialog failed. Proceeding with shutdown.");
-            return true;
+            _logger.LogError(ex, "Confirmation dialog failed. Rejecting shutdown to keep application open.");
+            return false;
         }
     }
 
@@ -103,7 +104,7 @@ public sealed class ConfirmService : IConfirmService
         var result = await dialog.ShowAsync().AsTask().ConfigureAwait(true);
         if (cancellationToken.IsCancellationRequested)
         {
-            return true;
+            return false;
         }
 
         return result == ContentDialogResult.Primary;
