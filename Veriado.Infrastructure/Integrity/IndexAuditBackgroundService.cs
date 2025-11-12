@@ -55,9 +55,10 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             {
                 break;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
-                throw;
+                _logger.LogDebug(ex, "Index audit execution canceled.");
+                break;
             }
             catch (Exception ex)
             {
@@ -68,8 +69,9 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             {
                 await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                _logger.LogDebug(ex, "Index audit delay canceled.");
                 break;
             }
         }
