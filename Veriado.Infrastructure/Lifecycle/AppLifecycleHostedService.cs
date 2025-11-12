@@ -10,10 +10,10 @@ namespace Veriado.Infrastructure.Lifecycle;
 
 public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleService, IAsyncDisposable
 {
-    private static readonly TimeSpan DefaultStartTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan DefaultStopTimeout = TimeSpan.FromSeconds(20);
-    private static readonly TimeSpan DefaultPauseTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan DefaultResumeTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DefaultStartTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan DefaultStopTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan DefaultPauseTimeout = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan DefaultResumeTimeout = TimeSpan.FromSeconds(45);
 
     private readonly ILogger<AppLifecycleHostedService> _logger;
     private readonly PauseTokenSource _pauseTokenSource;
@@ -261,11 +261,20 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             stopwatch.Stop();
             _logger.LogInformation("Lifecycle running after {Duration}.", stopwatch.Elapsed);
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             TransitionTo(AppLifecycleState.Faulted);
             stopwatch.Stop();
             _logger.LogWarning("Lifecycle start timed out after {Timeout}.", DefaultStartTimeout);
+            throw;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            TransitionTo(AppLifecycleState.Stopped);
+            stopwatch.Stop();
+            _logger.LogDebug("Lifecycle start canceled by caller.");
+            _runCts?.Dispose();
+            _runCts = null;
             throw;
         }
         catch (Exception ex)
@@ -297,11 +306,20 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             stopwatch.Stop();
             _logger.LogInformation("Lifecycle stopped after {Duration}.", stopwatch.Elapsed);
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             TransitionTo(AppLifecycleState.Faulted);
             stopwatch.Stop();
             _logger.LogWarning("Lifecycle stop timed out after {Timeout}.", DefaultStopTimeout);
+            throw;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            TransitionTo(AppLifecycleState.Running);
+            stopwatch.Stop();
+            _logger.LogDebug("Lifecycle stop canceled by caller.");
+            _runCts?.Dispose();
+            _runCts = new CancellationTokenSource();
             throw;
         }
         catch (Exception ex)
@@ -313,8 +331,11 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
         }
         finally
         {
-            _runCts?.Dispose();
-            _runCts = null;
+            if (_state is AppLifecycleState.Stopped or AppLifecycleState.Faulted or AppLifecycleState.Disposed)
+            {
+                _runCts?.Dispose();
+                _runCts = null;
+            }
         }
     }
 
@@ -340,7 +361,14 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             stopwatch.Stop();
             _logger.LogInformation("Lifecycle paused (handlers completed in {Duration}).", stopwatch.Elapsed);
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _pauseTokenSource.TryResume();
+            TransitionTo(AppLifecycleState.Running);
+            _logger.LogDebug("Lifecycle pause canceled by caller.");
+            throw;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             TransitionTo(AppLifecycleState.Faulted);
             _logger.LogWarning("Lifecycle pause timed out after {Timeout}.", DefaultPauseTimeout);
@@ -370,7 +398,14 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             stopwatch.Stop();
             _logger.LogInformation("Lifecycle resumed (handlers completed in {Duration}).", stopwatch.Elapsed);
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _pauseTokenSource.TryPause();
+            TransitionTo(AppLifecycleState.Paused);
+            _logger.LogDebug("Lifecycle resume canceled by caller.");
+            throw;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             TransitionTo(AppLifecycleState.Faulted);
             _logger.LogWarning("Lifecycle resume timed out after {Timeout}.", DefaultResumeTimeout);

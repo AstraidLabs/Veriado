@@ -17,7 +17,7 @@ namespace Veriado.Infrastructure.Idempotency;
 /// </summary>
 internal sealed class IdempotencyCleanupWorker : BackgroundService
 {
-    private static readonly TimeSpan IterationTimeout = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan IterationTimeout = TimeSpan.FromMinutes(10);
     private const string MonitorServiceName = nameof(IdempotencyCleanupWorker);
 
     private readonly InfrastructureOptions _options;
