@@ -53,15 +53,45 @@ public partial class App : WinUIApplication
         var startupWindow = new StartupWindow(startupViewModel);
         startupWindow.Activate();
 
-        while (!await TryInitializeAsync(startupViewModel).ConfigureAwait(true))
+        using var startupCts = new CancellationTokenSource();
+
+        void OnStartupWindowClosed(object? sender, WindowEventArgs e)
         {
-            await WaitForRetryAsync(startupViewModel).ConfigureAwait(true);
+            startupWindow.Closed -= OnStartupWindowClosed;
+            startupCts.Cancel();
         }
 
-        startupWindow.Close();
+        startupWindow.Closed += OnStartupWindowClosed;
+
+        try
+        {
+            while (!startupCts.IsCancellationRequested)
+            {
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(startupCts.Token);
+
+                if (await TryInitializeAsync(startupViewModel, linkedCts.Token).ConfigureAwait(true))
+                {
+                    startupWindow.Close();
+                    return;
+                }
+
+                try
+                {
+                    await WaitForRetryAsync(startupViewModel, startupCts.Token).ConfigureAwait(true);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            startupWindow.Closed -= OnStartupWindowClosed;
+        }
     }
 
-    private static Task WaitForRetryAsync(StartupViewModel viewModel)
+    private static async Task WaitForRetryAsync(StartupViewModel viewModel, CancellationToken cancellationToken)
     {
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -73,36 +103,37 @@ public partial class App : WinUIApplication
 
         viewModel.RetryRequested += Handler;
 
-        return completion.Task;
+        using var registration = cancellationToken.Register(() =>
+        {
+            viewModel.RetryRequested -= Handler;
+            completion.TrySetCanceled(cancellationToken);
+        });
+
+        await completion.Task.ConfigureAwait(true);
     }
 
-    private async Task<bool> TryInitializeAsync(StartupViewModel startupViewModel)
+    private async Task<bool> TryInitializeAsync(StartupViewModel startupViewModel, CancellationToken cancellationToken)
     {
         startupViewModel.ShowProgress("Spouštím služby aplikace...");
 
         AppHost? host = null;
+        var initialized = false;
 
         try
         {
-            host = await AppHost.StartAsync().ConfigureAwait(true);
+            host = await AppHost.StartAsync().ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             _appHost = host;
 
             var services = host.Services;
 
-            var shell = services.GetRequiredService<MainShell>();
-
-            var windowProvider = services.GetRequiredService<IWindowProvider>();
-            windowProvider.SetWindow(shell);
-
-            var dispatcherService = services.GetRequiredService<IDispatcherService>();
-            dispatcherService.ResetDispatcher(shell.DispatcherQueue);
-
-            var themeService = services.GetRequiredService<IThemeService>();
-            await themeService.InitializeAsync().ConfigureAwait(true);
-
             _shutdownOrchestrator = services.GetRequiredService<IShutdownOrchestrator>();
 
+            var startupCoordinator = services.GetRequiredService<IStartupCoordinator>();
+            var result = await startupCoordinator.RunAsync(cancellationToken).ConfigureAwait(true);
+
+            var shell = result.Shell;
             shell.Activate();
             shell.Closed += OnWindowClosed;
 
@@ -115,7 +146,12 @@ public partial class App : WinUIApplication
                 _appWindow.Closing += OnAppWindowClosing;
             }
 
+            initialized = true;
             return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation requested by caller; ensure cleanup before returning.
         }
         catch (Exception ex)
         {
@@ -124,16 +160,29 @@ public partial class App : WinUIApplication
                 ex.Message);
 
             LogStartupFailure(host, ex);
+        }
 
+        if (!initialized)
+        {
             if (host is not null)
             {
-                await host.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    await host.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception disposeEx)
+                {
+                    BootstrapLogger.LogError(disposeEx, "Best-effort host disposal failed after startup error.");
+                }
             }
 
             _appHost = null;
+            _shutdownOrchestrator = null;
             MainWindow = null;
-            return false;
+            _appWindow = null;
         }
+
+        return false;
     }
 
     private void LogStartupFailure(AppHost? host, Exception exception)
@@ -155,7 +204,7 @@ public partial class App : WinUIApplication
         (logger ?? BootstrapLogger).LogError(exception, "Application startup failed.");
     }
 
-    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         if (_isAppWindowShutdownInProgress)
         {
@@ -172,28 +221,23 @@ public partial class App : WinUIApplication
 
         args.Cancel = true;
 
-        HandleAppWindowClosingAsync(sender, orchestrator);
-
-        async void HandleAppWindowClosingAsync(AppWindow window, IShutdownOrchestrator shutdownOrchestrator)
+        try
         {
-            try
-            {
-                var result = await shutdownOrchestrator
-                    .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
-                    .ConfigureAwait(true);
+            var result = await orchestrator
+                .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
+                .ConfigureAwait(true);
 
-                if (result.IsAllowed)
-                {
-                    _isAppWindowShutdownInProgress = true;
-                    MainWindow?.Close();
-                }
-            }
-            catch (Exception ex)
+            if (result.IsAllowed)
             {
-                BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
                 _isAppWindowShutdownInProgress = true;
                 MainWindow?.Close();
             }
+        }
+        catch (Exception ex)
+        {
+            BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
+            _isAppWindowShutdownInProgress = true;
+            MainWindow?.Close();
         }
     }
 
@@ -212,6 +256,7 @@ public partial class App : WinUIApplication
 
         var host = _appHost;
         _appHost = null;
+        _shutdownOrchestrator = null;
 
         if (host is not null)
         {

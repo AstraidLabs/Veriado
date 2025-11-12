@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -8,8 +10,6 @@ namespace Veriado.WinUI.Services;
 
 public sealed class ConfirmService : IConfirmService
 {
-    private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(30);
-
     private readonly IWindowProvider _windowProvider;
     private readonly ILogger<ConfirmService> _logger;
 
@@ -24,8 +24,12 @@ public sealed class ConfirmService : IConfirmService
         string message,
         string confirmText,
         string cancelText,
-        CancellationToken cancellationToken = default)
+        ConfirmOptions? options = null)
     {
+        var effectiveOptions = options ?? new ConfirmOptions();
+        var timeout = effectiveOptions.Timeout;
+        var callerToken = effectiveOptions.CancellationToken;
+
         try
         {
             if (!_windowProvider.TryGetWindow(out var window) || window?.Content is not FrameworkElement root)
@@ -52,24 +56,44 @@ public sealed class ConfirmService : IConfirmService
                 RequestedTheme = root.ActualTheme,
             };
 
-            using var timeoutCts = new CancellationTokenSource(DialogTimeout);
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+            using var timeoutCts = timeout == Timeout.InfiniteTimeSpan
+                ? null
+                : new CancellationTokenSource(timeout);
+
+            CancellationToken combinedToken;
+            CancellationTokenSource? linkedCts = null;
+            if (timeoutCts is not null && callerToken.CanBeCanceled)
+            {
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, callerToken);
+                combinedToken = linkedCts.Token;
+            }
+            else if (timeoutCts is not null)
+            {
+                combinedToken = timeoutCts.Token;
+            }
+            else
+            {
+                combinedToken = callerToken;
+            }
 
             try
             {
-                var result = await ShowDialogAsync(dialog, linkedCts.Token).ConfigureAwait(true);
-                return result;
+                return await ShowDialogAsync(dialog, timeoutCts, callerToken, combinedToken).ConfigureAwait(true);
             }
-            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            finally
             {
-                _logger.LogWarning("Confirmation dialog timed out after {Timeout}.", DialogTimeout);
-                return false;
+                linkedCts?.Dispose();
             }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("Confirmation dialog canceled via token; treating as rejection.");
-                return false;
-            }
+        }
+        catch (OperationCanceledException) when (callerToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("Confirmation dialog canceled via caller token; treating as rejection.");
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Confirmation dialog timed out after {Timeout}.", timeout);
+            return false;
         }
         catch (Exception ex)
         {
@@ -78,9 +102,13 @@ public sealed class ConfirmService : IConfirmService
         }
     }
 
-    private static async Task<bool> ShowDialogAsync(ContentDialog dialog, CancellationToken cancellationToken)
+    private static async Task<bool> ShowDialogAsync(
+        ContentDialog dialog,
+        CancellationTokenSource? timeoutCts,
+        CancellationToken callerToken,
+        CancellationToken combinedToken)
     {
-        using var registration = cancellationToken.Register(() =>
+        using var registration = combinedToken.Register(() =>
         {
             if (dialog.DispatcherQueue.HasThreadAccess)
             {
@@ -102,7 +130,17 @@ public sealed class ConfirmService : IConfirmService
         });
 
         var result = await dialog.ShowAsync().AsTask().ConfigureAwait(true);
-        if (cancellationToken.IsCancellationRequested)
+        if (combinedToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        if (timeoutCts is not null && timeoutCts.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        if (callerToken.IsCancellationRequested)
         {
             return false;
         }

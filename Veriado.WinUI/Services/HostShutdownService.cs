@@ -38,6 +38,12 @@ internal sealed class HostShutdownService : IHostShutdownService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        if (IsStopCompleted)
+        {
+            _logger.LogDebug("Host stop requested but already completed.");
+            return;
+        }
+
         var host = _host ?? throw new InvalidOperationException("The host has not been initialized.");
 
         await host.StopAsync(cancellationToken).ConfigureAwait(false);
@@ -46,15 +52,39 @@ internal sealed class HostShutdownService : IHostShutdownService
 
     public async ValueTask DisposeAsync()
     {
-        var host = _host;
+        if (IsDisposeCompleted)
+        {
+            _logger.LogDebug("Host dispose requested but already completed.");
+            return;
+        }
+
+        var host = Interlocked.Exchange(ref _host, null);
         if (host is null)
         {
             _logger.LogDebug("DisposeAsync called without an initialized host.");
+            Volatile.Write(ref _disposeCompleted, true);
+            Volatile.Write(ref _stopCompleted, true);
             return;
         }
 
         try
         {
+            if (!IsStopCompleted)
+            {
+                _logger.LogDebug("Disposing host without prior StopAsync; signaling stop.");
+                try
+                {
+                    using var stopCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await host.StopAsync(stopCts.Token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Best-effort stop during dispose failed.");
+                }
+
+                Volatile.Write(ref _stopCompleted, true);
+            }
+
             if (host is IAsyncDisposable asyncDisposable)
             {
                 await asyncDisposable.DisposeAsync().ConfigureAwait(false);
@@ -64,14 +94,12 @@ internal sealed class HostShutdownService : IHostShutdownService
                 host.Dispose();
             }
 
-            var previous = Interlocked.CompareExchange(ref _host, null, host);
-            if (ReferenceEquals(previous, host) || previous is null)
-            {
-                Volatile.Write(ref _disposeCompleted, true);
-            }
+            _logger.LogDebug("Host disposed successfully.");
+            Volatile.Write(ref _disposeCompleted, true);
         }
         catch
         {
+            Volatile.Write(ref _disposeCompleted, false);
             throw;
         }
     }

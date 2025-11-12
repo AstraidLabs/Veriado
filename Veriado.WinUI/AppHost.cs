@@ -39,7 +39,8 @@ internal sealed class AppHost : IAsyncDisposable
         _logger = logger;
     }
 
-    public IServiceProvider Services => _host.Services;
+    public IServiceProvider Services => _host?.Services
+        ?? throw new InvalidOperationException("Application host has not been started.");
 
     public static async Task<AppHost> StartAsync()
     {
@@ -67,6 +68,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<HostShutdownService>();
                 services.AddSingleton<IHostShutdownService>(static sp => sp.GetRequiredService<HostShutdownService>());
                 services.AddSingleton<IShutdownOrchestrator, ShutdownOrchestrator>();
+                services.AddSingleton<IStartupCoordinator, StartupCoordinator>();
                 services.AddSingleton<ITimeFormattingService, TimeFormattingService>();
                 services.AddSingleton<IServerClock, ServerClock>();
                 services.AddSingleton<IPickerService, PickerService>();
@@ -104,7 +106,6 @@ internal sealed class AppHost : IAsyncDisposable
             gate.Acquire(TimeSpan.FromSeconds(30));
             await host.StartAsync().ConfigureAwait(false);
         }
-        await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
         var logger = host.Services.GetRequiredService<ILogger<AppHost>>();
         return new AppHost(host, hostShutdownService, logger);
     }
@@ -118,54 +119,46 @@ internal sealed class AppHost : IAsyncDisposable
 
         _disposed = true;
 
-        if (!_hostShutdownService.IsStopCompleted)
-        {
-            using var stopCts = new CancellationTokenSource(StopTimeout);
-
-            try
-            {
-                await _host.StopAsync(stopCts.Token).ConfigureAwait(false);
-                _logger.LogDebug("Host stopped successfully from AppHost.");
-            }
-            catch (OperationCanceledException)
-            {
-                if (stopCts.IsCancellationRequested)
-                {
-                    _logger.LogWarning("AppHost stop timed out after {Timeout}.", StopTimeout);
-                }
-                else
-                {
-                    _logger.LogInformation("AppHost stop canceled via caller token.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "AppHost failed to stop the host.");
-            }
-        }
-
-        if (_hostShutdownService.IsDisposeCompleted)
-        {
-            _logger.LogDebug("AppHost skip dispose because host was already released by orchestrator.");
-            return;
-        }
-
         try
         {
-            if (_host is IAsyncDisposable asyncDisposable)
+            if (!_hostShutdownService.IsStopCompleted)
             {
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                _host.Dispose();
+                using var stopCts = new CancellationTokenSource(StopTimeout);
+                try
+                {
+                    await _hostShutdownService.StopAsync(stopCts.Token).ConfigureAwait(false);
+                    _logger.LogDebug("Host stopped successfully from AppHost.");
+                }
+                catch (OperationCanceledException)
+                {
+                    if (stopCts.IsCancellationRequested)
+                    {
+                        _logger.LogWarning("AppHost stop timed out after {Timeout}.", StopTimeout);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("AppHost stop canceled via caller token.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "AppHost failed to stop the host.");
+                }
             }
 
+            if (_hostShutdownService.IsDisposeCompleted)
+            {
+                _logger.LogDebug("AppHost skip dispose because host was already released by orchestrator.");
+                return;
+            }
+
+            await _hostShutdownService.DisposeAsync().ConfigureAwait(false);
+            _host = null;
             _logger.LogDebug("Host disposed successfully from AppHost.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AppHost failed to dispose the host.");
+            _logger.LogError(ex, "AppHost failed during shutdown.");
         }
     }
 

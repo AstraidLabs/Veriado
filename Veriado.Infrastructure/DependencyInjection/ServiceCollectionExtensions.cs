@@ -20,6 +20,7 @@ using Veriado.Infrastructure.Import;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
 using Veriado.Infrastructure.Maintenance;
+using Veriado.Infrastructure.Lifecycle;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Interceptors;
@@ -105,6 +106,10 @@ public static class ServiceCollectionExtensions
             return new SqliteConnectionStringProvider(optionsMonitor, pathResolver, logger);
         });
         services.AddSingleton<InfrastructureInitializationState>();
+        services.AddSingleton<PauseTokenSource>();
+        services.AddSingleton<AppLifecycleHostedService>();
+        services.AddSingleton<IAppLifecycleService>(static sp => sp.GetRequiredService<AppLifecycleHostedService>());
+        services.AddSingleton<IHostedService>(static sp => sp.GetRequiredService<AppLifecycleHostedService>());
         services.AddSingleton<ISearchTelemetry, SearchTelemetry>();
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddSingleton<ISqliteConnectionFactory, PooledSqliteConnectionFactory>();
