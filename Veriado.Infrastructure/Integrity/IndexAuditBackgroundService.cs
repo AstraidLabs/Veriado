@@ -65,13 +65,9 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                 _logger.LogWarning(ex, "Index audit execution failed.");
             }
 
-            try
+            if (await WaitForIntervalAsync(interval, stoppingToken).ConfigureAwait(false))
             {
-                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException ex)
-            {
-                _logger.LogDebug(ex, "Index audit delay canceled.");
+                _logger.LogDebug("Index audit delay canceled.");
                 break;
             }
         }
@@ -105,6 +101,32 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             _logger.LogInformation(
                 "Periodic FTS audit detected {IssueCount} discrepancies; automated reindexing is disabled in this phase.",
                 issues);
+        }
+    }
+
+    private static async Task<bool> WaitForIntervalAsync(TimeSpan interval, CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            await Task.Delay(interval).ConfigureAwait(false);
+            return false;
+        }
+
+        var delayTask = Task.Delay(interval);
+        var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (cancellationToken.Register(
+                   static state => ((TaskCompletionSource<bool>)state!).TrySetResult(true),
+                   cancellationSource))
+        {
+            var completed = await Task.WhenAny(delayTask, cancellationSource.Task).ConfigureAwait(false);
+            if (completed == delayTask)
+            {
+                await delayTask.ConfigureAwait(false);
+                return false;
+            }
+
+            return true;
         }
     }
 }
