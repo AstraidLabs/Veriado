@@ -10,9 +10,9 @@ namespace Veriado.WinUI.Services.Shutdown;
 
 public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposable
 {
-    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(10);
 
-    private readonly IConfirmService _confirmService;
     private readonly IAppLifecycleService _lifecycleService;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly IHostShutdownService _hostShutdownService;
@@ -24,13 +24,11 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
     private bool _disposing;
 
     public ShutdownOrchestrator(
-        IConfirmService confirmService,
         IAppLifecycleService lifecycleService,
         IHostApplicationLifetime applicationLifetime,
         IHostShutdownService hostShutdownService,
         ILogger<ShutdownOrchestrator> logger)
     {
-        _confirmService = confirmService ?? throw new ArgumentNullException(nameof(confirmService));
         _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
         _applicationLifetime = applicationLifetime ?? throw new ArgumentNullException(nameof(applicationLifetime));
         _hostShutdownService = hostShutdownService ?? throw new ArgumentNullException(nameof(hostShutdownService));
@@ -52,19 +50,16 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
 
             _logger.LogInformation("Shutdown requested with reason {Reason}.", reason);
 
-            if (!await ConfirmAsync(reason, cancellationToken).ConfigureAwait(true))
-            {
-                _logger.LogInformation("Shutdown canceled by user confirmation.");
-                return ShutdownResult.Cancel();
-            }
-
             ExecuteStopApplication();
 
             var stopSucceeded = await StopLifecycleAsync(cancellationToken).ConfigureAwait(false);
-            var hostStopped = await StopHostAsync(cancellationToken).ConfigureAwait(false);
-            var disposeSucceeded = await DisposeHostAsync().ConfigureAwait(false);
+            var hostResult = await _hostShutdownService
+                .StopAndDisposeAsync(StopTimeout, DisposeTimeout, cancellationToken)
+                .ConfigureAwait(false);
 
-            if (stopSucceeded && hostStopped && disposeSucceeded)
+            LogHostShutdownResult(hostResult);
+
+            if (stopSucceeded && hostResult.IsCompleted)
             {
                 _logger.LogInformation("Shutdown sequence finished successfully.");
                 _stopped = true;
@@ -72,10 +67,10 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
             }
 
             _logger.LogWarning(
-                "Shutdown sequence incomplete. Lifecycle stopped: {LifecycleStopped}, host stopped: {HostStopped}, disposed: {Disposed}.",
+                "Shutdown sequence incomplete. Lifecycle stopped: {LifecycleStopped}, host stop: {HostStopState}, host dispose: {HostDisposeState}.",
                 stopSucceeded,
-                hostStopped,
-                disposeSucceeded);
+                hostResult.Stop.State,
+                hostResult.Dispose.State);
             return ShutdownResult.Allow();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -119,24 +114,6 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         }
     }
 
-    private async Task<bool> ConfirmAsync(ShutdownReason reason, CancellationToken cancellationToken)
-    {
-        if (reason != ShutdownReason.AppWindowClosing)
-        {
-            return true;
-        }
-
-        var options = new ConfirmOptions
-        {
-            Timeout = Timeout.InfiniteTimeSpan,
-            CancellationToken = cancellationToken,
-        };
-
-        return await _confirmService
-            .TryConfirmAsync("Ukončit aplikaci?", "Opravdu si přejete ukončit aplikaci?", "Ukončit", "Zůstat", options)
-            .ConfigureAwait(true);
-    }
-
     private void ExecuteStopApplication()
     {
         try
@@ -165,6 +142,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         {
             await _lifecycleService.StopAsync(stopCts.Token).ConfigureAwait(false);
             _logger.LogInformation("Lifecycle stopped cooperatively.");
+            _stopped = true;
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -184,57 +162,40 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         }
     }
 
-    private async Task<bool> StopHostAsync(CancellationToken cancellationToken)
+    private void LogHostShutdownResult(HostShutdownResult result)
     {
-        var result = await _hostShutdownService
-            .StopAsync(StopTimeout, cancellationToken)
-            .ConfigureAwait(false);
+        if (result.IsCompleted)
+        {
+            _logger.LogInformation("Host stop/dispose completed successfully.");
+            return;
+        }
 
-        switch (result.State)
+        switch (result.Stop.State)
         {
             case HostStopState.Completed:
-                _logger.LogInformation("Host stopped successfully.");
-                return true;
             case HostStopState.AlreadyStopped:
-                _logger.LogDebug("Host stop skipped because it was already completed.");
-                return true;
             case HostStopState.NotInitialized:
-                _logger.LogDebug("Host stop skipped because host not initialized.");
-                return true;
+                break;
             case HostStopState.Canceled:
                 _logger.LogInformation("Host stop canceled via caller token.");
-                return false;
+                break;
             case HostStopState.TimedOut:
-                _logger.LogWarning("Host stop timed out after {Timeout}.", StopTimeout);
-                return false;
+                _logger.LogWarning(result.Stop.Exception, "Host stop timed out after {Timeout}.", StopTimeout);
+                break;
             case HostStopState.Failed:
-                _logger.LogError(result.Exception, "Host stop failed.");
-                return false;
-            default:
-                return false;
+                _logger.LogError(result.Stop.Exception, "Host stop failed.");
+                break;
         }
-    }
 
-    private async Task<bool> DisposeHostAsync()
-    {
-        var result = await _hostShutdownService.DisposeAsync().ConfigureAwait(false);
-
-        switch (result.State)
+        switch (result.Dispose.State)
         {
             case HostDisposeState.Completed:
-                _logger.LogInformation("Host disposed successfully.");
-                return true;
             case HostDisposeState.AlreadyDisposed:
-                _logger.LogDebug("Host dispose skipped because host already disposed.");
-                return true;
             case HostDisposeState.NotInitialized:
-                _logger.LogDebug("Host dispose skipped because host not initialized.");
-                return true;
+                break;
             case HostDisposeState.Failed:
-                _logger.LogError(result.Exception, "Host dispose failed.");
-                return false;
-            default:
-                return false;
+                _logger.LogError(result.Dispose.Exception, "Host dispose failed.");
+                break;
         }
     }
 }

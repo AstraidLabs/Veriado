@@ -1,17 +1,26 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Veriado.Contracts.Files;
+using Veriado.Infrastructure.Lifecycle;
 using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services;
 
 public sealed partial class HotStateService : ObservableObject, IHotStateService
 {
+    private static readonly TimeSpan PersistDebounceDelay = TimeSpan.FromMilliseconds(250);
+
     private readonly ISettingsService _settingsService;
     private readonly IStatusService _statusService;
+    private readonly IAppLifecycleService _lifecycleService;
     private readonly ILogger<HotStateService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly object _persistSync = new();
     private bool _initialized;
     private ValidityThresholds _validityThresholds = AppSettings.CreateDefaultValidityThresholds();
+    private CancellationTokenSource? _persistSource;
+    private Task? _persistTask;
 
     [ObservableProperty]
     private string? lastQuery;
@@ -69,19 +78,24 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     public HotStateService(
         ISettingsService settingsService,
         IStatusService statusService,
+        IAppLifecycleService lifecycleService,
         ILogger<HotStateService> logger)
     {
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+        _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifecycleService.RunToken);
+        var effectiveToken = linkedCts.Token;
+
+        await _gate.WaitAsync(effectiveToken).ConfigureAwait(false);
         try
         {
-            var settings = await _settingsService.GetAsync(cancellationToken).ConfigureAwait(false);
+            var settings = await _settingsService.GetAsync(effectiveToken).ConfigureAwait(false);
             lastQuery = settings.LastQuery;
             lastFolder = settings.LastFolder;
             pageSize = settings.PageSize > 0 ? settings.PageSize : AppSettings.DefaultPageSize;
@@ -124,9 +138,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         }
     }
 
-    partial void OnLastQueryChanged(string? value) => PersistAsync();
+    partial void OnLastQueryChanged(string? value) => SchedulePersist();
 
-    partial void OnLastFolderChanged(string? value) => PersistAsync();
+    partial void OnLastFolderChanged(string? value) => SchedulePersist();
 
     partial void OnPageSizeChanged(int value)
     {
@@ -136,18 +150,18 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(PageSize));
         }
 
-        PersistAsync();
+        SchedulePersist();
     }
 
-    partial void OnImportRecursiveChanged(bool value) => PersistAsync();
+    partial void OnImportRecursiveChanged(bool value) => SchedulePersist();
 
-    partial void OnImportKeepFsMetadataChanged(bool value) => PersistAsync();
+    partial void OnImportKeepFsMetadataChanged(bool value) => SchedulePersist();
 
-    partial void OnImportSetReadOnlyChanged(bool value) => PersistAsync();
+    partial void OnImportSetReadOnlyChanged(bool value) => SchedulePersist();
 
-    partial void OnImportUseParallelChanged(bool value) => PersistAsync();
+    partial void OnImportUseParallelChanged(bool value) => SchedulePersist();
 
-    partial void OnImportAutoExportLogChanged(bool value) => PersistAsync();
+    partial void OnImportAutoExportLogChanged(bool value) => SchedulePersist();
 
     partial void OnImportMaxDegreeOfParallelismChanged(int value)
     {
@@ -157,10 +171,10 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
         }
 
-        PersistAsync();
+        SchedulePersist();
     }
 
-    partial void OnImportDefaultAuthorChanged(string? value) => PersistAsync();
+    partial void OnImportDefaultAuthorChanged(string? value) => SchedulePersist();
 
     partial void OnImportMaxFileSizeMegabytesChanged(double? value)
     {
@@ -170,7 +184,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportMaxFileSizeMegabytes));
         }
 
-        PersistAsync();
+        SchedulePersist();
     }
 
     private void UpdateValidityThresholds(int? red = null, int? orange = null, int? green = null)
@@ -198,40 +212,98 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
         if (persist)
         {
-            PersistAsync();
+            SchedulePersist();
         }
     }
 
-    private void PersistAsync()
+    private void SchedulePersist()
     {
         if (!_initialized)
         {
             return;
         }
 
-        _ = PersistStateAsync();
+        if (_lifecycleService.RunToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Skipping hot state persistence because the application is stopping.");
+            return;
+        }
+
+        CancellationTokenSource? previous;
+
+        lock (_persistSync)
+        {
+            previous = _persistSource;
+            var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(_lifecycleService.RunToken);
+            _persistSource = linkedSource;
+            _persistTask = RunPersistAsync(linkedSource);
+        }
+
+        previous?.Cancel();
+        previous?.Dispose();
     }
 
-    private async Task PersistStateAsync()
+    private async Task RunPersistAsync(CancellationTokenSource source)
     {
-        var result = await PersistStateInternalAsync().ConfigureAwait(false);
-        if (!result.Success)
+        var token = source.Token;
+
+        try
         {
-            var message = "Nepodařilo se uložit poslední použitý stav.";
-            if (!string.IsNullOrWhiteSpace(result.Exception?.Message))
+            if (PersistDebounceDelay > TimeSpan.Zero)
             {
-                message = $"{message} {result.Exception.Message}";
+                await Task.Delay(PersistDebounceDelay, token).ConfigureAwait(false);
+            }
+
+            await PersistStateAsync(token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            _logger.LogDebug("Hot state persistence canceled.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected failure while persisting hot state.");
+            var message = "Nepodařilo se uložit poslední použitý stav.";
+            if (!string.IsNullOrWhiteSpace(ex.Message))
+            {
+                message = $"{message} {ex.Message}";
             }
 
             _statusService.Error(message);
         }
+        finally
+        {
+            CleanupPersistState(source);
+        }
     }
 
-    private async Task<PersistStateResult> PersistStateInternalAsync()
+    private async Task PersistStateAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await _gate.WaitAsync().ConfigureAwait(false);
+            var result = await PersistStateInternalAsync(cancellationToken).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                var message = "Nepodařilo se uložit poslední použitý stav.";
+                if (!string.IsNullOrWhiteSpace(result.Exception?.Message))
+                {
+                    message = $"{message} {result.Exception.Message}";
+                }
+
+                _statusService.Error(message);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _lifecycleService.RunToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Hot state persistence canceled by token.");
+        }
+    }
+
+    private async Task<PersistStateResult> PersistStateInternalAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await _settingsService.UpdateAsync(settings =>
@@ -258,7 +330,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                     settings.Validity.RedThresholdDays = ValidityRedThresholdDays;
                     settings.Validity.OrangeThresholdDays = ValidityOrangeThresholdDays;
                     settings.Validity.GreenThresholdDays = ValidityGreenThresholdDays;
-                }).ConfigureAwait(false);
+                }, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -267,11 +339,29 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
             return PersistStateResult.CreateSuccess();
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _lifecycleService.RunToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to persist hot state.");
             return PersistStateResult.CreateFailure(ex);
         }
+    }
+
+    private void CleanupPersistState(CancellationTokenSource source)
+    {
+        lock (_persistSync)
+        {
+            if (ReferenceEquals(_persistSource, source))
+            {
+                _persistSource = null;
+                _persistTask = null;
+            }
+        }
+
+        source.Dispose();
     }
 
     private readonly struct PersistStateResult

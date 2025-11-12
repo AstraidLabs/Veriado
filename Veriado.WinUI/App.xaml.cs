@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.Helpers;
@@ -221,24 +222,7 @@ public partial class App : WinUIApplication
 
         args.Cancel = true;
 
-        try
-        {
-            var result = await orchestrator
-                .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
-                .ConfigureAwait(true);
-
-            if (result.IsAllowed)
-            {
-                _isAppWindowShutdownInProgress = true;
-                MainWindow?.Close();
-            }
-        }
-        catch (Exception ex)
-        {
-            BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
-            _isAppWindowShutdownInProgress = true;
-            MainWindow?.Close();
-        }
+        await HandleCloseAsync().ConfigureAwait(true);
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
@@ -254,27 +238,65 @@ public partial class App : WinUIApplication
             _appWindow = null;
         }
 
-        var host = _appHost;
         _appHost = null;
         _shutdownOrchestrator = null;
-
-        if (host is not null)
-        {
-            _ = DisposeHostAsync(host);
-        }
 
         MainWindow = null;
     }
 
-    private static async Task DisposeHostAsync(AppHost host)
+    private async Task HandleCloseAsync()
     {
         try
         {
-            await host.DisposeAsync().ConfigureAwait(false);
+            var services = Services;
+            var confirmService = services.GetRequiredService<IConfirmService>();
+
+            var options = new ConfirmOptions
+            {
+                Timeout = Timeout.InfiniteTimeSpan,
+                CancellationToken = CancellationToken.None,
+            };
+
+            var confirmed = await confirmService
+                .TryConfirmAsync("Ukončit aplikaci?", "Opravdu si přejete ukončit aplikaci?", "Ukončit", "Zůstat", options)
+                .ConfigureAwait(true);
+
+            if (!confirmed)
+            {
+                return;
+            }
+
+            _isAppWindowShutdownInProgress = true;
+
+            var orchestrator = _shutdownOrchestrator;
+            if (orchestrator is null)
+            {
+                MainWindow?.Close();
+                return;
+            }
+
+            var result = await orchestrator
+                .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
+                .ConfigureAwait(true);
+
+            if (result.IsAllowed)
+            {
+                MainWindow?.Close();
+            }
+            else
+            {
+                _isAppWindowShutdownInProgress = false;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _isAppWindowShutdownInProgress = false;
         }
         catch (Exception ex)
         {
-            BootstrapLogger.LogError(ex, "Best-effort host disposal failed after window closed.");
+            BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
+            _isAppWindowShutdownInProgress = true;
+            MainWindow?.Close();
         }
     }
 

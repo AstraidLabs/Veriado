@@ -1,8 +1,12 @@
 using System;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Search;
+using Veriado.Infrastructure.Lifecycle;
 
 namespace Veriado.Infrastructure.Idempotency;
 
@@ -11,20 +15,25 @@ namespace Veriado.Infrastructure.Idempotency;
 /// </summary>
 internal sealed class IdempotencyCleanupWorker : BackgroundService
 {
+    private static readonly TimeSpan IterationTimeout = TimeSpan.FromMinutes(5);
+
     private readonly InfrastructureOptions _options;
     private readonly IClock _clock;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ILogger<IdempotencyCleanupWorker> _logger;
+    private readonly IAppLifecycleService _lifecycleService;
 
     public IdempotencyCleanupWorker(
         InfrastructureOptions options,
         IClock clock,
         ISqliteConnectionFactory connectionFactory,
+        IAppLifecycleService lifecycleService,
         ILogger<IdempotencyCleanupWorker> logger)
     {
         _options = options;
         _clock = clock;
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+        _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
         _logger = logger;
     }
 
@@ -40,15 +49,43 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
             ? TimeSpan.FromHours(1)
             : _options.IdempotencyCleanupInterval;
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (!stoppingToken.IsCancellationRequested && !_lifecycleService.RunToken.IsCancellationRequested)
         {
+            using var iterationCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _lifecycleService.RunToken);
+            iterationCts.CancelAfter(IterationTimeout);
+            var iterationToken = iterationCts.Token;
+
             try
             {
-                await CleanupAsync(stoppingToken).ConfigureAwait(false);
+                await _lifecycleService.PauseToken.WaitIfPausedAsync(iterationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (iterationToken.IsCancellationRequested)
             {
-                break;
+                if (stoppingToken.IsCancellationRequested || _lifecycleService.RunToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            try
+            {
+                await CleanupAsync(iterationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (iterationToken.IsCancellationRequested)
+            {
+                if (stoppingToken.IsCancellationRequested || _lifecycleService.RunToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                if (iterationCts.IsCancellationRequested)
+                {
+                    _logger.LogWarning("Idempotency cleanup iteration timed out after {Timeout}.", IterationTimeout);
+                }
+
+                continue;
             }
             catch (Exception ex)
             {
@@ -57,11 +94,14 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 
             try
             {
-                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(delay, iterationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (iterationToken.IsCancellationRequested)
             {
-                break;
+                if (stoppingToken.IsCancellationRequested || _lifecycleService.RunToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
     }

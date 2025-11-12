@@ -29,6 +29,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IFileService _fileService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
+    private Task? _healthMonitorTask;
 
     private readonly IDialogService _dialogService;
     private readonly IExceptionHandler _exceptionHandler;
@@ -248,17 +249,20 @@ public partial class FilesPageViewModel : ViewModelBase
 
             var cts = new CancellationTokenSource();
             _healthMonitorSource = cts;
-            _ = MonitorHealthStatusAsync(cts.Token);
+            _healthMonitorTask = MonitorHealthStatusAsync(cts.Token);
         }
     }
 
-    public void StopHealthMonitoring()
+    public async Task StopHealthMonitoringAsync()
     {
         CancellationTokenSource? source;
+        Task? monitorTask;
         lock (_healthMonitorGate)
         {
             source = _healthMonitorSource;
             _healthMonitorSource = null;
+            monitorTask = _healthMonitorTask;
+            _healthMonitorTask = null;
         }
 
         if (source is null)
@@ -267,13 +271,24 @@ public partial class FilesPageViewModel : ViewModelBase
         }
 
         source.Cancel();
+        if (monitorTask is not null)
+        {
+            try
+            {
+                await monitorTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
         source.Dispose();
 
-        _ = Dispatcher.Enqueue(() =>
+        await Dispatcher.Enqueue(() =>
         {
             IsIndexingPending = false;
             IndexingWarningMessage = null;
-        });
+        }).ConfigureAwait(false);
     }
 
     partial void OnSearchTextChanged(string? value)
@@ -550,15 +565,11 @@ public partial class FilesPageViewModel : ViewModelBase
         {
             await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
 
-            using var timer = new PeriodicTimer(HealthPollingInterval);
+            await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
 
-            while (await timer.WaitForNextTickAsync().ConfigureAwait(false))
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
+                await Task.Delay(HealthPollingInterval, cancellationToken).ConfigureAwait(false);
                 await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
             }
         }

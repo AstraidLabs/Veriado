@@ -6,9 +6,12 @@ namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IHostShutdownService
 {
-    Task<HostStopResult> StopAsync(TimeSpan timeout, CancellationToken cancellationToken);
+    Task<HostShutdownResult> StopAndDisposeAsync(
+        TimeSpan stopTimeout,
+        TimeSpan disposeTimeout,
+        CancellationToken cancellationToken);
 
-    ValueTask<HostDisposeResult> DisposeAsync();
+    Task WhenStopped { get; }
 }
 
 public enum HostStopState
@@ -57,4 +60,11 @@ public readonly record struct HostDisposeResult(HostDisposeState State, Exceptio
     public static HostDisposeResult NotInitialized(Exception? exception = null) => new(HostDisposeState.NotInitialized, exception);
 
     public static HostDisposeResult Failed(Exception exception) => new(HostDisposeState.Failed, exception);
+}
+
+public readonly record struct HostShutdownResult(HostStopResult Stop, HostDisposeResult Dispose)
+{
+    public bool IsCompleted => Stop.IsSuccess && Dispose.IsSuccess;
+
+    public static HostShutdownResult NotInitialized() => new(HostStopResult.NotInitialized(), HostDisposeResult.NotInitialized());
 }
