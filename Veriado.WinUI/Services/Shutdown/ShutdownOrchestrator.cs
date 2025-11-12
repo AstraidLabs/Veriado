@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -39,49 +40,67 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         ShutdownReason reason,
         CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_disposed)
             {
                 _logger.LogDebug("Shutdown orchestrator already disposed; allowing close.");
-                return ShutdownResult.Allow();
+                stopwatch.Stop();
+                return ShutdownResult.Success(stopwatch.Elapsed, _stopped, HostShutdownResult.NotInitialized());
             }
 
             _logger.LogInformation("Shutdown requested with reason {Reason}.", reason);
 
             ExecuteStopApplication();
 
-            var stopSucceeded = await StopLifecycleAsync(cancellationToken).ConfigureAwait(false);
+            var lifecycleOutcome = await StopLifecycleAsync(cancellationToken).ConfigureAwait(false);
+
             var hostResult = await _hostShutdownService
                 .StopAndDisposeAsync(StopTimeout, DisposeTimeout, cancellationToken)
                 .ConfigureAwait(false);
 
             LogHostShutdownResult(hostResult);
 
-            if (stopSucceeded && hostResult.IsCompleted)
+            if (lifecycleOutcome.Success && hostResult.IsCompleted)
             {
-                _logger.LogInformation("Shutdown sequence finished successfully.");
                 _stopped = true;
-                return ShutdownResult.Allow();
+                _disposed = true;
+                stopwatch.Stop();
+                _logger.LogInformation(
+                    "Shutdown sequence finished successfully in {Duration}.",
+                    stopwatch.Elapsed);
+                return ShutdownResult.Success(stopwatch.Elapsed, lifecycleOutcome.Success, hostResult);
             }
 
+            var failure = ResolveFailure(lifecycleOutcome, hostResult);
+            stopwatch.Stop();
+
             _logger.LogWarning(
-                "Shutdown sequence incomplete. Lifecycle stopped: {LifecycleStopped}, host stop: {HostStopState}, host dispose: {HostDisposeState}.",
-                stopSucceeded,
+                "Shutdown sequence incomplete after {Duration}. Lifecycle stopped: {LifecycleStopped}; host stop: {HostStopState}; host dispose: {HostDisposeState}.",
+                stopwatch.Elapsed,
+                lifecycleOutcome.Success,
                 hostResult.Stop.State,
                 hostResult.Dispose.State);
-            return ShutdownResult.Allow();
+
+            return ShutdownResult.Failure(failure, stopwatch.Elapsed, lifecycleOutcome.Success, hostResult);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogInformation("Shutdown canceled via caller token.");
-            return ShutdownResult.Cancel();
+            stopwatch.Stop();
+            return ShutdownResult.Canceled(stopwatch.Elapsed);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected shutdown failure. Allowing window to close to avoid trapping the user.");
-            return ShutdownResult.Allow();
+            stopwatch.Stop();
+            _logger.LogError(ex, "Unexpected shutdown failure.");
+            return ShutdownResult.Failure(
+                ShutdownFailureDetail.Error(ShutdownFailurePhase.LifecycleStop, ex),
+                stopwatch.Elapsed,
+                lifecycleStopped: _stopped,
+                host: default);
         }
         finally
         {
@@ -127,12 +146,12 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         }
     }
 
-    private async Task<bool> StopLifecycleAsync(CancellationToken cancellationToken)
+    private async Task<LifecycleStopOutcome> StopLifecycleAsync(CancellationToken cancellationToken)
     {
         if (_stopped)
         {
             _logger.LogDebug("Lifecycle already stopped.");
-            return true;
+            return LifecycleStopOutcome.Success();
         }
 
         using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -143,23 +162,70 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
             await _lifecycleService.StopAsync(stopCts.Token).ConfigureAwait(false);
             _logger.LogInformation("Lifecycle stopped cooperatively.");
             _stopped = true;
-            return true;
+            return LifecycleStopOutcome.Success();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogInformation("Lifecycle stop canceled via caller token.");
-            return false;
+            return LifecycleStopOutcome.Canceled();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
             _logger.LogWarning("Lifecycle stop timed out after {Timeout}.", StopTimeout);
-            return false;
+            return LifecycleStopOutcome.Timeout(ex);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Lifecycle stop failed.");
-            return false;
+            return LifecycleStopOutcome.Failed(ex);
         }
+    }
+
+    private static ShutdownFailureDetail ResolveFailure(LifecycleStopOutcome lifecycleOutcome, HostShutdownResult hostResult)
+    {
+        if (!lifecycleOutcome.Success)
+        {
+            return lifecycleOutcome.Failure ?? ShutdownFailureDetail.Unknown(ShutdownFailurePhase.LifecycleStop);
+        }
+
+        if (!hostResult.Stop.IsSuccess)
+        {
+            return hostResult.Stop.State switch
+            {
+                HostStopState.TimedOut => ShutdownFailureDetail.Timeout(ShutdownFailurePhase.HostStop, hostResult.Stop.Exception),
+                HostStopState.Canceled => ShutdownFailureDetail.Canceled(ShutdownFailurePhase.HostStop, hostResult.Stop.Exception),
+                HostStopState.Failed => ShutdownFailureDetail.Error(ShutdownFailurePhase.HostStop, hostResult.Stop.Exception),
+                HostStopState.NotInitialized => ShutdownFailureDetail.NotSupported(ShutdownFailurePhase.HostStop),
+                HostStopState.AlreadyStopped => ShutdownFailureDetail.Unknown(ShutdownFailurePhase.HostStop, hostResult.Stop.Exception),
+                _ => ShutdownFailureDetail.Unknown(ShutdownFailurePhase.HostStop, hostResult.Stop.Exception),
+            };
+        }
+
+        if (!hostResult.Dispose.IsSuccess)
+        {
+            return hostResult.Dispose.State switch
+            {
+                HostDisposeState.Failed => ShutdownFailureDetail.Error(ShutdownFailurePhase.HostDispose, hostResult.Dispose.Exception),
+                HostDisposeState.NotInitialized => ShutdownFailureDetail.NotSupported(ShutdownFailurePhase.HostDispose),
+                _ => ShutdownFailureDetail.Unknown(ShutdownFailurePhase.HostDispose, hostResult.Dispose.Exception),
+            };
+        }
+
+        return ShutdownFailureDetail.Unknown(ShutdownFailurePhase.HostDispose);
+    }
+
+    private readonly record struct LifecycleStopOutcome(bool Success, ShutdownFailureDetail? Failure)
+    {
+        public static LifecycleStopOutcome Success() => new(true, null);
+
+        public static LifecycleStopOutcome Timeout(Exception? exception = null) =>
+            new(false, ShutdownFailureDetail.Timeout(ShutdownFailurePhase.LifecycleStop, exception));
+
+        public static LifecycleStopOutcome Canceled() =>
+            new(false, ShutdownFailureDetail.Canceled(ShutdownFailurePhase.LifecycleStop));
+
+        public static LifecycleStopOutcome Failed(Exception exception) =>
+            new(false, ShutdownFailureDetail.Error(ShutdownFailurePhase.LifecycleStop, exception));
     }
 
     private void LogHostShutdownResult(HostShutdownResult result)

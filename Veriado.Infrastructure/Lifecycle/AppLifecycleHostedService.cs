@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -88,7 +89,7 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
         }
     }
 
-    public async Task PauseAsync(CancellationToken ct = default)
+    public async Task<PauseResult> PauseAsync(CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -98,16 +99,38 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             if (_state is AppLifecycleState.Paused or AppLifecycleState.Pausing)
             {
                 _logger.LogDebug("Pause requested while already paused.");
-                return;
+                return PauseResult.Success(TimeSpan.Zero);
             }
 
             if (_state is not AppLifecycleState.Running)
             {
                 _logger.LogWarning("Pause requested while lifecycle state is {State}. Ignoring.", _state);
-                return;
+                return PauseResult.NotSupported();
             }
 
-            await PauseInternalAsync(ct).ConfigureAwait(false);
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                await PauseInternalAsync(ct).ConfigureAwait(false);
+                stopwatch.Stop();
+                return PauseResult.Success(stopwatch.Elapsed);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException ex)
+            {
+                stopwatch.Stop();
+                _logger.LogDebug(ex, "Lifecycle pause canceled or timed out.");
+                return PauseResult.RetryableFailure(ex);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                _logger.LogWarning(ex, "Lifecycle pause failed.");
+                return PauseResult.RetryableFailure(ex);
+            }
         }
         finally
         {

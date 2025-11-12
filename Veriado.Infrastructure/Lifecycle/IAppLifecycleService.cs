@@ -30,7 +30,7 @@ public interface IAppLifecycleService
 
     Task StopAsync(CancellationToken ct = default);
 
-    Task PauseAsync(CancellationToken ct = default);
+    Task<PauseResult> PauseAsync(CancellationToken ct = default);
 
     Task ResumeAsync(CancellationToken ct = default);
 

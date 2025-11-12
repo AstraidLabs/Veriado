@@ -94,7 +94,7 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 
             try
             {
-                await Task.Delay(delay, iterationToken).ConfigureAwait(false);
+                await PauseResponsiveDelay.DelayAsync(delay, _lifecycleService.PauseToken, iterationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (iterationToken.IsCancellationRequested)
             {
