@@ -574,37 +574,26 @@ public partial class FilesPageViewModel : ViewModelBase
             // Intentionally ignored; monitoring should continue without logging if unavailable.
         }
 
-        var retryDelay = TimeSpan.Zero;
-        var errorBackoff = TimeSpan.FromSeconds(2);
-
         try
         {
-            while (true)
-            {
-                if (retryDelay > TimeSpan.Zero)
-                {
-                    await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
-                }
+            await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
 
+            while (await DelayNoThrowAsync(HealthPollingInterval, cancellationToken).ConfigureAwait(false))
+            {
                 try
                 {
                     await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
-                    retryDelay = HealthPollingInterval;
                 }
-                catch (OperationCanceledException)
+                catch (Exception ex) when (ex is not OperationCanceledException && ex is not TaskCanceledException)
                 {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    logger?.LogWarning(ex, "Indexing health monitor iteration failed. Retrying soon.");
-                    retryDelay = errorBackoff;
+                    logger?.LogWarning(ex, "Indexing health monitor iteration failed. Monitoring will stop.");
+                    break;
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not TaskCanceledException)
         {
-            // Intentionally ignored.
+            logger?.LogWarning(ex, "Indexing health monitor encountered an error and will stop.");
         }
     }
 
@@ -612,9 +601,13 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         try
         {
-            var staleDocuments = 0;
+            var indexResult = await AwaitOrCancelAsync(_healthService.GetIndexStatisticsAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            if (indexResult is null)
+            {
+                return;
+            }
 
-            var indexResult = await _healthService.GetIndexStatisticsAsync(cancellationToken).ConfigureAwait(false);
+            var staleDocuments = 0;
             if (indexResult.TryGetValue(out var indexStatistics))
             {
                 staleDocuments = Math.Max(indexStatistics.StaleDocuments, 0);
@@ -633,15 +626,62 @@ public partial class FilesPageViewModel : ViewModelBase
         }
         catch (OperationCanceledException)
         {
-            throw;
+            // Intentionally ignored.
         }
-        catch
+        catch (Exception)
         {
             await Dispatcher.Enqueue(() =>
             {
                 IsIndexingPending = false;
                 IndexingWarningMessage = null;
             }).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<bool> DelayNoThrowAsync(TimeSpan delay, CancellationToken ct)
+    {
+        if (!ct.CanBeCanceled)
+        {
+            await Task.Delay(delay).ConfigureAwait(false);
+            return true;
+        }
+
+        var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = ct.Register(static state =>
+        {
+            ((TaskCompletionSource<bool>)state!).TrySetResult(false);
+        }, cancellationSource);
+
+        var completedTask = await Task.WhenAny(Task.Delay(delay), cancellationSource.Task).ConfigureAwait(false);
+        return completedTask != cancellationSource.Task;
+    }
+
+    private static async Task<T?> AwaitOrCancelAsync<T>(Task<T> task, CancellationToken ct)
+    {
+        if (!ct.CanBeCanceled)
+        {
+            return await task.ConfigureAwait(false);
+        }
+
+        var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = ct.Register(static state =>
+        {
+            ((TaskCompletionSource<bool>)state!).TrySetResult(true);
+        }, cancellationSource);
+
+        var completedTask = await Task.WhenAny(task, cancellationSource.Task).ConfigureAwait(false);
+        if (completedTask == cancellationSource.Task)
+        {
+            return default;
+        }
+
+        try
+        {
+            return await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return default;
         }
     }
 
