@@ -608,7 +608,7 @@ public partial class FilesPageViewModel : ViewModelBase
             }
 
             var staleDocuments = 0;
-            if (indexResult.TryGetValue(out var indexStatistics))
+            if (indexResult.Value.TryGetValue(out var indexStatistics))
             {
                 staleDocuments = Math.Max(indexStatistics.StaleDocuments, 0);
             }
