@@ -40,29 +40,29 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
             ? TimeSpan.FromHours(1)
             : _options.IdempotencyCleanupInterval;
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await CleanupAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to clean expired idempotency keys");
-            }
+                try
+                {
+                    await CleanupAsync(stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to clean expired idempotency keys");
+                }
 
-            try
-            {
                 await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Idempotency cleanup worker stopping");
         }
     }
 
