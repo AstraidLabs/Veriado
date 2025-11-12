@@ -26,6 +26,14 @@ public interface IAppLifecycleService
 
     PauseToken PauseToken { get; }
 
+    event Func<CancellationToken, Task>? Starting;
+
+    event Func<CancellationToken, Task>? Stopping;
+
+    event Func<CancellationToken, Task>? Paused;
+
+    event Func<CancellationToken, Task>? Resumed;
+
     Task StartAsync(CancellationToken ct = default);
 
     Task StopAsync(CancellationToken ct = default);

@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Veriado.Infrastructure.Diagnostics;
 using Veriado.Infrastructure.Lifecycle;
 using Veriado.Infrastructure.Persistence.Options;
 
@@ -20,10 +22,13 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
     private static readonly TimeSpan DefaultJitter = TimeSpan.FromMinutes(3);
     private const int MaxBackoffExponent = 5; // 2^5 = 32×
 
+    private const string MonitorServiceName = nameof(IndexAuditBackgroundService);
+
     private readonly IIndexAuditor _auditor;
     private readonly InfrastructureOptions _options;
     private readonly IAppLifecycleService _lifecycleService;
     private readonly ILogger<IndexAuditBackgroundService> _logger;
+    private readonly IAppHealthMonitor _healthMonitor;
     private readonly Random _rng = new();
 
     private static class LogIds
@@ -44,11 +49,13 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         IIndexAuditor auditor,
         InfrastructureOptions options,
         IAppLifecycleService lifecycleService,
+        IAppHealthMonitor healthMonitor,
         ILogger<IndexAuditBackgroundService> logger)
     {
         _auditor = auditor ?? throw new ArgumentNullException(nameof(auditor));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
+        _healthMonitor = healthMonitor ?? throw new ArgumentNullException(nameof(healthMonitor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -69,6 +76,8 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             iterationTimeout,
             jitter);
 
+        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Starting);
+
         try
         {
             await InitialJitterAsync(jitter, stoppingToken).ConfigureAwait(false);
@@ -76,11 +85,14 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             _logger.LogDebug("Index audit service stopping during initial jitter.");
+            _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Stopped);
             _logger.LogInformation(LogIds.ServiceStop, "Index audit service stopped.");
             return;
         }
 
         var consecutiveFailures = 0;
+
+        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Running);
 
         try
         {
@@ -91,7 +103,20 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
 
                 try
                 {
+                    var wasPaused = _lifecycleService.PauseToken.IsPaused;
+                    if (wasPaused)
+                    {
+                        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Paused);
+                        _logger.LogInformation("Index audit service paused by lifecycle.");
+                    }
+
                     await _lifecycleService.PauseToken.WaitIfPausedAsync(effectiveToken).ConfigureAwait(false);
+
+                    if (wasPaused)
+                    {
+                        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Running);
+                        _logger.LogInformation("Index audit service resumed after lifecycle pause.");
+                    }
                 }
                 catch (OperationCanceledException) when (effectiveToken.IsCancellationRequested)
                 {
@@ -104,7 +129,10 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                     continue;
                 }
 
-                var result = await RunAuditIterationSafeAsync(iterationTimeout, effectiveToken, stoppingToken).ConfigureAwait(false);
+                var iterationWatch = Stopwatch.StartNew();
+                var (result, exception) = await RunAuditIterationSafeAsync(iterationTimeout, effectiveToken, stoppingToken).ConfigureAwait(false);
+                iterationWatch.Stop();
+
                 if (result == IterationResult.Shutdown)
                 {
                     break;
@@ -115,6 +143,16 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                     IterationResult.Timeout or IterationResult.Failed => consecutiveFailures + 1,
                     _ => 0,
                 };
+
+                var outcome = MapOutcome(result);
+                var message = DescribeOutcome(result);
+                _healthMonitor.ReportBackgroundIteration(MonitorServiceName, outcome, iterationWatch.Elapsed, exception, message);
+
+                _logger.LogInformation(
+                    LogIds.TickOk,
+                    "Index audit iteration completed in {Duration} with outcome {Outcome}.",
+                    iterationWatch.Elapsed,
+                    outcome);
 
                 var backoffDelay = ComputeBackoffDelay(consecutiveFailures, jitter);
                 var delay = interval + backoffDelay;
@@ -134,15 +172,22 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
                         _logger.LogDebug(LogIds.TickCanceled, "Index audit delay canceled due to shutdown.");
                         break;
                     }
+
+                    if (_lifecycleService.PauseToken.IsPaused)
+                    {
+                        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Paused);
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(LogIds.ServiceCrashed, ex, "Index audit service crashed. Stopping the service.");
+            _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Faulted, ex.Message);
         }
         finally
         {
+            _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Stopped);
             _logger.LogInformation(LogIds.ServiceStop, "Index audit service stopped.");
         }
     }
@@ -163,7 +208,7 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
 
     private enum IterationResult { Success, NoIssues, Scheduled, Timeout, Failed, Shutdown }
 
-    private async Task<IterationResult> RunAuditIterationSafeAsync(TimeSpan iterationTimeout, CancellationToken effectiveToken, CancellationToken stoppingToken)
+    private async Task<(IterationResult Result, Exception? Exception)> RunAuditIterationSafeAsync(TimeSpan iterationTimeout, CancellationToken effectiveToken, CancellationToken stoppingToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(effectiveToken);
         cts.CancelAfter(iterationTimeout);
@@ -173,28 +218,48 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             _logger.LogDebug(LogIds.TickStart, "Running periodic FTS audit iteration…");
             var outcome = await RunAuditAsync(cts.Token).ConfigureAwait(false);
 
-            return outcome;
+            return (outcome, null);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested || _lifecycleService.RunToken.IsCancellationRequested)
         {
-            return IterationResult.Shutdown;
+            return (IterationResult.Shutdown, null);
         }
         catch (OperationCanceledException) when (effectiveToken.IsCancellationRequested)
         {
             _logger.LogDebug(LogIds.TickCanceled, "Index audit iteration canceled by lifecycle token.");
-            return IterationResult.Shutdown;
+            return (IterationResult.Shutdown, null);
         }
         catch (OperationCanceledException)
         {
             _logger.LogWarning(LogIds.TickTimeout, "Index audit iteration was canceled due to iteration timeout {Timeout}.", iterationTimeout);
-            return IterationResult.Timeout;
+            return (IterationResult.Timeout, null);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(LogIds.TickFailed, ex, "Index audit iteration failed.");
-            return IterationResult.Failed;
+            return (IterationResult.Failed, ex);
         }
     }
+
+    private static BackgroundIterationOutcome MapOutcome(IterationResult result) => result switch
+    {
+        IterationResult.Success => BackgroundIterationOutcome.Success,
+        IterationResult.NoIssues => BackgroundIterationOutcome.Success,
+        IterationResult.Scheduled => BackgroundIterationOutcome.NoWork,
+        IterationResult.Timeout => BackgroundIterationOutcome.Timeout,
+        IterationResult.Failed => BackgroundIterationOutcome.Failed,
+        IterationResult.Shutdown => BackgroundIterationOutcome.Canceled,
+        _ => BackgroundIterationOutcome.None,
+    };
+
+    private static string? DescribeOutcome(IterationResult result) => result switch
+    {
+        IterationResult.NoIssues => "No inconsistencies detected.",
+        IterationResult.Scheduled => "Indexing scheduled for outstanding files.",
+        IterationResult.Timeout => "Iteration timed out before completion.",
+        IterationResult.Failed => "Iteration failed. See logs for details.",
+        _ => null,
+    };
 
     /// <summary>
     /// Vlastní práce auditu; vrací detailnější výsledek pro lepší řízení backoffu/logování.

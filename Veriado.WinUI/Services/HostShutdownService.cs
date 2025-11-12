@@ -122,6 +122,7 @@ internal sealed class HostShutdownService : IHostShutdownService
 
         try
         {
+            _logger.LogInformation("Host stop requested with timeout {Timeout}.", timeout);
             await host.StopAsync(token).ConfigureAwait(false);
             _logger.LogInformation("Host stopped successfully.");
             return HostStopResult.Completed();
@@ -158,6 +159,7 @@ internal sealed class HostShutdownService : IHostShutdownService
     {
         try
         {
+            _logger.LogInformation("Host dispose requested with timeout {Timeout}.", timeout);
             Task disposeTask = host is IAsyncDisposable asyncDisposable
                 ? asyncDisposable.DisposeAsync().AsTask()
                 : Task.Run(host.Dispose);

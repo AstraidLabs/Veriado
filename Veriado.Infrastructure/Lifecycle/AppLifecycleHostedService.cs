@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Veriado.Infrastructure.Diagnostics;
 
 namespace Veriado.Infrastructure.Lifecycle;
 
@@ -16,16 +17,21 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
 
     private readonly ILogger<AppLifecycleHostedService> _logger;
     private readonly PauseTokenSource _pauseTokenSource;
+    private readonly IAppHealthMonitor? _healthMonitor;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private AppLifecycleState _state = AppLifecycleState.Stopped;
     private CancellationTokenSource? _runCts;
     private bool _disposed;
 
-    public AppLifecycleHostedService(ILogger<AppLifecycleHostedService> logger, PauseTokenSource pauseTokenSource)
+    public AppLifecycleHostedService(
+        ILogger<AppLifecycleHostedService> logger,
+        PauseTokenSource pauseTokenSource,
+        IAppHealthMonitor? healthMonitor = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _pauseTokenSource = pauseTokenSource ?? throw new ArgumentNullException(nameof(pauseTokenSource));
+        _healthMonitor = healthMonitor;
     }
 
     public AppLifecycleState State => _state;
@@ -33,6 +39,14 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
     public CancellationToken RunToken => _runCts?.Token ?? CancellationToken.None;
 
     public PauseToken PauseToken => _pauseTokenSource.Token;
+
+    public event Func<CancellationToken, Task>? Starting;
+
+    public event Func<CancellationToken, Task>? Stopping;
+
+    public event Func<CancellationToken, Task>? Paused;
+
+    public event Func<CancellationToken, Task>? Resumed;
 
     Task IHostedService.StartAsync(CancellationToken cancellationToken) => StartAsync(cancellationToken);
 
@@ -173,6 +187,7 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             ThrowIfDisposed();
 
             _logger.LogInformation("Restart requested.");
+            TransitionTo(AppLifecycleState.Restarting);
             await StopInternalAsync(ct).ConfigureAwait(false);
             await StartInternalAsync(ct).ConfigureAwait(false);
         }
@@ -198,11 +213,25 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
             }
 
             _disposed = true;
-            _state = AppLifecycleState.Disposed;
+
+            try
+            {
+                if (_state is not AppLifecycleState.Stopped and not AppLifecycleState.Disposed)
+                {
+                    await StopInternalAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lifecycle encountered an error during disposal stop phase.");
+            }
+
+            TransitionTo(AppLifecycleState.Disposed);
             _pauseTokenSource.TryResume();
             _runCts?.Cancel();
             _runCts?.Dispose();
             _runCts = null;
+            _logger.LogInformation("Lifecycle disposed.");
         }
         finally
         {
@@ -216,28 +245,33 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(DefaultStartTimeout);
 
-        _state = AppLifecycleState.Starting;
+        TransitionTo(AppLifecycleState.Starting);
         _logger.LogInformation("Lifecycle starting.");
 
         _runCts?.Cancel();
         _runCts?.Dispose();
         _runCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token);
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
-            await Task.CompletedTask.ConfigureAwait(false);
-            _state = AppLifecycleState.Running;
-            _logger.LogInformation("Lifecycle running.");
+            await InvokeHandlersAsync(Starting, DefaultStartTimeout, timeoutCts.Token, "Starting").ConfigureAwait(false);
+            TransitionTo(AppLifecycleState.Running);
+            stopwatch.Stop();
+            _logger.LogInformation("Lifecycle running after {Duration}.", stopwatch.Elapsed);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            _state = AppLifecycleState.Faulted;
+            TransitionTo(AppLifecycleState.Faulted);
+            stopwatch.Stop();
             _logger.LogWarning("Lifecycle start timed out after {Timeout}.", DefaultStartTimeout);
             throw;
         }
         catch (Exception ex)
         {
-            _state = AppLifecycleState.Faulted;
+            TransitionTo(AppLifecycleState.Faulted);
+            stopwatch.Stop();
             _logger.LogError(ex, "Lifecycle start failed.");
             throw;
         }
@@ -248,22 +282,33 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(DefaultStopTimeout);
 
-        _state = AppLifecycleState.Stopping;
+        TransitionTo(AppLifecycleState.Stopping);
         _logger.LogInformation("Lifecycle stopping.");
 
         _pauseTokenSource.TryResume();
         _runCts?.Cancel();
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
-            await Task.CompletedTask.ConfigureAwait(false);
-            _state = AppLifecycleState.Stopped;
-            _logger.LogInformation("Lifecycle stopped.");
+            await InvokeHandlersAsync(Stopping, DefaultStopTimeout, timeoutCts.Token, "Stopping").ConfigureAwait(false);
+            TransitionTo(AppLifecycleState.Stopped);
+            stopwatch.Stop();
+            _logger.LogInformation("Lifecycle stopped after {Duration}.", stopwatch.Elapsed);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            _state = AppLifecycleState.Faulted;
+            TransitionTo(AppLifecycleState.Faulted);
+            stopwatch.Stop();
             _logger.LogWarning("Lifecycle stop timed out after {Timeout}.", DefaultStopTimeout);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            TransitionTo(AppLifecycleState.Faulted);
+            stopwatch.Stop();
+            _logger.LogError(ex, "Lifecycle stop failed.");
             throw;
         }
         finally
@@ -278,7 +323,7 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(DefaultPauseTimeout);
 
-        _state = AppLifecycleState.Pausing;
+        TransitionTo(AppLifecycleState.Pausing);
         _logger.LogInformation("Lifecycle pausing.");
 
         try
@@ -289,13 +334,15 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
                 _logger.LogDebug("Lifecycle was already paused.");
             }
 
-            await Task.CompletedTask.ConfigureAwait(false);
-            _state = AppLifecycleState.Paused;
-            _logger.LogInformation("Lifecycle paused.");
+            TransitionTo(AppLifecycleState.Paused);
+            var stopwatch = Stopwatch.StartNew();
+            await InvokeHandlersAsync(Paused, DefaultPauseTimeout, timeoutCts.Token, "Paused").ConfigureAwait(false);
+            stopwatch.Stop();
+            _logger.LogInformation("Lifecycle paused (handlers completed in {Duration}).", stopwatch.Elapsed);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            _state = AppLifecycleState.Faulted;
+            TransitionTo(AppLifecycleState.Faulted);
             _logger.LogWarning("Lifecycle pause timed out after {Timeout}.", DefaultPauseTimeout);
             throw;
         }
@@ -306,7 +353,7 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(DefaultResumeTimeout);
 
-        _state = AppLifecycleState.Resuming;
+        TransitionTo(AppLifecycleState.Resuming);
         _logger.LogInformation("Lifecycle resuming.");
 
         try
@@ -317,16 +364,86 @@ public sealed class AppLifecycleHostedService : IHostedService, IAppLifecycleSer
                 _logger.LogDebug("Lifecycle was not paused.");
             }
 
-            await Task.CompletedTask.ConfigureAwait(false);
-            _state = AppLifecycleState.Running;
-            _logger.LogInformation("Lifecycle resumed.");
+            TransitionTo(AppLifecycleState.Running);
+            var stopwatch = Stopwatch.StartNew();
+            await InvokeHandlersAsync(Resumed, DefaultResumeTimeout, timeoutCts.Token, "Resumed").ConfigureAwait(false);
+            stopwatch.Stop();
+            _logger.LogInformation("Lifecycle resumed (handlers completed in {Duration}).", stopwatch.Elapsed);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            _state = AppLifecycleState.Faulted;
+            TransitionTo(AppLifecycleState.Faulted);
             _logger.LogWarning("Lifecycle resume timed out after {Timeout}.", DefaultResumeTimeout);
             throw;
         }
+    }
+
+    private void TransitionTo(AppLifecycleState newState)
+    {
+        _state = newState;
+        _healthMonitor?.ReportLifecycleState(newState);
+    }
+
+    private async Task InvokeHandlersAsync(
+        Func<CancellationToken, Task>? handlers,
+        TimeSpan timeout,
+        CancellationToken externalToken,
+        string stage)
+    {
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList())
+        {
+            var callback = (Func<CancellationToken, Task>)handler;
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
+            if (timeout > TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+            {
+                timeoutCts.CancelAfter(timeout);
+            }
+
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                await callback(timeoutCts.Token).ConfigureAwait(false);
+                sw.Stop();
+                _logger.LogDebug(
+                    "Lifecycle {Stage} handler {Handler} completed in {Duration}.",
+                    stage,
+                    DescribeHandler(callback),
+                    sw.Elapsed);
+            }
+            catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested && !externalToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Lifecycle {Stage} handler {Handler} timed out after {Timeout}.",
+                    stage,
+                    DescribeHandler(callback),
+                    timeout);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Lifecycle {Stage} handler {Handler} failed.",
+                    stage,
+                    DescribeHandler(callback));
+            }
+        }
+    }
+
+    private static string DescribeHandler(Delegate handler)
+    {
+        var method = handler.Method;
+        var typeName = method.DeclaringType?.Name ?? "<unknown>";
+        return $"{typeName}.{method.Name}";
     }
 
     private void ThrowIfDisposed()

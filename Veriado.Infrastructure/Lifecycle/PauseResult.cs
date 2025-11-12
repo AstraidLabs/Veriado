@@ -7,6 +7,7 @@ public enum PauseStatus
     Succeeded,
     RetryableFailure,
     NotSupported,
+    Fallback,
 }
 
 public readonly record struct PauseResult(
@@ -23,4 +24,7 @@ public readonly record struct PauseResult(
 
     public static PauseResult NotSupported(Exception? exception = null) =>
         new(PauseStatus.NotSupported, TimeSpan.Zero, exception);
+
+    public static PauseResult Fallback(Exception? exception = null) =>
+        new(PauseStatus.Fallback, TimeSpan.Zero, exception);
 }

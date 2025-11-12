@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.Abstractions;
 using Veriado.Application.Tests.Domain.Files;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Metadata;
@@ -219,6 +220,11 @@ public sealed class DomainEventsInterceptorTests : IAsyncLifetime
 
             _requests.Add((fileId, reason, requestedUtc));
             return Task.CompletedTask;
+        }
+
+        public Task<SearchIndexUpdateResult> ReindexAsync(Guid fileId, ReindexReason reason, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(SearchIndexUpdateResult.Success(true));
         }
 
         public void Reset()

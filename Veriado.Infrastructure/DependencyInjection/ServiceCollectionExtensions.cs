@@ -15,6 +15,7 @@ using Veriado.Appl.Abstractions;
 using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Events.Handlers;
+using Veriado.Infrastructure.Diagnostics;
 using Veriado.Infrastructure.Hosting;
 using Veriado.Infrastructure.Import;
 using Veriado.Infrastructure.Idempotency;
@@ -107,6 +108,7 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<InfrastructureInitializationState>();
         services.AddSingleton<PauseTokenSource>();
+        services.AddSingleton<IAppHealthMonitor, AppHealthMonitor>();
         services.AddSingleton<AppLifecycleHostedService>();
         services.AddSingleton<IAppLifecycleService>(static sp => sp.GetRequiredService<AppLifecycleHostedService>());
         services.AddSingleton<IHostedService>(static sp => sp.GetRequiredService<AppLifecycleHostedService>());
@@ -215,6 +217,7 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InfrastructureInitializationHostedService>());
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
+        services.AddHostedService<ReindexQueueProcessorService>();
 
         return services;
     }

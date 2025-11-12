@@ -1,3 +1,4 @@
+using System;
 using Veriado.Contracts.Import;
 
 namespace Veriado.Services.Import;
@@ -7,6 +8,8 @@ namespace Veriado.Services.Import;
 /// </summary>
 public interface IImportService
 {
+    event EventHandler<ImportLifecycleFallbackEventArgs>? LifecycleFallback;
+
     /// <summary>
     /// Imports a single file described by the supplied request contract.
     /// </summary>
@@ -37,3 +40,10 @@ public interface IImportService
         ImportOptions? options,
         CancellationToken cancellationToken);
 }
+
+public sealed record ImportLifecycleFallbackEventArgs(
+    int RequestedParallelism,
+    int EffectiveParallelism,
+    int Attempts,
+    DateTimeOffset OccurredUtc,
+    string Message);
