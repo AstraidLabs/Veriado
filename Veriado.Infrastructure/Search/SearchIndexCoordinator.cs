@@ -117,10 +117,16 @@ internal sealed class SearchIndexCoordinator : ISearchIndexCoordinator
         var projectionService = new SearchProjectionService(writeContext, _analyzerFactory, _projectionLogger, _telemetry);
 
         var tracked = await writeContext.Files.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken).ConfigureAwait(false);
-        var signatureSource = tracked ?? file;
-        var signature = _signatureCalculator.Compute(signatureSource);
-        var expectedContentHash = tracked?.SearchIndex?.IndexedContentHash ?? file.SearchIndex?.IndexedContentHash;
-        var expectedTokenHash = tracked?.SearchIndex?.TokenHash ?? file.SearchIndex?.TokenHash;
+
+        if (tracked is null)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return SearchIndexUpdateResult.NotFound();
+        }
+
+        var signature = _signatureCalculator.Compute(tracked);
+        var expectedContentHash = tracked.SearchIndex?.IndexedContentHash ?? file.SearchIndex?.IndexedContentHash;
+        var expectedTokenHash = tracked.SearchIndex?.TokenHash ?? file.SearchIndex?.TokenHash;
         var newContentHash = file.ContentHash.Value;
 
         bool projected;
