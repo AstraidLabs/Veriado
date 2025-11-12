@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 
 namespace Veriado.WinUI.Services;
@@ -7,9 +8,11 @@ public sealed class DispatcherService : IDispatcherService
     private readonly TaskCompletionSource<DispatcherQueue> _dispatcherReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly object _dispatcherLock = new();
     private DispatcherQueue? _dispatcher;
+    private readonly ILogger<DispatcherService> _logger;
 
-    public DispatcherService()
+    public DispatcherService(ILogger<DispatcherService> logger)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public bool HasThreadAccess
@@ -68,6 +71,7 @@ public sealed class DispatcherService : IDispatcherService
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!dispatcher.TryEnqueue(() => Execute(action, completion)))
         {
+            _logger.LogError("Unable to enqueue action {Action} on the UI dispatcher.", DescribeDelegate(action));
             completion.SetException(new InvalidOperationException("Unable to enqueue action on the UI dispatcher."));
         }
 
@@ -104,6 +108,7 @@ public sealed class DispatcherService : IDispatcherService
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!dispatcher.TryEnqueue(() => ExecuteAsync(action, completion)))
         {
+            _logger.LogError("Unable to enqueue action {Action} on the UI dispatcher.", DescribeDelegate(action));
             completion.SetException(new InvalidOperationException("Unable to enqueue action on the UI dispatcher."));
         }
 
@@ -127,6 +132,7 @@ public sealed class DispatcherService : IDispatcherService
         var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!dispatcher.TryEnqueue(() => ExecuteAsync(action, completion)))
         {
+            _logger.LogError("Unable to enqueue action {Action} on the UI dispatcher.", DescribeDelegate(action));
             completion.SetException(new InvalidOperationException("Unable to enqueue action on the UI dispatcher."));
         }
 
@@ -153,7 +159,7 @@ public sealed class DispatcherService : IDispatcherService
         }
     }
 
-    private static void Execute(Action action, TaskCompletionSource<object?> completion)
+    private void Execute(Action action, TaskCompletionSource<object?> completion)
     {
         try
         {
@@ -162,11 +168,12 @@ public sealed class DispatcherService : IDispatcherService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Dispatcher action {Action} failed.", DescribeDelegate(action));
             completion.SetException(ex);
         }
     }
 
-    private static async void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
+    private async void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
     {
         try
         {
@@ -182,11 +189,12 @@ public sealed class DispatcherService : IDispatcherService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Dispatcher action {Action} failed.", DescribeDelegate(action));
             completion.SetException(ex);
         }
     }
 
-    private static async void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
+    private async void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
     {
         try
         {
@@ -202,7 +210,20 @@ public sealed class DispatcherService : IDispatcherService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Dispatcher action {Action} failed.", DescribeDelegate(action));
             completion.SetException(ex);
         }
+    }
+
+    private static string DescribeDelegate(Delegate action)
+    {
+        var method = action.Method;
+        if (method is null)
+        {
+            return "<unknown>";
+        }
+
+        var typeName = method.DeclaringType?.FullName ?? method.DeclaringType?.Name ?? "<unknown>";
+        return $"{typeName}.{method.Name}";
     }
 }
