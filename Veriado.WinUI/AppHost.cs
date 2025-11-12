@@ -94,6 +94,9 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
+        var startupLogger = host.Services.GetRequiredService<ILogger<AppHost>>();
+        startupLogger.LogInformation("AppHost initialization starting.");
+
         var shutdownInitializer = host.Services.GetRequiredService<HostShutdownService>();
         shutdownInitializer.Initialize(host);
         var hostShutdownService = host.Services.GetRequiredService<IHostShutdownService>();
@@ -106,9 +109,11 @@ internal sealed class AppHost : IAsyncDisposable
         using (var gate = new NamedGlobalMutex(mutexKey))
         {
             gate.Acquire(TimeSpan.FromSeconds(30));
+            startupLogger.LogInformation("AppHost starting host services.");
             await host.StartAsync().ConfigureAwait(false);
         }
-        var logger = host.Services.GetRequiredService<ILogger<AppHost>>();
+        startupLogger.LogInformation("AppHost host services running.");
+        var logger = startupLogger;
         return new AppHost(host, hostShutdownService, logger);
     }
 
@@ -123,6 +128,7 @@ internal sealed class AppHost : IAsyncDisposable
 
         try
         {
+            _logger.LogInformation("AppHost initiating shutdown sequence.");
             var shutdownResult = await _hostShutdownService
                 .StopAndDisposeAsync(StopTimeout, DisposeTimeout, CancellationToken.None)
                 .ConfigureAwait(false);
@@ -139,6 +145,7 @@ internal sealed class AppHost : IAsyncDisposable
         finally
         {
             _host = null;
+            _logger.LogInformation("AppHost disposed.");
         }
     }
 

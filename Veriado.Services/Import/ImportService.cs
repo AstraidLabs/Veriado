@@ -58,6 +58,8 @@ public sealed class ImportService : IImportService
     private bool _fulltextRepairAttempted;
     private bool _fulltextRepairSucceeded;
 
+    public event EventHandler<ImportLifecycleFallbackEventArgs>? LifecycleFallback;
+
     public ImportService(
         IMediator mediator,
         WriteMappingPipeline mappingPipeline,
@@ -97,7 +99,7 @@ public sealed class ImportService : IImportService
             normalized.Content.LongLength,
             new MemoryStream(normalized.Content, writable: false));
 
-        return await ImportFileInternalAsync(import, descriptor, cancellationToken)
+        return await ImportFileInternalAsync(import, descriptor, isFallbackMode: false, static () => { }, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -435,6 +437,9 @@ public sealed class ImportService : IImportService
         }
 
         var effectiveParallelism = pauseContext.EffectiveParallelism;
+        var delayBetweenItems = pauseContext.DelayBetweenItems;
+        var fallbackMode = pauseContext.PauseStatus == PauseStatus.Fallback;
+        int fallbackBusyCount = 0;
 
         using var writerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var writerToken = writerCts.Token;
@@ -448,6 +453,23 @@ public sealed class ImportService : IImportService
                     CancellationToken = writerToken,
                     MaxDegreeOfParallelism = effectiveParallelism,
                 };
+
+                async Task ApplyThrottleAsync(CancellationToken token)
+                {
+                    if (delayBetweenItems is not { } throttle || throttle <= TimeSpan.Zero)
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        await PauseResponsiveDelay.DelayAsync(throttle, _lifecycleService.PauseToken, token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                }
 
                 await Parallel.ForEachAsync(files, parallelOptions, async (filePath, token) =>
                 {
@@ -465,6 +487,10 @@ public sealed class ImportService : IImportService
                     {
                         await using var createRequest = await CreateRequestFromFileAsync(filePath, options, token)
                             .ConfigureAwait(false);
+
+                        Action busyCallback = fallbackMode
+                            ? () => Interlocked.Increment(ref fallbackBusyCount)
+                            : static () => { };
 
                         if (await FileAlreadyExistsAsync(createRequest.ContentHash, token).ConfigureAwait(false))
                         {
@@ -501,10 +527,12 @@ public sealed class ImportService : IImportService
                                     _clock.UtcNow),
                                 token).ConfigureAwait(false);
 
+                            await ApplyThrottleAsync(token).ConfigureAwait(false);
                             return;
                         }
 
-                        var response = await ImportFileInternalAsync(createRequest, filePath, token).ConfigureAwait(false);
+                        var response = await ImportFileInternalAsync(createRequest, filePath, fallbackMode, busyCallback, token)
+                            .ConfigureAwait(false);
 
                         if (!response.IsSuccess
                             && ShouldAttemptFulltextRepair(response.Errors)
@@ -513,7 +541,7 @@ public sealed class ImportService : IImportService
                             _logger.LogInformation(
                                 "Retrying import for {FilePath} after repairing the full-text index.",
                                 filePath);
-                            response = await ImportFileInternalAsync(createRequest, filePath, token)
+                            response = await ImportFileInternalAsync(createRequest, filePath, fallbackMode, busyCallback, token)
                                 .ConfigureAwait(false);
                         }
 
@@ -543,6 +571,7 @@ public sealed class ImportService : IImportService
                                     timestamp: _clock.UtcNow),
                                 token).ConfigureAwait(false);
 
+                            await ApplyThrottleAsync(token).ConfigureAwait(false);
                             return;
                         }
 
@@ -580,6 +609,7 @@ public sealed class ImportService : IImportService
                                     _clock.UtcNow),
                                 token).ConfigureAwait(false);
 
+                            await ApplyThrottleAsync(token).ConfigureAwait(false);
                             return;
                         }
 
@@ -620,6 +650,8 @@ public sealed class ImportService : IImportService
                                 skippedSnapshot,
                                 timestamp: _clock.UtcNow),
                             token).ConfigureAwait(false);
+
+                        await ApplyThrottleAsync(token).ConfigureAwait(false);
                     }
                     catch (FileTooLargeException ex)
                     {
@@ -663,6 +695,8 @@ public sealed class ImportService : IImportService
                                 skippedSnapshot,
                                 timestamp: _clock.UtcNow),
                             token).ConfigureAwait(false);
+
+                        await ApplyThrottleAsync(token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -706,6 +740,8 @@ public sealed class ImportService : IImportService
                                 skippedSnapshot,
                                 timestamp: _clock.UtcNow),
                             token).ConfigureAwait(false);
+
+                        await ApplyThrottleAsync(token).ConfigureAwait(false);
                     }
                 }).ConfigureAwait(false);
             }
@@ -786,6 +822,13 @@ public sealed class ImportService : IImportService
             {
                 cancellationEncountered = true;
             }
+        }
+
+        if (fallbackMode && fallbackBusyCount > 0)
+        {
+            _logger.LogInformation(
+                "SQLite busy retries encountered {RetryCount} times while running in fallback mode.",
+                fallbackBusyCount);
         }
 
         var processedFinal = Volatile.Read(ref processed);
@@ -981,6 +1024,8 @@ public sealed class ImportService : IImportService
     private async Task<ApiResponse<Guid>> ImportFileInternalAsync(
         CreateFileImport import,
         string? descriptor,
+        bool isFallbackMode,
+        Action onSqliteBusy,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(import);
@@ -1016,8 +1061,11 @@ public sealed class ImportService : IImportService
             return ApiResponse<Guid>.Failure(mismatch);
         }
 
+        onSqliteBusy ??= static () => { };
+
         var importItem = CreateImportItem(fileId, request, mapped, storageResult, import.ContentHash);
-        var importResult = await InvokeImportAsync(importItem, cancellationToken).ConfigureAwait(false);
+        var importResult = await InvokeImportAsync(importItem, isFallbackMode, onSqliteBusy, cancellationToken)
+            .ConfigureAwait(false);
 
         if (importResult.Imported + importResult.Updated > 0)
         {
@@ -1813,6 +1861,8 @@ public sealed class ImportService : IImportService
                     attempt - 1,
                     null,
                     pauseResult.Duration,
+                    null,
+                    PauseStatus.Succeeded,
                     null);
             }
 
@@ -1830,7 +1880,9 @@ public sealed class ImportService : IImportService
                     attempt,
                     _clock.UtcNow,
                     null,
-                    "Pozastavení služeb není dostupné. Import běží se sníženou zátěží.");
+                    "Pozastavení služeb není dostupné. Import běží se sníženou zátěží.",
+                    PauseStatus.NotSupported,
+                    null);
             }
 
             _logger.LogWarning(
@@ -1862,6 +1914,16 @@ public sealed class ImportService : IImportService
             attempt,
             fallbackParallelism);
 
+        var warning = "Nepodařilo se pozastavit služby. Import pokračuje se sníženým paralelismem.";
+        LifecycleFallback?.Invoke(
+            this,
+            new ImportLifecycleFallbackEventArgs(
+                requestedParallelism,
+                fallbackParallelism,
+                attempt,
+                _clock.UtcNow,
+                warning));
+
         return new LifecyclePauseContext(
             NoopAsyncDisposable.Instance,
             false,
@@ -1869,18 +1931,27 @@ public sealed class ImportService : IImportService
             attempt,
             _clock.UtcNow,
             null,
-            "Nepodařilo se pozastavit služby. Import pokračuje se sníženým paralelismem.");
+            warning,
+            PauseStatus.Fallback,
+            TimeSpan.FromMilliseconds(200));
     }
 
-    private async Task<ImportResult> InvokeImportAsync(ImportItem item, CancellationToken cancellationToken)
+    private async Task<ImportResult> InvokeImportAsync(ImportItem item, bool isFallbackMode, Action onSqliteBusy, CancellationToken cancellationToken)
     {
         await _importSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            onSqliteBusy ??= static () => { };
+
             return await SqliteRetry.ExecuteAsync(
                     () => _importWriter.ImportAsync(new[] { item }, new ApplicationImportOptions(), cancellationToken),
                     (exception, attempt, delay) =>
                     {
+                        if (isFallbackMode)
+                        {
+                            onSqliteBusy();
+                        }
+
                         _logger.LogWarning(
                             exception,
                             "SQLite busy while importing {StoragePath}. Attempt {Attempt}; retrying in {Delay}.",
@@ -1997,7 +2068,9 @@ public sealed class ImportService : IImportService
         int FailureCount,
         DateTimeOffset? UnpausedSinceUtc,
         TimeSpan? PauseDuration,
-        string? WarningMessage);
+        string? WarningMessage,
+        PauseStatus PauseStatus,
+        TimeSpan? DelayBetweenItems);
 
     private sealed class LifecycleResumeScope : IAsyncDisposable
     {

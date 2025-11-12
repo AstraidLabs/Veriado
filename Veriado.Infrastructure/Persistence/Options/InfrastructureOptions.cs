@@ -144,8 +144,21 @@ public sealed class InfrastructureOptions
     private int _healthWorkerStallMs = DefaultHealthWorkerStallMs;
     private int _integrityBatchSize = DefaultIntegrityBatchSize;
     private int _integrityTimeSliceMs = DefaultIntegrityTimeSliceMs;
+    private int _reindexQueueBatchSize = 50;
 
-    public TimeSpan IndexAuditIterationTimeout { get; set; } = TimeSpan.Zero; // novì podporováno (fallback 10 min)
-    public TimeSpan IndexAuditJitter { get; set; } = TimeSpan.Zero;           // novì podporováno (fallback 3 min)
+    public TimeSpan IndexAuditIterationTimeout { get; set; } = TimeSpan.Zero;
+
+    public TimeSpan IndexAuditJitter { get; set; } = TimeSpan.Zero;
+
+    public TimeSpan ReindexQueuePollInterval { get; set; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan ReindexQueueIterationTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    public int ReindexQueueBatchSize
+    {
+        get => _reindexQueueBatchSize;
+        set => _reindexQueueBatchSize = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
+    public TimeSpan ReindexQueueErrorBackoff { get; set; } = TimeSpan.FromSeconds(30);
 }
-

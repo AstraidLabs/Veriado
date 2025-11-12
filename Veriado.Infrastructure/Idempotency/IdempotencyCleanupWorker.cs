@@ -1,10 +1,12 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Veriado.Infrastructure.Diagnostics;
 using Veriado.Infrastructure.Search;
 using Veriado.Infrastructure.Lifecycle;
 
@@ -16,38 +18,47 @@ namespace Veriado.Infrastructure.Idempotency;
 internal sealed class IdempotencyCleanupWorker : BackgroundService
 {
     private static readonly TimeSpan IterationTimeout = TimeSpan.FromMinutes(5);
+    private const string MonitorServiceName = nameof(IdempotencyCleanupWorker);
 
     private readonly InfrastructureOptions _options;
     private readonly IClock _clock;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ILogger<IdempotencyCleanupWorker> _logger;
     private readonly IAppLifecycleService _lifecycleService;
+    private readonly IAppHealthMonitor _healthMonitor;
 
     public IdempotencyCleanupWorker(
         InfrastructureOptions options,
         IClock clock,
         ISqliteConnectionFactory connectionFactory,
         IAppLifecycleService lifecycleService,
+        IAppHealthMonitor healthMonitor,
         ILogger<IdempotencyCleanupWorker> logger)
     {
         _options = options;
         _clock = clock;
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
+        _healthMonitor = healthMonitor ?? throw new ArgumentNullException(nameof(healthMonitor));
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Starting);
+
         if (_options.IdempotencyKeyTtl <= TimeSpan.Zero)
         {
             _logger.LogInformation("Idempotency cleanup worker disabled (TTL not configured)");
+            _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Stopped, "TTL not configured.");
             return;
         }
 
         var delay = _options.IdempotencyCleanupInterval <= TimeSpan.Zero
             ? TimeSpan.FromHours(1)
             : _options.IdempotencyCleanupInterval;
+
+        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Running);
 
         while (!stoppingToken.IsCancellationRequested && !_lifecycleService.RunToken.IsCancellationRequested)
         {
@@ -57,7 +68,20 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 
             try
             {
+                var wasPaused = _lifecycleService.PauseToken.IsPaused;
+                if (wasPaused)
+                {
+                    _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Paused);
+                    _logger.LogDebug("Idempotency cleanup worker paused by lifecycle.");
+                }
+
                 await _lifecycleService.PauseToken.WaitIfPausedAsync(iterationToken).ConfigureAwait(false);
+
+                if (wasPaused)
+                {
+                    _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Running);
+                    _logger.LogDebug("Idempotency cleanup worker resumed after lifecycle pause.");
+                }
             }
             catch (OperationCanceledException) when (iterationToken.IsCancellationRequested)
             {
@@ -71,7 +95,17 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 
             try
             {
+                var iterationWatch = Stopwatch.StartNew();
                 await CleanupAsync(iterationToken).ConfigureAwait(false);
+                iterationWatch.Stop();
+                _logger.LogInformation(
+                    "Idempotency cleanup iteration completed in {Duration}.",
+                    iterationWatch.Elapsed);
+                _healthMonitor.ReportBackgroundIteration(
+                    MonitorServiceName,
+                    BackgroundIterationOutcome.Success,
+                    iterationWatch.Elapsed,
+                    message: null);
             }
             catch (OperationCanceledException) when (iterationToken.IsCancellationRequested)
             {
@@ -83,6 +117,11 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
                 if (iterationCts.IsCancellationRequested)
                 {
                     _logger.LogWarning("Idempotency cleanup iteration timed out after {Timeout}.", IterationTimeout);
+                    _healthMonitor.ReportBackgroundIteration(
+                        MonitorServiceName,
+                        BackgroundIterationOutcome.Timeout,
+                        IterationTimeout,
+                        message: "Cleanup iteration timed out.");
                 }
 
                 continue;
@@ -90,6 +129,12 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to clean expired idempotency keys");
+                _healthMonitor.ReportBackgroundIteration(
+                    MonitorServiceName,
+                    BackgroundIterationOutcome.Failed,
+                    duration: null,
+                    exception: ex,
+                    message: ex.Message);
             }
 
             try
@@ -102,8 +147,15 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
                 {
                     break;
                 }
+
+                if (_lifecycleService.PauseToken.IsPaused)
+                {
+                    _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Paused);
+                }
             }
         }
+
+        _healthMonitor.ReportBackgroundState(MonitorServiceName, BackgroundServiceRunState.Stopped);
     }
 
     private async Task CleanupAsync(CancellationToken cancellationToken)
