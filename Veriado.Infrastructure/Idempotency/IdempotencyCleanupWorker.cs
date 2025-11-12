@@ -40,31 +40,38 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
             ? TimeSpan.FromHours(1)
             : _options.IdempotencyCleanupInterval;
 
-        try
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await CleanupAsync(stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to clean expired idempotency keys");
-                }
+        _logger.LogInformation("Idempotency cleanup worker started with interval {Delay}", delay);
 
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await CleanupAsync(stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("Idempotency cleanup worker stopping (cancellation during cleanup)");
+                break; // ukonèíme smyèku, žádné throw
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to clean expired idempotency keys");
+            }
+
+            try
+            {
                 await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("Idempotency cleanup worker stopping (cancellation during delay)");
+                break; // zrušení delay pøi shutdownu je oèekávané
+            }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            _logger.LogDebug("Idempotency cleanup worker stopping");
-        }
+
+        _logger.LogDebug("Idempotency cleanup worker stopped");
     }
+
 
     private async Task CleanupAsync(CancellationToken cancellationToken)
     {
