@@ -63,7 +63,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
 
             LogHostShutdownResult(hostResult);
 
-            if (lifecycleOutcome.Success && hostResult.IsCompleted)
+            if (lifecycleOutcome.Succeeded && hostResult.IsCompleted)
             {
                 _stopped = true;
                 _disposed = true;
@@ -71,7 +71,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
                 _logger.LogInformation(
                     "Shutdown sequence finished successfully in {Duration}.",
                     stopwatch.Elapsed);
-                return ShutdownResult.Success(stopwatch.Elapsed, lifecycleOutcome.Success, hostResult);
+                return ShutdownResult.Success(stopwatch.Elapsed, lifecycleOutcome.Succeeded, hostResult);
             }
 
             var failure = ResolveFailure(lifecycleOutcome, hostResult);
@@ -80,11 +80,11 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
             _logger.LogWarning(
                 "Shutdown sequence incomplete after {Duration}. Lifecycle stopped: {LifecycleStopped}; host stop: {HostStopState}; host dispose: {HostDisposeState}.",
                 stopwatch.Elapsed,
-                lifecycleOutcome.Success,
+                lifecycleOutcome.Succeeded,
                 hostResult.Stop.State,
                 hostResult.Dispose.State);
 
-            return ShutdownResult.Failure(failure, stopwatch.Elapsed, lifecycleOutcome.Success, hostResult);
+            return ShutdownResult.Failed(failure, stopwatch.Elapsed, lifecycleOutcome.Succeeded, hostResult);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -96,7 +96,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         {
             stopwatch.Stop();
             _logger.LogError(ex, "Unexpected shutdown failure.");
-            return ShutdownResult.Failure(
+            return ShutdownResult.Failed(
                 ShutdownFailureDetail.Error(ShutdownFailurePhase.LifecycleStop, ex),
                 stopwatch.Elapsed,
                 lifecycleStopped: _stopped,
@@ -151,7 +151,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         if (_stopped)
         {
             _logger.LogDebug("Lifecycle already stopped.");
-            return LifecycleStopOutcome.Success();
+            return LifecycleStopOutcome.Completed();
         }
 
         using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -162,7 +162,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
             await _lifecycleService.StopAsync(stopCts.Token).ConfigureAwait(false);
             _logger.LogInformation("Lifecycle stopped cooperatively.");
             _stopped = true;
-            return LifecycleStopOutcome.Success();
+            return LifecycleStopOutcome.Completed();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -172,7 +172,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         catch (OperationCanceledException ex)
         {
             _logger.LogWarning("Lifecycle stop timed out after {Timeout}.", StopTimeout);
-            return LifecycleStopOutcome.Timeout(ex);
+            return LifecycleStopOutcome.TimedOut(ex);
         }
         catch (Exception ex)
         {
@@ -183,7 +183,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
 
     private static ShutdownFailureDetail ResolveFailure(LifecycleStopOutcome lifecycleOutcome, HostShutdownResult hostResult)
     {
-        if (!lifecycleOutcome.Success)
+        if (!lifecycleOutcome.Succeeded)
         {
             return lifecycleOutcome.Failure ?? ShutdownFailureDetail.Unknown(ShutdownFailurePhase.LifecycleStop);
         }
@@ -214,11 +214,11 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
         return ShutdownFailureDetail.Unknown(ShutdownFailurePhase.HostDispose);
     }
 
-    private readonly record struct LifecycleStopOutcome(bool Success, ShutdownFailureDetail? Failure)
+    private readonly record struct LifecycleStopOutcome(bool Succeeded, ShutdownFailureDetail? Failure)
     {
-        public static LifecycleStopOutcome Success() => new(true, null);
+        public static LifecycleStopOutcome Completed() => new(true, null);
 
-        public static LifecycleStopOutcome Timeout(Exception? exception = null) =>
+        public static LifecycleStopOutcome TimedOut(Exception? exception = null) =>
             new(false, ShutdownFailureDetail.Timeout(ShutdownFailurePhase.LifecycleStop, exception));
 
         public static LifecycleStopOutcome Canceled() =>

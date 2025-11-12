@@ -7,7 +7,7 @@ using Veriado.WinUI.Services.Abstractions;
 
 namespace Veriado.WinUI.Services.Shutdown;
 
-internal interface IHostShutdownCoordinator
+public interface IHostShutdownCoordinator
 {
     void Initialize(IHost host);
 

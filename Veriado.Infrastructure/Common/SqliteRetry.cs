@@ -5,7 +5,7 @@ namespace Veriado.Infrastructure.Common;
 /// <summary>
 /// Provides a unified retry helper for operations that may encounter SQLITE_BUSY.
 /// </summary>
-internal static class SqliteRetry
+public static class SqliteRetry
 {
     private const int SqliteBusyErrorCode = 5;
     private const int MaxAttempts = 5;
