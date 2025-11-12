@@ -29,6 +29,7 @@ public partial class App : WinUIApplication
     private AppHost? _appHost;
     private AppWindow? _appWindow;
     private IShutdownOrchestrator? _shutdownOrchestrator;
+    private IHostShutdownCoordinator? _shutdownCoordinator;
     private bool _isAppWindowShutdownInProgress;
     private bool _shutdownCompleted;
     private bool _forceQuitRequested;
@@ -145,6 +146,7 @@ public partial class App : WinUIApplication
             var services = host.Services;
 
             _shutdownOrchestrator = services.GetRequiredService<IShutdownOrchestrator>();
+            _shutdownCoordinator = services.GetRequiredService<IHostShutdownCoordinator>();
 
             var startupCoordinator = services.GetRequiredService<IStartupCoordinator>();
             var result = await startupCoordinator.RunAsync(cancellationToken).ConfigureAwait(true);
@@ -197,6 +199,7 @@ public partial class App : WinUIApplication
 
             _appHost = null;
             _shutdownOrchestrator = null;
+            _shutdownCoordinator = null;
             MainWindow = null;
             _appWindow = null;
         }
@@ -264,6 +267,7 @@ public partial class App : WinUIApplication
         _isAppWindowShutdownInProgress = false;
         _appHost = null;
         _shutdownOrchestrator = null;
+        _shutdownCoordinator = null;
 
         MainWindow = null;
     }
@@ -340,7 +344,7 @@ public partial class App : WinUIApplication
 
                         if (choice == ShutdownFailureChoice.Force)
                         {
-                            forceExit = PrepareForceQuit(shutdownResult);
+                            forceExit = await PrepareForceQuitAsync(shutdownResult).ConfigureAwait(true);
                             return;
                         }
 
@@ -511,7 +515,7 @@ public partial class App : WinUIApplication
         };
     }
 
-    private bool PrepareForceQuit(ShutdownResult result)
+    private async Task<bool> PrepareForceQuitAsync(ShutdownResult result)
     {
         var failure = result.Failure;
         var logger = GetLogger();
@@ -524,6 +528,42 @@ public partial class App : WinUIApplication
         if (failure?.Exception is not null)
         {
             logger.LogCritical(failure.Exception, "Exception that prevented graceful shutdown.");
+        }
+
+        var coordinator = _shutdownCoordinator;
+        if (coordinator is null)
+        {
+            try
+            {
+                coordinator = _appHost?.Services.GetService<IHostShutdownCoordinator>();
+            }
+            catch (Exception resolveEx)
+            {
+                logger.LogDebug(resolveEx, "Failed to resolve shutdown coordinator for force quit cleanup.");
+            }
+        }
+
+        if (coordinator is not null)
+        {
+            try
+            {
+                using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await coordinator
+                    .StopAndDisposeAsync(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3), cleanupCts.Token)
+                    .ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogWarning("Best-effort shutdown before force quit timed out.");
+            }
+            catch (Exception cleanupEx)
+            {
+                logger.LogWarning(cleanupEx, "Best-effort shutdown before force quit failed.");
+            }
+        }
+        else
+        {
+            logger.LogWarning("Host shutdown coordinator unavailable; skipping best-effort cleanup before force quit.");
         }
 
         _forceQuitRequested = true;

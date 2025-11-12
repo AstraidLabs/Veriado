@@ -27,16 +27,16 @@ namespace Veriado.WinUI;
 internal sealed class AppHost : IAsyncDisposable
 {
     private IHost? _host;
-    private readonly IHostShutdownService _hostShutdownService;
+    private readonly IHostShutdownCoordinator _shutdownCoordinator;
     private readonly ILogger<AppHost> _logger;
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(10);
     private bool _disposed;
 
-    private AppHost(IHost host, IHostShutdownService hostShutdownService, ILogger<AppHost> logger)
+    private AppHost(IHost host, IHostShutdownCoordinator shutdownCoordinator, ILogger<AppHost> logger)
     {
         _host = host;
-        _hostShutdownService = hostShutdownService;
+        _shutdownCoordinator = shutdownCoordinator;
         _logger = logger;
     }
 
@@ -66,6 +66,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddSingleton<INavigationService, NavigationService>();
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<IConfirmService, ConfirmService>();
+                services.AddSingleton<IHostShutdownCoordinator, HostShutdownCoordinator>();
                 services.AddSingleton<HostShutdownService>();
                 services.AddSingleton<IHostShutdownService>(static sp => sp.GetRequiredService<HostShutdownService>());
                 services.AddSingleton<IShutdownOrchestrator, ShutdownOrchestrator>();
@@ -97,9 +98,9 @@ internal sealed class AppHost : IAsyncDisposable
         var startupLogger = host.Services.GetRequiredService<ILogger<AppHost>>();
         startupLogger.LogInformation("AppHost initialization starting.");
 
+        var shutdownCoordinator = host.Services.GetRequiredService<IHostShutdownCoordinator>();
         var shutdownInitializer = host.Services.GetRequiredService<HostShutdownService>();
         shutdownInitializer.Initialize(host);
-        var hostShutdownService = host.Services.GetRequiredService<IHostShutdownService>();
 
         var pathResolver = host.Services.GetRequiredService<ISqlitePathResolver>();
         var databasePath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
@@ -114,7 +115,7 @@ internal sealed class AppHost : IAsyncDisposable
         }
         startupLogger.LogInformation("AppHost host services running.");
         var logger = startupLogger;
-        return new AppHost(host, hostShutdownService, logger);
+        return new AppHost(host, shutdownCoordinator, logger);
     }
 
     public async ValueTask DisposeAsync()
@@ -129,10 +130,15 @@ internal sealed class AppHost : IAsyncDisposable
         try
         {
             _logger.LogInformation("AppHost initiating shutdown sequence.");
-            var shutdownResult = await _hostShutdownService
+            var shutdownResult = await _shutdownCoordinator
                 .StopAndDisposeAsync(StopTimeout, DisposeTimeout, CancellationToken.None)
                 .ConfigureAwait(false);
             LogShutdownResult(shutdownResult);
+
+            if (shutdownResult.IsCompleted)
+            {
+                _host = null;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -144,7 +150,6 @@ internal sealed class AppHost : IAsyncDisposable
         }
         finally
         {
-            _host = null;
             _logger.LogInformation("AppHost disposed.");
         }
     }
