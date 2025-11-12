@@ -1,16 +1,20 @@
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.Helpers;
 using Veriado.WinUI.Services.Abstractions;
+using Veriado.WinUI.Services.Shutdown;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
 
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using WinUIApplication = Microsoft.UI.Xaml.Application;
 using WinUIWindow = Microsoft.UI.Xaml.Window;
 
@@ -26,10 +30,16 @@ public partial class App : WinUIApplication
     private AppWindow? _appWindow;
     private IShutdownOrchestrator? _shutdownOrchestrator;
     private bool _isAppWindowShutdownInProgress;
+    private bool _shutdownCompleted;
+    private bool _forceQuitRequested;
 
     public App()
     {
         InitializeComponent();
+
+        UnhandledException += OnAppUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedTaskException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
 
         var czechCulture = CultureInfo.GetCultureInfo("cs-CZ");
         CultureInfo.DefaultThreadCurrentCulture = czechCulture;
@@ -46,10 +56,15 @@ public partial class App : WinUIApplication
 
     public Window? MainWindow { get; private set; }
 
-    protected override async void OnLaunched(LaunchActivatedEventArgs args)
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         base.OnLaunched(args);
 
+        ObserveTask(HandleLaunchAsync(args), "application launch");
+    }
+
+    private async Task HandleLaunchAsync(LaunchActivatedEventArgs args)
+    {
         var startupViewModel = new StartupViewModel();
         var startupWindow = new StartupWindow(startupViewModel);
         startupWindow.Activate();
@@ -147,6 +162,9 @@ public partial class App : WinUIApplication
                 _appWindow.Closing += OnAppWindowClosing;
             }
 
+            _shutdownCompleted = false;
+            _forceQuitRequested = false;
+
             initialized = true;
             return true;
         }
@@ -205,9 +223,9 @@ public partial class App : WinUIApplication
         (logger ?? BootstrapLogger).LogError(exception, "Application startup failed.");
     }
 
-    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (_isAppWindowShutdownInProgress)
+        if (_isAppWindowShutdownInProgress || _forceQuitRequested)
         {
             args.Cancel = false;
             return;
@@ -221,8 +239,8 @@ public partial class App : WinUIApplication
         }
 
         args.Cancel = true;
-
-        await HandleCloseAsync().ConfigureAwait(true);
+        var deferral = args.GetDeferral();
+        ObserveTask(HandleCloseAsync(deferral), "window closing");
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
@@ -238,17 +256,34 @@ public partial class App : WinUIApplication
             _appWindow = null;
         }
 
+        if (!_shutdownCompleted && !_forceQuitRequested)
+        {
+            GetLogger().LogWarning("App window closed without coordinated shutdown; clearing host references defensively.");
+        }
+
+        _isAppWindowShutdownInProgress = false;
         _appHost = null;
         _shutdownOrchestrator = null;
 
         MainWindow = null;
     }
 
-    private async Task HandleCloseAsync()
+    private async Task HandleCloseAsync(AppWindowClosingDeferral? deferral)
     {
+        var forceExit = false;
+
         try
         {
-            var services = Services;
+            var host = _appHost;
+            if (host is null)
+            {
+                _shutdownCompleted = true;
+                _forceQuitRequested = true;
+                MainWindow?.Close();
+                return;
+            }
+
+            var services = host.Services;
             var confirmService = services.GetRequiredService<IConfirmService>();
 
             var options = new ConfirmOptions
@@ -266,26 +301,52 @@ public partial class App : WinUIApplication
                 return;
             }
 
-            _isAppWindowShutdownInProgress = true;
-
-            var orchestrator = _shutdownOrchestrator;
-            if (orchestrator is null)
+            while (true)
             {
-                MainWindow?.Close();
-                return;
-            }
+                _isAppWindowShutdownInProgress = true;
 
-            var result = await orchestrator
-                .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
-                .ConfigureAwait(true);
+                var orchestrator = _shutdownOrchestrator;
+                if (orchestrator is null)
+                {
+                    _shutdownCompleted = true;
+                    MainWindow?.Close();
+                    return;
+                }
 
-            if (result.IsAllowed)
-            {
-                MainWindow?.Close();
-            }
-            else
-            {
-                _isAppWindowShutdownInProgress = false;
+                var shutdownResult = await orchestrator
+                    .RequestAppShutdownAsync(ShutdownReason.AppWindowClosing)
+                    .ConfigureAwait(true);
+
+                LogShutdownResult(shutdownResult);
+
+                switch (shutdownResult.Status)
+                {
+                    case ShutdownStatus.Success:
+                        _shutdownCompleted = true;
+                        MainWindow?.Close();
+                        return;
+
+                    case ShutdownStatus.Canceled:
+                        _isAppWindowShutdownInProgress = false;
+                        return;
+
+                    case ShutdownStatus.Failed:
+                        var choice = await ShowShutdownFailureDialogAsync(shutdownResult).ConfigureAwait(true);
+                        if (choice == ShutdownFailureChoice.Retry)
+                        {
+                            _isAppWindowShutdownInProgress = false;
+                            continue;
+                        }
+
+                        if (choice == ShutdownFailureChoice.Force)
+                        {
+                            forceExit = PrepareForceQuit(shutdownResult);
+                            return;
+                        }
+
+                        _isAppWindowShutdownInProgress = false;
+                        return;
+                }
             }
         }
         catch (OperationCanceledException)
@@ -294,9 +355,215 @@ public partial class App : WinUIApplication
         }
         catch (Exception ex)
         {
-            BootstrapLogger.LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
+            GetLogger().LogError(ex, "Shutdown orchestrator failed during AppWindow closing. Allowing close.");
             _isAppWindowShutdownInProgress = true;
+            _shutdownCompleted = true;
             MainWindow?.Close();
+        }
+        finally
+        {
+            deferral?.Complete();
+
+            if (forceExit)
+            {
+                Environment.ExitCode = 1;
+                Environment.Exit(1);
+            }
+        }
+    }
+
+    private enum ShutdownFailureChoice
+    {
+        Retry,
+        Force,
+        Cancel,
+    }
+
+    private void ObserveTask(Task task, string operation)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        task.ContinueWith(t =>
+        {
+            if (!t.IsFaulted || t.Exception is null)
+            {
+                return;
+            }
+
+            var logger = GetLogger();
+            var exception = t.Exception.Flatten().InnerExceptions.Count == 1
+                ? t.Exception.InnerException ?? t.Exception
+                : t.Exception;
+            logger.LogError(exception, "Unhandled exception during {Operation}.", operation);
+        }, TaskScheduler.Default);
+    }
+
+    private ILogger<App> GetLogger()
+    {
+        var host = _appHost;
+        if (host is not null)
+        {
+            try
+            {
+                return host.Services.GetService<ILogger<App>>() ?? BootstrapLogger;
+            }
+            catch
+            {
+                return BootstrapLogger;
+            }
+        }
+
+        return BootstrapLogger;
+    }
+
+    private void LogShutdownResult(ShutdownResult result)
+    {
+        var logger = GetLogger();
+
+        switch (result.Status)
+        {
+            case ShutdownStatus.Success:
+                logger.LogInformation(
+                    "Coordinated shutdown completed in {Duration}. Host stop={HostStop}, dispose={HostDispose}.",
+                    result.Duration,
+                    result.Host.Stop.State,
+                    result.Host.Dispose.State);
+                break;
+            case ShutdownStatus.Canceled:
+                logger.LogInformation("Shutdown canceled after {Duration}.", result.Duration);
+                break;
+            case ShutdownStatus.Failed:
+                var failure = result.Failure;
+                logger.LogWarning(
+                    "Shutdown failed after {Duration}. Phase={Phase}, Reason={Reason}, HostStop={HostStop}, HostDispose={HostDispose}.",
+                    result.Duration,
+                    failure?.Phase ?? ShutdownFailurePhase.None,
+                    failure?.Reason ?? ShutdownFailureReason.Unknown,
+                    result.Host.Stop.State,
+                    result.Host.Dispose.State);
+
+                if (failure?.Exception is not null)
+                {
+                    logger.LogDebug(failure.Exception, "Shutdown failure details.");
+                }
+
+                break;
+        }
+    }
+
+    private async Task<ShutdownFailureChoice> ShowShutdownFailureDialogAsync(ShutdownResult result)
+    {
+        if (MainWindow?.Content is not FrameworkElement root || root.XamlRoot is null)
+        {
+            GetLogger().LogWarning("Unable to display shutdown failure dialog because XamlRoot is unavailable.");
+            return ShutdownFailureChoice.Cancel;
+        }
+
+        var failure = result.Failure;
+        var phaseText = failure?.Phase switch
+        {
+            ShutdownFailurePhase.LifecycleStop => "Zastavení životního cyklu",
+            ShutdownFailurePhase.HostStop => "Zastavení hostitele",
+            ShutdownFailurePhase.HostDispose => "Uvolnění hostitele",
+            _ => "Neznámá fáze",
+        };
+
+        var reasonText = failure?.Reason switch
+        {
+            ShutdownFailureReason.Timeout => "Operace vypršela.",
+            ShutdownFailureReason.Canceled => "Operace byla zrušena.",
+            ShutdownFailureReason.Exception => failure.Exception?.Message ?? "Došlo k výjimce.",
+            ShutdownFailureReason.NotSupported => "Fáze ukončení není podporována.",
+            ShutdownFailureReason.Unknown or ShutdownFailureReason.None => "Došlo k neočekávané chybě.",
+            _ => "Došlo k neočekávané chybě.",
+        };
+
+        var message =
+            $"Ukončení aplikace se nezdařilo.\n\n" +
+            $"Fáze: {phaseText}\n" +
+            $"Důvod: {reasonText}\n" +
+            $"Host stop: {result.Host.Stop.State}\n" +
+            $"Host dispose: {result.Host.Dispose.State}\n" +
+            $"Doba pokusu: {result.Duration:g}\n\n" +
+            "Zvolte další postup.";
+
+        var dialog = new ContentDialog
+        {
+            Title = "Nelze ukončit aplikaci",
+            Content = message,
+            PrimaryButtonText = "Zkusit znovu",
+            SecondaryButtonText = "Vynutit ukončení",
+            CloseButtonText = "Zrušit",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = root.XamlRoot,
+            RequestedTheme = root.ActualTheme,
+        };
+
+        var dialogResult = await dialog.ShowAsync().AsTask().ConfigureAwait(true);
+        return dialogResult switch
+        {
+            ContentDialogResult.Primary => ShutdownFailureChoice.Retry,
+            ContentDialogResult.Secondary => ShutdownFailureChoice.Force,
+            _ => ShutdownFailureChoice.Cancel,
+        };
+    }
+
+    private bool PrepareForceQuit(ShutdownResult result)
+    {
+        var failure = result.Failure;
+        var logger = GetLogger();
+        logger.LogCritical(
+            "Force quitting application after shutdown failure. Phase={Phase}, Reason={Reason}, HostStop={HostStop}, HostDispose={HostDispose}.",
+            failure?.Phase ?? ShutdownFailurePhase.None,
+            failure?.Reason ?? ShutdownFailureReason.Unknown,
+            result.Host.Stop.State,
+            result.Host.Dispose.State);
+        if (failure?.Exception is not null)
+        {
+            logger.LogCritical(failure.Exception, "Exception that prevented graceful shutdown.");
+        }
+
+        _forceQuitRequested = true;
+        _shutdownCompleted = true;
+        return true;
+    }
+
+    private void OnAppUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        if (e.Exception is not null)
+        {
+            GetLogger().LogError(e.Exception, "Unhandled WinUI exception.");
+        }
+        else
+        {
+            GetLogger().LogError("Unhandled WinUI exception without details.");
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnTaskSchedulerUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        GetLogger().LogError(e.Exception, "Unobserved task exception encountered.");
+        e.SetObserved();
+    }
+
+    private void OnDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        var logger = GetLogger();
+        if (e.ExceptionObject is Exception exception)
+        {
+            logger.LogCritical(exception, "AppDomain unhandled exception. Terminating={Terminating}.", e.IsTerminating);
+        }
+        else
+        {
+            logger.LogCritical(
+                "AppDomain unhandled exception object: {ExceptionObject}. Terminating={Terminating}.",
+                e.ExceptionObject,
+                e.IsTerminating);
         }
     }
 

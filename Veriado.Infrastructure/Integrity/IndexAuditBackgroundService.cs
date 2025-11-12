@@ -125,7 +125,7 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
 
                 try
                 {
-                    await Task.Delay(delay, effectiveToken).ConfigureAwait(false);
+                    await PauseResponsiveDelay.DelayAsync(delay, _lifecycleService.PauseToken, effectiveToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (effectiveToken.IsCancellationRequested)
                 {
@@ -157,7 +157,7 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         var delay = RandomUpTo(jitter);
         if (delay > TimeSpan.Zero)
         {
-            await Task.Delay(delay, ct).ConfigureAwait(false);
+            await PauseResponsiveDelay.DelayAsync(delay, _lifecycleService.PauseToken, ct).ConfigureAwait(false);
         }
     }
 

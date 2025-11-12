@@ -1,3 +1,5 @@
+using Veriado.WinUI.Services.Shutdown;
+
 namespace Veriado.WinUI.Services.Abstractions;
 
 public interface IShutdownOrchestrator
