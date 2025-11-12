@@ -27,12 +27,12 @@ namespace Veriado.WinUI;
 internal sealed class AppHost : IAsyncDisposable
 {
     private readonly IHost _host;
-    private readonly HostShutdownService _hostShutdownService;
+    private readonly IHostShutdownService _hostShutdownService;
     private readonly ILogger<AppHost> _logger;
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
     private bool _disposed;
 
-    private AppHost(IHost host, HostShutdownService hostShutdownService, ILogger<AppHost> logger)
+    private AppHost(IHost host, IHostShutdownService hostShutdownService, ILogger<AppHost> logger)
     {
         _host = host;
         _hostShutdownService = hostShutdownService;
@@ -93,8 +93,9 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
-        var hostShutdownService = host.Services.GetRequiredService<HostShutdownService>();
-        hostShutdownService.Initialize(host);
+        var shutdownInitializer = host.Services.GetRequiredService<HostShutdownService>();
+        shutdownInitializer.Initialize(host);
+        var hostShutdownService = host.Services.GetRequiredService<IHostShutdownService>();
 
         var pathResolver = host.Services.GetRequiredService<ISqlitePathResolver>();
         var databasePath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
@@ -121,40 +122,13 @@ internal sealed class AppHost : IAsyncDisposable
 
         try
         {
-            if (!_hostShutdownService.IsStopCompleted)
-            {
-                using var stopCts = new CancellationTokenSource(StopTimeout);
-                try
-                {
-                    await _hostShutdownService.StopAsync(stopCts.Token).ConfigureAwait(false);
-                    _logger.LogDebug("Host stopped successfully from AppHost.");
-                }
-                catch (OperationCanceledException)
-                {
-                    if (stopCts.IsCancellationRequested)
-                    {
-                        _logger.LogWarning("AppHost stop timed out after {Timeout}.", StopTimeout);
-                    }
-                    else
-                    {
-                        _logger.LogInformation("AppHost stop canceled via caller token.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "AppHost failed to stop the host.");
-                }
-            }
+            var stopResult = await _hostShutdownService
+                .StopAsync(StopTimeout, CancellationToken.None)
+                .ConfigureAwait(false);
+            LogStopResult(stopResult);
 
-            if (_hostShutdownService.IsDisposeCompleted)
-            {
-                _logger.LogDebug("AppHost skip dispose because host was already released by orchestrator.");
-                return;
-            }
-
-            await _hostShutdownService.DisposeAsync().ConfigureAwait(false);
-            _host = null;
-            _logger.LogDebug("Host disposed successfully from AppHost.");
+            var disposeResult = await _hostShutdownService.DisposeAsync().ConfigureAwait(false);
+            LogDisposeResult(disposeResult);
         }
         catch (Exception ex)
         {
@@ -169,6 +143,50 @@ internal sealed class AppHost : IAsyncDisposable
             .Replace(Path.AltDirectorySeparatorChar, '_')
             .Replace(':', '_');
         return $"Veriado-Migrate-{sanitized}";
+    }
+
+    private void LogStopResult(HostStopResult result)
+    {
+        switch (result.State)
+        {
+            case HostStopState.Completed:
+                _logger.LogDebug("Host stopped successfully from AppHost.");
+                break;
+            case HostStopState.AlreadyStopped:
+                _logger.LogDebug("Host stop skipped because it was already completed.");
+                break;
+            case HostStopState.NotInitialized:
+                _logger.LogDebug("Host stop skipped because host was not initialized.");
+                break;
+            case HostStopState.TimedOut:
+                _logger.LogWarning(result.Exception, "AppHost stop timed out after {Timeout}.", StopTimeout);
+                break;
+            case HostStopState.Canceled:
+                _logger.LogInformation("AppHost stop canceled via caller token.");
+                break;
+            case HostStopState.Failed:
+                _logger.LogError(result.Exception, "AppHost failed to stop the host.");
+                break;
+        }
+    }
+
+    private void LogDisposeResult(HostDisposeResult result)
+    {
+        switch (result.State)
+        {
+            case HostDisposeState.Completed:
+                _logger.LogDebug("Host disposed successfully from AppHost.");
+                break;
+            case HostDisposeState.AlreadyDisposed:
+                _logger.LogDebug("AppHost skip dispose because host was already released by orchestrator.");
+                break;
+            case HostDisposeState.NotInitialized:
+                _logger.LogDebug("Host dispose skipped because host was not initialized.");
+                break;
+            case HostDisposeState.Failed:
+                _logger.LogError(result.Exception, "AppHost failed during shutdown.");
+                break;
+        }
     }
 }
 

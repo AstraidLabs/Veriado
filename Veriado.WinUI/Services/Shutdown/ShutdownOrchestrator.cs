@@ -186,64 +186,55 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
 
     private async Task<bool> StopHostAsync(CancellationToken cancellationToken)
     {
-        using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        stopCts.CancelAfter(StopTimeout);
+        var result = await _hostShutdownService
+            .StopAsync(StopTimeout, cancellationToken)
+            .ConfigureAwait(false);
 
-        try
+        switch (result.State)
         {
-            await _hostShutdownService.StopAsync(stopCts.Token).ConfigureAwait(false);
-            _logger.LogInformation("Host stopped successfully.");
-            return true;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            _logger.LogInformation("Host stop canceled via caller token.");
-            return false;
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogWarning("Host stop timed out after {Timeout}.", StopTimeout);
-            return false;
-        }
-        catch (ObjectDisposedException ex)
-        {
-            _logger.LogDebug(ex, "Host stop skipped because host already disposed.");
-            return true;
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogDebug(ex, "Host stop skipped because host not initialized.");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Host stop failed.");
-            return false;
+            case HostStopState.Completed:
+                _logger.LogInformation("Host stopped successfully.");
+                return true;
+            case HostStopState.AlreadyStopped:
+                _logger.LogDebug("Host stop skipped because it was already completed.");
+                return true;
+            case HostStopState.NotInitialized:
+                _logger.LogDebug("Host stop skipped because host not initialized.");
+                return true;
+            case HostStopState.Canceled:
+                _logger.LogInformation("Host stop canceled via caller token.");
+                return false;
+            case HostStopState.TimedOut:
+                _logger.LogWarning("Host stop timed out after {Timeout}.", StopTimeout);
+                return false;
+            case HostStopState.Failed:
+                _logger.LogError(result.Exception, "Host stop failed.");
+                return false;
+            default:
+                return false;
         }
     }
 
     private async Task<bool> DisposeHostAsync()
     {
-        try
+        var result = await _hostShutdownService.DisposeAsync().ConfigureAwait(false);
+
+        switch (result.State)
         {
-            await _hostShutdownService.DisposeAsync().ConfigureAwait(false);
-            _logger.LogInformation("Host disposed successfully.");
-            return true;
-        }
-        catch (ObjectDisposedException ex)
-        {
-            _logger.LogDebug(ex, "Host dispose skipped because host already disposed.");
-            return true;
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogDebug(ex, "Host dispose skipped because host not initialized.");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Host dispose failed.");
-            return false;
+            case HostDisposeState.Completed:
+                _logger.LogInformation("Host disposed successfully.");
+                return true;
+            case HostDisposeState.AlreadyDisposed:
+                _logger.LogDebug("Host dispose skipped because host already disposed.");
+                return true;
+            case HostDisposeState.NotInitialized:
+                _logger.LogDebug("Host dispose skipped because host not initialized.");
+                return true;
+            case HostDisposeState.Failed:
+                _logger.LogError(result.Exception, "Host dispose failed.");
+                return false;
+            default:
+                return false;
         }
     }
 }

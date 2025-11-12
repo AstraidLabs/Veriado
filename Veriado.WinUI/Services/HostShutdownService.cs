@@ -9,6 +9,8 @@ namespace Veriado.WinUI.Services;
 
 internal sealed class HostShutdownService : IHostShutdownService
 {
+    private static readonly TimeSpan DefaultDisposeStopTimeout = TimeSpan.FromSeconds(5);
+
     private readonly ILogger<HostShutdownService> _logger;
     private IHost? _host;
     private volatile bool _stopCompleted;
@@ -36,26 +38,25 @@ internal sealed class HostShutdownService : IHostShutdownService
 
     public bool IsDisposeCompleted => Volatile.Read(ref _disposeCompleted);
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public async Task<HostStopResult> StopAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        if (IsStopCompleted)
+        var host = Volatile.Read(ref _host);
+        if (host is null)
         {
-            _logger.LogDebug("Host stop requested but already completed.");
-            return;
+            _logger.LogDebug("Host stop skipped because host has not been initialized.");
+            return HostStopResult.NotInitialized();
         }
 
-        var host = _host ?? throw new InvalidOperationException("The host has not been initialized.");
-
-        await host.StopAsync(cancellationToken).ConfigureAwait(false);
-        Volatile.Write(ref _stopCompleted, true);
+        var result = await StopHostCoreAsync(host, timeout, cancellationToken, logOnSuccess: true).ConfigureAwait(false);
+        return result;
     }
 
-    public async ValueTask DisposeAsync()
+    public async ValueTask<HostDisposeResult> DisposeAsync()
     {
         if (IsDisposeCompleted)
         {
             _logger.LogDebug("Host dispose requested but already completed.");
-            return;
+            return HostDisposeResult.AlreadyDisposed();
         }
 
         var host = Interlocked.Exchange(ref _host, null);
@@ -64,25 +65,23 @@ internal sealed class HostShutdownService : IHostShutdownService
             _logger.LogDebug("DisposeAsync called without an initialized host.");
             Volatile.Write(ref _disposeCompleted, true);
             Volatile.Write(ref _stopCompleted, true);
-            return;
+            return HostDisposeResult.NotInitialized();
         }
 
         try
         {
             if (!IsStopCompleted)
             {
-                _logger.LogDebug("Disposing host without prior StopAsync; signaling stop.");
-                try
-                {
-                    using var stopCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await host.StopAsync(stopCts.Token).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Best-effort stop during dispose failed.");
-                }
+                var stopResult = await StopHostCoreAsync(host, DefaultDisposeStopTimeout, CancellationToken.None, logOnSuccess: false)
+                    .ConfigureAwait(false);
 
-                Volatile.Write(ref _stopCompleted, true);
+                if (!stopResult.IsSuccess)
+                {
+                    _logger.LogWarning(
+                        stopResult.Exception,
+                        "Best-effort stop during dispose completed with status {Status}.",
+                        stopResult.State);
+                }
             }
 
             if (host is IAsyncDisposable asyncDisposable)
@@ -94,13 +93,75 @@ internal sealed class HostShutdownService : IHostShutdownService
                 host.Dispose();
             }
 
-            _logger.LogDebug("Host disposed successfully.");
+            _logger.LogInformation("Host disposed successfully.");
             Volatile.Write(ref _disposeCompleted, true);
+            return HostDisposeResult.Completed();
         }
-        catch
+        catch (Exception ex)
         {
             Volatile.Write(ref _disposeCompleted, false);
-            throw;
+            _logger.LogError(ex, "Host dispose failed.");
+            return HostDisposeResult.Failed(ex);
+        }
+    }
+
+    private async Task<HostStopResult> StopHostCoreAsync(
+        IHost host,
+        TimeSpan timeout,
+        CancellationToken cancellationToken,
+        bool logOnSuccess)
+    {
+        if (IsStopCompleted)
+        {
+            _logger.LogDebug("Host stop requested but already completed.");
+            return HostStopResult.AlreadyStopped();
+        }
+
+        using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        stopCts.CancelAfter(timeout);
+
+        try
+        {
+            await host.StopAsync(stopCts.Token).ConfigureAwait(false);
+            Volatile.Write(ref _stopCompleted, true);
+
+            if (logOnSuccess)
+            {
+                _logger.LogInformation("Host stopped successfully.");
+            }
+            else
+            {
+                _logger.LogDebug("Host stopped as part of disposal.");
+            }
+
+            return HostStopResult.Completed();
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("Host stop canceled via caller token.");
+            return HostStopResult.Canceled(ex);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning("Host stop timed out after {Timeout}.", timeout);
+            return HostStopResult.TimedOut(ex);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogDebug(ex, "Host stop skipped because host already disposed.");
+            Volatile.Write(ref _stopCompleted, true);
+            return HostStopResult.AlreadyStopped(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogDebug(ex, "Host stop skipped because host not initialized.");
+            Volatile.Write(ref _stopCompleted, true);
+            return HostStopResult.NotInitialized(ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Host stop failed.");
+            return HostStopResult.Failed(ex);
         }
     }
 }

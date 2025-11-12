@@ -6,6 +6,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Linq;
+using System.Threading;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Veriado.Mapping.AC;
@@ -16,6 +17,8 @@ using Veriado.Contracts.Import;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.UseCases.Files.CheckFileHash;
 using Veriado.Application.Import;
+using Veriado.Infrastructure.Common;
+using Veriado.Infrastructure.Lifecycle;
 using ApplicationImportOptions = Veriado.Application.Import.ImportOptions;
 using StreamingImportOptions = Veriado.Services.Import.Ingestion.ImportOptions;
 using ContractsImportOptions = Veriado.Contracts.Import.ImportOptions;
@@ -47,6 +50,7 @@ public sealed class ImportService : IImportService
     private readonly IRequestContext _requestContext;
     private readonly ILogger<ImportService> _logger;
     private readonly IMaintenanceService _maintenanceService;
+    private readonly IAppLifecycleService _lifecycleService;
     private readonly IFileStorage _fileStorage;
     private readonly IFileImportWriter _importWriter;
     private readonly SemaphoreSlim _fulltextRepairSemaphore = new(1, 1);
@@ -61,6 +65,7 @@ public sealed class ImportService : IImportService
         IRequestContext requestContext,
         ILogger<ImportService> logger,
         IMaintenanceService maintenanceService,
+        IAppLifecycleService lifecycleService,
         IFileStorage fileStorage,
         IFileImportWriter importWriter)
     {
@@ -70,6 +75,7 @@ public sealed class ImportService : IImportService
         _requestContext = requestContext ?? throw new ArgumentNullException(nameof(requestContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _maintenanceService = maintenanceService ?? throw new ArgumentNullException(nameof(maintenanceService));
+        _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
         _importWriter = importWriter ?? throw new ArgumentNullException(nameof(importWriter));
     }
@@ -393,13 +399,18 @@ public sealed class ImportService : IImportService
         var fatalEncountered = false;
         var cancellationEncountered = false;
 
+        await using var lifecycleScope = await PauseLifecycleForImportAsync(cancellationToken).ConfigureAwait(false);
+
+        using var writerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var writerToken = writerCts.Token;
+
         var writerTask = Task.Run(async () =>
         {
             try
             {
                 var parallelOptions = new ParallelOptions
                 {
-                    CancellationToken = cancellationToken,
+                    CancellationToken = writerToken,
                     MaxDegreeOfParallelism = options.MaxDegreeOfParallelism,
                 };
 
@@ -407,9 +418,10 @@ public sealed class ImportService : IImportService
                 {
                     token.ThrowIfCancellationRequested();
 
-                    await channel.Writer.WriteAsync(
+                    await WriteProgressAsync(
+                        channel.Writer,
                         ImportProgressEvent.FileStarted(filePath, Volatile.Read(ref processed), total, _clock.UtcNow),
-                        CancellationToken.None).ConfigureAwait(false);
+                        token).ConfigureAwait(false);
 
                     int successCountSnapshot;
                     int failedCountSnapshot;
@@ -433,7 +445,8 @@ public sealed class ImportService : IImportService
                             failedCountSnapshot = Volatile.Read(ref failed);
                             var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
 
-                            await channel.Writer.WriteAsync(
+                            await WriteProgressAsync(
+                                channel.Writer,
                                 ImportProgressEvent.FileCompleted(
                                     filePath,
                                     completedSkip,
@@ -442,9 +455,10 @@ public sealed class ImportService : IImportService
                                     skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
-                                CancellationToken.None).ConfigureAwait(false);
+                                token).ConfigureAwait(false);
 
-                            await channel.Writer.WriteAsync(
+                            await WriteProgressAsync(
+                                channel.Writer,
                                 ImportProgressEvent.Progress(
                                     completedSkip,
                                     total,
@@ -453,7 +467,7 @@ public sealed class ImportService : IImportService
                                     skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
-                                CancellationToken.None).ConfigureAwait(false);
+                                token).ConfigureAwait(false);
 
                             return;
                         }
@@ -477,7 +491,8 @@ public sealed class ImportService : IImportService
                             var success = Interlocked.Increment(ref succeeded);
                             skippedSnapshot = Volatile.Read(ref skipped);
 
-                            await channel.Writer.WriteAsync(
+                            await WriteProgressAsync(
+                                channel.Writer,
                                 ImportProgressEvent.FileCompleted(
                                     filePath,
                                     completed,
@@ -485,9 +500,10 @@ public sealed class ImportService : IImportService
                                     success,
                                     skippedSnapshot,
                                     timestamp: _clock.UtcNow),
-                                CancellationToken.None).ConfigureAwait(false);
+                                token).ConfigureAwait(false);
 
-                            await channel.Writer.WriteAsync(
+                            await WriteProgressAsync(
+                                channel.Writer,
                                 ImportProgressEvent.Progress(
                                     completed,
                                     total,
@@ -495,7 +511,7 @@ public sealed class ImportService : IImportService
                                     Volatile.Read(ref failed),
                                     skippedSnapshot,
                                     timestamp: _clock.UtcNow),
-                                CancellationToken.None).ConfigureAwait(false);
+                                token).ConfigureAwait(false);
 
                             return;
                         }
@@ -512,7 +528,8 @@ public sealed class ImportService : IImportService
                             failedCountSnapshot = Volatile.Read(ref failed);
                             var skipMessage = $"Skipped '{filePath}' because identical content already exists.";
 
-                            await channel.Writer.WriteAsync(
+                            await WriteProgressAsync(
+                                channel.Writer,
                                 ImportProgressEvent.FileCompleted(
                                     filePath,
                                     completedSkip,
@@ -521,9 +538,10 @@ public sealed class ImportService : IImportService
                                     skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
-                                CancellationToken.None).ConfigureAwait(false);
+                                token).ConfigureAwait(false);
 
-                            await channel.Writer.WriteAsync(
+                            await WriteProgressAsync(
+                                channel.Writer,
                                 ImportProgressEvent.Progress(
                                     completedSkip,
                                     total,
@@ -532,7 +550,7 @@ public sealed class ImportService : IImportService
                                     skippedSnapshot,
                                     skipMessage,
                                     _clock.UtcNow),
-                                CancellationToken.None).ConfigureAwait(false);
+                                token).ConfigureAwait(false);
 
                             return;
                         }
@@ -554,7 +572,8 @@ public sealed class ImportService : IImportService
                         failedCountSnapshot = Interlocked.Increment(ref failed);
                         skippedSnapshot = Volatile.Read(ref skipped);
 
-                        await channel.Writer.WriteAsync(
+                        await WriteProgressAsync(
+                            channel.Writer,
                             ImportProgressEvent.ErrorOccurred(
                                 primaryError,
                                 completedFailure,
@@ -563,9 +582,10 @@ public sealed class ImportService : IImportService
                                 failedCountSnapshot,
                                 skippedSnapshot,
                                 _clock.UtcNow),
-                            CancellationToken.None).ConfigureAwait(false);
+                            token).ConfigureAwait(false);
 
-                        await channel.Writer.WriteAsync(
+                        await WriteProgressAsync(
+                            channel.Writer,
                             ImportProgressEvent.Progress(
                                 completedFailure,
                                 total,
@@ -573,7 +593,7 @@ public sealed class ImportService : IImportService
                                 failedCountSnapshot,
                                 skippedSnapshot,
                                 timestamp: _clock.UtcNow),
-                            CancellationToken.None).ConfigureAwait(false);
+                            token).ConfigureAwait(false);
                     }
                     catch (FileTooLargeException ex)
                     {
@@ -597,7 +617,8 @@ public sealed class ImportService : IImportService
                         failedCountSnapshot = Interlocked.Increment(ref failed);
                         skippedSnapshot = Volatile.Read(ref skipped);
 
-                        await channel.Writer.WriteAsync(
+                        await WriteProgressAsync(
+                            channel.Writer,
                             ImportProgressEvent.ErrorOccurred(
                                 error,
                                 completedFailure,
@@ -606,9 +627,10 @@ public sealed class ImportService : IImportService
                                 failedCountSnapshot,
                                 skippedSnapshot,
                                 _clock.UtcNow),
-                            CancellationToken.None).ConfigureAwait(false);
+                            token).ConfigureAwait(false);
 
-                        await channel.Writer.WriteAsync(
+                        await WriteProgressAsync(
+                            channel.Writer,
                             ImportProgressEvent.Progress(
                                 completedFailure,
                                 total,
@@ -616,7 +638,7 @@ public sealed class ImportService : IImportService
                                 failedCountSnapshot,
                                 skippedSnapshot,
                                 timestamp: _clock.UtcNow),
-                            CancellationToken.None).ConfigureAwait(false);
+                            token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -640,7 +662,8 @@ public sealed class ImportService : IImportService
                         failedCountSnapshot = Interlocked.Increment(ref failed);
                         skippedSnapshot = Volatile.Read(ref skipped);
 
-                        await channel.Writer.WriteAsync(
+                        await WriteProgressAsync(
+                            channel.Writer,
                             ImportProgressEvent.ErrorOccurred(
                                 error,
                                 completedFailure,
@@ -649,9 +672,10 @@ public sealed class ImportService : IImportService
                                 failedCountSnapshot,
                                 skippedSnapshot,
                                 _clock.UtcNow),
-                            CancellationToken.None).ConfigureAwait(false);
+                            token).ConfigureAwait(false);
 
-                        await channel.Writer.WriteAsync(
+                        await WriteProgressAsync(
+                            channel.Writer,
                             ImportProgressEvent.Progress(
                                 completedFailure,
                                 total,
@@ -659,7 +683,7 @@ public sealed class ImportService : IImportService
                                 failedCountSnapshot,
                                 skippedSnapshot,
                                 timestamp: _clock.UtcNow),
-                            CancellationToken.None).ConfigureAwait(false);
+                            token).ConfigureAwait(false);
                     }
                 }).ConfigureAwait(false);
             }
@@ -677,7 +701,8 @@ public sealed class ImportService : IImportService
 
                 _logger.LogInformation("Import canceled for {FolderPath}", folderPath);
 
-                await channel.Writer.WriteAsync(
+                await WriteProgressAsync(
+                    channel.Writer,
                     ImportProgressEvent.ErrorOccurred(
                         error,
                         Volatile.Read(ref processed),
@@ -686,7 +711,7 @@ public sealed class ImportService : IImportService
                         Volatile.Read(ref failed),
                         Volatile.Read(ref skipped),
                         _clock.UtcNow),
-                    CancellationToken.None).ConfigureAwait(false);
+                    writerToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -702,7 +727,8 @@ public sealed class ImportService : IImportService
 
                 _logger.LogError(ex, "Folder import failed for {FolderPath}", folderPath);
 
-                await channel.Writer.WriteAsync(
+                await WriteProgressAsync(
+                    channel.Writer,
                     ImportProgressEvent.ErrorOccurred(
                         error,
                         Volatile.Read(ref processed),
@@ -711,20 +737,32 @@ public sealed class ImportService : IImportService
                         Volatile.Read(ref failed),
                         Volatile.Read(ref skipped),
                         _clock.UtcNow),
-                    CancellationToken.None).ConfigureAwait(false);
+                    writerToken).ConfigureAwait(false);
             }
             finally
             {
                 channel.Writer.TryComplete();
             }
-        }, CancellationToken.None);
+        }, writerToken);
 
-        await foreach (var progress in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            yield return progress;
+            await foreach (var progress in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return progress;
+            }
         }
-
-        await writerTask.ConfigureAwait(false);
+        finally
+        {
+            try
+            {
+                await writerTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (writerToken.IsCancellationRequested)
+            {
+                cancellationEncountered = true;
+            }
+        }
 
         var processedFinal = Volatile.Read(ref processed);
         var succeededFinal = Volatile.Read(ref succeeded);
@@ -1708,18 +1746,127 @@ public sealed class ImportService : IImportService
             metadata);
     }
 
+    private async ValueTask<IAsyncDisposable> PauseLifecycleForImportAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _lifecycleService.PauseAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Paused background services before import.");
+            return new LifecycleResumeScope(_lifecycleService, _logger);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to pause background services before import; continuing without pause.");
+            return NoopAsyncDisposable.Instance;
+        }
+    }
+
     private async Task<ImportResult> InvokeImportAsync(ImportItem item, CancellationToken cancellationToken)
     {
         await _importSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await _importWriter
-                .ImportAsync(new[] { item }, new ApplicationImportOptions(), cancellationToken)
+            return await SqliteRetry.ExecuteAsync(
+                    () => _importWriter.ImportAsync(new[] { item }, new ApplicationImportOptions(), cancellationToken),
+                    (exception, attempt, delay) =>
+                    {
+                        _logger.LogWarning(
+                            exception,
+                            "SQLite busy while importing {StoragePath}. Attempt {Attempt}; retrying in {Delay}.",
+                            item.StoragePath,
+                            attempt,
+                            delay);
+                        return Task.CompletedTask;
+                    },
+                    (exception, attempt) =>
+                    {
+                        _logger.LogError(
+                            exception,
+                            "Exceeded retry budget ({Attempts}) while importing {StoragePath} due to SQLITE_BUSY.",
+                            attempt,
+                            item.StoragePath);
+                    },
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         finally
         {
             _importSemaphore.Release();
+        }
+    }
+
+    private sealed class LifecycleResumeScope : IAsyncDisposable
+    {
+        private readonly IAppLifecycleService _lifecycleService;
+        private readonly ILogger _logger;
+        private bool _disposed;
+
+        public LifecycleResumeScope(IAppLifecycleService lifecycleService, ILogger logger)
+        {
+            _lifecycleService = lifecycleService;
+            _logger = logger;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            try
+            {
+                await _lifecycleService.ResumeAsync().ConfigureAwait(false);
+                _logger.LogInformation("Resumed background services after import.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resume background services after import.");
+            }
+        }
+    }
+
+    private sealed class NoopAsyncDisposable : IAsyncDisposable
+    {
+        public static readonly IAsyncDisposable Instance = new NoopAsyncDisposable();
+
+        private NoopAsyncDisposable()
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private static ValueTask WriteProgressAsync(
+        ChannelWriter<ImportProgressEvent> writer,
+        ImportProgressEvent progress,
+        CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            return writer.WriteAsync(progress);
+        }
+
+        return WriteWithCancellationAsync(writer, progress, cancellationToken);
+    }
+
+    private static async ValueTask WriteWithCancellationAsync(
+        ChannelWriter<ImportProgressEvent> writer,
+        ImportProgressEvent progress,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await writer.WriteAsync(progress, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
     }
 
