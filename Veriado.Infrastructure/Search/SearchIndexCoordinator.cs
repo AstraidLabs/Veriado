@@ -1,7 +1,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
+using ApplicationClock = Veriado.Appl.Abstractions.IClock;
 using Veriado.Appl.Common.Exceptions;
 using Veriado.Appl.Search;
 using Veriado.Domain.Primitives;
@@ -19,7 +19,7 @@ internal sealed class SearchIndexCoordinator : ISearchIndexCoordinator
     private readonly IAnalyzerFactory _analyzerFactory;
     private readonly ISearchIndexSignatureCalculator _signatureCalculator;
     private readonly ILogger<SearchProjectionService> _projectionLogger;
-    private readonly IClock _clock;
+    private readonly ApplicationClock _clock;
     private readonly ISearchTelemetry? _telemetry;
 
     public SearchIndexCoordinator(
@@ -29,7 +29,7 @@ internal sealed class SearchIndexCoordinator : ISearchIndexCoordinator
         IAnalyzerFactory analyzerFactory,
         ISearchIndexSignatureCalculator signatureCalculator,
         ILogger<SearchProjectionService> projectionLogger,
-        IClock clock,
+        ApplicationClock clock,
         ISearchTelemetry? telemetry = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));

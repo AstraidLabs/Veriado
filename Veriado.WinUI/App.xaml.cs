@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.WinUI.Helpers;
+using Veriado.WinUI.Services;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Services.Shutdown;
 using Veriado.WinUI.ViewModels.Startup;
@@ -242,8 +243,7 @@ public partial class App : WinUIApplication
         }
 
         args.Cancel = true;
-        var deferral = args.GetDeferral();
-        ObserveTask(HandleCloseAsync(deferral), "window closing");
+        ObserveTask(HandleCloseAsync(), "window closing");
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
@@ -272,7 +272,7 @@ public partial class App : WinUIApplication
         MainWindow = null;
     }
 
-    private async Task HandleCloseAsync(AppWindowClosingDeferral? deferral)
+    private async Task HandleCloseAsync()
     {
         var forceExit = false;
 
@@ -366,8 +366,6 @@ public partial class App : WinUIApplication
         }
         finally
         {
-            deferral?.Complete();
-
             if (forceExit)
             {
                 Environment.ExitCode = 1;
@@ -591,7 +589,7 @@ public partial class App : WinUIApplication
         e.SetObserved();
     }
 
-    private void OnDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    private void OnDomainUnhandledException(object? sender, global::System.UnhandledExceptionEventArgs e)
     {
         var logger = GetLogger();
         if (e.ExceptionObject is Exception exception)
