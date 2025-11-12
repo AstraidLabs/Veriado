@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -561,19 +562,47 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private async Task MonitorHealthStatusAsync(CancellationToken cancellationToken)
     {
+        ILogger<FilesPageViewModel>? logger = null;
+
         try
         {
-            await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
+            var serviceProvider = global::Veriado.WinUI.App.Services;
+            logger = serviceProvider.GetService(typeof(ILogger<FilesPageViewModel>)) as ILogger<FilesPageViewModel>;
+        }
+        catch
+        {
+            // Intentionally ignored; monitoring should continue without logging if unavailable.
+        }
 
-            await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
+        var retryDelay = TimeSpan.Zero;
+        var errorBackoff = TimeSpan.FromSeconds(2);
 
-            while (!cancellationToken.IsCancellationRequested)
+        try
+        {
+            while (true)
             {
-                await Task.Delay(HealthPollingInterval, cancellationToken).ConfigureAwait(false);
-                await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
+                if (retryDelay > TimeSpan.Zero)
+                {
+                    await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
+                }
+
+                try
+                {
+                    await UpdateIndexingStatusAsync(cancellationToken).ConfigureAwait(false);
+                    retryDelay = HealthPollingInterval;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogWarning(ex, "Indexing health monitor iteration failed. Retrying soon.");
+                    retryDelay = errorBackoff;
+                }
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             // Intentionally ignored.
         }
