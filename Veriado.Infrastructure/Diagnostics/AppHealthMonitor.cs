@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Veriado.Infrastructure.Lifecycle;
 
@@ -56,13 +57,26 @@ public sealed record BackgroundServiceSnapshot(
 public sealed class AppHealthMonitor : IAppHealthMonitor
 {
     private readonly ConcurrentDictionary<string, BackgroundServiceSnapshot> _services = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _lifecycleStateLock = new();
     private AppLifecycleState? _lifecycleState;
 
-    public AppLifecycleState? CurrentLifecycleState => Volatile.Read(ref _lifecycleState);
+    public AppLifecycleState? CurrentLifecycleState
+    {
+        get
+        {
+            lock (_lifecycleStateLock)
+            {
+                return _lifecycleState;
+            }
+        }
+    }
 
     public void ReportLifecycleState(AppLifecycleState state)
     {
-        Volatile.Write(ref _lifecycleState, state);
+        lock (_lifecycleStateLock)
+        {
+            _lifecycleState = state;
+        }
     }
 
     public void ReportBackgroundState(string serviceName, BackgroundServiceRunState state, string? message = null)
@@ -119,6 +133,6 @@ public sealed class AppHealthMonitor : IAppHealthMonitor
 
     public IReadOnlyCollection<BackgroundServiceSnapshot> GetBackgroundSnapshots()
     {
-        return _services.Values;
+        return _services.Values.ToArray();
     }
 }
