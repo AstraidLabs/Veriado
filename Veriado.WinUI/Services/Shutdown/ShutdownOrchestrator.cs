@@ -16,7 +16,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
 
     private readonly IAppLifecycleService _lifecycleService;
     private readonly IHostApplicationLifetime _applicationLifetime;
-    private readonly IHostShutdownService _hostShutdownService;
+    private readonly IHostShutdownCoordinator _hostShutdownCoordinator;
     private readonly ILogger<ShutdownOrchestrator> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -27,12 +27,12 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
     public ShutdownOrchestrator(
         IAppLifecycleService lifecycleService,
         IHostApplicationLifetime applicationLifetime,
-        IHostShutdownService hostShutdownService,
+        IHostShutdownCoordinator hostShutdownCoordinator,
         ILogger<ShutdownOrchestrator> logger)
     {
         _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
         _applicationLifetime = applicationLifetime ?? throw new ArgumentNullException(nameof(applicationLifetime));
-        _hostShutdownService = hostShutdownService ?? throw new ArgumentNullException(nameof(hostShutdownService));
+        _hostShutdownCoordinator = hostShutdownCoordinator ?? throw new ArgumentNullException(nameof(hostShutdownCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -57,7 +57,7 @@ public sealed class ShutdownOrchestrator : IShutdownOrchestrator, IAsyncDisposab
 
             var lifecycleOutcome = await StopLifecycleAsync(cancellationToken).ConfigureAwait(false);
 
-            var hostResult = await _hostShutdownService
+            var hostResult = await _hostShutdownCoordinator
                 .StopAndDisposeAsync(StopTimeout, DisposeTimeout, cancellationToken)
                 .ConfigureAwait(false);
 
