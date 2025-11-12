@@ -62,7 +62,7 @@ public sealed record class ShutdownResult(
         new(ShutdownStatus.Success, duration, lifecycleStopped, host);
 
     public static ShutdownResult Canceled(TimeSpan duration) =>
-        new(ShutdownStatus.Canceled, duration, lifecycleStopped: false, host: default);
+        new(ShutdownStatus.Canceled, duration, LifecycleStopped: false, host: default);
 
     public static ShutdownResult Failed(
         ShutdownFailureDetail failure,
