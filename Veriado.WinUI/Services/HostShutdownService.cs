@@ -9,12 +9,11 @@ namespace Veriado.WinUI.Services;
 
 internal sealed class HostShutdownService : IHostShutdownService
 {
-    private static readonly TimeSpan DefaultDisposeStopTimeout = TimeSpan.FromSeconds(5);
-
     private readonly ILogger<HostShutdownService> _logger;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private TaskCompletionSource<object?> _stopCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Task<HostShutdownResult>? _shutdownTask;
     private IHost? _host;
-    private volatile bool _stopCompleted;
-    private volatile bool _disposeCompleted;
 
     public HostShutdownService(ILogger<HostShutdownService> logger)
     {
@@ -30,138 +29,221 @@ internal sealed class HostShutdownService : IHostShutdownService
             throw new InvalidOperationException("The host has already been initialized.");
         }
 
-        Volatile.Write(ref _stopCompleted, false);
-        Volatile.Write(ref _disposeCompleted, false);
+        _shutdownTask = null;
+        _stopCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    public bool IsStopCompleted => Volatile.Read(ref _stopCompleted);
+    public Task WhenStopped => _stopCompletion.Task;
 
-    public bool IsDisposeCompleted => Volatile.Read(ref _disposeCompleted);
-
-    public async Task<HostStopResult> StopAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    public async Task<HostShutdownResult> StopAndDisposeAsync(
+        TimeSpan stopTimeout,
+        TimeSpan disposeTimeout,
+        CancellationToken cancellationToken)
     {
-        var host = Volatile.Read(ref _host);
-        if (host is null)
-        {
-            _logger.LogDebug("Host stop skipped because host has not been initialized.");
-            return HostStopResult.NotInitialized();
-        }
+        ValidateTimeout(stopTimeout, nameof(stopTimeout));
+        ValidateTimeout(disposeTimeout, nameof(disposeTimeout));
 
-        var result = await StopHostCoreAsync(host, timeout, cancellationToken, logOnSuccess: true).ConfigureAwait(false);
-        return result;
-    }
+        Task<HostShutdownResult> shutdownOperation;
 
-    public async ValueTask<HostDisposeResult> DisposeAsync()
-    {
-        if (IsDisposeCompleted)
-        {
-            _logger.LogDebug("Host dispose requested but already completed.");
-            return HostDisposeResult.AlreadyDisposed();
-        }
-
-        var host = Interlocked.Exchange(ref _host, null);
-        if (host is null)
-        {
-            _logger.LogDebug("DisposeAsync called without an initialized host.");
-            Volatile.Write(ref _disposeCompleted, true);
-            Volatile.Write(ref _stopCompleted, true);
-            return HostDisposeResult.NotInitialized();
-        }
-
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!IsStopCompleted)
+            if (_shutdownTask is null)
             {
-                var stopResult = await StopHostCoreAsync(host, DefaultDisposeStopTimeout, CancellationToken.None, logOnSuccess: false)
-                    .ConfigureAwait(false);
-
-                if (!stopResult.IsSuccess)
+                var host = Interlocked.Exchange(ref _host, null);
+                if (host is null)
                 {
-                    _logger.LogWarning(
-                        stopResult.Exception,
-                        "Best-effort stop during dispose completed with status {Status}.",
-                        stopResult.State);
+                    _logger.LogDebug("Host shutdown requested but host is not initialized.");
+                    var result = HostShutdownResult.NotInitialized();
+                    shutdownOperation = Task.FromResult(result);
+                    _shutdownTask = shutdownOperation;
+                    _stopCompletion.TrySetResult(null);
                 }
-            }
+                else
+                {
+                    _logger.LogInformation(
+                        "Coordinating host shutdown (stop timeout: {StopTimeout}, dispose timeout: {DisposeTimeout}).",
+                        stopTimeout,
+                        disposeTimeout);
 
-            if (host is IAsyncDisposable asyncDisposable)
-            {
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    shutdownOperation = ShutdownCoreAsync(host, stopTimeout, disposeTimeout);
+                    _shutdownTask = shutdownOperation;
+                }
             }
             else
             {
-                host.Dispose();
+                shutdownOperation = _shutdownTask;
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        return await WaitForShutdownAsync(shutdownOperation, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<HostShutdownResult> ShutdownCoreAsync(IHost host, TimeSpan stopTimeout, TimeSpan disposeTimeout)
+    {
+        try
+        {
+            var stopResult = await StopHostAsync(host, stopTimeout).ConfigureAwait(false);
+            var disposeResult = await DisposeHostAsync(host, disposeTimeout).ConfigureAwait(false);
+
+            if (stopResult.IsSuccess && disposeResult.IsSuccess)
+            {
+                _logger.LogInformation("Host shutdown completed successfully.");
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Host shutdown completed with Stop={StopState} and Dispose={DisposeState}.",
+                    stopResult.State,
+                    disposeResult.State);
             }
 
-            _logger.LogInformation("Host disposed successfully.");
-            Volatile.Write(ref _disposeCompleted, true);
-            return HostDisposeResult.Completed();
+            return new HostShutdownResult(stopResult, disposeResult);
         }
         catch (Exception ex)
         {
-            Volatile.Write(ref _disposeCompleted, false);
-            _logger.LogError(ex, "Host dispose failed.");
-            return HostDisposeResult.Failed(ex);
+            _logger.LogError(ex, "Unexpected failure during host shutdown.");
+            return new HostShutdownResult(HostStopResult.Failed(ex), HostDisposeResult.Failed(ex));
+        }
+        finally
+        {
+            _stopCompletion.TrySetResult(null);
         }
     }
 
-    private async Task<HostStopResult> StopHostCoreAsync(
-        IHost host,
-        TimeSpan timeout,
-        CancellationToken cancellationToken,
-        bool logOnSuccess)
+    private async Task<HostStopResult> StopHostAsync(IHost host, TimeSpan timeout)
     {
-        if (IsStopCompleted)
-        {
-            _logger.LogDebug("Host stop requested but already completed.");
-            return HostStopResult.AlreadyStopped();
-        }
-
-        using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        stopCts.CancelAfter(timeout);
+        using var stopCts = CreateTimeoutSource(timeout);
+        var token = stopCts.Token;
 
         try
         {
-            await host.StopAsync(stopCts.Token).ConfigureAwait(false);
-            Volatile.Write(ref _stopCompleted, true);
-
-            if (logOnSuccess)
-            {
-                _logger.LogInformation("Host stopped successfully.");
-            }
-            else
-            {
-                _logger.LogDebug("Host stopped as part of disposal.");
-            }
-
+            await host.StopAsync(token).ConfigureAwait(false);
+            _logger.LogInformation("Host stopped successfully.");
             return HostStopResult.Completed();
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (token.IsCancellationRequested)
         {
-            _logger.LogInformation("Host stop canceled via caller token.");
+            if (timeout > TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+            {
+                _logger.LogWarning(ex, "Host stop timed out after {Timeout}.", timeout);
+                return HostStopResult.TimedOut(ex);
+            }
+
+            _logger.LogInformation("Host stop canceled via cancellation token.");
             return HostStopResult.Canceled(ex);
-        }
-        catch (OperationCanceledException ex)
-        {
-            _logger.LogWarning("Host stop timed out after {Timeout}.", timeout);
-            return HostStopResult.TimedOut(ex);
         }
         catch (ObjectDisposedException ex)
         {
-            _logger.LogDebug(ex, "Host stop skipped because host already disposed.");
-            Volatile.Write(ref _stopCompleted, true);
+            _logger.LogDebug(ex, "Host stop skipped because the host was already disposed.");
             return HostStopResult.AlreadyStopped(ex);
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogDebug(ex, "Host stop skipped because host not initialized.");
-            Volatile.Write(ref _stopCompleted, true);
+            _logger.LogDebug(ex, "Host stop skipped because the host was not initialized.");
             return HostStopResult.NotInitialized(ex);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Host stop failed.");
             return HostStopResult.Failed(ex);
+        }
+    }
+
+    private async Task<HostDisposeResult> DisposeHostAsync(IHost host, TimeSpan timeout)
+    {
+        try
+        {
+            Task disposeTask = host is IAsyncDisposable asyncDisposable
+                ? asyncDisposable.DisposeAsync().AsTask()
+                : Task.Run(host.Dispose);
+
+            await WaitWithTimeoutAsync(disposeTask, timeout).ConfigureAwait(false);
+
+            _logger.LogInformation("Host disposed successfully.");
+            return HostDisposeResult.Completed();
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Host dispose timed out after {Timeout}.", timeout);
+            return HostDisposeResult.Failed(ex);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogInformation(ex, "Host dispose canceled via cancellation token.");
+            return HostDisposeResult.AlreadyDisposed(ex);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogDebug(ex, "Host dispose skipped because the host was already disposed.");
+            return HostDisposeResult.AlreadyDisposed(ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Host dispose failed.");
+            return HostDisposeResult.Failed(ex);
+        }
+    }
+
+    private async Task<HostShutdownResult> WaitForShutdownAsync(Task<HostShutdownResult> operation, CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            return await operation.ConfigureAwait(false);
+        }
+
+        try
+        {
+            return await operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Host shutdown wait canceled via caller token.");
+            throw;
+        }
+    }
+
+    private static CancellationTokenSource CreateTimeoutSource(TimeSpan timeout)
+    {
+        if (timeout == Timeout.InfiniteTimeSpan)
+        {
+            return new CancellationTokenSource();
+        }
+
+        if (timeout < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
+
+        var source = new CancellationTokenSource();
+        if (timeout > TimeSpan.Zero)
+        {
+            source.CancelAfter(timeout);
+        }
+
+        return source;
+    }
+
+    private static async Task WaitWithTimeoutAsync(Task task, TimeSpan timeout)
+    {
+        if (timeout == Timeout.InfiniteTimeSpan || timeout <= TimeSpan.Zero)
+        {
+            await task.ConfigureAwait(false);
+            return;
+        }
+
+        await task.WaitAsync(timeout).ConfigureAwait(false);
+    }
+
+    private static void ValidateTimeout(TimeSpan timeout, string parameterName)
+    {
+        if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(parameterName);
         }
     }
 }

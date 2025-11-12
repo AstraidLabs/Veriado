@@ -50,9 +50,9 @@ public sealed partial class FilesPage : Page
         RefreshValidityIndicators();
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e)
+    private async void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.StopHealthMonitoring();
+        await ViewModel.StopHealthMonitoringAsync().ConfigureAwait(true);
         CancelSuggestionRequest();
         if (_validityRefreshTimer.IsEnabled)
         {

@@ -747,9 +747,12 @@ public sealed class ImportService : IImportService
 
         try
         {
-            await foreach (var progress in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            while (await channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                yield return progress;
+                while (channel.Reader.TryRead(out var progress))
+                {
+                    yield return progress;
+                }
             }
         }
         finally
