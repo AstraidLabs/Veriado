@@ -38,7 +38,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0"/>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.HeaderedControls" Version="8.2.250402" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.250402" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" Version="8.2.250402" />
@@ -59,9 +59,19 @@
   </ItemGroup>
 
   <PropertyGroup>
+	<PublishTrimmed>false</PublishTrimmed>
     <PublishReadyToRun Condition="'$(Configuration)'=='Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)'!='Debug'">True</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)'!='Debug'">False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)'=='Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)'!='Debug'">True</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)'!='Debug'">False</PublishTrimmed>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+    <PackageCertificateThumbprint>C61AA0418D907B56F0B164FFE1800BC6379D444C</PackageCertificateThumbprint>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+    <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <AppxBundle>Always</AppxBundle>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
   </PropertyGroup>
 </Project>
