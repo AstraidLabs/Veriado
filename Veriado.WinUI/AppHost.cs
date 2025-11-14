@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Veriado.Infrastructure.DependencyInjection;
@@ -30,7 +33,7 @@ internal sealed class AppHost : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static async Task<AppHost> StartAsync()
+    public static async Task<AppHost> StartAsync(CancellationToken cancellationToken = default)
     {
         var host = Host
             .CreateDefaultBuilder()
@@ -76,6 +79,8 @@ internal sealed class AppHost : IAsyncDisposable
             })
             .Build();
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         var pathResolver = host.Services.GetRequiredService<ISqlitePathResolver>();
         var databasePath = pathResolver.Resolve(SqliteResolutionScenario.Runtime);
         pathResolver.EnsureStorageExists(databasePath);
@@ -83,10 +88,14 @@ internal sealed class AppHost : IAsyncDisposable
 
         using (var gate = new NamedGlobalMutex(mutexKey))
         {
-            gate.Acquire(TimeSpan.FromSeconds(30));
-            await host.StartAsync().ConfigureAwait(false);
+            await gate.AcquireAsync(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+            await host.StartAsync(cancellationToken).ConfigureAwait(false);
         }
-        await host.Services.GetRequiredService<IHotStateService>().InitializeAsync().ConfigureAwait(false);
+
+        await host.Services
+            .GetRequiredService<IHotStateService>()
+            .InitializeAsync(cancellationToken)
+            .ConfigureAwait(false);
         return new AppHost(host);
     }
 
@@ -117,20 +126,47 @@ internal sealed class NamedGlobalMutex : IDisposable
         _mutex = new Mutex(false, mutexName);
     }
 
-    public void Acquire(TimeSpan timeout)
+    public async Task AcquireAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var acquired = TryAcquireOnce();
+            if (acquired)
+            {
+                _hasHandle = true;
+                return;
+            }
+
+            if (stopwatch.Elapsed >= timeout)
+            {
+                throw new TimeoutException("Nelze získat migrační mutex – pravděpodobně běží jiná instance.");
+            }
+
+            var remaining = timeout - stopwatch.Elapsed;
+            var delay = remaining < TimeSpan.FromMilliseconds(100)
+                ? remaining
+                : TimeSpan.FromMilliseconds(100);
+
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private bool TryAcquireOnce()
     {
         try
         {
-            _hasHandle = _mutex.WaitOne(timeout);
+            return _mutex.WaitOne(0);
         }
         catch (AbandonedMutexException)
         {
-            _hasHandle = true;
-        }
-
-        if (!_hasHandle)
-        {
-            throw new TimeoutException("Nelze získat migrační mutex – pravděpodobně běží jiná instance.");
+            return true;
         }
     }
 
