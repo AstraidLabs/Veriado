@@ -17,17 +17,7 @@ public sealed class DispatcherService : IDispatcherService
         get
         {
             var dispatcher = Volatile.Read(ref _dispatcher);
-            if (dispatcher is not null)
-            {
-                return dispatcher.HasThreadAccess;
-            }
-
-            if (_dispatcherReady.Task.IsCompletedSuccessfully)
-            {
-                return _dispatcherReady.Task.Result.HasThreadAccess;
-            }
-
-            return false;
+            return dispatcher?.HasThreadAccess ?? false;
         }
     }
 

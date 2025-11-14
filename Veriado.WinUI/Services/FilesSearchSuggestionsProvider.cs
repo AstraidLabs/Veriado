@@ -24,12 +24,12 @@ public sealed class FilesSearchSuggestionsProvider : IFilesSearchSuggestionsProv
 
         await Task.WhenAll(favoritesTask, historyTask).ConfigureAwait(false);
 
-        var favorites = favoritesTask.Result
+        var favorites = (await favoritesTask.ConfigureAwait(false))
             .Select(item => item.QueryText ?? item.MatchQuery)
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .Select(text => text!.Trim());
 
-        var history = historyTask.Result
+        var history = (await historyTask.ConfigureAwait(false))
             .Select(item => item.QueryText ?? item.MatchQuery)
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .Select(text => text!.Trim());
