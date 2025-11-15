@@ -1,7 +1,10 @@
 using System;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Idempotency;
@@ -22,10 +25,10 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
         ISqliteConnectionFactory connectionFactory,
         ILogger<IdempotencyCleanupWorker> logger)
     {
-        _options = options;
-        _clock = clock;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,45 +39,57 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
             return;
         }
 
-        var delay = _options.IdempotencyCleanupInterval <= TimeSpan.Zero
+        var interval = _options.IdempotencyCleanupInterval <= TimeSpan.Zero
             ? TimeSpan.FromHours(1)
             : _options.IdempotencyCleanupInterval;
 
-        _logger.LogInformation("Idempotency cleanup worker started with interval {Delay}", delay);
+        _logger.LogInformation(
+            "{WorkerName} started with interval {Interval}.",
+            nameof(IdempotencyCleanupWorker),
+            interval);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await CleanupAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogDebug("Idempotency cleanup worker stopping (cancellation during cleanup)");
-                break; // ukonèíme smyèku, žádné throw
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to clean expired idempotency keys");
-            }
-
-            try
-            {
-                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogDebug("Idempotency cleanup worker stopping (cancellation during delay)");
-                break; // zrušení delay pøi shutdownu je oèekávané
+                await ExecuteCleanupAsync(stoppingToken).ConfigureAwait(false);
+                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
             }
         }
-
-        _logger.LogDebug("Idempotency cleanup worker stopped");
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("{WorkerName} is stopping (canceled).", nameof(IdempotencyCleanupWorker));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in {WorkerName}.", nameof(IdempotencyCleanupWorker));
+        }
+        finally
+        {
+            _logger.LogInformation("{WorkerName} stopped.", nameof(IdempotencyCleanupWorker));
+        }
     }
 
+    private async Task ExecuteCleanupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await CleanupAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clean expired idempotency keys");
+        }
+    }
 
     private async Task CleanupAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         await using var lease = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = lease.Connection;
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
