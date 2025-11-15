@@ -15,22 +15,17 @@ internal static class ValidityDisplayFormatter
 
         var metrics = countdown.Value;
 
-        if (status == ValidityStatus.Expired)
+        if (metrics.TotalDays == 0)
         {
-            if (metrics.DaysAfterExpiration == 0)
-            {
-                return "Platnost skončila";
-            }
-
-            return $"{ValidityRelativeFormatter.FormatAfterExpiration(metrics)} po expiraci";
+            return "Expirace dnes";
         }
 
-        if (metrics.ExpiresToday)
+        if (metrics.TotalDays < 0)
         {
-            return "Dnes končí";
+            return ValidityRelativeFormatter.FormatAfterExpirationPhrase(metrics);
         }
 
-        return $"Za {ValidityRelativeFormatter.FormatRemaining(metrics)}";
+        return ValidityRelativeFormatter.FormatBeforeExpirationPhrase(metrics);
     }
 
     public static string? BuildTooltip(
@@ -48,22 +43,30 @@ internal static class ValidityDisplayFormatter
         var toText = to.Value.ToString(DateFormats.ShortDate, CultureInfo.CurrentCulture);
         var rangeText = string.Format(CultureInfo.CurrentCulture, "Platné: {0} – {1}", fromText, toText);
 
-        return status switch
+        var metrics = countdown.Value;
+
+        if (metrics.TotalDays < 0)
         {
-            ValidityStatus.Expired => string.Format(
+            return string.Format(
                 CultureInfo.CurrentCulture,
                 "{0} (Platnost skončila před {1})",
                 rangeText,
-                ValidityRelativeFormatter.FormatAfterExpiration(countdown.Value)),
-            ValidityStatus.ExpiringToday => string.Format(
+                ValidityRelativeFormatter.FormatAfterExpiration(metrics));
+        }
+
+        if (metrics.TotalDays == 0)
+        {
+            return string.Format(
                 CultureInfo.CurrentCulture,
-                "{0} (Končí dnes)",
-                rangeText),
-            _ => string.Format(
-                CultureInfo.CurrentCulture,
-                "{0} (zbývá {1})",
+                "{0} (Platnost končí dnes: {1})",
                 rangeText,
-                ValidityRelativeFormatter.FormatRemaining(countdown.Value)),
-        };
+                toText);
+        }
+
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            "{0} ({1})",
+            rangeText,
+            ValidityRelativeFormatter.FormatBeforeExpirationPhrase(metrics));
     }
 }
