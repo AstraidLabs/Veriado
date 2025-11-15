@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using Veriado.WinUI.Helpers;
+using Veriado.Contracts.Localization;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
 

@@ -2,7 +2,7 @@ using System;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using Veriado.Contracts.Files;
-using Veriado.WinUI.Helpers;
+using Veriado.WinUI.Resources;
 
 namespace Veriado.WinUI.Converters;
 
@@ -13,12 +13,12 @@ public sealed class ValidityStatusToBrushConverter : IValueConverter
         var status = value is ValidityStatus castStatus ? castStatus : ValidityStatus.None;
         return status switch
         {
-            ValidityStatus.LongTerm => ValidityColors.LongTerm,
-            ValidityStatus.ExpiringLater => ValidityColors.ExpiringLater,
-            ValidityStatus.ExpiringSoon => ValidityColors.ExpiringSoon,
-            ValidityStatus.ExpiringToday => ValidityColors.Expired,
-            ValidityStatus.Expired => ValidityColors.Expired,
-            _ => ValidityColors.Transparent,
+            ValidityStatus.LongTerm => AppColorPalette.ValidityLongTermBackgroundBrush,
+            ValidityStatus.ExpiringLater => AppColorPalette.ValidityExpiringLaterBackgroundBrush,
+            ValidityStatus.ExpiringSoon => AppColorPalette.ValidityExpiringSoonBackgroundBrush,
+            ValidityStatus.ExpiringToday => AppColorPalette.ValidityExpiredBackgroundBrush,
+            ValidityStatus.Expired => AppColorPalette.ValidityExpiredBackgroundBrush,
+            _ => AppColorPalette.ValidityLongTermBackgroundBrush,
         };
     }
 

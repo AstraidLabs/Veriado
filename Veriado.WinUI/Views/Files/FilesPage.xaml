@@ -15,6 +15,8 @@
         <converters:NullableLongToDoubleConverter x:Key="NullableLongToDoubleConverter" />
         <converters:SizeToHumanConverter x:Key="SizeToHumanConverter" />
         <converters:ValidityStatusToBrushConverter x:Key="StatusToBrush" />
+        <converters:ValidityStatusToForegroundBrushConverter x:Key="StatusToForegroundBrush" />
+        <converters:ValidityStatusToGlyphConverter x:Key="StatusToGlyph" />
         <converters:NullToCollapsedConverter x:Key="NullToCollapsed" />
     </Page.Resources>
 
@@ -266,21 +268,28 @@
                                             Grid.Column="0"
                                             MinWidth="36"
                                             MinHeight="36"
-                                            Padding="4"
+                                            Padding="6"
                                             CornerRadius="8"
                                             Background="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
-                                            Visibility="{x:Bind Validity.DaysRemaining, Mode=OneWay, Converter={StaticResource NullToCollapsed}}"
+                                            Visibility="{x:Bind Validity.HasValidity, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
                                             ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
                                             AutomationProperties.Name="{x:Bind Validity.Tooltip, Mode=OneWay}">
-                                            <TextBlock
-                                                Text="{x:Bind Validity.DaysRemainingDisplay}"
-                                                VerticalAlignment="Center"
-                                                HorizontalAlignment="Center"
-                                                TextAlignment="Center"
-                                                TextWrapping="WrapWholeWords"
-                                                FontWeight="SemiBold"
-                                                FontSize="12"
-                                                Foreground="White" />
+                                            <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <FontIcon
+                                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                                    Glyph="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToGlyph}}"
+                                                    Visibility="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToGlyph}, ConverterParameter=Visibility}"
+                                                    Foreground="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToForegroundBrush}}" />
+                                                <TextBlock
+                                                    Text="{x:Bind Validity.DaysRemainingDisplay}"
+                                                    VerticalAlignment="Center"
+                                                    HorizontalAlignment="Center"
+                                                    TextAlignment="Center"
+                                                    TextWrapping="WrapWholeWords"
+                                                    FontWeight="SemiBold"
+                                                    FontSize="12"
+                                                    Foreground="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToForegroundBrush}}" />
+                                            </StackPanel>
                                         </Border>
 
                                         <StackPanel Grid.Column="1" Spacing="4">

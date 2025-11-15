@@ -97,6 +97,22 @@ public sealed class FileDocumentValidityEntity
         return (ValidUntil.Value - instant).TotalDays;
     }
 
+    /// <summary>
+    /// Gets the number of days elapsed since the document expired.
+    /// </summary>
+    /// <param name="moment">The reference timestamp.</param>
+    /// <returns>The number of days after expiration, or zero if not expired yet.</returns>
+    public double DaysAfterExpiration(DateTimeOffset moment)
+    {
+        var instant = moment.ToUniversalTime();
+        if (instant <= ValidUntil.Value)
+        {
+            return 0d;
+        }
+
+        return (instant - ValidUntil.Value).TotalDays;
+    }
+
     private static void EnsurePeriod(UtcTimestamp issuedAt, UtcTimestamp validUntil)
     {
         if (validUntil.Value < issuedAt.Value)
