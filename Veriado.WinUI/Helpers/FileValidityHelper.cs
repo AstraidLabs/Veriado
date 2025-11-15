@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Media;
 using Veriado.Contracts.Files;
 using Veriado.WinUI.Resources;
@@ -20,7 +21,7 @@ public static class FileValidityHelper
     /// <returns><see langword="true"/> if the badge represents a valid window; otherwise <see langword="false"/>.</returns>
     public static bool TryGetBadge(FileValidityDto? validity, DateTimeOffset referenceTime, out FileValidityBadge badge)
     {
-        return TryGetBadge(validity, referenceTime, AppSettings.CreateDefaultValidityThresholds(), out badge);
+        return TryGetBadge(validity, referenceTime, ResolveThresholds(), out badge);
     }
 
     /// <summary>
@@ -44,20 +45,20 @@ public static class FileValidityHelper
             return false;
         }
 
-        var daysRemaining = ValidityComputation.ComputeDaysRemaining(referenceTime, validity.ValidUntil);
-        if (!daysRemaining.HasValue)
+        var countdown = ValidityComputation.ComputeCountdown(referenceTime, validity.ValidUntil);
+        if (!countdown.HasValue)
         {
             badge = FileValidityBadge.None;
             return false;
         }
 
-        var days = daysRemaining.Value;
-        var status = ValidityComputation.ComputeStatus(daysRemaining, thresholds);
-        var text = CreateText(status, days);
+        var status = ValidityComputation.ComputeStatus(countdown, thresholds);
+        var text = ValidityDisplayFormatter.BuildBadgeText(status, countdown);
+        var glyph = ValidityGlyphProvider.GetGlyph(status);
         var background = SelectBackground(status);
         var foreground = SelectForeground(status);
 
-        badge = new FileValidityBadge(status, days, text, background, foreground);
+        badge = new FileValidityBadge(status, countdown, text ?? string.Empty, glyph, background, foreground);
         return true;
     }
 
@@ -69,7 +70,7 @@ public static class FileValidityHelper
     /// <returns>The computed badge metadata.</returns>
     public static FileValidityBadge GetBadge(FileValidityDto? validity, DateTimeOffset referenceTime)
     {
-        return GetBadge(validity, referenceTime, AppSettings.CreateDefaultValidityThresholds());
+        return GetBadge(validity, referenceTime, ResolveThresholds());
     }
 
     /// <summary>
@@ -86,26 +87,6 @@ public static class FileValidityHelper
     {
         TryGetBadge(validity, referenceTime, thresholds, out var badge);
         return badge;
-    }
-
-    private static string CreateText(ValidityStatus status, int daysRemaining)
-    {
-        if (status == ValidityStatus.None)
-        {
-            return string.Empty;
-        }
-
-        if (daysRemaining < 0)
-        {
-            return "Platnost skončila";
-        }
-
-        if (daysRemaining == 0)
-        {
-            return "Dnes končí";
-        }
-
-        return $"Zbývá {CzechPluralization.FormatDays(daysRemaining)}";
     }
 
     private static Brush SelectBackground(ValidityStatus status)
@@ -131,20 +112,39 @@ public static class FileValidityHelper
             _ => AppColorPalette.ValidityDarkForegroundBrush,
         };
     }
+
+    private static ValidityThresholds ResolveThresholds()
+    {
+        try
+        {
+            if (App.Services.GetService<IHotStateService>() is { } hotState)
+            {
+                return hotState.ValidityThresholds;
+            }
+        }
+        catch
+        {
+            // Swallow exceptions during service resolution and fall back to defaults.
+        }
+
+        return AppSettings.CreateDefaultValidityThresholds();
+    }
 }
 
 /// <summary>
 /// Represents the computed UI metadata for a validity badge.
 /// </summary>
 /// <param name="Status">The calculated status of the validity window.</param>
-/// <param name="DaysRemaining">The number of days remaining relative to the reference time.</param>
+/// <param name="Countdown">The computed countdown metrics for the validity window.</param>
 /// <param name="Text">The localized label describing the status.</param>
+/// <param name="Glyph">The glyph representing the status.</param>
 /// <param name="Background">The brush used for the badge background.</param>
 /// <param name="Foreground">The brush used for the badge foreground.</param>
 public sealed record FileValidityBadge(
     ValidityStatus Status,
-    int? DaysRemaining,
+    ValidityCountdown? Countdown,
     string Text,
+    string? Glyph,
     Brush Background,
     Brush Foreground)
 {
@@ -160,6 +160,7 @@ public sealed record FileValidityBadge(
         ValidityStatus.None,
         null,
         string.Empty,
+        null,
         AppColorPalette.ValidityLongTermBackgroundBrush,
         AppColorPalette.ValidityDarkForegroundBrush);
 }

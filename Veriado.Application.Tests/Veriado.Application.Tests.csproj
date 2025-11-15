@@ -17,5 +17,6 @@
     <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
     <ProjectReference Include="..\Veriado.Infrastructure\Veriado.Infrastructure.csproj" />
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
+    <ProjectReference Include="..\Veriado.Contracts\Veriado.Contracts.csproj" />
   </ItemGroup>
 </Project>
