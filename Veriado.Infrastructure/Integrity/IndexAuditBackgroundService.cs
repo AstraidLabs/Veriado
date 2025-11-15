@@ -43,36 +43,55 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             interval = MinimumInterval;
         }
 
-        _logger.LogInformation("Index audit background service started with interval {Interval}.", interval);
+        _logger.LogInformation(
+            "{WorkerName} started with interval {Interval}.",
+            nameof(IndexAuditBackgroundService),
+            interval);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await RunAuditAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (OperationCanceledException ex)
-            {
-                _logger.LogDebug(ex, "Index audit execution canceled.");
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Index audit execution failed.");
-            }
-
-            if (await WaitForIntervalAsync(interval, stoppingToken).ConfigureAwait(false))
-            {
-                _logger.LogDebug("Index audit delay canceled.");
-                break;
+                await RunAuditCycleAsync(interval, stoppingToken).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation(
+                "{WorkerName} is stopping (canceled).",
+                nameof(IndexAuditBackgroundService));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in {WorkerName}.", nameof(IndexAuditBackgroundService));
+        }
+        finally
+        {
+            _logger.LogInformation("{WorkerName} stopped.", nameof(IndexAuditBackgroundService));
+        }
+    }
 
-        _logger.LogInformation("Index audit background service stopping.");
+    private async Task RunAuditCycleAsync(TimeSpan interval, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await RunAuditAsync(stoppingToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "Index audit execution canceled.");
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Index audit execution failed.");
+        }
+
+        await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
     }
 
     private async Task RunAuditAsync(CancellationToken cancellationToken)
@@ -101,32 +120,6 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
             _logger.LogInformation(
                 "Periodic FTS audit detected {IssueCount} discrepancies; automated reindexing is disabled in this phase.",
                 issues);
-        }
-    }
-
-    private static async Task<bool> WaitForIntervalAsync(TimeSpan interval, CancellationToken cancellationToken)
-    {
-        if (!cancellationToken.CanBeCanceled)
-        {
-            await Task.Delay(interval).ConfigureAwait(false);
-            return false;
-        }
-
-        var delayTask = Task.Delay(interval);
-        var cancellationSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        using (cancellationToken.Register(
-                   static state => ((TaskCompletionSource<bool>)state!).TrySetResult(true),
-                   cancellationSource))
-        {
-            var completed = await Task.WhenAny(delayTask, cancellationSource.Task).ConfigureAwait(false);
-            if (completed == delayTask)
-            {
-                await delayTask.ConfigureAwait(false);
-                return false;
-            }
-
-            return true;
         }
     }
 }
