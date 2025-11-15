@@ -7,32 +7,56 @@ namespace Veriado.Contracts.Localization;
 /// </summary>
 public static class CzechPluralization
 {
-    public static string FormatDays(int days) => $"{days} {GetDayNoun(days)}";
+    public static string FormatDays(int days)
+    {
+        var absolute = Math.Abs(days);
+        return $"{absolute} {DayWord(absolute)}";
+    }
+
+    public static string DayWord(int days) => SelectNoun(Math.Abs(days), "den", "dny", "dní");
 
     public static string GetDayNoun(int days)
     {
-        return SelectNoun(days, "den", "dny", "dní");
+        return DayWord(Math.Abs(days));
     }
 
-    public static string FormatWeeks(int weeks) => $"{weeks} {GetWeekNoun(weeks)}";
+    public static string FormatWeeks(int weeks)
+    {
+        var absolute = Math.Abs(weeks);
+        return $"{absolute} {WeekWord(absolute)}";
+    }
+
+    public static string WeekWord(int weeks) => SelectNoun(Math.Abs(weeks), "týden", "týdny", "týdnů");
 
     public static string GetWeekNoun(int weeks)
     {
-        return SelectNoun(weeks, "týden", "týdny", "týdnů");
+        return WeekWord(Math.Abs(weeks));
     }
 
-    public static string FormatMonths(int months) => $"{months} {GetMonthNoun(months)}";
+    public static string FormatMonths(int months)
+    {
+        var absolute = Math.Abs(months);
+        return $"{absolute} {MonthWord(absolute)}";
+    }
+
+    public static string MonthWord(int months) => SelectNoun(Math.Abs(months), "měsíc", "měsíce", "měsíců");
 
     public static string GetMonthNoun(int months)
     {
-        return SelectNoun(months, "měsíc", "měsíce", "měsíců");
+        return MonthWord(Math.Abs(months));
     }
 
-    public static string FormatYears(int years) => $"{years} {GetYearNoun(years)}";
+    public static string FormatYears(int years)
+    {
+        var absolute = Math.Abs(years);
+        return $"{absolute} {YearWord(absolute)}";
+    }
+
+    public static string YearWord(int years) => SelectNoun(Math.Abs(years), "rok", "roky", "let");
 
     public static string GetYearNoun(int years)
     {
-        return SelectNoun(years, "rok", "roky", "let");
+        return YearWord(Math.Abs(years));
     }
 
     private static string SelectNoun(int value, string singular, string paucal, string plural)

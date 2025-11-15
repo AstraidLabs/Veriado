@@ -46,4 +46,14 @@ public static class ValidityRelativeFormatter
 
         return CzechPluralization.FormatDays(countdown.DaysAfterExpiration);
     }
+
+    public static string FormatBeforeExpirationPhrase(ValidityCountdown countdown)
+    {
+        return $"{FormatRemaining(countdown)} do expirace";
+    }
+
+    public static string FormatAfterExpirationPhrase(ValidityCountdown countdown)
+    {
+        return $"{FormatAfterExpiration(countdown)} po expiraci";
+    }
 }

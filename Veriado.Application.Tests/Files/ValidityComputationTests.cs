@@ -84,7 +84,7 @@ public class ValidityComputationTests
     [InlineData(2, "2 dny")]
     [InlineData(5, "5 dní")]
     [InlineData(11, "11 dní")]
-    [InlineData(-3, "-3 dny")]
+    [InlineData(-3, "3 dny")]
     public void CzechPluralization_FormatsDays(int value, string expected)
     {
         Assert.Equal(expected, CzechPluralization.FormatDays(value));
@@ -94,7 +94,7 @@ public class ValidityComputationTests
     [InlineData(1, "1 týden")]
     [InlineData(4, "4 týdny")]
     [InlineData(6, "6 týdnů")]
-    [InlineData(-2, "-2 týdny")]
+    [InlineData(-2, "2 týdny")]
     public void CzechPluralization_FormatsWeeks(int value, string expected)
     {
         Assert.Equal(expected, CzechPluralization.FormatWeeks(value));
@@ -104,7 +104,7 @@ public class ValidityComputationTests
     [InlineData(1, "1 měsíc")]
     [InlineData(3, "3 měsíce")]
     [InlineData(8, "8 měsíců")]
-    [InlineData(-5, "-5 měsíců")]
+    [InlineData(-5, "5 měsíců")]
     public void CzechPluralization_FormatsMonths(int value, string expected)
     {
         Assert.Equal(expected, CzechPluralization.FormatMonths(value));
@@ -114,7 +114,7 @@ public class ValidityComputationTests
     [InlineData(1, "1 rok")]
     [InlineData(2, "2 roky")]
     [InlineData(5, "5 let")]
-    [InlineData(-7, "-7 let")]
+    [InlineData(-7, "7 let")]
     public void CzechPluralization_FormatsYears(int value, string expected)
     {
         Assert.Equal(expected, CzechPluralization.FormatYears(value));
@@ -154,5 +154,70 @@ public class ValidityComputationTests
 
         var formatted = ValidityRelativeFormatter.FormatAfterExpiration(countdown);
         Assert.Equal("1 rok", formatted);
+    }
+
+    [Theory]
+    [InlineData(5, 5, 0, 0, 0, 0, 0, 0, 0, "5 dní do expirace")]
+    [InlineData(1, 1, 0, 0, 0, 0, 0, 0, 0, "1 den do expirace")]
+    [InlineData(10, 10, 0, 1, 0, 0, 0, 0, 0, "1 týden do expirace")]
+    [InlineData(45, 45, 0, 6, 0, 1, 0, 0, 0, "1 měsíc do expirace")]
+    [InlineData(500, 500, 0, 71, 0, 16, 0, 1, 0, "1 rok do expirace")]
+    public void ValidityRelativeFormatter_BuildsBeforeExpirationPhrase(
+        int totalDays,
+        int daysRemaining,
+        int daysAfterExpiration,
+        int weeksRemaining,
+        int weeksAfterExpiration,
+        int monthsRemaining,
+        int monthsAfterExpiration,
+        int yearsRemaining,
+        int yearsAfterExpiration,
+        string expected)
+    {
+        var countdown = new ValidityCountdown(
+            totalDays,
+            daysRemaining,
+            daysAfterExpiration,
+            weeksRemaining,
+            weeksAfterExpiration,
+            monthsRemaining,
+            monthsAfterExpiration,
+            yearsRemaining,
+            yearsAfterExpiration);
+
+        var phrase = ValidityRelativeFormatter.FormatBeforeExpirationPhrase(countdown);
+        Assert.Equal(expected, phrase);
+    }
+
+    [Theory]
+    [InlineData(-1, 0, 1, 0, 0, 0, 0, 0, 0, "1 den po expiraci")]
+    [InlineData(-10, 0, 10, 0, 1, 0, 0, 0, 0, "1 týden po expiraci")]
+    [InlineData(-40, 0, 40, 0, 5, 0, 1, 0, 0, "1 měsíc po expiraci")]
+    [InlineData(-800, 0, 800, 0, 114, 0, 26, 0, 2, "2 roky po expiraci")]
+    public void ValidityRelativeFormatter_BuildsAfterExpirationPhrase(
+        int totalDays,
+        int daysRemaining,
+        int daysAfterExpiration,
+        int weeksRemaining,
+        int weeksAfterExpiration,
+        int monthsRemaining,
+        int monthsAfterExpiration,
+        int yearsRemaining,
+        int yearsAfterExpiration,
+        string expected)
+    {
+        var countdown = new ValidityCountdown(
+            totalDays,
+            daysRemaining,
+            daysAfterExpiration,
+            weeksRemaining,
+            weeksAfterExpiration,
+            monthsRemaining,
+            monthsAfterExpiration,
+            yearsRemaining,
+            yearsAfterExpiration);
+
+        var phrase = ValidityRelativeFormatter.FormatAfterExpirationPhrase(countdown);
+        Assert.Equal(expected, phrase);
     }
 }
