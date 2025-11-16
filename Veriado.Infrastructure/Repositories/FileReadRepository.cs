@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Common;
 
@@ -34,8 +33,8 @@ internal sealed class FileReadRepository : IFileReadRepository
                 Size = file.Content != null ? (long?)file.Content.Size.Value : null,
                 Version = file.ContentRevision,
                 file.IsReadOnly,
-                CreatedUtc = EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
-                LastModifiedUtc = EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
+                file.CreatedUtc,
+                file.LastModifiedUtc,
                 Validity = file.Validity,
                 file.SystemMetadata,
             })
@@ -59,8 +58,8 @@ internal sealed class FileReadRepository : IFileReadRepository
             projection.Size ?? 0L,
             projection.Version,
             projection.IsReadOnly,
-            ParseTimestamp(projection.CreatedUtc),
-            ParseTimestamp(projection.LastModifiedUtc),
+            ToDateTimeOffset(projection.CreatedUtc),
+            ToDateTimeOffset(projection.LastModifiedUtc),
             validity,
             projection.SystemMetadata);
     }
@@ -87,9 +86,9 @@ internal sealed class FileReadRepository : IFileReadRepository
                 Size = file.Content != null ? (long?)file.Content.Size.Value : null,
                 file.ContentRevision,
                 file.IsReadOnly,
-                CreatedUtc = EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
-                LastModifiedUtc = EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
-                ValidUntil = EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"),
+                file.CreatedUtc,
+                file.LastModifiedUtc,
+                file.Validity,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -104,9 +103,9 @@ internal sealed class FileReadRepository : IFileReadRepository
                 row.Size ?? 0L,
                 row.ContentRevision,
                 row.IsReadOnly,
-                ParseTimestamp(row.CreatedUtc),
-                ParseTimestamp(row.LastModifiedUtc),
-                row.ValidUntil))
+                ToDateTimeOffset(row.CreatedUtc),
+                ToDateTimeOffset(row.LastModifiedUtc),
+                ToDateTimeOffset(row.Validity?.ValidUntil)))
             .ToList();
 
         return new Page<FileListItemReadModel>(items, request.PageNumber, request.PageSize, totalCount);
@@ -133,9 +132,9 @@ internal sealed class FileReadRepository : IFileReadRepository
                 Size = file.Content != null ? (long?)file.Content.Size.Value : null,
                 file.ContentRevision,
                 file.IsReadOnly,
-                CreatedUtc = EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
-                LastModifiedUtc = EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
-                ValidUntil = EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"),
+                file.CreatedUtc,
+                file.LastModifiedUtc,
+                file.Validity,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -150,9 +149,9 @@ internal sealed class FileReadRepository : IFileReadRepository
                 row.Size ?? 0L,
                 row.ContentRevision,
                 row.IsReadOnly,
-                ParseTimestamp(row.CreatedUtc),
-                ParseTimestamp(row.LastModifiedUtc),
-                row.ValidUntil))
+                ToDateTimeOffset(row.CreatedUtc),
+                ToDateTimeOffset(row.LastModifiedUtc),
+                ToDateTimeOffset(row.Validity?.ValidUntil)))
             .ToList();
 
         return items;
@@ -172,8 +171,7 @@ internal sealed class FileReadRepository : IFileReadRepository
             validity.HasElectronicCopy);
     }
 
-    private static DateTimeOffset ParseTimestamp(string value)
-    {
-        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-    }
+    private static DateTimeOffset ToDateTimeOffset(UtcTimestamp timestamp) => timestamp.ToDateTimeOffset();
+
+    private static DateTimeOffset? ToDateTimeOffset(UtcTimestamp? timestamp) => timestamp?.ToDateTimeOffset();
 }
