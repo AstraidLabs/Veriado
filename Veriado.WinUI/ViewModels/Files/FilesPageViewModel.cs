@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,24 +42,6 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly AsyncRelayCommand<FileSummaryDto?> _selectFileCommand;
     private readonly AsyncRelayCommand<FileSummaryDto?> _deleteFileCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
-    private readonly IReadOnlyList<ValidityFilterModeOption> _validityFilterModeOptions = new[]
-    {
-        new ValidityFilterModeOption("Bez filtru", ValidityFilterMode.None),
-        new ValidityFilterModeOption("Má platnost", ValidityFilterMode.HasValidity),
-        new ValidityFilterModeOption("Nemá platnost", ValidityFilterMode.NoValidity),
-        new ValidityFilterModeOption("Aktuálně platné", ValidityFilterMode.CurrentlyValid),
-        new ValidityFilterModeOption("Po expiraci", ValidityFilterMode.Expired),
-        new ValidityFilterModeOption("Vyprší do", ValidityFilterMode.ExpiringWithin),
-        new ValidityFilterModeOption("Expirace v rozsahu", ValidityFilterMode.ExpiringRange),
-    };
-
-    private readonly IReadOnlyList<ValidityRelativeUnitOption> _validityRelativeUnitOptions = new[]
-    {
-        new ValidityRelativeUnitOption("dní", ValidityRelativeUnit.Days),
-        new ValidityRelativeUnitOption("týdnů", ValidityRelativeUnit.Weeks),
-        new ValidityRelativeUnitOption("měsíců", ValidityRelativeUnit.Months),
-        new ValidityRelativeUnitOption("let", ValidityRelativeUnit.Years),
-    };
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
     private CancellationTokenSource? _detailLoadSource;
@@ -91,7 +72,6 @@ public partial class FilesPageViewModel : ViewModelBase
 
         Items = new ObservableCollection<FileListItemModel>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
-        ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
 
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
@@ -118,8 +98,6 @@ public partial class FilesPageViewModel : ViewModelBase
 
     public IAsyncRelayCommand RefreshCommand { get; }
 
-    public IAsyncRelayCommand ClearFiltersCommand { get; }
-
     public IAsyncRelayCommand NextPageCommand => _nextPageCommand;
 
     public IAsyncRelayCommand PreviousPageCommand => _previousPageCommand;
@@ -132,66 +110,8 @@ public partial class FilesPageViewModel : ViewModelBase
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
-    public IReadOnlyList<ValidityFilterModeOption> ValidityFilterModeOptions => _validityFilterModeOptions;
-
-    public IReadOnlyList<ValidityRelativeUnitOption> ValidityRelativeUnitOptions => _validityRelativeUnitOptions;
-
     [ObservableProperty]
     private string? searchText;
-
-    [ObservableProperty]
-    private string? extensionFilter;
-
-    [ObservableProperty]
-    private string? mimeFilter;
-
-    [ObservableProperty]
-    private string? authorFilter;
-
-    [ObservableProperty]
-    private string? versionFilter;
-
-    [ObservableProperty]
-    private bool? readOnlyFilter;
-
-    [ObservableProperty]
-    private bool? isIndexStaleFilter;
-
-    [ObservableProperty]
-    private bool? hasValidityFilter;
-
-    [ObservableProperty]
-    private bool? currentlyValidFilter;
-
-    [ObservableProperty]
-    private ValidityFilterMode validityFilterMode = ValidityFilterMode.None;
-
-    [ObservableProperty]
-    private ValidityRelativeUnit validityFilterUnit = ValidityRelativeUnit.Days;
-
-    [ObservableProperty]
-    private int? expiringFromInDaysFilter;
-
-    [ObservableProperty]
-    private int? expiringInDaysFilter;
-
-    [ObservableProperty]
-    private long? sizeMinFilter;
-
-    [ObservableProperty]
-    private long? sizeMaxFilter;
-
-    [ObservableProperty]
-    private DateTimeOffset? createdFromFilter;
-
-    [ObservableProperty]
-    private DateTimeOffset? createdToFilter;
-
-    [ObservableProperty]
-    private DateTimeOffset? modifiedFromFilter;
-
-    [ObservableProperty]
-    private DateTimeOffset? modifiedToFilter;
 
     [ObservableProperty]
     private int pageSize = DefaultPageSize;
@@ -231,15 +151,6 @@ public partial class FilesPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? detailErrorMessage;
-
-    [ObservableProperty]
-    private string? mimeFilterErrorMessage;
-
-    public bool HasMimeFilterError => !string.IsNullOrEmpty(MimeFilterErrorMessage);
-
-    public bool IsExpiringWithinMode => ValidityFilterMode == ValidityFilterMode.ExpiringWithin;
-
-    public bool IsExpiringRangeMode => ValidityFilterMode == ValidityFilterMode.ExpiringRange;
 
     public double TargetPageMaximum
     {
@@ -317,25 +228,6 @@ public partial class FilesPageViewModel : ViewModelBase
         DebounceRefresh();
     }
 
-    partial void OnMimeFilterChanged(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            MimeFilterErrorMessage = null;
-            return;
-        }
-
-        var trimmed = value.Trim();
-        MimeFilterErrorMessage = trimmed.Contains('/')
-            ? null
-            : "MIME filtr musí obsahovat oddělovač '/'.";
-    }
-
-    partial void OnMimeFilterErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasMimeFilterError));
-    }
-
     partial void OnTargetPageChanged(double value)
     {
         if (_suppressTargetPageChange)
@@ -371,36 +263,6 @@ public partial class FilesPageViewModel : ViewModelBase
         }
 
         _ = RefreshAsync(false, clamped);
-    }
-
-    partial void OnValidityFilterModeChanged(ValidityFilterMode value)
-    {
-        OnPropertyChanged(nameof(IsExpiringWithinMode));
-        OnPropertyChanged(nameof(IsExpiringRangeMode));
-
-        switch (value)
-        {
-            case ValidityFilterMode.HasValidity:
-                HasValidityFilter = true;
-                CurrentlyValidFilter = null;
-                break;
-            case ValidityFilterMode.NoValidity:
-                HasValidityFilter = false;
-                CurrentlyValidFilter = null;
-                break;
-            case ValidityFilterMode.CurrentlyValid:
-                CurrentlyValidFilter = true;
-                HasValidityFilter = null;
-                break;
-            case ValidityFilterMode.None:
-                HasValidityFilter = null;
-                CurrentlyValidFilter = null;
-                break;
-            default:
-                HasValidityFilter = null;
-                CurrentlyValidFilter = null;
-                break;
-        }
     }
 
     partial void OnPageSizeChanged(int value)
@@ -487,12 +349,6 @@ public partial class FilesPageViewModel : ViewModelBase
     {
         CancelPendingDebounce();
 
-        if (!string.IsNullOrEmpty(MimeFilterErrorMessage))
-        {
-            await Dispatcher.Enqueue(() => StatusText = "Opravte chybu ve filtru MIME.").ConfigureAwait(false);
-            return;
-        }
-
         var page = explicitPage ?? (resetPage ? 1 : CurrentPage <= 0 ? 1 : CurrentPage);
         if (page <= 0)
         {
@@ -520,117 +376,16 @@ public partial class FilesPageViewModel : ViewModelBase
         });
     }
 
-    private async Task ClearFiltersAsync()
-    {
-        SearchText = null;
-        ExtensionFilter = null;
-        MimeFilter = null;
-        AuthorFilter = null;
-        VersionFilter = null;
-        ReadOnlyFilter = null;
-        IsIndexStaleFilter = null;
-        HasValidityFilter = null;
-        CurrentlyValidFilter = null;
-        ValidityFilterMode = ValidityFilterMode.None;
-        ValidityFilterUnit = ValidityRelativeUnit.Days;
-        ExpiringFromInDaysFilter = null;
-        ExpiringInDaysFilter = null;
-        SizeMinFilter = null;
-        SizeMaxFilter = null;
-        CreatedFromFilter = null;
-        CreatedToFilter = null;
-        ModifiedFromFilter = null;
-        ModifiedToFilter = null;
-        MimeFilterErrorMessage = null;
-
-        UpdatePaginationState(0, 0, 0, 0);
-
-        await RefreshAsync(true).ConfigureAwait(false);
-    }
-
     private FileGridQueryDto BuildQuery(int page)
     {
-        var extension = string.IsNullOrWhiteSpace(ExtensionFilter) ? null : ExtensionFilter.Trim();
-        var mime = string.IsNullOrWhiteSpace(MimeFilter) ? null : MimeFilter.Trim();
-        if (mime is not null && !mime.Contains('/'))
-        {
-            mime = null;
-        }
-        var author = string.IsNullOrWhiteSpace(AuthorFilter) ? null : AuthorFilter.Trim();
-        var version = ParseVersion(VersionFilter);
-        var validityMode = ValidityFilterMode;
-        bool? hasValidity = HasValidityFilter;
-        bool? currentlyValid = CurrentlyValidFilter;
-        int? legacyExpiringInDays = validityMode == ValidityFilterMode.None ? ExpiringInDaysFilter : null;
-        int? validityValue = validityMode == ValidityFilterMode.ExpiringWithin ? ExpiringInDaysFilter : null;
-        int? validityRangeFrom = validityMode == ValidityFilterMode.ExpiringRange ? ExpiringFromInDaysFilter : null;
-        int? validityRangeTo = validityMode == ValidityFilterMode.ExpiringRange ? ExpiringInDaysFilter : null;
-
-        switch (validityMode)
-        {
-            case ValidityFilterMode.HasValidity:
-                hasValidity = true;
-                currentlyValid = null;
-                break;
-            case ValidityFilterMode.NoValidity:
-                hasValidity = false;
-                currentlyValid = null;
-                break;
-            case ValidityFilterMode.CurrentlyValid:
-                currentlyValid = true;
-                hasValidity = null;
-                break;
-            case ValidityFilterMode.Expired:
-            case ValidityFilterMode.ExpiringWithin:
-            case ValidityFilterMode.ExpiringRange:
-                hasValidity = null;
-                currentlyValid = null;
-                break;
-            case ValidityFilterMode.None:
-            default:
-                break;
-        }
-
         var query = new FileGridQueryDto
         {
             Text = SearchText,
-            Extension = extension,
-            Mime = mime,
-            Author = author,
-            Version = version,
-            IsReadOnly = ReadOnlyFilter,
-            IsIndexStale = IsIndexStaleFilter,
-            HasValidity = hasValidity,
-            IsCurrentlyValid = currentlyValid,
-            ExpiringInDays = legacyExpiringInDays,
-            ValidityFilterMode = validityMode,
-            ValidityFilterUnit = ValidityFilterUnit,
-            ValidityFilterValue = validityValue,
-            ValidityFilterRangeFrom = validityRangeFrom,
-            ValidityFilterRangeTo = validityRangeTo,
-            SizeMin = SizeMinFilter,
-            SizeMax = SizeMaxFilter,
-            CreatedFromUtc = CreatedFromFilter,
-            CreatedToUtc = CreatedToFilter,
-            ModifiedFromUtc = ModifiedFromFilter,
-            ModifiedToUtc = ModifiedToFilter,
             Page = page,
             PageSize = Math.Clamp(PageSize <= 0 ? DefaultPageSize : PageSize, 1, 200),
         };
 
         return query;
-    }
-
-    private static int? ParseVersion(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
     }
 
     private void OnHotStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1007,7 +762,3 @@ public partial class FilesPageViewModel : ViewModelBase
         source?.Dispose();
     }
 }
-
-public sealed record ValidityFilterModeOption(string DisplayName, ValidityFilterMode Mode);
-
-public sealed record ValidityRelativeUnitOption(string DisplayName, ValidityRelativeUnit Unit);
