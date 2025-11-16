@@ -17,6 +17,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.Property(file => file.Name)
             .HasColumnName("name")
+            .HasColumnType("TEXT")
             .HasMaxLength(255)
             .HasConversion(Converters.FileNameToString)
             .IsRequired();
