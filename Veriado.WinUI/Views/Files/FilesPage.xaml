@@ -9,7 +9,6 @@
     xmlns:views="using:Veriado.WinUI.Views.Files"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:viewModels="using:Veriado.WinUI.ViewModels.Files"
-    xmlns:contracts="using:Veriado.Contracts.Files"
     mc:Ignorable="d">
     <Page.Resources>
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
@@ -98,20 +97,19 @@
                             <ComboBox
                                 x:Uid="FilesPage_ValidityModeComboBox"
                                 Header="Filtr platnosti"
-                                SelectedValuePath="Tag"
+                                ItemsSource="{x:Bind ViewModel.ValidityFilterModeOptions, Mode=OneWay}"
+                                SelectedValuePath="Mode"
                                 SelectedValue="{x:Bind ViewModel.ValidityFilterMode, Mode=TwoWay}">
-                                <ComboBoxItem Content="Bez filtru" Tag="{x:Bind contracts:ValidityFilterMode.None, Mode=OneWay}" />
-                                <ComboBoxItem Content="Má platnost" Tag="{x:Bind contracts:ValidityFilterMode.HasValidity, Mode=OneWay}" />
-                                <ComboBoxItem Content="Nemá platnost" Tag="{x:Bind contracts:ValidityFilterMode.NoValidity, Mode=OneWay}" />
-                                <ComboBoxItem Content="Aktuálně platné" Tag="{x:Bind contracts:ValidityFilterMode.CurrentlyValid, Mode=OneWay}" />
-                                <ComboBoxItem Content="Po expiraci" Tag="{x:Bind contracts:ValidityFilterMode.Expired, Mode=OneWay}" />
-                                <ComboBoxItem Content="Vyprší do" Tag="{x:Bind contracts:ValidityFilterMode.ExpiringWithin, Mode=OneWay}" />
-                                <ComboBoxItem Content="Expirace v rozsahu" Tag="{x:Bind contracts:ValidityFilterMode.ExpiringRange, Mode=OneWay}" />
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="viewModels:ValidityFilterModeOption">
+                                        <TextBlock Text="{x:Bind DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
                             </ComboBox>
 
                             <StackPanel
                                 Spacing="8"
-                                x:Load="{x:Bind ViewModel.ValidityFilterMode == contracts:ValidityFilterMode.ExpiringWithin, Mode=OneWay}">
+                                x:Load="{x:Bind ViewModel.IsExpiringWithinMode, Mode=OneWay}">
                                 <controls:NumberBox
                                     x:Uid="FilesPage_ExpiringWithinNumberBox"
                                     Header="Vyprší do"
@@ -122,18 +120,20 @@
                                 <ComboBox
                                     x:Uid="FilesPage_ExpiringWithinUnitComboBox"
                                     Header="Jednotka"
-                                    SelectedValuePath="Tag"
+                                    ItemsSource="{x:Bind ViewModel.ValidityRelativeUnitOptions, Mode=OneWay}"
+                                    SelectedValuePath="Unit"
                                     SelectedValue="{x:Bind ViewModel.ValidityFilterUnit, Mode=TwoWay}">
-                                    <ComboBoxItem Content="dní" Tag="{x:Bind contracts:ValidityRelativeUnit.Days, Mode=OneWay}" />
-                                    <ComboBoxItem Content="týdnů" Tag="{x:Bind contracts:ValidityRelativeUnit.Weeks, Mode=OneWay}" />
-                                    <ComboBoxItem Content="měsíců" Tag="{x:Bind contracts:ValidityRelativeUnit.Months, Mode=OneWay}" />
-                                    <ComboBoxItem Content="let" Tag="{x:Bind contracts:ValidityRelativeUnit.Years, Mode=OneWay}" />
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="viewModels:ValidityRelativeUnitOption">
+                                            <TextBlock Text="{x:Bind DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
                                 </ComboBox>
                             </StackPanel>
 
                             <StackPanel
                                 Spacing="8"
-                                x:Load="{x:Bind ViewModel.ValidityFilterMode == contracts:ValidityFilterMode.ExpiringRange, Mode=OneWay}">
+                                x:Load="{x:Bind ViewModel.IsExpiringRangeMode, Mode=OneWay}">
                                 <TextBlock Text="Expirace v rozsahu" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <controls:NumberBox
@@ -155,12 +155,14 @@
                                     <ComboBox
                                         x:Uid="FilesPage_ValidityRangeUnitComboBox"
                                         Header="Jednotka"
-                                        SelectedValuePath="Tag"
+                                        ItemsSource="{x:Bind ViewModel.ValidityRelativeUnitOptions, Mode=OneWay}"
+                                        SelectedValuePath="Unit"
                                         SelectedValue="{x:Bind ViewModel.ValidityFilterUnit, Mode=TwoWay}">
-                                        <ComboBoxItem Content="dní" Tag="{x:Bind contracts:ValidityRelativeUnit.Days, Mode=OneWay}" />
-                                        <ComboBoxItem Content="týdnů" Tag="{x:Bind contracts:ValidityRelativeUnit.Weeks, Mode=OneWay}" />
-                                        <ComboBoxItem Content="měsíců" Tag="{x:Bind contracts:ValidityRelativeUnit.Months, Mode=OneWay}" />
-                                        <ComboBoxItem Content="let" Tag="{x:Bind contracts:ValidityRelativeUnit.Years, Mode=OneWay}" />
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="viewModels:ValidityRelativeUnitOption">
+                                                <TextBlock Text="{x:Bind DisplayName}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
                                     </ComboBox>
                                 </StackPanel>
                             </StackPanel>
