@@ -84,6 +84,36 @@ public sealed record FileGridQueryDto
         = null;
 
     /// <summary>
+    /// Gets or sets the high-level validity filter mode.
+    /// </summary>
+    public ValidityFilterMode ValidityFilterMode { get; init; }
+        = ValidityFilterMode.None;
+
+    /// <summary>
+    /// Gets or sets the unit used by relative validity filters.
+    /// </summary>
+    public ValidityRelativeUnit ValidityFilterUnit { get; init; }
+        = ValidityRelativeUnit.Days;
+
+    /// <summary>
+    /// Gets or sets the single relative value (for expiring-within scenarios).
+    /// </summary>
+    public int? ValidityFilterValue { get; init; }
+        = null;
+
+    /// <summary>
+    /// Gets or sets the lower bound of the relative validity range.
+    /// </summary>
+    public int? ValidityFilterRangeFrom { get; init; }
+        = null;
+
+    /// <summary>
+    /// Gets or sets the upper bound of the relative validity range.
+    /// </summary>
+    public int? ValidityFilterRangeTo { get; init; }
+        = null;
+
+    /// <summary>
     /// Gets or sets the minimum file size in bytes.
     /// </summary>
     public long? SizeMin { get; init; }

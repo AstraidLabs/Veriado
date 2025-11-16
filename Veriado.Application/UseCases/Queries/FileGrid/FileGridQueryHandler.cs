@@ -53,7 +53,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         var dto = request.Parameters;
         var pageNumber = Math.Max(dto.Page, 1);
         var pageSize = Math.Clamp(dto.PageSize, 1, _options.MaxPageSize);
-        var today = DateOnly.FromDateTime(_clock.UtcNow.UtcDateTime);
+        var referenceTime = _clock.UtcNow;
 
         SearchFavoriteItem? favorite = null;
         if (!string.IsNullOrWhiteSpace(dto.SavedQueryKey))
@@ -81,7 +81,7 @@ public sealed class FileGridQueryHandler : IRequestHandler<FileGridQuery, PageRe
         await using var context = await _contextFactory.CreateAsync(cancellationToken).ConfigureAwait(false);
         var filesQuery = context.Files;
 
-        var filteredQuery = QueryableFilters.ApplyFilters(filesQuery, dto, today);
+        var filteredQuery = QueryableFilters.ApplyFilters(filesQuery, dto, referenceTime);
         var sortSpecifications = dto.Sort ?? new List<FileSortSpecDto>();
         bool sortByScore = sortSpecifications.Count > 0
             && string.Equals(sortSpecifications[0].Field, "score", StringComparison.OrdinalIgnoreCase);

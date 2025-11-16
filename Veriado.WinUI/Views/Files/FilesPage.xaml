@@ -9,6 +9,7 @@
     xmlns:views="using:Veriado.WinUI.Views.Files"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:viewModels="using:Veriado.WinUI.ViewModels.Files"
+    xmlns:contracts="using:Veriado.Contracts.Files"
     mc:Ignorable="d">
     <Page.Resources>
         <converters:NullableIntToDoubleConverter x:Key="NullableIntToDoubleConverter" />
@@ -94,23 +95,75 @@
                                 Content="Neaktuální index"
                                 IsThreeState="True"
                                 IsChecked="{x:Bind ViewModel.IsIndexStaleFilter, Mode=TwoWay}" />
-                            <CheckBox
-                                x:Uid="FilesPage_HasValidityCheckBox"
-                                Content="Má platnost"
-                                IsThreeState="True"
-                                IsChecked="{x:Bind ViewModel.HasValidityFilter, Mode=TwoWay}" />
-                            <CheckBox
-                                x:Uid="FilesPage_CurrentlyValidCheckBox"
-                                Content="Aktuálně platné"
-                                IsThreeState="True"
-                                IsChecked="{x:Bind ViewModel.CurrentlyValidFilter, Mode=TwoWay}" />
-                            <controls:NumberBox
-                                x:Uid="FilesPage_ExpiringNumberBox"
-                                Header="Vyprší za (dní)"
-                                Minimum="0"
-                                SmallChange="1"
-                                SpinButtonPlacementMode="Compact"
-                                Value="{x:Bind ViewModel.ExpiringInDaysFilter, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}}" />
+                            <ComboBox
+                                x:Uid="FilesPage_ValidityModeComboBox"
+                                Header="Filtr platnosti"
+                                SelectedValuePath="Tag"
+                                SelectedValue="{x:Bind ViewModel.ValidityFilterMode, Mode=TwoWay}">
+                                <ComboBoxItem Content="Bez filtru" Tag="{x:Bind contracts:ValidityFilterMode.None, Mode=OneWay}" />
+                                <ComboBoxItem Content="Má platnost" Tag="{x:Bind contracts:ValidityFilterMode.HasValidity, Mode=OneWay}" />
+                                <ComboBoxItem Content="Nemá platnost" Tag="{x:Bind contracts:ValidityFilterMode.NoValidity, Mode=OneWay}" />
+                                <ComboBoxItem Content="Aktuálně platné" Tag="{x:Bind contracts:ValidityFilterMode.CurrentlyValid, Mode=OneWay}" />
+                                <ComboBoxItem Content="Po expiraci" Tag="{x:Bind contracts:ValidityFilterMode.Expired, Mode=OneWay}" />
+                                <ComboBoxItem Content="Vyprší do" Tag="{x:Bind contracts:ValidityFilterMode.ExpiringWithin, Mode=OneWay}" />
+                                <ComboBoxItem Content="Expirace v rozsahu" Tag="{x:Bind contracts:ValidityFilterMode.ExpiringRange, Mode=OneWay}" />
+                            </ComboBox>
+
+                            <StackPanel
+                                Spacing="8"
+                                x:Load="{x:Bind ViewModel.ValidityFilterMode == contracts:ValidityFilterMode.ExpiringWithin, Mode=OneWay}">
+                                <controls:NumberBox
+                                    x:Uid="FilesPage_ExpiringWithinNumberBox"
+                                    Header="Vyprší do"
+                                    Minimum="0"
+                                    SmallChange="1"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{x:Bind ViewModel.ExpiringInDaysFilter, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}}" />
+                                <ComboBox
+                                    x:Uid="FilesPage_ExpiringWithinUnitComboBox"
+                                    Header="Jednotka"
+                                    SelectedValuePath="Tag"
+                                    SelectedValue="{x:Bind ViewModel.ValidityFilterUnit, Mode=TwoWay}">
+                                    <ComboBoxItem Content="dní" Tag="{x:Bind contracts:ValidityRelativeUnit.Days, Mode=OneWay}" />
+                                    <ComboBoxItem Content="týdnů" Tag="{x:Bind contracts:ValidityRelativeUnit.Weeks, Mode=OneWay}" />
+                                    <ComboBoxItem Content="měsíců" Tag="{x:Bind contracts:ValidityRelativeUnit.Months, Mode=OneWay}" />
+                                    <ComboBoxItem Content="let" Tag="{x:Bind contracts:ValidityRelativeUnit.Years, Mode=OneWay}" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel
+                                Spacing="8"
+                                x:Load="{x:Bind ViewModel.ValidityFilterMode == contracts:ValidityFilterMode.ExpiringRange, Mode=OneWay}">
+                                <TextBlock Text="Expirace v rozsahu" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <controls:NumberBox
+                                        x:Uid="FilesPage_ValidityRangeFromNumberBox"
+                                        Width="120"
+                                        Header="Od"
+                                        Minimum="0"
+                                        SmallChange="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        Value="{x:Bind ViewModel.ExpiringFromInDaysFilter, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}}" />
+                                    <controls:NumberBox
+                                        x:Uid="FilesPage_ValidityRangeToNumberBox"
+                                        Width="120"
+                                        Header="Do"
+                                        Minimum="0"
+                                        SmallChange="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        Value="{x:Bind ViewModel.ExpiringInDaysFilter, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}}" />
+                                    <ComboBox
+                                        x:Uid="FilesPage_ValidityRangeUnitComboBox"
+                                        Header="Jednotka"
+                                        SelectedValuePath="Tag"
+                                        SelectedValue="{x:Bind ViewModel.ValidityFilterUnit, Mode=TwoWay}">
+                                        <ComboBoxItem Content="dní" Tag="{x:Bind contracts:ValidityRelativeUnit.Days, Mode=OneWay}" />
+                                        <ComboBoxItem Content="týdnů" Tag="{x:Bind contracts:ValidityRelativeUnit.Weeks, Mode=OneWay}" />
+                                        <ComboBoxItem Content="měsíců" Tag="{x:Bind contracts:ValidityRelativeUnit.Months, Mode=OneWay}" />
+                                        <ComboBoxItem Content="let" Tag="{x:Bind contracts:ValidityRelativeUnit.Years, Mode=OneWay}" />
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
                     </controls:Expander>
 

@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Veriado.Contracts.Files;
 
 namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
@@ -16,7 +17,7 @@ internal static class QueryableFilters
     public static IQueryable<FileEntity> ApplyFilters(
         IQueryable<FileEntity> query,
         FileGridQueryDto dto,
-        DateOnly today)
+        DateTimeOffset referenceTime)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(dto);
@@ -55,43 +56,50 @@ internal static class QueryableFilters
             query = query.Where(file => file.SearchIndex.IsStale == dto.IsIndexStale.Value);
         }
 
-        if (dto.HasValidity.HasValue)
+        var referenceInstant = referenceTime.ToUniversalTime();
+
+        if (dto.ValidityFilterMode != ValidityFilterMode.None)
         {
-            if (dto.HasValidity.Value)
-            {
-                query = query.Where(file => file.Validity != null);
-            }
-            else
-            {
-                query = query.Where(file => file.Validity == null);
-            }
+            query = ApplyAdvancedValidityFilter(query, dto, referenceInstant);
         }
-
-        var todayReference = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-
-        if (dto.IsCurrentlyValid.HasValue)
+        else
         {
-            if (dto.IsCurrentlyValid.Value)
+            if (dto.HasValidity.HasValue)
             {
+                if (dto.HasValidity.Value)
+                {
+                    query = query.Where(file => file.Validity != null);
+                }
+                else
+                {
+                    query = query.Where(file => file.Validity == null);
+                }
+            }
+
+            if (dto.IsCurrentlyValid.HasValue)
+            {
+                if (dto.IsCurrentlyValid.Value)
+                {
+                    query = query.Where(file => file.Validity != null
+                        && file.Validity.IssuedAt.Value <= referenceInstant
+                        && file.Validity.ValidUntil.Value >= referenceInstant);
+                }
+                else
+                {
+                    query = query.Where(file => file.Validity == null
+                        || file.Validity.ValidUntil.Value < referenceInstant
+                        || file.Validity.IssuedAt.Value > referenceInstant);
+                }
+            }
+
+            if (dto.ExpiringInDays.HasValue)
+            {
+                var days = dto.ExpiringInDays.Value;
+                var horizon = referenceInstant.AddDays(days);
                 query = query.Where(file => file.Validity != null
-                    && file.Validity.IssuedAt.Value <= todayReference
-                    && file.Validity.ValidUntil.Value >= todayReference);
+                    && file.Validity.ValidUntil.Value >= referenceInstant
+                    && file.Validity.ValidUntil.Value <= horizon);
             }
-            else
-            {
-                query = query.Where(file => file.Validity == null
-                    || file.Validity.ValidUntil.Value < todayReference
-                    || file.Validity.IssuedAt.Value > todayReference);
-            }
-        }
-
-        if (dto.ExpiringInDays.HasValue)
-        {
-            var days = dto.ExpiringInDays.Value;
-            var horizon = new DateTimeOffset(today.AddDays(days).ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc));
-            query = query.Where(file => file.Validity != null
-                && file.Validity.ValidUntil.Value >= todayReference
-                && file.Validity.ValidUntil.Value <= horizon);
         }
 
         if (dto.SizeMin.HasValue)
@@ -134,6 +142,72 @@ internal static class QueryableFilters
         }
 
         return query;
+    }
+
+    private static IQueryable<FileEntity> ApplyAdvancedValidityFilter(
+        IQueryable<FileEntity> query,
+        FileGridQueryDto dto,
+        DateTimeOffset referenceInstant)
+    {
+        switch (dto.ValidityFilterMode)
+        {
+            case ValidityFilterMode.HasValidity:
+                return query.Where(file => file.Validity != null);
+            case ValidityFilterMode.NoValidity:
+                return query.Where(file => file.Validity == null);
+            case ValidityFilterMode.CurrentlyValid:
+                return query.Where(file => file.Validity != null
+                    && file.Validity.IssuedAt.Value <= referenceInstant
+                    && file.Validity.ValidUntil.Value >= referenceInstant);
+            case ValidityFilterMode.Expired:
+                return query.Where(file => file.Validity != null
+                    && file.Validity.ValidUntil.Value < referenceInstant);
+            case ValidityFilterMode.ExpiringWithin:
+                if (!dto.ValidityFilterValue.HasValue)
+                {
+                    return query;
+                }
+
+                {
+                    var horizon = AddRelative(referenceInstant, dto.ValidityFilterUnit, dto.ValidityFilterValue.Value);
+                    return query.Where(file => file.Validity != null
+                        && file.Validity.ValidUntil.Value >= referenceInstant
+                        && file.Validity.ValidUntil.Value <= horizon);
+                }
+
+            case ValidityFilterMode.ExpiringRange:
+                if (!dto.ValidityFilterRangeFrom.HasValue || !dto.ValidityFilterRangeTo.HasValue)
+                {
+                    return query;
+                }
+
+                {
+                    var start = AddRelative(referenceInstant, dto.ValidityFilterUnit, dto.ValidityFilterRangeFrom.Value);
+                    var end = AddRelative(referenceInstant, dto.ValidityFilterUnit, dto.ValidityFilterRangeTo.Value);
+                    if (end < start)
+                    {
+                        (start, end) = (end, start);
+                    }
+
+                    return query.Where(file => file.Validity != null
+                        && file.Validity.ValidUntil.Value >= start
+                        && file.Validity.ValidUntil.Value <= end);
+                }
+            default:
+                return query;
+        }
+    }
+
+    private static DateTimeOffset AddRelative(DateTimeOffset reference, ValidityRelativeUnit unit, int amount)
+    {
+        return unit switch
+        {
+            ValidityRelativeUnit.Days => reference.AddDays(amount),
+            ValidityRelativeUnit.Weeks => reference.AddDays(amount * 7),
+            ValidityRelativeUnit.Months => reference.AddMonths(amount),
+            ValidityRelativeUnit.Years => reference.AddYears(amount),
+            _ => reference.AddDays(amount),
+        };
     }
 
     /// <summary>
