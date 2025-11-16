@@ -11,6 +11,14 @@ namespace Veriado.Appl.UseCases.Queries.FileGrid;
 internal static class QueryableFilters
 {
     private const string EscapeChar = "\\";
+    private static readonly Expression<Func<FileEntity, string>> NameSortSelector =
+        file => EF.Property<string>(file, nameof(FileEntity.Name));
+
+    private static readonly Expression<Func<FileEntity, string>> MimeSortSelector =
+        file => EF.Property<string>(file, nameof(FileEntity.Mime));
+
+    private static readonly Expression<Func<FileEntity, string>> ExtensionSortSelector =
+        file => EF.Property<string>(file, nameof(FileEntity.Extension));
 
     /// <summary>
     /// Applies the filters defined in <see cref="FileGridQueryDto"/> to the provided query.
@@ -26,19 +34,22 @@ internal static class QueryableFilters
         if (!string.IsNullOrWhiteSpace(dto.Name))
         {
             var pattern = $"%{EscapeLike(dto.Name)}%";
-            query = query.Where(file => EF.Functions.Like(file.Name.Value, pattern, EscapeChar));
+            query = query.Where(file =>
+                EF.Functions.Like(EF.Property<string>(file, nameof(FileEntity.Name)), pattern, EscapeChar));
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Extension))
         {
             var pattern = $"%{EscapeLike(dto.Extension)}%";
-            query = query.Where(file => EF.Functions.Like(file.Extension.Value, pattern, EscapeChar));
+            query = query.Where(file =>
+                EF.Functions.Like(EF.Property<string>(file, nameof(FileEntity.Extension)), pattern, EscapeChar));
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Mime))
         {
             var pattern = $"%{EscapeLike(dto.Mime)}%";
-            query = query.Where(file => EF.Functions.Like(file.Mime.Value, pattern, EscapeChar));
+            query = query.Where(file =>
+                EF.Functions.Like(EF.Property<string>(file, nameof(FileEntity.Mime)), pattern, EscapeChar));
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Author))
@@ -237,7 +248,7 @@ internal static class QueryableFilters
 
         if (sort is null || sort.Count == 0)
         {
-            return query.OrderBy(file => file.Name.Value)
+            return query.OrderBy(NameSortSelector)
                 .ThenBy(file => file.Id);
         }
 
@@ -253,9 +264,9 @@ internal static class QueryableFilters
 
             orderedQuery = spec.Field.ToLowerInvariant() switch
             {
-                "name" => ApplyOrder(orderedQuery, file => file.Name.Value, spec.Descending, ref ordered),
-                "mime" => ApplyOrder(orderedQuery, file => file.Mime.Value, spec.Descending, ref ordered),
-                "extension" => ApplyOrder(orderedQuery, file => file.Extension.Value, spec.Descending, ref ordered),
+                "name" => ApplyOrder(orderedQuery, NameSortSelector, spec.Descending, ref ordered),
+                "mime" => ApplyOrder(orderedQuery, MimeSortSelector, spec.Descending, ref ordered),
+                "extension" => ApplyOrder(orderedQuery, ExtensionSortSelector, spec.Descending, ref ordered),
                 "size" => ApplyOrder(orderedQuery, file => EF.Property<long?>(file, "Content_Size"), spec.Descending, ref ordered),
                 "createdutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.CreatedUtc)), spec.Descending, ref ordered),
                 "modifiedutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)), spec.Descending, ref ordered),
@@ -272,7 +283,7 @@ internal static class QueryableFilters
 
         if (!ordered)
         {
-            orderedQuery = orderedQuery.OrderBy(file => file.Name.Value);
+            orderedQuery = orderedQuery.OrderBy(NameSortSelector);
         }
 
         return ((IOrderedQueryable<FileEntity>)orderedQuery).ThenBy(file => file.Id);
