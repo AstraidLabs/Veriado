@@ -43,6 +43,24 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly AsyncRelayCommand<FileSummaryDto?> _selectFileCommand;
     private readonly AsyncRelayCommand<FileSummaryDto?> _deleteFileCommand;
     private readonly IReadOnlyList<int> _pageSizeOptions = new[] { 25, 50, 100, 150, 200 };
+    private readonly IReadOnlyList<ValidityFilterModeOption> _validityFilterModeOptions = new[]
+    {
+        new ValidityFilterModeOption("Bez filtru", ValidityFilterMode.None),
+        new ValidityFilterModeOption("Má platnost", ValidityFilterMode.HasValidity),
+        new ValidityFilterModeOption("Nemá platnost", ValidityFilterMode.NoValidity),
+        new ValidityFilterModeOption("Aktuálně platné", ValidityFilterMode.CurrentlyValid),
+        new ValidityFilterModeOption("Po expiraci", ValidityFilterMode.Expired),
+        new ValidityFilterModeOption("Vyprší do", ValidityFilterMode.ExpiringWithin),
+        new ValidityFilterModeOption("Expirace v rozsahu", ValidityFilterMode.ExpiringRange),
+    };
+
+    private readonly IReadOnlyList<ValidityRelativeUnitOption> _validityRelativeUnitOptions = new[]
+    {
+        new ValidityRelativeUnitOption("dní", ValidityRelativeUnit.Days),
+        new ValidityRelativeUnitOption("týdnů", ValidityRelativeUnit.Weeks),
+        new ValidityRelativeUnitOption("měsíců", ValidityRelativeUnit.Months),
+        new ValidityRelativeUnitOption("let", ValidityRelativeUnit.Years),
+    };
     private bool _suppressTargetPageChange;
     private readonly object _detailLoadGate = new();
     private CancellationTokenSource? _detailLoadSource;
@@ -113,6 +131,10 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand<FileSummaryDto?> DeleteFileCommand => _deleteFileCommand;
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
+
+    public IReadOnlyList<ValidityFilterModeOption> ValidityFilterModeOptions => _validityFilterModeOptions;
+
+    public IReadOnlyList<ValidityRelativeUnitOption> ValidityRelativeUnitOptions => _validityRelativeUnitOptions;
 
     [ObservableProperty]
     private string? searchText;
@@ -214,6 +236,10 @@ public partial class FilesPageViewModel : ViewModelBase
     private string? mimeFilterErrorMessage;
 
     public bool HasMimeFilterError => !string.IsNullOrEmpty(MimeFilterErrorMessage);
+
+    public bool IsExpiringWithinMode => ValidityFilterMode == ValidityFilterMode.ExpiringWithin;
+
+    public bool IsExpiringRangeMode => ValidityFilterMode == ValidityFilterMode.ExpiringRange;
 
     public double TargetPageMaximum
     {
@@ -349,6 +375,9 @@ public partial class FilesPageViewModel : ViewModelBase
 
     partial void OnValidityFilterModeChanged(ValidityFilterMode value)
     {
+        OnPropertyChanged(nameof(IsExpiringWithinMode));
+        OnPropertyChanged(nameof(IsExpiringRangeMode));
+
         switch (value)
         {
             case ValidityFilterMode.HasValidity:
@@ -978,3 +1007,7 @@ public partial class FilesPageViewModel : ViewModelBase
         source?.Dispose();
     }
 }
+
+public sealed record ValidityFilterModeOption(string DisplayName, ValidityFilterMode Mode);
+
+public sealed record ValidityRelativeUnitOption(string DisplayName, ValidityRelativeUnit Unit);
