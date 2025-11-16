@@ -108,6 +108,7 @@
                             </ComboBox>
 
                             <StackPanel
+                                x:Name="ExpiringWithinPanel"
                                 Spacing="8"
                                 x:Load="{x:Bind ViewModel.IsExpiringWithinMode, Mode=OneWay}">
                                 <controls:NumberBox
@@ -132,6 +133,7 @@
                             </StackPanel>
 
                             <StackPanel
+                                x:Name="ExpiringRangePanel"
                                 Spacing="8"
                                 x:Load="{x:Bind ViewModel.IsExpiringRangeMode, Mode=OneWay}">
                                 <TextBlock Text="Expirace v rozsahu" />
