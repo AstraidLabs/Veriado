@@ -322,15 +322,15 @@
                                         </Grid.ColumnDefinitions>
 
                                         <Border
-                                            Grid.Column="0"
-                                            MinWidth="36"
-                                            MinHeight="36"
-                                            Padding="6"
-                                            CornerRadius="8"
-                                            Background="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
-                                            Visibility="{x:Bind Validity.HasValidity, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                            ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
-                                            AutomationProperties.Name="{x:Bind Validity.Tooltip, Mode=OneWay}">
+                                               Grid.Column="0"
+                                               MinWidth="36"
+                                               MinHeight="36"
+                                               Padding="6"
+                                               CornerRadius="8"
+                                               Background="{x:Bind Validity.Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
+                                               Visibility="{x:Bind Validity.HasValidity, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               ToolTipService.ToolTip="{x:Bind Validity.Tooltip, Mode=OneWay}"
+                                               AutomationProperties.Name="{x:Bind Validity.Tooltip, Mode=OneWay}">
                                             <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <FontIcon
                                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
