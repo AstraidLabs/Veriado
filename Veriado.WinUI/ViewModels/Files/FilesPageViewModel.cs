@@ -142,6 +142,15 @@ public partial class FilesPageViewModel : ViewModelBase
     private bool? currentlyValidFilter;
 
     [ObservableProperty]
+    private ValidityFilterMode validityFilterMode = ValidityFilterMode.None;
+
+    [ObservableProperty]
+    private ValidityRelativeUnit validityFilterUnit = ValidityRelativeUnit.Days;
+
+    [ObservableProperty]
+    private int? expiringFromInDaysFilter;
+
+    [ObservableProperty]
     private int? expiringInDaysFilter;
 
     [ObservableProperty]
@@ -338,6 +347,33 @@ public partial class FilesPageViewModel : ViewModelBase
         _ = RefreshAsync(false, clamped);
     }
 
+    partial void OnValidityFilterModeChanged(ValidityFilterMode value)
+    {
+        switch (value)
+        {
+            case ValidityFilterMode.HasValidity:
+                HasValidityFilter = true;
+                CurrentlyValidFilter = null;
+                break;
+            case ValidityFilterMode.NoValidity:
+                HasValidityFilter = false;
+                CurrentlyValidFilter = null;
+                break;
+            case ValidityFilterMode.CurrentlyValid:
+                CurrentlyValidFilter = true;
+                HasValidityFilter = null;
+                break;
+            case ValidityFilterMode.None:
+                HasValidityFilter = null;
+                CurrentlyValidFilter = null;
+                break;
+            default:
+                HasValidityFilter = null;
+                CurrentlyValidFilter = null;
+                break;
+        }
+    }
+
     partial void OnPageSizeChanged(int value)
     {
         var clamped = Math.Clamp(value <= 0 ? DefaultPageSize : value, 1, 200);
@@ -466,6 +502,9 @@ public partial class FilesPageViewModel : ViewModelBase
         IsIndexStaleFilter = null;
         HasValidityFilter = null;
         CurrentlyValidFilter = null;
+        ValidityFilterMode = ValidityFilterMode.None;
+        ValidityFilterUnit = ValidityRelativeUnit.Days;
+        ExpiringFromInDaysFilter = null;
         ExpiringInDaysFilter = null;
         SizeMinFilter = null;
         SizeMaxFilter = null;
@@ -490,6 +529,38 @@ public partial class FilesPageViewModel : ViewModelBase
         }
         var author = string.IsNullOrWhiteSpace(AuthorFilter) ? null : AuthorFilter.Trim();
         var version = ParseVersion(VersionFilter);
+        var validityMode = ValidityFilterMode;
+        bool? hasValidity = HasValidityFilter;
+        bool? currentlyValid = CurrentlyValidFilter;
+        int? legacyExpiringInDays = validityMode == ValidityFilterMode.None ? ExpiringInDaysFilter : null;
+        int? validityValue = validityMode == ValidityFilterMode.ExpiringWithin ? ExpiringInDaysFilter : null;
+        int? validityRangeFrom = validityMode == ValidityFilterMode.ExpiringRange ? ExpiringFromInDaysFilter : null;
+        int? validityRangeTo = validityMode == ValidityFilterMode.ExpiringRange ? ExpiringInDaysFilter : null;
+
+        switch (validityMode)
+        {
+            case ValidityFilterMode.HasValidity:
+                hasValidity = true;
+                currentlyValid = null;
+                break;
+            case ValidityFilterMode.NoValidity:
+                hasValidity = false;
+                currentlyValid = null;
+                break;
+            case ValidityFilterMode.CurrentlyValid:
+                currentlyValid = true;
+                hasValidity = null;
+                break;
+            case ValidityFilterMode.Expired:
+            case ValidityFilterMode.ExpiringWithin:
+            case ValidityFilterMode.ExpiringRange:
+                hasValidity = null;
+                currentlyValid = null;
+                break;
+            case ValidityFilterMode.None:
+            default:
+                break;
+        }
 
         var query = new FileGridQueryDto
         {
@@ -500,9 +571,14 @@ public partial class FilesPageViewModel : ViewModelBase
             Version = version,
             IsReadOnly = ReadOnlyFilter,
             IsIndexStale = IsIndexStaleFilter,
-            HasValidity = HasValidityFilter,
-            IsCurrentlyValid = CurrentlyValidFilter,
-            ExpiringInDays = ExpiringInDaysFilter,
+            HasValidity = hasValidity,
+            IsCurrentlyValid = currentlyValid,
+            ExpiringInDays = legacyExpiringInDays,
+            ValidityFilterMode = validityMode,
+            ValidityFilterUnit = ValidityFilterUnit,
+            ValidityFilterValue = validityValue,
+            ValidityFilterRangeFrom = validityRangeFrom,
+            ValidityFilterRangeTo = validityRangeTo,
             SizeMin = SizeMinFilter,
             SizeMax = SizeMaxFilter,
             CreatedFromUtc = CreatedFromFilter,

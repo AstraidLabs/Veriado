@@ -1,3 +1,5 @@
+using Veriado.Contracts.Files;
+
 namespace Veriado.Appl.UseCases.Queries.FileGrid;
 
 /// <summary>
@@ -55,6 +57,42 @@ public sealed class FileGridQueryValidator : AbstractValidator<FileGridQueryDto>
         RuleFor(dto => dto.ExpiringInDays)
             .Must(value => !value.HasValue || value.Value >= 0)
             .WithMessage("ExpiringInDays must be non-negative.");
+
+        RuleFor(dto => dto.ValidityFilterValue)
+            .Must(value => !value.HasValue || value.Value >= 0)
+            .WithMessage("ValidityFilterValue must be non-negative.");
+
+        RuleFor(dto => dto.ValidityFilterRangeFrom)
+            .Must(value => !value.HasValue || value.Value >= 0)
+            .WithMessage("ValidityFilterRangeFrom must be non-negative.");
+
+        RuleFor(dto => dto.ValidityFilterRangeTo)
+            .Must(value => !value.HasValue || value.Value >= 0)
+            .WithMessage("ValidityFilterRangeTo must be non-negative.");
+
+        RuleFor(dto => dto.ValidityFilterRangeTo)
+            .Must((dto, to) => !to.HasValue
+                || !dto.ValidityFilterRangeFrom.HasValue
+                || dto.ValidityFilterRangeFrom.Value <= to.Value)
+            .WithMessage("ValidityFilterRangeTo must be greater than or equal to ValidityFilterRangeFrom.");
+
+        When(dto => dto.ValidityFilterMode == ValidityFilterMode.ExpiringWithin, () =>
+        {
+            RuleFor(dto => dto.ValidityFilterValue)
+                .NotNull()
+                .WithMessage("ValidityFilterValue is required for ExpiringWithin mode.");
+        });
+
+        When(dto => dto.ValidityFilterMode == ValidityFilterMode.ExpiringRange, () =>
+        {
+            RuleFor(dto => dto.ValidityFilterRangeFrom)
+                .NotNull()
+                .WithMessage("ValidityFilterRangeFrom is required for ExpiringRange mode.");
+
+            RuleFor(dto => dto.ValidityFilterRangeTo)
+                .NotNull()
+                .WithMessage("ValidityFilterRangeTo is required for ExpiringRange mode.");
+        });
 
         RuleForEach(dto => dto.Sort)
             .SetValidator(new SortSpecValidator());
