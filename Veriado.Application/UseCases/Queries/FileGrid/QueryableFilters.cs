@@ -20,6 +20,9 @@ internal static class QueryableFilters
     private static readonly Expression<Func<FileEntity, string>> ExtensionSortSelector =
         file => EF.Property<string>(file, nameof(FileEntity.Extension));
 
+    private static readonly Expression<Func<FileEntity, long?>> ContentSizeSelector =
+        file => file.Content != null ? (long?)file.Content.Size.Value : null;
+
     /// <summary>
     /// Applies the filters defined in <see cref="FileGridQueryDto"/> to the provided query.
     /// </summary>
@@ -117,14 +120,14 @@ internal static class QueryableFilters
 
         if (dto.SizeMin.HasValue)
         {
-            query = query.Where(file =>
-                EF.Property<long?>(file, "Content_Size") >= dto.SizeMin.Value);
+            query = query.Where(file => file.Content != null
+                && file.Content.Size.Value >= dto.SizeMin.Value);
         }
 
         if (dto.SizeMax.HasValue)
         {
-            query = query.Where(file =>
-                EF.Property<long?>(file, "Content_Size") <= dto.SizeMax.Value);
+            query = query.Where(file => file.Content != null
+                && file.Content.Size.Value <= dto.SizeMax.Value);
         }
 
         if (dto.CreatedFromUtc.HasValue)
@@ -267,7 +270,7 @@ internal static class QueryableFilters
                 "name" => ApplyOrder(orderedQuery, NameSortSelector, spec.Descending, ref ordered),
                 "mime" => ApplyOrder(orderedQuery, MimeSortSelector, spec.Descending, ref ordered),
                 "extension" => ApplyOrder(orderedQuery, ExtensionSortSelector, spec.Descending, ref ordered),
-                "size" => ApplyOrder(orderedQuery, file => EF.Property<long?>(file, "Content_Size"), spec.Descending, ref ordered),
+                "size" => ApplyOrder(orderedQuery, ContentSizeSelector, spec.Descending, ref ordered),
                 "createdutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.CreatedUtc)), spec.Descending, ref ordered),
                 "modifiedutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)), spec.Descending, ref ordered),
                 "version" => ApplyOrder(orderedQuery, file => file.ContentRevision, spec.Descending, ref ordered),

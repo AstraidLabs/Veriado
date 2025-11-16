@@ -157,14 +157,14 @@ internal sealed class FacetService : IFacetService
     {
         if (TryConvertLong(from, out var lower))
         {
-            query = query.Where(file =>
-                EF.Property<long?>(file, "Content_Size") >= lower);
+            query = query.Where(file => file.Content != null
+                && file.Content.Size.Value >= lower);
         }
 
         if (TryConvertLong(to, out var upper))
         {
-            query = query.Where(file =>
-                EF.Property<long?>(file, "Content_Size") <= upper);
+            query = query.Where(file => file.Content != null
+                && file.Content.Size.Value <= upper);
         }
 
         return query;
@@ -250,7 +250,7 @@ internal sealed class FacetService : IFacetService
         }
 
         var buckets = await query
-            .Select(file => EF.Property<long?>(file, "Content_Size") ?? 0L)
+            .Select(file => file.Content != null ? file.Content.Size.Value : 0L)
             .GroupBy(size => size < TenMegabytes
                 ? "0-10MB"
                 : size < HundredMegabytes
