@@ -1,6 +1,7 @@
 namespace Veriado.Infrastructure.Search;
 
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 /// Implements aggregation-based facets using SQLite group by projections.
@@ -156,12 +157,14 @@ internal sealed class FacetService : IFacetService
     {
         if (TryConvertLong(from, out var lower))
         {
-            query = query.Where(file => file.Size.Value >= lower);
+            query = query.Where(file =>
+                EF.Property<long?>(file, "Content_Size") >= lower);
         }
 
         if (TryConvertLong(to, out var upper))
         {
-            query = query.Where(file => file.Size.Value <= upper);
+            query = query.Where(file =>
+                EF.Property<long?>(file, "Content_Size") <= upper);
         }
 
         return query;
@@ -247,7 +250,7 @@ internal sealed class FacetService : IFacetService
         }
 
         var buckets = await query
-            .Select(file => file.Size.Value)
+            .Select(file => EF.Property<long?>(file, "Content_Size") ?? 0L)
             .GroupBy(size => size < TenMegabytes
                 ? "0-10MB"
                 : size < HundredMegabytes

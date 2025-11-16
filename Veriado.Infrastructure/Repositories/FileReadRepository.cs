@@ -1,3 +1,5 @@
+using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Common;
 
 namespace Veriado.Infrastructure.Repositories;
@@ -29,11 +31,11 @@ internal sealed class FileReadRepository : IFileReadRepository
                 Extension = file.Extension.Value,
                 Mime = file.Mime.Value,
                 file.Author,
-                Size = file.Size.Value,
+                Size = EF.Property<long?>(file, "Content_Size"),
                 Version = file.ContentRevision,
                 file.IsReadOnly,
-                CreatedUtc = file.CreatedUtc.Value,
-                LastModifiedUtc = file.LastModifiedUtc.Value,
+                CreatedUtc = EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
+                LastModifiedUtc = EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
                 Validity = file.Validity,
                 file.SystemMetadata,
             })
@@ -54,11 +56,11 @@ internal sealed class FileReadRepository : IFileReadRepository
             projection.Extension,
             projection.Mime,
             projection.Author,
-            projection.Size,
+            projection.Size ?? 0L,
             projection.Version,
             projection.IsReadOnly,
-            projection.CreatedUtc,
-            projection.LastModifiedUtc,
+            ParseTimestamp(projection.CreatedUtc),
+            ParseTimestamp(projection.LastModifiedUtc),
             validity,
             projection.SystemMetadata);
     }
@@ -70,25 +72,42 @@ internal sealed class FileReadRepository : IFileReadRepository
         var baseQuery = context.Files.AsNoTracking();
         var totalCount = await baseQuery.CountAsync(cancellationToken).ConfigureAwait(false);
 
-        var items = await baseQuery
-            .OrderByDescending(file => file.LastModifiedUtc.Value)
+        var rows = await baseQuery
+            .OrderByDescending(file => EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)))
             .ThenBy(file => file.Id)
             .Skip(request.Skip)
             .Take(request.PageSize)
-            .Select(file => new FileListItemReadModel(
+            .Select(file => new
+            {
                 file.Id,
-                file.Name.Value,
-                file.Extension.Value,
-                file.Mime.Value,
+                Name = file.Name.Value,
+                Extension = file.Extension.Value,
+                Mime = file.Mime.Value,
                 file.Author,
-                file.Size.Value,
+                Size = EF.Property<long?>(file, "Content_Size"),
                 file.ContentRevision,
                 file.IsReadOnly,
-                file.CreatedUtc.Value,
-                file.LastModifiedUtc.Value,
-                file.Validity == null ? (DateTimeOffset?)null : file.Validity.ValidUntil.Value))
+                CreatedUtc = EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
+                LastModifiedUtc = EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
+                ValidUntil = EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"),
+            })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        var items = rows
+            .Select(row => new FileListItemReadModel(
+                row.Id,
+                row.Name,
+                row.Extension,
+                row.Mime,
+                row.Author,
+                row.Size ?? 0L,
+                row.ContentRevision,
+                row.IsReadOnly,
+                ParseTimestamp(row.CreatedUtc),
+                ParseTimestamp(row.LastModifiedUtc),
+                row.ValidUntil))
+            .ToList();
 
         return new Page<FileListItemReadModel>(items, request.PageNumber, request.PageSize, totalCount);
     }
@@ -98,25 +117,43 @@ internal sealed class FileReadRepository : IFileReadRepository
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var threshold = validUntilUtc.ToUniversalTime();
 
-        var items = await context.Files
+        var rows = await context.Files
             .AsNoTracking()
-            .Where(file => file.Validity != null && file.Validity.ValidUntil.Value <= threshold)
-            .OrderBy(file => file.Validity!.ValidUntil.Value)
+            .Where(file => file.Validity != null
+                && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") <= threshold)
+            .OrderBy(file => EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"))
             .ThenBy(file => file.Id)
-            .Select(file => new FileListItemReadModel(
+            .Select(file => new
+            {
                 file.Id,
-                file.Name.Value,
-                file.Extension.Value,
-                file.Mime.Value,
+                Name = file.Name.Value,
+                Extension = file.Extension.Value,
+                Mime = file.Mime.Value,
                 file.Author,
-                file.Size.Value,
+                Size = EF.Property<long?>(file, "Content_Size"),
                 file.ContentRevision,
                 file.IsReadOnly,
-                file.CreatedUtc.Value,
-                file.LastModifiedUtc.Value,
-                file.Validity!.ValidUntil.Value))
+                CreatedUtc = EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
+                LastModifiedUtc = EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
+                ValidUntil = EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"),
+            })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        var items = rows
+            .Select(row => new FileListItemReadModel(
+                row.Id,
+                row.Name,
+                row.Extension,
+                row.Mime,
+                row.Author,
+                row.Size ?? 0L,
+                row.ContentRevision,
+                row.IsReadOnly,
+                ParseTimestamp(row.CreatedUtc),
+                ParseTimestamp(row.LastModifiedUtc),
+                row.ValidUntil))
+            .ToList();
 
         return items;
     }
@@ -133,5 +170,10 @@ internal sealed class FileReadRepository : IFileReadRepository
             validity.ValidUntil.Value,
             validity.HasPhysicalCopy,
             validity.HasElectronicCopy);
+    }
+
+    private static DateTimeOffset ParseTimestamp(string value)
+    {
+        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
     }
 }
