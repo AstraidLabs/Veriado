@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Contracts.Files;
@@ -53,7 +54,8 @@ internal static class QueryableFilters
 
         if (dto.IsIndexStale.HasValue)
         {
-            query = query.Where(file => file.SearchIndex.IsStale == dto.IsIndexStale.Value);
+            query = query.Where(file =>
+                EF.Property<bool>(file, "fts_is_stale") == dto.IsIndexStale.Value);
         }
 
         var referenceInstant = referenceTime.ToUniversalTime();
@@ -81,14 +83,14 @@ internal static class QueryableFilters
                 if (dto.IsCurrentlyValid.Value)
                 {
                     query = query.Where(file => file.Validity != null
-                        && file.Validity.IssuedAt.Value <= referenceInstant
-                        && file.Validity.ValidUntil.Value >= referenceInstant);
+                        && EF.Property<DateTimeOffset?>(file, "Validity_IssuedAt") <= referenceInstant
+                        && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") >= referenceInstant);
                 }
                 else
                 {
                     query = query.Where(file => file.Validity == null
-                        || file.Validity.ValidUntil.Value < referenceInstant
-                        || file.Validity.IssuedAt.Value > referenceInstant);
+                        || EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") < referenceInstant
+                        || EF.Property<DateTimeOffset?>(file, "Validity_IssuedAt") > referenceInstant);
                 }
             }
 
@@ -97,43 +99,57 @@ internal static class QueryableFilters
                 var days = dto.ExpiringInDays.Value;
                 var horizon = referenceInstant.AddDays(days);
                 query = query.Where(file => file.Validity != null
-                    && file.Validity.ValidUntil.Value >= referenceInstant
-                    && file.Validity.ValidUntil.Value <= horizon);
+                    && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") >= referenceInstant
+                    && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") <= horizon);
             }
         }
 
         if (dto.SizeMin.HasValue)
         {
-            query = query.Where(file => file.Size.Value >= dto.SizeMin.Value);
+            query = query.Where(file =>
+                EF.Property<long?>(file, "Content_Size") >= dto.SizeMin.Value);
         }
 
         if (dto.SizeMax.HasValue)
         {
-            query = query.Where(file => file.Size.Value <= dto.SizeMax.Value);
+            query = query.Where(file =>
+                EF.Property<long?>(file, "Content_Size") <= dto.SizeMax.Value);
         }
 
         if (dto.CreatedFromUtc.HasValue)
         {
-            var from = dto.CreatedFromUtc.Value.ToUniversalTime();
-            query = query.Where(file => file.CreatedUtc.Value >= from);
+            var fromIso = dto.CreatedFromUtc.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            query = query.Where(file => string.Compare(
+                EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
+                fromIso,
+                StringComparison.Ordinal) >= 0);
         }
 
         if (dto.CreatedToUtc.HasValue)
         {
-            var to = dto.CreatedToUtc.Value.ToUniversalTime();
-            query = query.Where(file => file.CreatedUtc.Value <= to);
+            var toIso = dto.CreatedToUtc.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            query = query.Where(file => string.Compare(
+                EF.Property<string>(file, nameof(FileEntity.CreatedUtc)),
+                toIso,
+                StringComparison.Ordinal) <= 0);
         }
 
         if (dto.ModifiedFromUtc.HasValue)
         {
-            var from = dto.ModifiedFromUtc.Value.ToUniversalTime();
-            query = query.Where(file => file.LastModifiedUtc.Value >= from);
+            var fromIso = dto.ModifiedFromUtc.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            query = query.Where(file => string.Compare(
+                EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
+                fromIso,
+                StringComparison.Ordinal) >= 0);
         }
 
         if (dto.ModifiedToUtc.HasValue)
         {
-            var to = dto.ModifiedToUtc.Value.ToUniversalTime();
-            query = query.Where(file => file.LastModifiedUtc.Value <= to);
+            var toIso = dto.ModifiedToUtc.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            query = query.Where(file => string.Compare(
+                EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)),
+                toIso,
+                StringComparison.Ordinal) <= 0);
         }
 
         if (dto.Version.HasValue)
@@ -157,11 +173,11 @@ internal static class QueryableFilters
                 return query.Where(file => file.Validity == null);
             case ValidityFilterMode.CurrentlyValid:
                 return query.Where(file => file.Validity != null
-                    && file.Validity.IssuedAt.Value <= referenceInstant
-                    && file.Validity.ValidUntil.Value >= referenceInstant);
+                    && EF.Property<DateTimeOffset?>(file, "Validity_IssuedAt") <= referenceInstant
+                    && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") >= referenceInstant);
             case ValidityFilterMode.Expired:
                 return query.Where(file => file.Validity != null
-                    && file.Validity.ValidUntil.Value < referenceInstant);
+                    && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") < referenceInstant);
             case ValidityFilterMode.ExpiringWithin:
                 if (!dto.ValidityFilterValue.HasValue)
                 {
@@ -171,8 +187,8 @@ internal static class QueryableFilters
                 {
                     var horizon = AddRelative(referenceInstant, dto.ValidityFilterUnit, dto.ValidityFilterValue.Value);
                     return query.Where(file => file.Validity != null
-                        && file.Validity.ValidUntil.Value >= referenceInstant
-                        && file.Validity.ValidUntil.Value <= horizon);
+                        && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") >= referenceInstant
+                        && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") <= horizon);
                 }
 
             case ValidityFilterMode.ExpiringRange:
@@ -190,8 +206,8 @@ internal static class QueryableFilters
                     }
 
                     return query.Where(file => file.Validity != null
-                        && file.Validity.ValidUntil.Value >= start
-                        && file.Validity.ValidUntil.Value <= end);
+                        && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") >= start
+                        && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") <= end);
                 }
             default:
                 return query;
@@ -221,7 +237,7 @@ internal static class QueryableFilters
 
         if (sort is null || sort.Count == 0)
         {
-            return query.OrderBy(file => EF.Property<string>(file, nameof(FileEntity.Name)))
+            return query.OrderBy(file => file.Name.Value)
                 .ThenBy(file => file.Id);
         }
 
@@ -237,17 +253,17 @@ internal static class QueryableFilters
 
             orderedQuery = spec.Field.ToLowerInvariant() switch
             {
-                "name" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.Name)), spec.Descending, ref ordered),
-                "mime" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.Mime)), spec.Descending, ref ordered),
-                "extension" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.Extension)), spec.Descending, ref ordered),
-                "size" => ApplyOrder(orderedQuery, file => EF.Property<long>(file, nameof(FileEntity.Size)), spec.Descending, ref ordered),
+                "name" => ApplyOrder(orderedQuery, file => file.Name.Value, spec.Descending, ref ordered),
+                "mime" => ApplyOrder(orderedQuery, file => file.Mime.Value, spec.Descending, ref ordered),
+                "extension" => ApplyOrder(orderedQuery, file => file.Extension.Value, spec.Descending, ref ordered),
+                "size" => ApplyOrder(orderedQuery, file => EF.Property<long?>(file, "Content_Size"), spec.Descending, ref ordered),
                 "createdutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.CreatedUtc)), spec.Descending, ref ordered),
                 "modifiedutc" => ApplyOrder(orderedQuery, file => EF.Property<string>(file, nameof(FileEntity.LastModifiedUtc)), spec.Descending, ref ordered),
                 "version" => ApplyOrder(orderedQuery, file => file.ContentRevision, spec.Descending, ref ordered),
                 "author" => ApplyOrder(orderedQuery, file => file.Author, spec.Descending, ref ordered),
                 "validuntil" => ApplyOrder(
                     orderedQuery,
-                    file => file.Validity == null ? (DateTimeOffset?)null : file.Validity.ValidUntil.Value,
+                    file => EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"),
                     spec.Descending,
                     ref ordered),
                 _ => orderedQuery,
@@ -256,7 +272,7 @@ internal static class QueryableFilters
 
         if (!ordered)
         {
-            orderedQuery = orderedQuery.OrderBy(file => EF.Property<string>(file, nameof(FileEntity.Name)));
+            orderedQuery = orderedQuery.OrderBy(file => file.Name.Value);
         }
 
         return ((IOrderedQueryable<FileEntity>)orderedQuery).ThenBy(file => file.Id);
