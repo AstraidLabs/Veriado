@@ -22,7 +22,10 @@ public sealed partial class FileSystemEntity
         ContentVersion contentVersion,
         bool isMissing,
         UtcTimestamp? missingSinceUtc,
-        UtcTimestamp? lastLinkedUtc)
+        UtcTimestamp? lastLinkedUtc,
+        string? currentFilePath = null,
+        string? originalFilePath = null,
+        FilePhysicalState physicalState = FilePhysicalState.Unknown)
     {
         var entity = new FileSystemEntity(id)
         {
@@ -38,9 +41,18 @@ public sealed partial class FileSystemEntity
             LastWriteUtc = lastWriteUtc,
             LastAccessUtc = lastAccessUtc,
             ContentVersion = contentVersion,
-            IsMissing = isMissing,
-            MissingSinceUtc = missingSinceUtc,
+            IsMissing = isMissing || physicalState == FilePhysicalState.Missing,
+            MissingSinceUtc = (isMissing || physicalState == FilePhysicalState.Missing) ? missingSinceUtc : null,
             LastLinkedUtc = lastLinkedUtc,
+            CurrentFilePath = currentFilePath ?? string.Empty,
+            OriginalFilePath = string.IsNullOrWhiteSpace(originalFilePath)
+                ? currentFilePath ?? string.Empty
+                : originalFilePath.Trim(),
+            PhysicalState = isMissing
+                ? FilePhysicalState.Missing
+                : physicalState == FilePhysicalState.Unknown
+                    ? FilePhysicalState.Healthy
+                    : physicalState,
         };
 
         return entity;

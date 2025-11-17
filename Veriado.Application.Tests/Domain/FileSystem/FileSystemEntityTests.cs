@@ -2,6 +2,7 @@ using System;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.FileSystem.Events;
 using Veriado.Domain.Metadata;
+using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 using Xunit;
 
@@ -68,7 +69,7 @@ public class FileSystemEntityTests
         entity.ClearDomainEvents();
 
         var firstDetection = UtcTimestamp.From(new DateTimeOffset(2024, 4, 1, 0, 0, 0, TimeSpan.Zero));
-        entity.MarkMissing(firstDetection);
+        entity.MarkMissing(new StaticClock(firstDetection.ToDateTimeOffset()));
 
         var evt = Assert.IsType<FileSystemMissingDetected>(Assert.Single(entity.DomainEvents));
         Assert.Equal(firstDetection, entity.MissingSinceUtc);
@@ -76,10 +77,20 @@ public class FileSystemEntityTests
         Assert.True(entity.IsMissing);
 
         var laterDetection = UtcTimestamp.From(new DateTimeOffset(2024, 4, 2, 0, 0, 0, TimeSpan.Zero));
-        entity.MarkMissing(laterDetection);
+        entity.MarkMissing(new StaticClock(laterDetection.ToDateTimeOffset()));
 
         Assert.Single(entity.DomainEvents);
         Assert.Equal(firstDetection, entity.MissingSinceUtc);
         Assert.True(entity.IsMissing);
     }
+}
+
+file class StaticClock : IClock
+{
+    public StaticClock(DateTimeOffset utcNow)
+    {
+        UtcNow = utcNow;
+    }
+
+    public DateTimeOffset UtcNow { get; }
 }
