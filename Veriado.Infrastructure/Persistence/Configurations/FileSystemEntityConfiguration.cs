@@ -1,3 +1,5 @@
+using Veriado.Domain.FileSystem;
+
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
 /// <summary>
@@ -78,10 +80,28 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
             .HasColumnType("INTEGER")
             .IsRequired();
 
+        // Legacy missing flags retained for compatibility alongside PhysicalState.
         builder.Property(entity => entity.MissingSinceUtc)
             .HasColumnName("missing_since_utc")
             .HasColumnType("TEXT")
             .HasConversion(Converters.NullableUtcTimestampToString);
+
+        builder.Property(entity => entity.CurrentFilePath)
+            .HasColumnName("current_file_path")
+            .HasColumnType("TEXT")
+            .HasMaxLength(2048);
+
+        builder.Property(entity => entity.OriginalFilePath)
+            .HasColumnName("original_file_path")
+            .HasColumnType("TEXT")
+            .HasMaxLength(2048);
+
+        builder.Property(entity => entity.PhysicalState)
+            .HasColumnName("physical_state")
+            .HasColumnType("INTEGER")
+            .HasConversion<int>()
+            .HasDefaultValue((int)FilePhysicalState.Unknown)
+            .IsRequired();
 
         builder.Property(entity => entity.ContentVersion)
             .HasColumnName("content_version")
@@ -111,6 +131,7 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
             .HasColumnName("last_linked_utc")
             .HasColumnType("TEXT")
             .HasConversion(Converters.NullableUtcTimestampToString);
+
 
         builder.Ignore(entity => entity.DomainEvents);
 
