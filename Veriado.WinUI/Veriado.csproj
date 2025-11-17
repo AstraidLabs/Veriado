@@ -28,6 +28,7 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="favicon.ico" />
     <Manifest Include="app.manifest" />
   </ItemGroup>
 
@@ -38,7 +39,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0"/>
+    <None Include="..\..\..\..\Desktop\pix3l_ai_Abstract_high-tech_vector_logo_for_a_corporate_DMS_s_3bc7159a-97e3-44d7-90e8-7eb36ebb4ff6_0.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.HeaderedControls" Version="8.2.250402" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.250402" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" Version="8.2.250402" />
@@ -63,5 +71,16 @@
     <PublishReadyToRun Condition="'$(Configuration)'!='Debug'">False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)'=='Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)'!='Debug'">False</PublishTrimmed>
+    <ApplicationIcon>favicon.ico</ApplicationIcon>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+    <PackageCertificateThumbprint>51C5563D2EF80F461170759EB4DF5B8240BF48C4</PackageCertificateThumbprint>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
+    <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <AppxBundle>Always</AppxBundle>
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+    <PackageIcon>pix3l_ai_Abstract_high-tech_vector_logo_for_a_corporate_DMS_s_3bc7159a-97e3-44d7-90e8-7eb36ebb4ff6_0.png</PackageIcon>
   </PropertyGroup>
 </Project>
