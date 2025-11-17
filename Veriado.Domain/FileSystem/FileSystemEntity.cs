@@ -31,7 +31,10 @@ public sealed partial class FileSystemEntity : AggregateRoot
         ContentVersion contentVersion,
         bool isMissing,
         UtcTimestamp? missingSinceUtc,
-        UtcTimestamp? lastLinkedUtc)
+        UtcTimestamp? lastLinkedUtc,
+        string? currentFilePath,
+        string? originalFilePath,
+        FilePhysicalState physicalState)
         : base(id)
     {
         Provider = provider;
@@ -46,8 +49,10 @@ public sealed partial class FileSystemEntity : AggregateRoot
         LastWriteUtc = lastWriteUtc;
         LastAccessUtc = lastAccessUtc;
         ContentVersion = contentVersion;
-        IsMissing = isMissing;
-        MissingSinceUtc = missingSinceUtc;
+        PhysicalState = NormalizePhysicalState(physicalState, isMissing);
+        InitializePaths(currentFilePath, originalFilePath);
+        IsMissing = PhysicalState == FilePhysicalState.Missing || isMissing;
+        MissingSinceUtc = IsMissing ? missingSinceUtc : null;
         LastLinkedUtc = lastLinkedUtc;
     }
 
@@ -127,6 +132,21 @@ public sealed partial class FileSystemEntity : AggregateRoot
     public UtcTimestamp? LastLinkedUtc { get; private set; }
 
     /// <summary>
+    /// Gets the currently observed physical path of the file on disk.
+    /// </summary>
+    public string CurrentFilePath { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Gets the original physical path observed during import.
+    /// </summary>
+    public string OriginalFilePath { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Gets the current physical health state of the file.
+    /// </summary>
+    public FilePhysicalState PhysicalState { get; private set; }
+
+    /// <summary>
     /// Creates a new file system entity from the supplied metadata.
     /// </summary>
     /// <param name="provider">The storage provider hosting the content.</param>
@@ -154,7 +174,10 @@ public sealed partial class FileSystemEntity : AggregateRoot
         UtcTimestamp createdUtc,
         UtcTimestamp lastWriteUtc,
         UtcTimestamp lastAccessUtc,
-        UtcTimestamp? lastLinkedUtc = null)
+        UtcTimestamp? lastLinkedUtc = null,
+        string? currentFilePath = null,
+        string? originalFilePath = null,
+        FilePhysicalState physicalState = FilePhysicalState.Healthy)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -175,7 +198,10 @@ public sealed partial class FileSystemEntity : AggregateRoot
             ContentVersion.Initial,
             isMissing: false,
             missingSinceUtc: null,
-            lastLinkedUtc);
+            lastLinkedUtc,
+            currentFilePath,
+            originalFilePath,
+            physicalState);
 
         entity.RaiseDomainEvent(new FileSystemContentChanged(
             entity.Id,
@@ -253,8 +279,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         Size = size;
         Mime = mime;
         IsEncrypted = isEncrypted;
-        IsMissing = false;
-        MissingSinceUtc = null;
+        SetPhysicalState(FilePhysicalState.ContentChanged);
         LastWriteUtc = whenUtc;
         LastAccessUtc = whenUtc;
         LastLinkedUtc = whenUtc;
@@ -360,15 +385,14 @@ public sealed partial class FileSystemEntity : AggregateRoot
     /// Marks the entity as missing from the underlying storage.
     /// </summary>
     /// <param name="whenUtc">The timestamp when the missing state was detected.</param>
-    public void MarkMissing(UtcTimestamp whenUtc)
+    private void MarkMissing(UtcTimestamp whenUtc)
     {
         if (IsMissing)
         {
             return;
         }
 
-        IsMissing = true;
-        MissingSinceUtc = whenUtc;
+        SetPhysicalState(FilePhysicalState.Missing, whenUtc);
 
         RaiseDomainEvent(new FileSystemMissingDetected(Id, Path, whenUtc, MissingSinceUtc));
     }
@@ -391,8 +415,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         }
 
         Path = normalized;
-        IsMissing = false;
-        MissingSinceUtc = null;
+        SetPhysicalState(FilePhysicalState.Healthy);
         LastLinkedUtc = whenUtc;
 
         RaiseDomainEvent(new FileSystemRehydrated(Id, Provider, normalized, wasMissing, previousMissingSince, whenUtc));
@@ -419,7 +442,10 @@ public sealed partial class FileSystemEntity : AggregateRoot
         ContentVersion contentVersion,
         bool isMissing,
         UtcTimestamp? missingSinceUtc,
-        UtcTimestamp? lastLinkedUtc)
+        UtcTimestamp? lastLinkedUtc,
+        string? currentFilePath = null,
+        string? originalFilePath = null,
+        FilePhysicalState physicalState = FilePhysicalState.Unknown)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -439,7 +465,10 @@ public sealed partial class FileSystemEntity : AggregateRoot
             contentVersion,
             isMissing,
             missingSinceUtc,
-            lastLinkedUtc);
+            lastLinkedUtc,
+            currentFilePath,
+            originalFilePath,
+            physicalState);
     }
 
     private static string? NormalizeOwnerSid(string? ownerSid)
@@ -450,5 +479,131 @@ public sealed partial class FileSystemEntity : AggregateRoot
         }
 
         return ownerSid.Trim();
+    }
+
+    private void InitializePaths(string? currentFilePath, string? originalFilePath)
+    {
+        if (!string.IsNullOrWhiteSpace(originalFilePath))
+        {
+            OriginalFilePath = originalFilePath.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentFilePath))
+        {
+            var normalized = currentFilePath.Trim();
+            CurrentFilePath = normalized;
+            if (string.IsNullOrWhiteSpace(OriginalFilePath))
+            {
+                OriginalFilePath = normalized;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(OriginalFilePath))
+        {
+            CurrentFilePath = OriginalFilePath;
+        }
+        else
+        {
+            CurrentFilePath = string.Empty;
+        }
+    }
+
+    private void SetPhysicalState(FilePhysicalState newState, UtcTimestamp? missingDetectedAt = null)
+    {
+        PhysicalState = newState;
+
+        if (newState == FilePhysicalState.Missing)
+        {
+            if (!IsMissing)
+            {
+                MissingSinceUtc = missingDetectedAt;
+            }
+            else if (MissingSinceUtc is null)
+            {
+                MissingSinceUtc = missingDetectedAt;
+            }
+
+            IsMissing = true;
+        }
+        else
+        {
+            IsMissing = false;
+            MissingSinceUtc = null;
+        }
+    }
+
+    private static FilePhysicalState NormalizePhysicalState(FilePhysicalState physicalState, bool isMissing)
+    {
+        if (isMissing)
+        {
+            return FilePhysicalState.Missing;
+        }
+
+        return physicalState == FilePhysicalState.Unknown
+            ? FilePhysicalState.Healthy
+            : physicalState;
+    }
+
+    public void UpdatePath(string newPath)
+    {
+        if (string.IsNullOrWhiteSpace(newPath))
+        {
+            throw new ArgumentException("Physical path must be provided.", nameof(newPath));
+        }
+
+        var normalized = newPath.Trim();
+        var pathChanged = !string.Equals(CurrentFilePath, normalized, StringComparison.Ordinal);
+
+        if (string.IsNullOrWhiteSpace(OriginalFilePath))
+        {
+            OriginalFilePath = normalized;
+        }
+
+        if (!pathChanged)
+        {
+            return;
+        }
+
+        CurrentFilePath = normalized;
+
+        if (PhysicalState != FilePhysicalState.Missing)
+        {
+            PhysicalState = FilePhysicalState.MovedOrRenamed;
+        }
+    }
+
+    public void MarkMissing(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        var whenUtc = UtcTimestamp.From(clock.UtcNow);
+        if (PhysicalState == FilePhysicalState.Missing)
+        {
+            return;
+        }
+
+        SetPhysicalState(FilePhysicalState.Missing, whenUtc);
+
+        RaiseDomainEvent(new FileSystemMissingDetected(Id, Path, whenUtc, MissingSinceUtc));
+    }
+
+    public void MarkHealthy()
+    {
+        if (PhysicalState == FilePhysicalState.Healthy && !IsMissing)
+        {
+            return;
+        }
+
+        SetPhysicalState(FilePhysicalState.Healthy);
+    }
+
+    public void MarkContentChanged()
+    {
+        SetPhysicalState(FilePhysicalState.ContentChanged);
+    }
+
+    public void MarkMovedOrRenamed(string newPath)
+    {
+        UpdatePath(newPath);
+        SetPhysicalState(FilePhysicalState.MovedOrRenamed);
     }
 }
