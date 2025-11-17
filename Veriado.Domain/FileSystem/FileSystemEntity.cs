@@ -51,8 +51,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         ContentVersion = contentVersion;
         PhysicalState = NormalizePhysicalState(physicalState, isMissing);
         InitializePaths(currentFilePath, originalFilePath);
-        IsMissing = PhysicalState == FilePhysicalState.Missing || isMissing;
-        MissingSinceUtc = IsMissing ? missingSinceUtc : null;
+        SetPhysicalState(PhysicalState, missingSinceUtc);
         LastLinkedUtc = lastLinkedUtc;
     }
 
@@ -119,6 +118,9 @@ public sealed partial class FileSystemEntity : AggregateRoot
     /// <summary>
     /// Gets a value indicating whether the content is currently missing.
     /// </summary>
+    /// <remarks>
+    /// Maintained for legacy compatibility and kept in sync with <see cref="PhysicalState"/>.
+    /// </remarks>
     public bool IsMissing { get; private set; }
 
     /// <summary>
