@@ -89,12 +89,12 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
         builder.Property(entity => entity.CurrentFilePath)
             .HasColumnName("current_file_path")
             .HasColumnType("TEXT")
-            .HasMaxLength(2048);
+            .HasMaxLength(1024);
 
         builder.Property(entity => entity.OriginalFilePath)
             .HasColumnName("original_file_path")
             .HasColumnType("TEXT")
-            .HasMaxLength(2048);
+            .HasMaxLength(1024);
 
         builder.Property(entity => entity.PhysicalState)
             .HasColumnName("physical_state")

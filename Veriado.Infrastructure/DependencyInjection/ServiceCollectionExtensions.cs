@@ -16,6 +16,7 @@ using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Events.Handlers;
 using Veriado.Infrastructure.Hosting;
+using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Import;
 using Veriado.Infrastructure.Idempotency;
 using Veriado.Infrastructure.Integrity;
@@ -139,6 +140,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOptions<AnalyzerOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Analyzer));
         services.AddSingleton<IOptions<SearchScoreOptions>>(sp => Options.Create(sp.GetRequiredService<SearchOptions>().Score));
 
+        var fileSystemHealthOptions = services.AddOptions<FileSystemHealthCheckOptions>();
+        if (configuration is not null)
+        {
+            fileSystemHealthOptions.Bind(configuration.GetSection("FileSystemHealthCheck"));
+        }
+        else
+        {
+            fileSystemHealthOptions.Configure(_ => { });
+        }
+
         services.AddSingleton<IAnalyzerFactory, AnalyzerFactory>();
 
         services.AddSingleton<IDomainEventDispatcher, DomainEventDispatcher>();
@@ -210,6 +221,7 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InfrastructureInitializationHostedService>());
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
+        services.AddHostedService<FileSystemHealthCheckWorker>();
 
         return services;
     }

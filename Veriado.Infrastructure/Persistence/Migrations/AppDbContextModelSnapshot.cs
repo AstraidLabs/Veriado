@@ -36,6 +36,11 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_utc");
 
+                    b.Property<string>("CurrentFilePath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("current_file_path");
+
                     b.Property<string>("Hash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -74,6 +79,11 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("missing_since_utc");
 
+                    b.Property<string>("OriginalFilePath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("original_file_path");
+
                     b.Property<string>("OwnerSid")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT")
@@ -83,6 +93,12 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("path");
+
+                    b.Property<int>("PhysicalState")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("physical_state")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("Provider")
                         .HasColumnType("INTEGER")
