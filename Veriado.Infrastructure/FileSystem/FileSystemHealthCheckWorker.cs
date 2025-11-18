@@ -20,18 +20,15 @@ namespace Veriado.Infrastructure.FileSystem;
 internal sealed class FileSystemHealthCheckWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IFilePathResolver _pathResolver;
     private readonly FileSystemHealthCheckOptions _options;
     private readonly ILogger<FileSystemHealthCheckWorker> _logger;
 
     public FileSystemHealthCheckWorker(
         IServiceScopeFactory scopeFactory,
-        IFilePathResolver pathResolver,
         IOptions<FileSystemHealthCheckOptions> options,
         ILogger<FileSystemHealthCheckWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
@@ -78,6 +75,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<IClock>();
         var hashCalculator = scope.ServiceProvider.GetRequiredService<IFileHashCalculator>();
+        var pathResolver = scope.ServiceProvider.GetRequiredService<IFilePathResolver>();
 
         var batchSize = _options.BatchSize;
         var lastId = Guid.Empty;
@@ -97,7 +95,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
                 break;
             }
 
-            await CheckBatchAsync(batch, dbContext, clock, hashCalculator, cancellationToken).ConfigureAwait(false);
+            await CheckBatchAsync(batch, dbContext, clock, hashCalculator, pathResolver, cancellationToken)
+                .ConfigureAwait(false);
 
             lastId = batch[^1].Id;
         }
@@ -108,6 +107,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         AppDbContext dbContext,
         IClock clock,
         IFileHashCalculator hashCalculator,
+        IFilePathResolver pathResolver,
         CancellationToken cancellationToken)
     {
         if (_options.EnableParallelChecks)
@@ -121,7 +121,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
 
             await Parallel.ForEachAsync(batch, parallelOptions, async (file, ct) =>
             {
-                var result = await EvaluateFileAsync(file, hashCalculator, ct).ConfigureAwait(false);
+                var result = await EvaluateFileAsync(file, hashCalculator, pathResolver, ct).ConfigureAwait(false);
                 results.Add(result);
             }).ConfigureAwait(false);
 
@@ -135,7 +135,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         {
             foreach (var file in batch)
             {
-                var result = await EvaluateFileAsync(file, hashCalculator, cancellationToken).ConfigureAwait(false);
+                var result = await EvaluateFileAsync(file, hashCalculator, pathResolver, cancellationToken)
+                    .ConfigureAwait(false);
                 ApplyResult(file, result, clock);
             }
         }
@@ -147,9 +148,10 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     private async Task<FileEvaluationResult> EvaluateFileAsync(
         FileSystemEntity file,
         IFileHashCalculator hashCalculator,
+        IFilePathResolver pathResolver,
         CancellationToken cancellationToken)
     {
-        var fullPath = _pathResolver.GetFullPath(file);
+        var fullPath = pathResolver.GetFullPath(file);
         if (!File.Exists(fullPath))
         {
             return FileEvaluationResult.Missing(file.Id);
