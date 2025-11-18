@@ -196,6 +196,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddSingleton<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddScoped<IFilePathResolver, FilePathResolver>();
+        services.AddSingleton<IFileSystemMonitoringService, FileSystemMonitoringService>();
 
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();
@@ -223,6 +224,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<IdempotencyCleanupWorker>();
         services.AddHostedService<IndexAuditBackgroundService>();
         services.AddHostedService<FileSystemHealthCheckWorker>();
+        services.AddHostedService<FileSystemMonitoringHostedService>();
 
         return services;
     }
