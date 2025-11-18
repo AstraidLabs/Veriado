@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Appl.Files;
 using Veriado.Contracts.Files;
+using Veriado.Infrastructure.FileSystem;
 using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
@@ -26,6 +27,8 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IHotStateService _hotStateService;
     private readonly IHealthService _healthService;
     private readonly IFileService _fileService;
+    private readonly IPickerService _pickerService;
+    private readonly IFileHashCalculator _fileHashCalculator;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
@@ -52,6 +55,8 @@ public partial class FilesPageViewModel : ViewModelBase
         IHotStateService hotStateService,
         IHealthService healthService,
         IFileService fileService,
+        IPickerService pickerService,
+        IFileHashCalculator fileHashCalculator,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
         IServerClock serverClock,
@@ -65,6 +70,8 @@ public partial class FilesPageViewModel : ViewModelBase
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
+        _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
+        _fileHashCalculator = fileHashCalculator ?? throw new ArgumentNullException(nameof(fileHashCalculator));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
@@ -78,6 +85,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync, CanOpenDetail);
         _selectFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteSelectFileAsync);
         _deleteFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteDeleteFileAsync, CanDeleteFile);
+        UpdateFileCommand = new AsyncRelayCommand<FileListItemModel?>(UpdateFileAsync);
 
         _suppressTargetPageChange = true;
         TargetPage = 1;
@@ -107,6 +115,8 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand<FileSummaryDto?> SelectFileCommand => _selectFileCommand;
 
     public IAsyncRelayCommand<FileSummaryDto?> DeleteFileCommand => _deleteFileCommand;
+
+    public IAsyncRelayCommand<FileListItemModel?> UpdateFileCommand { get; }
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
@@ -513,6 +523,61 @@ public partial class FilesPageViewModel : ViewModelBase
 
         _nextPageCommand.NotifyCanExecuteChanged();
         _previousPageCommand.NotifyCanExecuteChanged();
+    }
+
+    private async Task UpdateFileAsync(FileListItemModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        string[]? selection;
+        try
+        {
+            selection = await _pickerService
+                .PickFilesAsync(
+                    string.IsNullOrWhiteSpace(item.Dto.Extension) ? null : new[] { item.Dto.Extension },
+                    multiple: false)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var message = _exceptionHandler.Handle(ex);
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                StatusService.Error(message);
+            }
+
+            return;
+        }
+
+        var filePath = selection?.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return;
+        }
+
+        await SafeExecuteAsync(
+            async cancellationToken =>
+            {
+                var hash = await _fileHashCalculator
+                    .ComputeSha256Async(filePath, cancellationToken)
+                    .ConfigureAwait(false);
+
+                // TODO: Call backend command to reattach/refresh the physical file using filePath and hash.Value.
+                // The backend should validate the hash, update the stored path, and return an updated FileSummaryDto.
+
+                await Dispatcher.Enqueue(() =>
+                {
+                    item.UpdatePhysicalStatus("Healthy", null);
+                }).ConfigureAwait(false);
+            },
+            "Aktualizace souboru...")
+            .ConfigureAwait(false);
+
+        // TODO: Replace with incremental model update once the backend returns the refreshed DTO.
+        await RefreshCommand.ExecuteAsync(null).ConfigureAwait(false);
     }
 
     private static string BuildIndexingWarningMessage(int staleDocuments)
