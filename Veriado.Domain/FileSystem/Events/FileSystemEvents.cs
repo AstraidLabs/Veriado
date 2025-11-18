@@ -15,7 +15,7 @@ public sealed class FileSystemContentChanged : IDomainEvent
     public FileSystemContentChanged(
         Guid fileSystemId,
         StorageProvider provider,
-        StoragePath path,
+        RelativeFilePath path,
         FileHash hash,
         ByteSize size,
         MimeType mime,
@@ -46,9 +46,9 @@ public sealed class FileSystemContentChanged : IDomainEvent
     public StorageProvider Provider { get; }
 
     /// <summary>
-    /// Gets the path referencing the content.
+    /// Gets the relative path referencing the content within the storage root.
     /// </summary>
-    public StoragePath Path { get; }
+    public RelativeFilePath Path { get; }
 
     /// <summary>
     /// Gets the hash of the content.
@@ -93,8 +93,8 @@ public sealed class FileSystemMoved : IDomainEvent
     public FileSystemMoved(
         Guid fileSystemId,
         StorageProvider provider,
-        StoragePath previousPath,
-        StoragePath newPath,
+        RelativeFilePath previousPath,
+        RelativeFilePath newPath,
         UtcTimestamp occurredUtc)
     {
         FileSystemId = fileSystemId;
@@ -116,14 +116,14 @@ public sealed class FileSystemMoved : IDomainEvent
     public StorageProvider Provider { get; }
 
     /// <summary>
-    /// Gets the previous storage path.
+    /// Gets the previous relative storage path.
     /// </summary>
-    public StoragePath PreviousPath { get; }
+    public RelativeFilePath PreviousPath { get; }
 
     /// <summary>
-    /// Gets the new storage path.
+    /// Gets the new relative storage path.
     /// </summary>
-    public StoragePath NewPath { get; }
+    public RelativeFilePath NewPath { get; }
 
     /// <inheritdoc />
     public Guid EventId { get; }
@@ -258,7 +258,7 @@ public sealed class FileSystemMissingDetected : IDomainEvent
     /// </summary>
     public FileSystemMissingDetected(
         Guid fileSystemId,
-        StoragePath path,
+        RelativeFilePath path,
         UtcTimestamp occurredUtc,
         UtcTimestamp? missingSinceUtc)
     {
@@ -275,9 +275,9 @@ public sealed class FileSystemMissingDetected : IDomainEvent
     public Guid FileSystemId { get; }
 
     /// <summary>
-    /// Gets the path that was probed.
+    /// Gets the relative path that was probed.
     /// </summary>
-    public StoragePath Path { get; }
+    public RelativeFilePath Path { get; }
 
     /// <summary>
     /// Gets the timestamp when the content was first observed missing, if known.
@@ -302,7 +302,7 @@ public sealed class FileSystemRehydrated : IDomainEvent
     public FileSystemRehydrated(
         Guid fileSystemId,
         StorageProvider provider,
-        StoragePath path,
+        RelativeFilePath path,
         bool wasMissing,
         UtcTimestamp? missingSinceUtc,
         UtcTimestamp occurredUtc)
@@ -327,9 +327,9 @@ public sealed class FileSystemRehydrated : IDomainEvent
     public StorageProvider Provider { get; }
 
     /// <summary>
-    /// Gets the path referencing the rehydrated content.
+    /// Gets the relative path referencing the rehydrated content.
     /// </summary>
-    public StoragePath Path { get; }
+    public RelativeFilePath Path { get; }
 
     /// <summary>
     /// Gets a value indicating whether the content had been missing prior to rehydration.

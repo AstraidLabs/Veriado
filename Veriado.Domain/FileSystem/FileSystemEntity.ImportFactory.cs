@@ -9,7 +9,7 @@ public sealed partial class FileSystemEntity
     internal static FileSystemEntity CreateForImport(
         Guid id,
         StorageProvider provider,
-        StoragePath path,
+        RelativeFilePath relativePath,
         FileHash hash,
         ByteSize size,
         MimeType mime,
@@ -30,7 +30,7 @@ public sealed partial class FileSystemEntity
         var entity = new FileSystemEntity(id)
         {
             Provider = provider,
-            Path = path,
+            RelativePath = relativePath,
             Hash = hash,
             Size = size,
             Mime = mime,
