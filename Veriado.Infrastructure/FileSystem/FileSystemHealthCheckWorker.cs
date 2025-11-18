@@ -1,8 +1,8 @@
 using System;
-using System.Buffers;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -20,163 +20,230 @@ namespace Veriado.Infrastructure.FileSystem;
 internal sealed class FileSystemHealthCheckWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IClock _clock;
-    private readonly ILogger<FileSystemHealthCheckWorker> _logger;
+    private readonly IFilePathResolver _pathResolver;
     private readonly FileSystemHealthCheckOptions _options;
+    private readonly ILogger<FileSystemHealthCheckWorker> _logger;
 
     public FileSystemHealthCheckWorker(
         IServiceScopeFactory scopeFactory,
-        IClock clock,
+        IFilePathResolver pathResolver,
         IOptions<FileSystemHealthCheckOptions> options,
         ILogger<FileSystemHealthCheckWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var interval = _options.Interval;
+
         _logger.LogInformation(
             "{WorkerName} started with interval {Interval} and batch size {BatchSize}.",
             nameof(FileSystemHealthCheckWorker),
-            _options.Interval,
+            interval,
             _options.BatchSize);
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                await RunHealthCheckAsync(stoppingToken).ConfigureAwait(false);
-                await Task.Delay(_options.Interval, stoppingToken).ConfigureAwait(false);
+                await RunHealthCheckIterationAsync(stoppingToken).ConfigureAwait(false);
             }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("{WorkerName} is stopping (canceled).", nameof(FileSystemHealthCheckWorker));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error in {WorkerName}.", nameof(FileSystemHealthCheckWorker));
-        }
-        finally
-        {
-            _logger.LogInformation("{WorkerName} stopped.", nameof(FileSystemHealthCheckWorker));
+            catch (TaskCanceledException)
+            {
+                // shutting down
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "File system health check iteration failed.");
+            }
+
+            try
+            {
+                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+            }
+            catch (TaskCanceledException)
+            {
+                // shutting down
+            }
         }
     }
 
-    private async Task RunHealthCheckAsync(CancellationToken cancellationToken)
+    private async Task RunHealthCheckIterationAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var clock = scope.ServiceProvider.GetRequiredService<IClock>();
+        var hashCalculator = scope.ServiceProvider.GetRequiredService<IFileHashCalculator>();
 
-        var offset = 0;
+        var batchSize = _options.BatchSize;
+        var lastId = Guid.Empty;
+
         while (!cancellationToken.IsCancellationRequested)
         {
             var batch = await dbContext.FileSystems
                 .AsTracking()
+                .Where(file => file.Id.CompareTo(lastId) > 0)
                 .OrderBy(file => file.Id)
-                .Skip(offset)
-                .Take(_options.BatchSize)
+                .Take(batchSize)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
             if (batch.Count == 0)
             {
-                return;
+                break;
             }
 
-            foreach (var file in batch)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await EvaluateFileAsync(file, cancellationToken).ConfigureAwait(false);
-            }
+            await CheckBatchAsync(batch, dbContext, clock, hashCalculator, cancellationToken).ConfigureAwait(false);
 
-            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            dbContext.ChangeTracker.Clear();
-
-            offset += batch.Count;
+            lastId = batch[^1].Id;
         }
     }
 
-    private async Task EvaluateFileAsync(FileSystemEntity file, CancellationToken cancellationToken)
+    private async Task CheckBatchAsync(
+        List<FileSystemEntity> batch,
+        AppDbContext dbContext,
+        IClock clock,
+        IFileHashCalculator hashCalculator,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(file.CurrentFilePath))
+        if (_options.EnableParallelChecks)
         {
-            _logger.LogDebug("Skipping file system entity {FileId} because no current path is set.", file.Id);
-            return;
+            var results = new ConcurrentBag<FileEvaluationResult>();
+            var parallelOptions = new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = Math.Max(1, _options.MaxDegreeOfParallelism),
+            };
+
+            await Parallel.ForEachAsync(batch, parallelOptions, async (file, ct) =>
+            {
+                var result = await EvaluateFileAsync(file, hashCalculator, ct).ConfigureAwait(false);
+                results.Add(result);
+            }).ConfigureAwait(false);
+
+            var fileMap = batch.ToDictionary(f => f.Id);
+            foreach (var result in results.OrderBy(r => r.Id))
+            {
+                ApplyResult(fileMap[result.Id], result, clock);
+            }
+        }
+        else
+        {
+            foreach (var file in batch)
+            {
+                var result = await EvaluateFileAsync(file, hashCalculator, cancellationToken).ConfigureAwait(false);
+                ApplyResult(file, result, clock);
+            }
         }
 
-        var info = new FileInfo(file.CurrentFilePath);
-        if (!info.Exists)
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        dbContext.ChangeTracker.Clear();
+    }
+
+    private async Task<FileEvaluationResult> EvaluateFileAsync(
+        FileSystemEntity file,
+        IFileHashCalculator hashCalculator,
+        CancellationToken cancellationToken)
+    {
+        var fullPath = _pathResolver.GetFullPath(file);
+        if (!File.Exists(fullPath))
         {
-            file.MarkMissing(_clock);
-            return;
+            return FileEvaluationResult.Missing(file.Id);
         }
 
+        var info = new FileInfo(fullPath);
         var size = ByteSize.From(info.Length);
         var created = UtcTimestamp.From(info.CreationTimeUtc);
         var lastWrite = UtcTimestamp.From(info.LastWriteTimeUtc);
         var lastAccess = UtcTimestamp.From(info.LastAccessTimeUtc);
 
-        var sizeChanged = file.Size != size;
-        var timestampsChanged = file.CreatedUtc != created
-            || file.LastWriteUtc != lastWrite
-            || file.LastAccessUtc != lastAccess;
+        var sizeChanged = size != file.Size;
+        var timestampsChanged = file.CreatedUtc != created || file.LastWriteUtc != lastWrite || file.LastAccessUtc != lastAccess;
 
         if (!sizeChanged && !timestampsChanged)
         {
-            file.MarkHealthy();
-            return;
+            return FileEvaluationResult.Unchanged(file.Id, size, created, lastWrite, lastAccess, file.Hash);
         }
 
-        var hash = await ComputeHashAsync(info.FullName, cancellationToken).ConfigureAwait(false);
+        var hash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
         if (hash == file.Hash)
         {
-            file.UpdateTimestamps(created, lastWrite, lastAccess, UtcTimestamp.From(_clock.UtcNow));
-            file.MarkHealthy();
-            return;
+            return FileEvaluationResult.MetadataChanged(file.Id, size, created, lastWrite, lastAccess, hash);
         }
 
-        file.ReplaceContent(file.RelativePath, hash, size, file.Mime, file.IsEncrypted, lastWrite);
-        file.UpdateTimestamps(created, lastWrite, lastAccess, UtcTimestamp.From(_clock.UtcNow));
-        file.MarkContentChanged();
+        return FileEvaluationResult.ContentChanged(file.Id, size, created, lastWrite, lastAccess, hash);
     }
 
-    private static async Task<FileHash> ComputeHashAsync(string filePath, CancellationToken cancellationToken)
+    private static void ApplyResult(FileSystemEntity file, FileEvaluationResult result, IClock clock)
     {
-        await using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite,
-            81920,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = ArrayPool<byte>.Shared.Rent(81920);
-
-        try
+        switch (result.Outcome)
         {
-            while (true)
-            {
-                var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
-                    .ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-
-                hash.AppendData(buffer, 0, read);
-            }
+            case FileCheckOutcome.Missing:
+                file.MarkMissing(clock);
+                return;
+            case FileCheckOutcome.Unchanged:
+                file.MarkHealthy();
+                return;
+            case FileCheckOutcome.MetadataChanged:
+                file.UpdateTimestamps(result.Created, result.LastWrite, result.LastAccess, UtcTimestamp.From(clock.UtcNow));
+                file.MarkHealthy();
+                return;
+            case FileCheckOutcome.ContentChanged:
+                file.ReplaceContent(file.RelativePath, result.Hash, result.Size, file.Mime, file.IsEncrypted, result.LastWrite);
+                file.UpdateTimestamps(result.Created, result.LastWrite, result.LastAccess, UtcTimestamp.From(clock.UtcNow));
+                file.MarkContentChanged();
+                return;
+            default:
+                throw new InvalidOperationException($"Unsupported file check outcome '{result.Outcome}'.");
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+    }
 
-        var hex = Convert.ToHexString(hash.GetHashAndReset());
-        return FileHash.From(hex);
+    private enum FileCheckOutcome
+    {
+        Missing,
+        Unchanged,
+        MetadataChanged,
+        ContentChanged,
+    }
+
+    private sealed record FileEvaluationResult(
+        Guid Id,
+        FileCheckOutcome Outcome,
+        ByteSize Size,
+        UtcTimestamp Created,
+        UtcTimestamp LastWrite,
+        UtcTimestamp LastAccess,
+        FileHash Hash)
+    {
+        public static FileEvaluationResult Missing(Guid id) =>
+            new(id, FileCheckOutcome.Missing, default, default, default, default, default);
+
+        public static FileEvaluationResult Unchanged(
+            Guid id,
+            ByteSize size,
+            UtcTimestamp created,
+            UtcTimestamp lastWrite,
+            UtcTimestamp lastAccess,
+            FileHash hash) => new(id, FileCheckOutcome.Unchanged, size, created, lastWrite, lastAccess, hash);
+
+        public static FileEvaluationResult MetadataChanged(
+            Guid id,
+            ByteSize size,
+            UtcTimestamp created,
+            UtcTimestamp lastWrite,
+            UtcTimestamp lastAccess,
+            FileHash hash) => new(id, FileCheckOutcome.MetadataChanged, size, created, lastWrite, lastAccess, hash);
+
+        public static FileEvaluationResult ContentChanged(
+            Guid id,
+            ByteSize size,
+            UtcTimestamp created,
+            UtcTimestamp lastWrite,
+            UtcTimestamp lastAccess,
+            FileHash hash) => new(id, FileCheckOutcome.ContentChanged, size, created, lastWrite, lastAccess, hash);
     }
 }
