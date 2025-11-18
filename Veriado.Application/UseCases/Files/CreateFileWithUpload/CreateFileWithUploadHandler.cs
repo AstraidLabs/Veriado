@@ -1,4 +1,5 @@
 using Veriado.Appl.Abstractions;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Appl.UseCases.Files.CreateFileWithUpload;
 
@@ -63,9 +64,10 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
             }
 
             var createdAt = CurrentTimestamp();
+            var relativePath = RelativeFilePath.From(storageResult.Path.Value);
             var fileSystem = FileSystemEntity.CreateNew(
                 storageResult.Provider,
-                storageResult.Path,
+                relativePath,
                 storageResult.Hash,
                 storageResult.Size,
                 storageResult.Mime,
