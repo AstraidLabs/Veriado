@@ -590,7 +590,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
 
         SetPhysicalState(FilePhysicalState.Missing, whenUtc);
 
-        RaiseDomainEvent(new FileSystemMissingDetected(Id, Path, whenUtc, MissingSinceUtc));
+        RaiseDomainEvent(new FileSystemMissingDetected(Id, RelativePath, whenUtc, MissingSinceUtc));
     }
 
     public void MarkHealthy()
