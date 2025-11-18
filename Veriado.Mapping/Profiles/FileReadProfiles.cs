@@ -66,7 +66,15 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.PhysicalState, opt =>
                 opt.MapFrom(static src => src.FileSystem != null ? src.FileSystem.PhysicalState.ToString() : null))
             .ForMember(dest => dest.PhysicalStatusMessage, opt =>
-                opt.MapFrom(static src => GetPhysicalStatusMessage(src.FileSystem?.PhysicalState)))
+                opt.MapFrom(static src => src.FileSystem != null
+                    ? src.FileSystem.PhysicalState switch
+                    {
+                        FilePhysicalState.Missing => "Soubor byl smazán z disku nebo není dostupný.",
+                        FilePhysicalState.MovedOrRenamed => "Soubor byl přejmenován nebo přesunut.",
+                        FilePhysicalState.ContentChanged => "Soubor byl změněn mimo aplikaci.",
+                        _ => null,
+                    }
+                    : null))
             .ForMember(dest => dest.IsIndexStale, ConfigureSearchIndexMember<FileSummaryDto, bool>(static state => state.IsStale))
             .ForMember(dest => dest.LastIndexedUtc, ConfigureSearchIndexMember<FileSummaryDto, DateTimeOffset?>(static state => state.LastIndexedUtc))
             .ForMember(dest => dest.IndexedTitle, ConfigureSearchIndexMember<FileSummaryDto, string?>(static state => state.IndexedTitle))
