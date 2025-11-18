@@ -35,6 +35,9 @@ public sealed partial class FileListItemModel : ObservableObject
         ValidTo = to;
         _validityThresholds = thresholds;
         Validity = new ValidityInfo(ValidFrom, ValidTo, referenceTime, _validityThresholds);
+
+        PhysicalState = dto.PhysicalState;
+        PhysicalStatusMessage = dto.PhysicalStatusMessage;
     }
 
     public FileSummaryDto Dto { get; }
@@ -51,6 +54,16 @@ public sealed partial class FileListItemModel : ObservableObject
         private set => SetProperty(ref _validity, value);
     }
 
+    [ObservableProperty]
+    private string? physicalState;
+
+    [ObservableProperty]
+    private string? physicalStatusMessage;
+
+    public bool HasPhysicalIssue => !string.IsNullOrWhiteSpace(PhysicalStatusMessage);
+
+    public bool IsHealthy => string.Equals(PhysicalState, "Healthy", StringComparison.OrdinalIgnoreCase);
+
     public void RecomputeValidity(DateTimeOffset referenceTime, ValidityThresholds? thresholds = null)
     {
         if (thresholds.HasValue)
@@ -59,5 +72,21 @@ public sealed partial class FileListItemModel : ObservableObject
         }
 
         Validity = new ValidityInfo(ValidFrom, ValidTo, referenceTime, _validityThresholds);
+    }
+
+    public void UpdatePhysicalStatus(string? newState, string? statusMessage)
+    {
+        PhysicalState = newState;
+        PhysicalStatusMessage = statusMessage;
+    }
+
+    partial void OnPhysicalStateChanged(string? value)
+    {
+        OnPropertyChanged(nameof(IsHealthy));
+    }
+
+    partial void OnPhysicalStatusMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasPhysicalIssue));
     }
 }

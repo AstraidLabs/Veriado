@@ -167,6 +167,12 @@
                                             <TextBlock
                                                 Text="{x:Bind Dto.Size, Converter={StaticResource SizeToHumanConverter}}"
                                                 FontSize="12" />
+                                            <TextBlock
+                                                Text="{x:Bind PhysicalStatusMessage, Mode=OneWay}"
+                                                FontSize="12"
+                                                Foreground="Red"
+                                                TextWrapping="Wrap"
+                                                Visibility="{x:Bind HasPhysicalIssue, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         </StackPanel>
                                     </Grid>
 
@@ -186,6 +192,11 @@
                                             Content="Smazat"
                                             Command="{Binding DataContext.DeleteFileCommand, ElementName=PageRoot}"
                                             CommandParameter="{x:Bind Dto}" />
+                                        <Button
+                                            Content="Aktualizovat soubor"
+                                            Command="{Binding DataContext.UpdateFileCommand, ElementName=PageRoot}"
+                                            CommandParameter="{x:Bind}"
+                                            Visibility="{x:Bind HasPhysicalIssue, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
