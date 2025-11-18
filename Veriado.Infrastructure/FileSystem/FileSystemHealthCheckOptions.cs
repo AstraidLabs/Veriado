@@ -16,4 +16,14 @@ public sealed class FileSystemHealthCheckOptions
     /// Gets or sets the number of files processed per batch.
     /// </summary>
     public int BatchSize { get; set; } = 200;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether file checks should run in parallel.
+    /// </summary>
+    public bool EnableParallelChecks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum degree of parallelism when parallel checks are enabled.
+    /// </summary>
+    public int MaxDegreeOfParallelism { get; set; } = 4;
 }
