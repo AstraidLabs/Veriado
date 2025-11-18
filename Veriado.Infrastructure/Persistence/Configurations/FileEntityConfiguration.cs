@@ -132,7 +132,7 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
         builder.HasIndex(file => file.Mime).HasDatabaseName("idx_files_mime");
         builder.HasIndex(file => file.FileSystemId).HasDatabaseName("ux_files_filesystem_id").IsUnique();
 
-        builder.HasOne<FileSystemEntity>()
+        builder.HasOne(file => file.FileSystem)
             .WithMany()
             .HasForeignKey(file => file.FileSystemId)
             .HasPrincipalKey(entity => entity.Id)

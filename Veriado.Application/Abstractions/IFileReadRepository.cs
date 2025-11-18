@@ -23,7 +23,8 @@ public sealed record FileListItemReadModel(
     bool IsReadOnly,
     DateTimeOffset CreatedUtc,
     DateTimeOffset LastModifiedUtc,
-    DateTimeOffset? ValidUntilUtc);
+    DateTimeOffset? ValidUntilUtc,
+    FilePhysicalState PhysicalState);
 
 public sealed record FileDocumentValidityReadModel(
     DateTimeOffset IssuedAtUtc,
@@ -44,4 +45,5 @@ public sealed record FileDetailReadModel(
     DateTimeOffset CreatedUtc,
     DateTimeOffset LastModifiedUtc,
     FileDocumentValidityReadModel? Validity,
-    FileSystemMetadata SystemMetadata);
+    FileSystemMetadata SystemMetadata,
+    FilePhysicalState PhysicalState);

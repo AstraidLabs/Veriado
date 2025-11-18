@@ -1,4 +1,5 @@
 using Veriado.Appl.Abstractions;
+using Veriado.Domain.FileSystem;
 using Veriado.Domain.Files;
 
 namespace Veriado.Mapping.Profiles;
@@ -62,6 +63,10 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.IsReadOnly, opt => opt.MapFrom(static src => src.IsReadOnly))
             .ForMember(dest => dest.Version, opt => opt.MapFrom(static src => src.ContentRevision))
             .ForMember(dest => dest.Validity, opt => opt.MapFrom(static src => src.Validity))
+            .ForMember(dest => dest.PhysicalState, opt =>
+                opt.MapFrom(static src => src.FileSystem != null ? src.FileSystem.PhysicalState.ToString() : null))
+            .ForMember(dest => dest.PhysicalStatusMessage, opt =>
+                opt.MapFrom(static src => GetPhysicalStatusMessage(src.FileSystem?.PhysicalState)))
             .ForMember(dest => dest.IsIndexStale, ConfigureSearchIndexMember<FileSummaryDto, bool>(static state => state.IsStale))
             .ForMember(dest => dest.LastIndexedUtc, ConfigureSearchIndexMember<FileSummaryDto, DateTimeOffset?>(static state => state.LastIndexedUtc))
             .ForMember(dest => dest.IndexedTitle, ConfigureSearchIndexMember<FileSummaryDto, string?>(static state => state.IndexedTitle))
@@ -98,7 +103,13 @@ public sealed class FileReadProfiles : Profile
             .ForCtorParam(nameof(FileValidityDto.HasPhysicalCopy), opt => opt.MapFrom(static src => src.HasPhysicalCopy))
             .ForCtorParam(nameof(FileValidityDto.HasElectronicCopy), opt => opt.MapFrom(static src => src.HasElectronicCopy));
 
-        CreateMap<FileListItemReadModel, FileListItemDto>();
+        CreateMap<FileListItemReadModel, FileListItemDto>()
+            .ForCtorParam(
+                nameof(FileListItemDto.PhysicalState),
+                opt => opt.MapFrom(static src => src.PhysicalState.ToString()))
+            .ForCtorParam(
+                nameof(FileListItemDto.PhysicalStatusMessage),
+                opt => opt.MapFrom(static src => GetPhysicalStatusMessage(src.PhysicalState)));
 
         CreateMap<FileDetailReadModel, FileDetailDto>()
             .ForMember(dest => dest.Name, opt => opt.MapFrom(static src => src.Name))
@@ -127,6 +138,22 @@ public sealed class FileReadProfiles : Profile
         {
             opt.PreCondition(static src => src.SearchIndex is not null);
             opt.MapFrom(src => selector(src.SearchIndex!));
+        };
+    }
+
+    private static string? GetPhysicalStatusMessage(FilePhysicalState? state)
+    {
+        if (state is null)
+        {
+            return null;
+        }
+
+        return state.Value switch
+        {
+            FilePhysicalState.Missing => "Soubor byl smazán z disku nebo není dostupný.",
+            FilePhysicalState.MovedOrRenamed => "Soubor byl přejmenován nebo přesunut.",
+            FilePhysicalState.ContentChanged => "Soubor byl změněn mimo aplikaci.",
+            _ => null,
         };
     }
 }
