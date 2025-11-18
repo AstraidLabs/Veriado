@@ -24,11 +24,18 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
             .HasConversion<int>()
             .IsRequired();
 
-        builder.Property(entity => entity.Path)
+        builder.Property(entity => entity.RelativePath)
+            .HasColumnName("relative_path")
+            .HasColumnType("TEXT")
+            .HasMaxLength(1024)
+            .HasConversion(Converters.RelativeFilePathToString)
+            .IsRequired();
+
+        // Legacy absolute path retained for schema compatibility; domain now uses RelativePath exclusively.
+        builder.Property<string?>("Path")
             .HasColumnName("path")
             .HasColumnType("TEXT")
-            .HasConversion(Converters.StoragePathToString)
-            .IsRequired();
+            .HasMaxLength(1024);
 
         builder.Property(entity => entity.Hash)
             .HasColumnName("hash")
@@ -135,8 +142,8 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
 
         builder.Ignore(entity => entity.DomainEvents);
 
-        builder.HasIndex(entity => entity.Path)
-            .HasDatabaseName("ux_filesystem_entities_path")
+        builder.HasIndex(entity => entity.RelativePath)
+            .HasDatabaseName("ux_filesystem_entities_relative_path")
             .IsUnique();
 
         builder.HasIndex(entity => entity.Hash)

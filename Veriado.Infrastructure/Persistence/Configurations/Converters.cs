@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Veriado.Domain.Metadata;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Infrastructure.Persistence.Configurations;
 
@@ -41,6 +42,10 @@ internal static class Converters
     public static readonly ValueConverter<StoragePath, string> StoragePathToString = new(
         path => path.Value,
         value => StoragePath.From(value));
+
+    public static readonly ValueConverter<RelativeFilePath, string> RelativeFilePathToString = new(
+        path => path.Value,
+        value => RelativeFilePath.From(value));
 
     public static readonly ValueConverter<ContentVersion, int> ContentVersionToInt = new(
         version => version.Value,

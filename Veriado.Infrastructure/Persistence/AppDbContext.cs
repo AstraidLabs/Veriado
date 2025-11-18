@@ -43,6 +43,8 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<FileSystemAuditRecord> FileSystemAudits => Set<FileSystemAuditRecord>();
 
+    public DbSet<FileStorageRootEntity> StorageRoots => Set<FileStorageRootEntity>();
+
     public DbSet<SearchHistoryEntryEntity> SearchHistory => Set<SearchHistoryEntryEntity>();
 
     public DbSet<SearchFavoriteEntity> SearchFavorites => Set<SearchFavoriteEntity>();
