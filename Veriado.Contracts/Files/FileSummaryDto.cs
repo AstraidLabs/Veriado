@@ -94,4 +94,15 @@ public sealed record FileSummaryDto
     /// Gets the optional relevance score returned from full-text search queries.
     /// </summary>
     public double? Score { get; init; }
+
+    /// <summary>
+    /// Stav fyzického souboru (např. Healthy, Missing, MovedOrRenamed, ContentChanged).
+    /// </summary>
+    public string? PhysicalState { get; init; }
+
+    /// <summary>
+    /// Lidsky čitelná hláška o fyzickém stavu souboru pro UI.
+    /// Např. "Soubor byl smazán z disku", "Soubor byl přejmenován nebo přesunut", "Soubor byl změněn mimo aplikaci".
+    /// </summary>
+    public string? PhysicalStatusMessage { get; init; }
 }

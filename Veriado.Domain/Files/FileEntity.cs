@@ -1,4 +1,5 @@
 using Veriado.Domain.Files.Events;
+using Veriado.Domain.FileSystem;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search;
@@ -100,6 +101,11 @@ public sealed partial class FileEntity : AggregateRoot
     /// Gets the identifier of the linked file system content.
     /// </summary>
     public Guid FileSystemId { get; private set; }
+
+    /// <summary>
+    /// Gets the linked file system entity describing the physical file state.
+    /// </summary>
+    public FileSystemEntity? FileSystem { get; private set; }
 
     /// <summary>
     /// Gets the version of the currently linked content.

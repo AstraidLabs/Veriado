@@ -22,22 +22,27 @@ internal sealed class FileReadRepository : IFileReadRepository
         var projection = await context.Files
             .AsNoTracking()
             .Where(file => file.Id == id)
-            .Select(file => new
-            {
-                file.Id,
-                Name = file.Name.Value,
-                Title = file.Title ?? file.Name.Value,
-                Extension = file.Extension.Value,
-                Mime = file.Mime.Value,
-                file.Author,
-                Size = file.Content != null ? (long?)file.Content.Size.Value : null,
-                Version = file.ContentRevision,
-                file.IsReadOnly,
-                file.CreatedUtc,
-                file.LastModifiedUtc,
-                Validity = file.Validity,
-                file.SystemMetadata,
-            })
+            .Join(
+                context.FileSystems.AsNoTracking(),
+                file => file.FileSystemId,
+                system => system.Id,
+                (file, system) => new
+                {
+                    file.Id,
+                    Name = file.Name.Value,
+                    Title = file.Title ?? file.Name.Value,
+                    Extension = file.Extension.Value,
+                    Mime = file.Mime.Value,
+                    file.Author,
+                    Size = file.Content != null ? (long?)file.Content.Size.Value : null,
+                    Version = file.ContentRevision,
+                    file.IsReadOnly,
+                    file.CreatedUtc,
+                    file.LastModifiedUtc,
+                    Validity = file.Validity,
+                    file.SystemMetadata,
+                    PhysicalState = system.PhysicalState,
+                })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -61,7 +66,8 @@ internal sealed class FileReadRepository : IFileReadRepository
             ToDateTimeOffset(projection.CreatedUtc),
             ToDateTimeOffset(projection.LastModifiedUtc),
             validity,
-            projection.SystemMetadata);
+            projection.SystemMetadata,
+            projection.PhysicalState);
     }
 
     public async Task<Page<FileListItemReadModel>> ListAsync(PageRequest request, CancellationToken cancellationToken)
@@ -76,20 +82,25 @@ internal sealed class FileReadRepository : IFileReadRepository
             .ThenBy(file => file.Id)
             .Skip(request.Skip)
             .Take(request.PageSize)
-            .Select(file => new
-            {
-                file.Id,
-                Name = file.Name.Value,
-                Extension = file.Extension.Value,
-                Mime = file.Mime.Value,
-                file.Author,
-                Size = file.Content != null ? (long?)file.Content.Size.Value : null,
-                file.ContentRevision,
-                file.IsReadOnly,
-                file.CreatedUtc,
-                file.LastModifiedUtc,
-                file.Validity,
-            })
+            .Join(
+                context.FileSystems.AsNoTracking(),
+                file => file.FileSystemId,
+                system => system.Id,
+                (file, system) => new
+                {
+                    file.Id,
+                    Name = file.Name.Value,
+                    Extension = file.Extension.Value,
+                    Mime = file.Mime.Value,
+                    file.Author,
+                    Size = file.Content != null ? (long?)file.Content.Size.Value : null,
+                    file.ContentRevision,
+                    file.IsReadOnly,
+                    file.CreatedUtc,
+                    file.LastModifiedUtc,
+                    file.Validity,
+                    PhysicalState = system.PhysicalState,
+                })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -105,7 +116,8 @@ internal sealed class FileReadRepository : IFileReadRepository
                 row.IsReadOnly,
                 ToDateTimeOffset(row.CreatedUtc),
                 ToDateTimeOffset(row.LastModifiedUtc),
-                ToDateTimeOffset(row.Validity?.ValidUntil)))
+                ToDateTimeOffset(row.Validity?.ValidUntil),
+                row.PhysicalState))
             .ToList();
 
         return new Page<FileListItemReadModel>(items, request.PageNumber, request.PageSize, totalCount);
@@ -122,20 +134,25 @@ internal sealed class FileReadRepository : IFileReadRepository
                 && EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil") <= threshold)
             .OrderBy(file => EF.Property<DateTimeOffset?>(file, "Validity_ValidUntil"))
             .ThenBy(file => file.Id)
-            .Select(file => new
-            {
-                file.Id,
-                Name = file.Name.Value,
-                Extension = file.Extension.Value,
-                Mime = file.Mime.Value,
-                file.Author,
-                Size = file.Content != null ? (long?)file.Content.Size.Value : null,
-                file.ContentRevision,
-                file.IsReadOnly,
-                file.CreatedUtc,
-                file.LastModifiedUtc,
-                file.Validity,
-            })
+            .Join(
+                context.FileSystems.AsNoTracking(),
+                file => file.FileSystemId,
+                system => system.Id,
+                (file, system) => new
+                {
+                    file.Id,
+                    Name = file.Name.Value,
+                    Extension = file.Extension.Value,
+                    Mime = file.Mime.Value,
+                    file.Author,
+                    Size = file.Content != null ? (long?)file.Content.Size.Value : null,
+                    file.ContentRevision,
+                    file.IsReadOnly,
+                    file.CreatedUtc,
+                    file.LastModifiedUtc,
+                    file.Validity,
+                    PhysicalState = system.PhysicalState,
+                })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -151,7 +168,8 @@ internal sealed class FileReadRepository : IFileReadRepository
                 row.IsReadOnly,
                 ToDateTimeOffset(row.CreatedUtc),
                 ToDateTimeOffset(row.LastModifiedUtc),
-                ToDateTimeOffset(row.Validity?.ValidUntil)))
+                ToDateTimeOffset(row.Validity?.ValidUntil),
+                row.PhysicalState))
             .ToList();
 
         return items;

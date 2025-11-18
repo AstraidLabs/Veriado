@@ -25,4 +25,6 @@ public sealed record FileListItemDto(
     bool IsReadOnly,
     DateTimeOffset CreatedUtc,
     DateTimeOffset LastModifiedUtc,
-    DateTimeOffset? ValidUntilUtc);
+    DateTimeOffset? ValidUntilUtc,
+    string? PhysicalState,
+    string? PhysicalStatusMessage);
