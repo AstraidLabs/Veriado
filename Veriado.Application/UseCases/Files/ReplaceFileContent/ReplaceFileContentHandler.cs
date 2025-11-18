@@ -59,7 +59,7 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
             var newSize = ByteSize.From(request.Content.LongLength);
 
             fileSystem.ReplaceContent(
-                fileSystem.Path,
+                fileSystem.RelativePath,
                 newHash,
                 newSize,
                 file.Mime,
@@ -68,7 +68,7 @@ public sealed class ReplaceFileContentHandler : FileWriteHandlerBase, IRequestHa
 
             var link = FileContentLink.Create(
                 fileSystem.Provider.ToString(),
-                fileSystem.Path.Value,
+                fileSystem.RelativePath.Value,
                 fileSystem.Hash,
                 fileSystem.Size,
                 fileSystem.ContentVersion,

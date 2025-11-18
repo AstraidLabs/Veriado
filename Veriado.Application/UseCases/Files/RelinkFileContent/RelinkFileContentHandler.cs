@@ -1,4 +1,5 @@
 using Veriado.Appl.Abstractions;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Appl.UseCases.Files.RelinkFileContent;
 
@@ -72,9 +73,10 @@ public sealed class RelinkFileContentHandler : FileWriteHandlerBase, IRequestHan
                 throw new InvalidOperationException($"File system entity '{file.FileSystemId}' was not found.");
             }
 
+            var relativePath = RelativeFilePath.From(storageResult.Path.Value);
             var timestamp = CurrentTimestamp();
             fileSystem.ReplaceContent(
-                storageResult.Path,
+                relativePath,
                 storageResult.Hash,
                 storageResult.Size,
                 storageResult.Mime,
