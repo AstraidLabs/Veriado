@@ -18,7 +18,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
     private FileSystemEntity(
         Guid id,
         StorageProvider provider,
-        StoragePath path,
+        RelativeFilePath relativePath,
         FileHash hash,
         ByteSize size,
         MimeType mime,
@@ -38,7 +38,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         : base(id)
     {
         Provider = provider;
-        Path = path;
+        RelativePath = relativePath;
         Hash = hash;
         Size = size;
         Mime = mime;
@@ -61,9 +61,9 @@ public sealed partial class FileSystemEntity : AggregateRoot
     public StorageProvider Provider { get; private set; }
 
     /// <summary>
-    /// Gets the normalized path pointing to the stored content.
+    /// Gets the normalized relative path pointing to the stored content under the storage root.
     /// </summary>
-    public StoragePath Path { get; private set; } = null!;
+    public RelativeFilePath RelativePath { get; private set; } = null!;
 
     /// <summary>
     /// Gets the SHA-256 hash of the stored content.
@@ -152,7 +152,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
     /// Creates a new file system entity from the supplied metadata.
     /// </summary>
     /// <param name="provider">The storage provider hosting the content.</param>
-    /// <param name="path">The storage path referencing the content.</param>
+    /// <param name="relativePath">The relative storage path referencing the content.</param>
     /// <param name="hash">The hash of the content.</param>
     /// <param name="size">The size of the content.</param>
     /// <param name="mime">The MIME type of the content.</param>
@@ -166,7 +166,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
     /// <returns>The created aggregate.</returns>
     public static FileSystemEntity CreateNew(
         StorageProvider provider,
-        StoragePath path,
+        RelativeFilePath relativePath,
         FileHash hash,
         ByteSize size,
         MimeType mime,
@@ -181,13 +181,13 @@ public sealed partial class FileSystemEntity : AggregateRoot
         string? originalFilePath = null,
         FilePhysicalState physicalState = FilePhysicalState.Healthy)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(relativePath);
 
         var normalizedOwner = NormalizeOwnerSid(ownerSid);
         var entity = new FileSystemEntity(
             Guid.NewGuid(),
             provider,
-            path,
+            relativePath,
             hash,
             size,
             mime,
@@ -208,7 +208,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         entity.RaiseDomainEvent(new FileSystemContentChanged(
             entity.Id,
             provider,
-            path,
+            relativePath,
             hash,
             size,
             mime,
@@ -239,23 +239,23 @@ public sealed partial class FileSystemEntity : AggregateRoot
     /// <summary>
     /// Replaces the stored content with a new blob and refreshes metadata.
     /// </summary>
-    /// <param name="path">The storage path referencing the content.</param>
+    /// <param name="relativePath">The relative storage path referencing the content.</param>
     /// <param name="hash">The new content hash.</param>
     /// <param name="size">The new content size.</param>
     /// <param name="mime">The new MIME type.</param>
     /// <param name="isEncrypted">Indicates whether the content is encrypted.</param>
     /// <param name="whenUtc">The timestamp when the replacement occurred.</param>
     public void ReplaceContent(
-        StoragePath path,
+        RelativeFilePath relativePath,
         FileHash hash,
         ByteSize size,
         MimeType mime,
         bool isEncrypted,
         UtcTimestamp whenUtc)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(relativePath);
 
-        var pathChanged = !Path.Equals(path);
+        var pathChanged = !RelativePath.Equals(relativePath);
         var hashChanged = Hash != hash;
         var sizeChanged = Size != size;
         var mimeChanged = Mime != mime;
@@ -267,7 +267,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
             return;
         }
 
-        Path = path;
+        RelativePath = relativePath;
         if (hashChanged)
         {
             Hash = hash;
@@ -286,25 +286,30 @@ public sealed partial class FileSystemEntity : AggregateRoot
         LastAccessUtc = whenUtc;
         LastLinkedUtc = whenUtc;
 
-        RaiseDomainEvent(new FileSystemContentChanged(Id, Provider, Path, Hash, Size, Mime, ContentVersion, IsEncrypted, whenUtc));
+        RaiseDomainEvent(new FileSystemContentChanged(Id, Provider, RelativePath, Hash, Size, Mime, ContentVersion, IsEncrypted, whenUtc));
     }
 
     /// <summary>
     /// Moves the stored content to a different path within the same provider.
     /// </summary>
-    /// <param name="newPath">The new storage path.</param>
+    /// <param name="newPath">The new relative storage path.</param>
     /// <param name="whenUtc">The timestamp when the move occurred.</param>
-    public void MoveTo(StoragePath newPath, UtcTimestamp whenUtc)
+    /// <remarks>
+    /// The missing state (<see cref="IsMissing"/>) is not altered by this operation; it only updates the tracked relative
+    /// path and emits a <see cref="FileSystemMoved"/> event so that infrastructure can adjust absolute paths derived from
+    /// the storage root.
+    /// </remarks>
+    public void MoveTo(RelativeFilePath newPath, UtcTimestamp whenUtc)
     {
         ArgumentNullException.ThrowIfNull(newPath);
 
-        if (Path.Equals(newPath))
+        if (RelativePath.Equals(newPath))
         {
             return;
         }
 
-        var previous = Path;
-        Path = newPath;
+        var previous = RelativePath;
+        RelativePath = newPath;
 
         RaiseDomainEvent(new FileSystemMoved(Id, Provider, previous, newPath, whenUtc));
     }
@@ -396,18 +401,18 @@ public sealed partial class FileSystemEntity : AggregateRoot
 
         SetPhysicalState(FilePhysicalState.Missing, whenUtc);
 
-        RaiseDomainEvent(new FileSystemMissingDetected(Id, Path, whenUtc, MissingSinceUtc));
+        RaiseDomainEvent(new FileSystemMissingDetected(Id, RelativePath, whenUtc, MissingSinceUtc));
     }
 
     /// <summary>
     /// Clears the missing state and optionally updates the storage path.
     /// </summary>
-    /// <param name="newPath">An optional new storage path.</param>
+    /// <param name="newPath">An optional new relative storage path.</param>
     /// <param name="whenUtc">The timestamp when rehydration occurred.</param>
-    public void Rehydrate(StoragePath? newPath, UtcTimestamp whenUtc)
+    public void Rehydrate(RelativeFilePath? newPath, UtcTimestamp whenUtc)
     {
-        var normalized = newPath ?? Path;
-        var pathChanged = !Path.Equals(normalized);
+        var normalized = newPath ?? RelativePath;
+        var pathChanged = !RelativePath.Equals(normalized);
         var wasMissing = IsMissing;
         var previousMissingSince = MissingSinceUtc;
 
@@ -416,7 +421,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
             return;
         }
 
-        Path = normalized;
+        RelativePath = normalized;
         SetPhysicalState(FilePhysicalState.Healthy);
         LastLinkedUtc = whenUtc;
 
@@ -431,7 +436,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
     public static FileSystemEntity Rehydrate(
         Guid id,
         StorageProvider provider,
-        StoragePath path,
+        RelativeFilePath relativePath,
         FileHash hash,
         ByteSize size,
         MimeType mime,
@@ -449,12 +454,12 @@ public sealed partial class FileSystemEntity : AggregateRoot
         string? originalFilePath = null,
         FilePhysicalState physicalState = FilePhysicalState.Unknown)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(relativePath);
 
         return new FileSystemEntity(
             id,
             provider,
-            path,
+            relativePath,
             hash,
             size,
             mime,
