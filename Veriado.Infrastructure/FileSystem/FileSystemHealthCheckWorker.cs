@@ -14,6 +14,7 @@ using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
+using DomainClock = Veriado.Domain.Primitives.IClock;
 
 namespace Veriado.Infrastructure.FileSystem;
 
@@ -76,7 +77,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<IClock>();
+        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
         var hashCalculator = scope.ServiceProvider.GetRequiredService<IFileHashCalculator>();
 
         var batchSize = _options.BatchSize;
@@ -106,7 +107,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     private async Task CheckBatchAsync(
         List<FileSystemEntity> batch,
         AppDbContext dbContext,
-        IClock clock,
+        DomainClock clock,
         IFileHashCalculator hashCalculator,
         CancellationToken cancellationToken)
     {
@@ -178,7 +179,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         return FileEvaluationResult.ContentChanged(file.Id, size, created, lastWrite, lastAccess, hash);
     }
 
-    private static void ApplyResult(FileSystemEntity file, FileEvaluationResult result, IClock clock)
+    private static void ApplyResult(FileSystemEntity file, FileEvaluationResult result, DomainClock clock)
     {
         switch (result.Outcome)
         {
