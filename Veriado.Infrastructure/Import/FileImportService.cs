@@ -12,6 +12,7 @@ using Veriado.Application.Import;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
+using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Search;
 using Microsoft.Extensions.Logging;
@@ -33,6 +34,7 @@ public sealed class FileImportService : IFileImportWriter
     private readonly IClock _clock;
     private readonly ILogger<FileImportService> _logger;
     private readonly ISearchProjectionScope _projectionScope;
+    private readonly IFilePathResolver _filePathResolver;
 
     public FileImportService(
         AppDbContext dbContext,
@@ -40,6 +42,7 @@ public sealed class FileImportService : IFileImportWriter
         ISearchIndexSignatureCalculator signatureCalculator,
         IClock clock,
         ISearchProjectionScope projectionScope,
+        IFilePathResolver filePathResolver,
         ILogger<FileImportService>? logger = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -47,6 +50,7 @@ public sealed class FileImportService : IFileImportWriter
         _signatureCalculator = signatureCalculator ?? throw new ArgumentNullException(nameof(signatureCalculator));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _projectionScope = projectionScope ?? throw new ArgumentNullException(nameof(projectionScope));
+        _filePathResolver = filePathResolver ?? throw new ArgumentNullException(nameof(filePathResolver));
         _logger = logger ?? NullLogger<FileImportService>.Instance;
     }
 
@@ -169,7 +173,10 @@ public sealed class FileImportService : IFileImportWriter
             {
                 ct.ThrowIfCancellationRequested();
                 var existing = existingFiles.FirstOrDefault(file => file.Id == item.FileId);
-                var mapped = ImportMapping.MapToAggregate(item, existing?.FileSystemId);
+                var relativePath = RelativeFilePath.From(_filePathResolver.GetRelativePath(item.StoragePath));
+
+                // FileSystemEntity stores only relative paths; full paths are derived via IFilePathResolver.
+                var mapped = ImportMapping.MapToAggregate(item, relativePath, existing?.FileSystemId);
 
                 if (existing is not null)
                 {

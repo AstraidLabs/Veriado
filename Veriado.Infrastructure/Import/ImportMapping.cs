@@ -10,9 +10,13 @@ namespace Veriado.Infrastructure.Import;
 
 internal static class ImportMapping
 {
-    public static MappedImport MapToAggregate(ImportItem item, Guid? existingFileSystemId = null)
+    public static MappedImport MapToAggregate(
+        ImportItem item,
+        RelativeFilePath relativePath,
+        Guid? existingFileSystemId = null)
     {
         ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(relativePath);
 
         if (item.Metadata is not ImportMetadata metadata)
         {
@@ -36,7 +40,6 @@ internal static class ImportMapping
         var ftsPolicy = BuildFtsPolicy(metadata.FtsPolicy);
 
         var provider = ParseProvider(item.StorageProvider);
-        var path = StoragePath.From(item.StoragePath);
 
         var fsCreated = metadata.FileSystem?.CreatedUtc ?? item.CreatedUtc ?? DateTimeOffset.UtcNow;
         var fsWrite = metadata.FileSystem?.LastWriteUtc ?? item.ModifiedUtc ?? item.CreatedUtc ?? DateTimeOffset.UtcNow;
@@ -45,7 +48,7 @@ internal static class ImportMapping
         var fileSystem = FileSystemEntity.CreateForImport(
             fileSystemId,
             provider,
-            path,
+            relativePath,
             hash,
             size,
             mime,
@@ -68,7 +71,7 @@ internal static class ImportMapping
             metadata.Author,
             fileSystem.Id,
             provider.ToString(),
-            path.Value,
+            relativePath.Value,
             hash,
             size,
             contentVersion,

@@ -90,9 +90,15 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .HasColumnName("owner_sid");
 
                     b.Property<string>("Path")
-                        .IsRequired()
+                        .HasMaxLength(1024)
                         .HasColumnType("TEXT")
                         .HasColumnName("path");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("relative_path");
 
                     b.Property<int>("PhysicalState")
                         .ValueGeneratedOnAdd()
@@ -120,9 +126,9 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     b.HasIndex("Hash")
                         .HasDatabaseName("idx_filesystem_entities_hash");
 
-                    b.HasIndex("Path")
+                    b.HasIndex("RelativePath")
                         .IsUnique()
-                        .HasDatabaseName("ux_filesystem_entities_path");
+                        .HasDatabaseName("ux_filesystem_entities_relative_path");
 
                     b.ToTable("filesystem_entities", (string)null);
                 });
@@ -834,6 +840,24 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Validity");
+                });
+
+            modelBuilder.Entity("Veriado.Infrastructure.Persistence.Entities.FileStorageRootEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("RootPath")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("root_path");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("storage_root", (string)null);
                 });
 
             modelBuilder.Entity("Veriado.Domain.Search.DocumentLocationEntity", b =>

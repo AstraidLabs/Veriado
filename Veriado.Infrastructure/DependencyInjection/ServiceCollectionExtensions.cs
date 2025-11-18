@@ -195,6 +195,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LocalFileStorage>();
         services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddSingleton<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
+        services.AddScoped<IFilePathResolver, FilePathResolver>();
 
         services.AddSingleton<ISearchQueryService, SqliteFts5QueryService>();
         services.AddSingleton<ISearchHistoryService, SearchHistoryService>();

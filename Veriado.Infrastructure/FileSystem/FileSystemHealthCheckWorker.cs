@@ -139,7 +139,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             return;
         }
 
-        file.ReplaceContent(file.Path, hash, size, file.Mime, file.IsEncrypted, lastWrite);
+        file.ReplaceContent(file.RelativePath, hash, size, file.Mime, file.IsEncrypted, lastWrite);
         file.UpdateTimestamps(created, lastWrite, lastAccess, UtcTimestamp.From(_clock.UtcNow));
         file.MarkContentChanged();
     }
