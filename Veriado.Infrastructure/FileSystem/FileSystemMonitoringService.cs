@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
+using DomainClock = Veriado.Domain.Primitives.IClock;
 using Veriado.Infrastructure.Persistence;
 
 namespace Veriado.Infrastructure.FileSystem;
@@ -129,7 +130,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<IClock>();
+        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
         var entity = await dbContext.FileSystems
             .SingleOrDefaultAsync(f => f.RelativePath.Value == relativePath, cancellationToken)
@@ -159,7 +160,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<IClock>();
+        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
         var entity = await dbContext.FileSystems
             .SingleOrDefaultAsync(f => f.RelativePath.Value == relativePath, cancellationToken)
@@ -185,7 +186,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<IClock>();
+        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
         var entity = await dbContext.FileSystems
             .SingleOrDefaultAsync(f => f.RelativePath.Value == oldRelativePath, cancellationToken)
