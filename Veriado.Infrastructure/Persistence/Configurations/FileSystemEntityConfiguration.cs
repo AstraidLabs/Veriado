@@ -107,7 +107,7 @@ internal sealed class FileSystemEntityConfiguration : IEntityTypeConfiguration<F
             .HasColumnName("physical_state")
             .HasColumnType("INTEGER")
             .HasConversion<int>()
-            .HasDefaultValue((int)FilePhysicalState.Unknown)
+            .HasDefaultValue(FilePhysicalState.Unknown)
             .IsRequired();
 
         builder.Property(entity => entity.ContentVersion)
