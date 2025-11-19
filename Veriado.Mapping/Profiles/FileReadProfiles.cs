@@ -66,7 +66,8 @@ public sealed class FileReadProfiles : Profile
             .ForMember(dest => dest.PhysicalState, opt =>
                 opt.MapFrom(static src => src.FileSystem != null ? src.FileSystem.PhysicalState.ToString() : null))
             .ForMember(dest => dest.PhysicalStatusMessage, opt =>
-                opt.MapFrom(static src => GetPhysicalStatusMessage(src.FileSystem?.PhysicalState)))
+                opt.MapFrom(static src => GetPhysicalStatusMessage(
+                    src.FileSystem != null ? src.FileSystem.PhysicalState : (FilePhysicalState?)null)))
             .ForMember(dest => dest.IsIndexStale, ConfigureSearchIndexMember<FileSummaryDto, bool>(static state => state.IsStale))
             .ForMember(dest => dest.LastIndexedUtc, ConfigureSearchIndexMember<FileSummaryDto, DateTimeOffset?>(static state => state.LastIndexedUtc))
             .ForMember(dest => dest.IndexedTitle, ConfigureSearchIndexMember<FileSummaryDto, string?>(static state => state.IndexedTitle))
