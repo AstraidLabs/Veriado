@@ -1,12 +1,11 @@
-using Microsoft.EntityFrameworkCore.Migrations;
-using Veriado.Infrastructure.Persistence.Schema;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Veriado.Infrastructure.Persistence.Migrations
+namespace Veriado.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -90,7 +89,7 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 {
                     id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     provider = table.Column<int>(type: "INTEGER", nullable: false),
-                    path = table.Column<string>(type: "TEXT", nullable: false),
+                    relative_path = table.Column<string>(type: "TEXT", maxLength: 1024, nullable: false),
                     hash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     size = table.Column<long>(type: "BIGINT", nullable: false),
                     mime = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
@@ -104,6 +103,10 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                     is_missing = table.Column<bool>(type: "INTEGER", nullable: false),
                     missing_since_utc = table.Column<string>(type: "TEXT", nullable: true),
                     last_linked_utc = table.Column<string>(type: "TEXT", nullable: true),
+                    current_file_path = table.Column<string>(type: "TEXT", maxLength: 1024, nullable: false),
+                    original_file_path = table.Column<string>(type: "TEXT", maxLength: 1024, nullable: false),
+                    physical_state = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
+                    path = table.Column<string>(type: "TEXT", maxLength: 1024, nullable: true),
                     row_version = table.Column<byte[]>(type: "BLOB", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
@@ -170,6 +173,19 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_search_history", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "storage_root",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    root_path = table.Column<string>(type: "TEXT", maxLength: 2048, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_storage_root", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -339,9 +355,9 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 column: "hash");
 
             migrationBuilder.CreateIndex(
-                name: "ux_filesystem_entities_path",
+                name: "ux_filesystem_entities_relative_path",
                 table: "filesystem_entities",
-                column: "path",
+                column: "relative_path",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -381,29 +397,11 @@ namespace Veriado.Infrastructure.Persistence.Migrations
                 table: "suggestions",
                 columns: new[] { "term", "lang", "source_field" },
                 unique: true);
-
-            foreach (var statement in SqliteFulltextSchemaSql.ResetStatements)
-            {
-                migrationBuilder.Sql(statement);
-            }
-
-            foreach (var statement in SqliteFulltextSchemaSql.CreateStatements)
-            {
-                migrationBuilder.Sql(statement);
-            }
-
-            migrationBuilder.Sql(SqliteFulltextSchemaSql.PopulateStatement);
-            migrationBuilder.Sql(SqliteFulltextSchemaSql.OptimizeStatement);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            foreach (var statement in SqliteFulltextSchemaSql.FullResetStatements)
-            {
-                migrationBuilder.Sql(statement);
-            }
-
             migrationBuilder.DropTable(
                 name: "audit_file");
 
@@ -436,6 +434,9 @@ namespace Veriado.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "search_history");
+
+            migrationBuilder.DropTable(
+                name: "storage_root");
 
             migrationBuilder.DropTable(
                 name: "suggestions");
