@@ -132,8 +132,10 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
+        var relativeFilePath = RelativeFilePath.From(relativePath);
+
         var entity = await dbContext.FileSystems
-            .SingleOrDefaultAsync(f => f.RelativePath.Value == relativePath, cancellationToken)
+            .SingleOrDefaultAsync(f => f.RelativePath == relativeFilePath, cancellationToken)
             .ConfigureAwait(false);
 
         if (entity is null)
@@ -162,8 +164,10 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
+        var relativeFilePath = RelativeFilePath.From(relativePath);
+
         var entity = await dbContext.FileSystems
-            .SingleOrDefaultAsync(f => f.RelativePath.Value == relativePath, cancellationToken)
+            .SingleOrDefaultAsync(f => f.RelativePath == relativeFilePath, cancellationToken)
             .ConfigureAwait(false);
 
         if (entity is null)
@@ -188,8 +192,10 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
+        var oldRelativeFilePath = RelativeFilePath.From(oldRelativePath);
+
         var entity = await dbContext.FileSystems
-            .SingleOrDefaultAsync(f => f.RelativePath.Value == oldRelativePath, cancellationToken)
+            .SingleOrDefaultAsync(f => f.RelativePath == oldRelativeFilePath, cancellationToken)
             .ConfigureAwait(false);
 
         if (entity is null)
@@ -218,8 +224,10 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        var relativeFilePath = RelativeFilePath.From(relativePath);
+
         var entity = await dbContext.FileSystems
-            .SingleOrDefaultAsync(f => f.RelativePath.Value == relativePath, cancellationToken)
+            .SingleOrDefaultAsync(f => f.RelativePath == relativeFilePath, cancellationToken)
             .ConfigureAwait(false);
 
         if (entity is null)
