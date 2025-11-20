@@ -8,15 +8,15 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="5ea5a875-aba5-4def-8b04-c547bdcc72f2"
-    Publisher="CN=tomas"
-    Version="0.4.2.0" />
+    Name="AstraidLabs.Veriado"
+    Publisher="CN=983D5877-1D98-43A0-B663-359B22C57B56"
+    Version="0.4.4.0" />
 
-  <mp:PhoneIdentity PhoneProductId="5ea5a875-aba5-4def-8b04-c547bdcc72f2" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="94356163-ff57-447b-86f1-67392cca0fcf" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>Veriado</DisplayName>
-    <PublisherDisplayName>tomas</PublisherDisplayName>
+    <PublisherDisplayName>AstraidLabs</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
