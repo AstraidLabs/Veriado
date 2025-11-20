@@ -1,3 +1,5 @@
+using System;
+
 namespace Veriado.Infrastructure.Persistence.Entities;
 
 /// <summary>
@@ -5,6 +7,16 @@ namespace Veriado.Infrastructure.Persistence.Entities;
 /// </summary>
 public sealed class FileStorageRootEntity
 {
+    public FileStorageRootEntity(string rootPath)
+    {
+        RootPath = rootPath ?? throw new ArgumentNullException(nameof(rootPath));
+    }
+
+    // Required for EF Core
+    private FileStorageRootEntity()
+    {
+    }
+
     /// <summary>
     /// Gets the primary key. Only a single row is expected (Id = 1).
     /// </summary>
