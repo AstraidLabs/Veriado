@@ -5,42 +5,47 @@ using System.Threading.Tasks;
 namespace Veriado.Application.Abstractions;
 
 /// <summary>
-/// Provides operations for migrating, exporting, and importing storage.
+/// Coordinates pausing of background operations that may interfere with critical file operations.
+/// </summary>
+public interface IOperationalPauseCoordinator
+{
+    /// <summary>Gets a value indicating whether operations are currently paused.</summary>
+    bool IsPaused { get; }
+
+    /// <summary>Pauses cooperating services until <see cref="Resume"/> is called.</summary>
+    Task PauseAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Resumes any paused services.</summary>
+    void Resume();
+
+    /// <summary>Await this to ensure execution only continues when not paused.</summary>
+    Task WaitIfPausedAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Provides operations for migrating the configured storage root.
 /// </summary>
 public interface IStorageMigrationService
 {
-    /// <summary>
-    /// Migrates the storage root to a new location on disk.
-    /// </summary>
-    /// <param name="newRootPath">The target storage root.</param>
-    /// <param name="options">Optional migration options.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The migration result.</returns>
+    /// <summary>Migrates the storage root to a new location on disk.</summary>
     Task<StorageMigrationResult> MigrateStorageRootAsync(
         string newRootPath,
         StorageMigrationOptions? options,
         CancellationToken cancellationToken);
+}
 
-    /// <summary>
-    /// Exports the database and storage content into a portable package.
-    /// </summary>
-    /// <param name="packageRoot">The destination directory for the package.</param>
-    /// <param name="options">Optional export options.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The export result.</returns>
+/// <summary>Provides operations for exporting the database and managed storage into a portable package.</summary>
+public interface IExportPackageService
+{
     Task<StorageExportResult> ExportPackageAsync(
         string packageRoot,
         StorageExportOptions? options,
         CancellationToken cancellationToken);
+}
 
-    /// <summary>
-    /// Imports a previously exported package into the current environment.
-    /// </summary>
-    /// <param name="packageRoot">The root directory of the package.</param>
-    /// <param name="targetStorageRoot">The target storage root for imported files.</param>
-    /// <param name="options">Optional import options.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The import result.</returns>
+/// <summary>Provides operations for importing a portable package into the current environment.</summary>
+public interface IImportPackageService
+{
     Task<StorageImportResult> ImportPackageAsync(
         string packageRoot,
         string targetStorageRoot,
@@ -48,52 +53,34 @@ public interface IStorageMigrationService
         CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// Options controlling storage root migration.
-/// </summary>
+/// <summary>Options controlling storage root migration.</summary>
 public sealed record StorageMigrationOptions
 {
-    /// <summary>
-    /// Gets a value indicating whether the original files should be deleted after a successful copy.
-    /// </summary>
+    /// <summary>Gets a value indicating whether the original files should be deleted after a successful copy.</summary>
     public bool DeleteSourceAfterCopy { get; init; }
 
-    /// <summary>
-    /// Gets a value indicating whether migrated files should be validated using SHA-256 hashes.
-    /// </summary>
+    /// <summary>Gets a value indicating whether migrated files should be validated using SHA-256 hashes.</summary>
     public bool VerifyHashes { get; init; }
 }
 
-/// <summary>
-/// Options controlling export behaviour.
-/// </summary>
+/// <summary>Options controlling export behaviour.</summary>
 public sealed record StorageExportOptions
 {
-    /// <summary>
-    /// Gets a value indicating whether existing package contents may be overwritten.
-    /// </summary>
+    /// <summary>Gets a value indicating whether existing package contents may be overwritten.</summary>
     public bool OverwriteExisting { get; init; }
 }
 
-/// <summary>
-/// Options controlling import behaviour.
-/// </summary>
+/// <summary>Options controlling import behaviour.</summary>
 public sealed record StorageImportOptions
 {
-    /// <summary>
-    /// Gets a value indicating whether existing database and files may be overwritten.
-    /// </summary>
+    /// <summary>Gets a value indicating whether existing database and files may be overwritten.</summary>
     public bool OverwriteExisting { get; init; }
 
-    /// <summary>
-    /// Gets a value indicating whether imported files should be validated after copy.
-    /// </summary>
+    /// <summary>Gets a value indicating whether imported files should be validated after copy.</summary>
     public bool VerifyAfterCopy { get; init; }
 }
 
-/// <summary>
-/// Result information for storage migrations.
-/// </summary>
+/// <summary>Result information for storage migrations.</summary>
 public sealed record StorageMigrationResult(string OldRoot, string NewRoot)
 {
     public int MigratedFiles { get; init; }
@@ -102,9 +89,7 @@ public sealed record StorageMigrationResult(string OldRoot, string NewRoot)
     public IReadOnlyCollection<string> Errors { get; init; } = new List<string>();
 }
 
-/// <summary>
-/// Result information for export operations.
-/// </summary>
+/// <summary>Result information for export operations.</summary>
 public sealed record StorageExportResult(string PackageRoot)
 {
     public string DatabasePath { get; init; } = string.Empty;
@@ -112,9 +97,7 @@ public sealed record StorageExportResult(string PackageRoot)
     public int MissingFiles { get; init; }
 }
 
-/// <summary>
-/// Result information for import operations.
-/// </summary>
+/// <summary>Result information for import operations.</summary>
 public sealed record StorageImportResult(string PackageRoot, string TargetStorageRoot)
 {
     public int ImportedFiles { get; init; }

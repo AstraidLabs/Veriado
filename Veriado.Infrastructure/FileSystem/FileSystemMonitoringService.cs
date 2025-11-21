@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Application.Abstractions;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 using DomainClock = Veriado.Domain.Primitives.IClock;
@@ -16,6 +17,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 {
     private readonly IFilePathResolver _pathResolver;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IOperationalPauseCoordinator _pauseCoordinator;
     private readonly ILogger<FileSystemMonitoringService> _logger;
     private FileSystemWatcher? _watcher;
     private CancellationToken _cancellationToken;
@@ -23,10 +25,12 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     public FileSystemMonitoringService(
         IFilePathResolver pathResolver,
         IServiceScopeFactory scopeFactory,
+        IOperationalPauseCoordinator pauseCoordinator,
         ILogger<FileSystemMonitoringService> logger)
     {
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -108,6 +112,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         {
             try
             {
+                await _pauseCoordinator.WaitIfPausedAsync(_cancellationToken).ConfigureAwait(false);
                 await handler().ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)

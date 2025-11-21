@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Veriado.Application.Abstractions;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Common.Exceptions;
 using Veriado.Application.Import;
@@ -35,6 +36,7 @@ public sealed class FileImportService : IFileImportWriter
     private readonly ILogger<FileImportService> _logger;
     private readonly ISearchProjectionScope _projectionScope;
     private readonly IFilePathResolver _filePathResolver;
+    private readonly IOperationalPauseCoordinator _pauseCoordinator;
 
     public FileImportService(
         AppDbContext dbContext,
@@ -43,6 +45,7 @@ public sealed class FileImportService : IFileImportWriter
         IClock clock,
         ISearchProjectionScope projectionScope,
         IFilePathResolver filePathResolver,
+        IOperationalPauseCoordinator pauseCoordinator,
         ILogger<FileImportService>? logger = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -51,6 +54,7 @@ public sealed class FileImportService : IFileImportWriter
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _projectionScope = projectionScope ?? throw new ArgumentNullException(nameof(projectionScope));
         _filePathResolver = filePathResolver ?? throw new ArgumentNullException(nameof(filePathResolver));
+        _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
         _logger = logger ?? NullLogger<FileImportService>.Instance;
     }
 
@@ -67,6 +71,8 @@ public sealed class FileImportService : IFileImportWriter
         {
             return new ImportResult(0, 0, 0);
         }
+
+        await _pauseCoordinator.WaitIfPausedAsync(ct).ConfigureAwait(false);
 
         var normalizedBatchSize = Math.Clamp(options.BatchSize, MinimumBatchSize, MaximumBatchSize);
         var imported = 0;

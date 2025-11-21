@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Veriado.Application.Abstractions;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
@@ -23,18 +24,21 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IFilePathResolver _pathResolver;
     private readonly FileSystemHealthCheckOptions _options;
+    private readonly IOperationalPauseCoordinator _pauseCoordinator;
     private readonly ILogger<FileSystemHealthCheckWorker> _logger;
 
     public FileSystemHealthCheckWorker(
         IServiceScopeFactory scopeFactory,
         IFilePathResolver pathResolver,
         IOptions<FileSystemHealthCheckOptions> options,
+        IOperationalPauseCoordinator pauseCoordinator,
         ILogger<FileSystemHealthCheckWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -51,6 +55,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         {
             try
             {
+                await _pauseCoordinator.WaitIfPausedAsync(stoppingToken).ConfigureAwait(false);
                 await RunHealthCheckIterationAsync(stoppingToken).ConfigureAwait(false);
             }
             catch (TaskCanceledException)

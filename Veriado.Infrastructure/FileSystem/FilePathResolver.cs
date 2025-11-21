@@ -52,6 +52,9 @@ public sealed class FilePathResolver : IFilePathResolver
     }
 
     public string GetFullPath(string relativePath)
+        => GetFullPath(relativePath, null);
+
+    public string GetFullPath(string relativePath, string? rootOverride)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
         {
@@ -60,8 +63,11 @@ public sealed class FilePathResolver : IFilePathResolver
 
         try
         {
-            var root = GetStorageRoot();
-            var normalizedRelative = NormalizeRelative(relativePath);
+            var root = string.IsNullOrWhiteSpace(rootOverride)
+                ? GetStorageRoot()
+                : StorageRootValidator.ValidateWritableRoot(rootOverride!, _logger);
+
+            var normalizedRelative = NormalizeRelative(relativePath, _logger);
             var fullPath = Path.Combine(root, normalizedRelative);
             return Path.GetFullPath(fullPath);
         }
@@ -106,7 +112,7 @@ public sealed class FilePathResolver : IFilePathResolver
                 throw new InvalidOperationException("Full path does not reside under the configured storage root.");
             }
 
-            var normalized = NormalizeRelative(relative);
+            var normalized = NormalizeRelative(relative, _logger);
             if (IsOutsideRoot(normalized))
             {
                 _logger.LogWarning(
@@ -142,12 +148,8 @@ public sealed class FilePathResolver : IFilePathResolver
         return normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
-    private static string NormalizeRelative(string relativePath)
-    {
-        return relativePath
-            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
-            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    }
+    internal static string NormalizeRelative(string relativePath, ILogger logger)
+        => SafePathUtilities.NormalizeRelative(relativePath, logger);
 
     private static bool IsOutsideRoot(string relative)
         => relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative);
