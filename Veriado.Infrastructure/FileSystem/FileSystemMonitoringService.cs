@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
-using FileSystemSyncService = Veriado.Appl.FileSystem.IFileSystemSyncService;
+using ApplicationFileSystemSyncService = Veriado.Appl.Abstractions.IFileSystemSyncService;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
@@ -24,7 +24,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     private readonly IFilePathResolver _pathResolver;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
-    private readonly FileSystemSyncService _syncService;
+    private readonly ApplicationFileSystemSyncService _syncService;
     private readonly ApplicationClock _clock;
     private readonly ILogger<FileSystemMonitoringService> _logger;
     private readonly Channel<FileSystemEvent> _eventChannel;
@@ -37,7 +37,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         IFilePathResolver pathResolver,
         IServiceScopeFactory scopeFactory,
         IOperationalPauseCoordinator pauseCoordinator,
-        FileSystemSyncService syncService,
+        ApplicationFileSystemSyncService syncService,
         ApplicationClock clock,
         ILogger<FileSystemMonitoringService> logger)
     {
@@ -346,11 +346,13 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var lastAccessUtc = UtcTimestamp.From(info.LastAccessTimeUtc);
         var observedUtc = UtcTimestamp.From(clock.UtcNow);
 
-        FileHash? hash = null;
+        FileHash computedHash = default;
+        var hashComputed = false;
 
         try
         {
-            hash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
+            computedHash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
+            hashComputed = true;
         }
         catch (Exception ex)
         {
@@ -359,7 +361,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         entity.MarkHealthy();
         entity.UpdatePath(fullPath);
-        if (hash is FileHash computedHash)
+        if (hashComputed)
         {
             entity.ReplaceContent(entity.RelativePath, computedHash, size, entity.Mime, entity.IsEncrypted, observedUtc);
         }
@@ -512,14 +514,16 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var sizeChanged = entity.Size != size;
         var timestampsChanged = entity.CreatedUtc != createdUtc || entity.LastWriteUtc != lastWriteUtc || entity.LastAccessUtc != lastAccessUtc;
 
-        FileHash? hash = null;
+        FileHash computedHash = default;
+        var hashComputed = false;
         var contentChanged = false;
 
         if (sizeChanged)
         {
             try
             {
-                hash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
+                computedHash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
+                hashComputed = true;
             }
             catch (Exception ex)
             {
@@ -527,7 +531,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             }
         }
 
-        if (hash is FileHash computedHash)
+        if (hashComputed)
         {
             entity.ReplaceContent(entity.RelativePath, computedHash, size, entity.Mime, entity.IsEncrypted, whenUtc);
             contentChanged = true;
