@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Veriado.Contracts.Storage;
 using Veriado.Services.Storage;
 using Veriado.WinUI.ViewModels.Base;
@@ -247,11 +248,6 @@ public partial class StorageManagementPageViewModel : ViewModelBase
             && !string.IsNullOrWhiteSpace(ImportPackageRoot)
             && !string.IsNullOrWhiteSpace(ImportTargetRoot);
 
-    partial void OnIsBusyChanged(bool value)
-    {
-        NotifyCommandStates();
-    }
-
     partial void OnMigrationTargetRootChanged(string? value)
     {
         _runMigrationCommand.NotifyCanExecuteChanged();
@@ -265,6 +261,16 @@ public partial class StorageManagementPageViewModel : ViewModelBase
     partial void OnImportPackageRootChanged(string? value)
     {
         _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+
+        if (e.PropertyName == nameof(IsBusy))
+        {
+            NotifyCommandStates();
+        }
     }
 
     partial void OnImportTargetRootChanged(string? value)
