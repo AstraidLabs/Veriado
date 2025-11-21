@@ -245,12 +245,30 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         try
         {
             var fullPath = _pathResolver.GetFullPath(sanitizedRelative);
+            EnsureWithinRoot(fullPath);
             return fullPath;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to resolve storage path for relative path {RelativePath}.", relativePath);
             throw;
+        }
+    }
+
+    private void EnsureWithinRoot(string fullPath)
+    {
+        var storageRoot = Path.GetFullPath(_pathResolver.GetStorageRoot());
+        var normalizedFullPath = Path.GetFullPath(fullPath);
+        var relativeToRoot = Path.GetRelativePath(storageRoot, normalizedFullPath);
+
+        if (relativeToRoot.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativeToRoot))
+        {
+            _logger.LogWarning(
+                "Resolved path {FullPath} is outside of storage root {StorageRoot}.",
+                normalizedFullPath,
+                storageRoot);
+
+            throw new StoragePathViolationException(storageRoot, normalizedFullPath);
         }
     }
 
