@@ -9,13 +9,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
-using Veriado.Appl.FileSystem;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using ApplicationClock = Veriado.Appl.Abstractions.IClock;
 using DomainClock = Veriado.Domain.Primitives.IClock;
+using IFileSystemSyncService = Veriado.Appl.FileSystem.IFileSystemSyncService;
 
 namespace Veriado.Infrastructure.FileSystem;
 
@@ -361,7 +361,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         entity.UpdatePath(fullPath);
         if (hash is not null)
         {
-            entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, observedUtc);
+            entity.ReplaceContent(entity.RelativePath, hash.Value, size, entity.Mime, entity.IsEncrypted, observedUtc);
         }
         else if (entity.Size != size)
         {
@@ -529,7 +529,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         if (hash is not null)
         {
-            entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
+            entity.ReplaceContent(entity.RelativePath, hash.Value, size, entity.Mime, entity.IsEncrypted, whenUtc);
             contentChanged = true;
         }
         else if (sizeChanged)

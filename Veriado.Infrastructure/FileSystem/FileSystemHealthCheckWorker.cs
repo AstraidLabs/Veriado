@@ -12,12 +12,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
-using Veriado.Appl.FileSystem;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using DomainClock = Veriado.Domain.Primitives.IClock;
+using IFileSystemSyncService = Veriado.Appl.FileSystem.IFileSystemSyncService;
 
 namespace Veriado.Infrastructure.FileSystem;
 
