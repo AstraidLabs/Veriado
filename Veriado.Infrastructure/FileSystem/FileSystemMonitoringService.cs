@@ -249,10 +249,15 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             return;
         }
 
+        var hashCalculator = scope.ServiceProvider.GetRequiredService<IFileHashCalculator>();
         var info = new FileInfo(fullPath);
         var whenUtc = UtcTimestamp.From(clock.UtcNow);
         var size = ByteSize.From(info.Exists ? info.Length : 0);
-        entity.ReplaceContent(entity.RelativePath, entity.Hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
+        var hash = info.Exists
+            ? await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false)
+            : entity.Hash;
+
+        entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
         entity.UpdatePath(fullPath);
         entity.UpdateTimestamps(UtcTimestamp.From(info.CreationTimeUtc), UtcTimestamp.From(info.LastWriteTimeUtc), UtcTimestamp.From(info.LastAccessTimeUtc), whenUtc);
 
