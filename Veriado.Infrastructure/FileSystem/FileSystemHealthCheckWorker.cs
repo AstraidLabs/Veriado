@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
 using Veriado.Appl.FileSystem;
 using Veriado.Domain.FileSystem;

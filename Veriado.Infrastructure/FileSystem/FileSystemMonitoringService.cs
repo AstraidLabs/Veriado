@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.Abstractions;
 using Veriado.Appl.FileSystem;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;

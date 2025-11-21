@@ -13,7 +13,6 @@ using Veriado.Application.Import;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
-using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Search;
 using Microsoft.Extensions.Logging;

@@ -5,6 +5,7 @@ using Veriado.Appl.UseCases.Files.ReplaceFileContent;
 using Veriado.Appl.UseCases.Files.RenameFile;
 using Veriado.Appl.UseCases.Files.SetFileReadOnly;
 using Veriado.Appl.UseCases.Files.SetFileValidity;
+using Veriado.Appl.UseCases.Files.UpdateFileContent;
 using Veriado.Mapping.AC;
 
 namespace Veriado.Services.Files;
@@ -160,6 +161,18 @@ public sealed class FileOperationsService : IFileOperationsService
         return ToIdResponse(result);
     }
 
+    public async Task<ApiResponse<FileSummaryDto>> UpdateFileContentAsync(
+        Guid fileId,
+        string sourceFileFullPath,
+        CancellationToken cancellationToken)
+    {
+        using var scope = BeginScope();
+        var result = await _mediator
+            .Send(new UpdateFileContentCommand(fileId, sourceFileFullPath), cancellationToken)
+            .ConfigureAwait(false);
+        return ToResponse(result);
+    }
+
     public async Task<ApiResponse<Guid>> ApplySystemMetadataAsync(Guid fileId, FileSystemMetadataDto metadata, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -219,6 +232,17 @@ public sealed class FileOperationsService : IFileOperationsService
 
         var error = ConvertAppError(result.Error);
         return ApiResponse<Guid>.Failure(error);
+    }
+
+    private static ApiResponse<FileSummaryDto> ToResponse(AppResult<FileSummaryDto> result)
+    {
+        if (result.IsSuccess)
+        {
+            return ApiResponse<FileSummaryDto>.Success(result.Value);
+        }
+
+        var error = ConvertAppError(result.Error);
+        return ApiResponse<FileSummaryDto>.Failure(error);
     }
 
     private static ApiError ConvertAppError(AppError error)

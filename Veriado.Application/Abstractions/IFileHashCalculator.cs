@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Domain.ValueObjects;
 
-namespace Veriado.Infrastructure.FileSystem;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Computes hashes for files stored on disk.
