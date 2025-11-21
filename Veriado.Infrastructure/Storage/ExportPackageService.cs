@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
 using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Persistence.Connections;
 
 namespace Veriado.Infrastructure.Storage;
 
