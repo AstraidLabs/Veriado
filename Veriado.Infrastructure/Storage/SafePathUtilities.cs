@@ -66,7 +66,11 @@ internal static class SafePathUtilities
 
     private static void ValidatePathCharacters(string relativePath, ILogger logger)
     {
-        var invalidChars = Path.GetInvalidPathChars().Concat(Path.GetInvalidFileNameChars()).Distinct().ToArray();
+        var invalidChars = Path.GetInvalidPathChars()
+            .Concat(Path.GetInvalidFileNameChars())
+            .Where(c => c != Path.DirectorySeparatorChar && c != Path.AltDirectorySeparatorChar)
+            .Distinct()
+            .ToArray();
         if (relativePath.IndexOfAny(invalidChars) >= 0)
         {
             logger.LogWarning("Relative path {RelativePath} contains invalid characters.", relativePath);
