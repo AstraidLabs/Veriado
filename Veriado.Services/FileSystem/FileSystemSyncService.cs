@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Veriado.Appl.Abstractions;
 using Veriado.Appl.FileSystem;
 using Veriado.Domain.Files;
-using Veriado.Domain.Primitives;
+using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
+using ApplicationClock = Veriado.Appl.Abstractions.IClock;
 
 namespace Veriado.Services.FileSystem;
 
@@ -14,12 +14,12 @@ namespace Veriado.Services.FileSystem;
 public sealed class FileSystemSyncService : IFileSystemSyncService
 {
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
-    private readonly IClock _clock;
+    private readonly ApplicationClock _clock;
     private readonly ILogger<FileSystemSyncService> _logger;
 
     public FileSystemSyncService(
         IDbContextFactory<AppDbContext> dbContextFactory,
-        IClock clock,
+        ApplicationClock clock,
         ILogger<FileSystemSyncService> logger)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));

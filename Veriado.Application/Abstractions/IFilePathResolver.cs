@@ -41,4 +41,9 @@ public interface IFilePathResolver
     /// <param name="fullPath">The absolute path to convert.</param>
     /// <returns>The normalized relative path.</returns>
     string GetRelativePath(string fullPath);
+
+    /// <summary>
+    /// Clears any cached storage root value forcing a refresh on next access.
+    /// </summary>
+    void InvalidateRootCache();
 }
