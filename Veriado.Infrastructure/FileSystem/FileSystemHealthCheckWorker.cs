@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
-using FileSystemSyncService = Veriado.Appl.FileSystem.IFileSystemSyncService;
+using FileSystemSyncService = Veriado.Appl.Abstractions.IFileSystemSyncService;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;

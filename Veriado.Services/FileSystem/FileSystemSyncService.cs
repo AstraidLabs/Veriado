@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Veriado.Appl.FileSystem;
+using ApplicationFileSystemSyncService = Veriado.Appl.Abstractions.IFileSystemSyncService;
 using Veriado.Domain.Files;
 using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
@@ -11,7 +11,7 @@ namespace Veriado.Services.FileSystem;
 /// <summary>
 /// Coordinates logical file state in response to physical file system changes.
 /// </summary>
-public sealed class FileSystemSyncService : IFileSystemSyncService
+public sealed class FileSystemSyncService : ApplicationFileSystemSyncService
 {
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly ApplicationClock _clock;
