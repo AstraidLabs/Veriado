@@ -1,3 +1,5 @@
+// File: Veriado.Services/Files/FileContentService.cs
+using System.IO;
 using AutoMapper;
 
 namespace Veriado.Services.Files;
@@ -8,11 +10,13 @@ namespace Veriado.Services.Files;
 public sealed class FileContentService : IFileContentService
 {
     private readonly IFileRepository _repository;
+    private readonly IFilePathResolver _pathResolver;
     private readonly IMapper _mapper;
 
-    public FileContentService(IFileRepository repository, IMapper mapper)
+    public FileContentService(IFileRepository repository, IFilePathResolver pathResolver, IMapper mapper)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
     }
 
@@ -24,7 +28,22 @@ public sealed class FileContentService : IFileContentService
             return null;
         }
 
-        return _mapper.Map<FileContentResponseDto>(file);
+        var fileSystem = await _repository.GetFileSystemAsync(file.FileSystemId, cancellationToken)
+            .ConfigureAwait(false);
+        if (fileSystem is null)
+        {
+            return null;
+        }
+
+        var absolutePath = _pathResolver.GetFullPath(fileSystem.RelativePath.Value);
+        if (!File.Exists(absolutePath))
+        {
+            return null;
+        }
+
+        var bytes = await File.ReadAllBytesAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+        var dto = _mapper.Map<FileContentResponseDto>(file);
+        return dto with { Content = bytes };
     }
 
     public async Task<AppResult<Guid>> SaveContentToDiskAsync(Guid fileId, string targetPath, CancellationToken cancellationToken)
@@ -40,6 +59,26 @@ public sealed class FileContentService : IFileContentService
             return AppResult<Guid>.NotFound($"File '{fileId}' was not found.");
         }
 
-        return AppResult<Guid>.Unexpected("File binary content is stored externally and cannot be exported via FileContentService.");
+        var fileSystem = await _repository.GetFileSystemAsync(file.FileSystemId, cancellationToken)
+            .ConfigureAwait(false);
+        if (fileSystem is null)
+        {
+            return AppResult<Guid>.NotFound($"File system entry for '{fileId}' was not found.");
+        }
+
+        var sourcePath = _pathResolver.GetFullPath(fileSystem.RelativePath.Value);
+        if (!File.Exists(sourcePath))
+        {
+            return AppResult<Guid>.NotFound($"Physical file for '{fileId}' was not found at '{sourcePath}'.");
+        }
+
+        var targetDirectory = Path.GetDirectoryName(targetPath);
+        if (!string.IsNullOrWhiteSpace(targetDirectory) && !Directory.Exists(targetDirectory))
+        {
+            Directory.CreateDirectory(targetDirectory!);
+        }
+
+        File.Copy(sourcePath, targetPath, overwrite: true);
+        return AppResult<Guid>.Success(fileId);
     }
 }

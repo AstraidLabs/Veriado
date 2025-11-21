@@ -1,0 +1,32 @@
+// File: Veriado.Services/Storage/IStorageManagementService.cs
+using Veriado.Contracts.Storage;
+
+namespace Veriado.Services.Storage;
+
+/// <summary>
+/// Provides a façade over storage root management, migration, export, and import operations.
+/// </summary>
+public interface IStorageManagementService
+{
+    Task<string> GetCurrentRootAsync(CancellationToken cancellationToken);
+
+    Task<string> GetEffectiveRootAsync(CancellationToken cancellationToken);
+
+    Task ChangeRootAsync(string newRoot, CancellationToken cancellationToken);
+
+    Task<StorageMigrationResultDto> MigrateRootAsync(
+        string newRoot,
+        StorageMigrationOptionsDto? options,
+        CancellationToken cancellationToken);
+
+    Task<StorageExportResultDto> ExportAsync(
+        string packageRoot,
+        StorageExportOptionsDto? options,
+        CancellationToken cancellationToken);
+
+    Task<StorageImportResultDto> ImportAsync(
+        string packageRoot,
+        string targetStorageRoot,
+        StorageImportOptionsDto? options,
+        CancellationToken cancellationToken);
+}
