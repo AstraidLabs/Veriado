@@ -17,46 +17,6 @@ public sealed partial class FileSystemEntity : AggregateRoot
     {
     }
 
-    private FileSystemEntity(
-        Guid id,
-        StorageProvider provider,
-        RelativeFilePath relativePath,
-        FileHash hash,
-        ByteSize size,
-        MimeType mime,
-        FileAttributesFlags attributes,
-        string? ownerSid,
-        bool isEncrypted,
-        UtcTimestamp createdUtc,
-        UtcTimestamp lastWriteUtc,
-        UtcTimestamp lastAccessUtc,
-        ContentVersion contentVersion,
-        bool isMissing,
-        UtcTimestamp? missingSinceUtc,
-        UtcTimestamp? lastLinkedUtc,
-        string? currentFilePath,
-        string? originalFilePath,
-        FilePhysicalState physicalState)
-        : base(id)
-    {
-        Provider = provider;
-        RelativePath = relativePath;
-        Hash = hash;
-        Size = size;
-        Mime = mime;
-        Attributes = attributes;
-        OwnerSid = ownerSid;
-        IsEncrypted = isEncrypted;
-        CreatedUtc = createdUtc;
-        LastWriteUtc = lastWriteUtc;
-        LastAccessUtc = lastAccessUtc;
-        ContentVersion = contentVersion;
-        PhysicalState = NormalizePhysicalState(physicalState, isMissing);
-        InitializePaths(currentFilePath, originalFilePath);
-        SetPhysicalState(PhysicalState, missingSinceUtc);
-        LastLinkedUtc = lastLinkedUtc;
-    }
-
     /// <summary>
     /// Gets the storage provider that contains the physical content.
     /// </summary>
@@ -230,16 +190,15 @@ public sealed partial class FileSystemEntity : AggregateRoot
     {
         ArgumentNullException.ThrowIfNull(relativePath);
 
-        var normalizedOwner = NormalizeOwnerSid(ownerSid);
-        var entity = new FileSystemEntity(
-            id,
+        var entity = new FileSystemEntity(id);
+        entity.Initialize(
             provider,
             relativePath,
             hash,
             size,
             mime,
             attributes,
-            normalizedOwner,
+            ownerSid,
             isEncrypted,
             createdUtc,
             lastWriteUtc,
@@ -253,6 +212,8 @@ public sealed partial class FileSystemEntity : AggregateRoot
             physicalState);
 
         entity.ReconcilePhysicalState();
+
+        var normalizedOwner = entity.OwnerSid;
 
         if (raiseInitialEvents)
         {
@@ -286,6 +247,46 @@ public sealed partial class FileSystemEntity : AggregateRoot
         }
 
         return entity;
+    }
+
+    private void Initialize(
+        StorageProvider provider,
+        RelativeFilePath relativePath,
+        FileHash hash,
+        ByteSize size,
+        MimeType mime,
+        FileAttributesFlags attributes,
+        string? ownerSid,
+        bool isEncrypted,
+        UtcTimestamp createdUtc,
+        UtcTimestamp lastWriteUtc,
+        UtcTimestamp lastAccessUtc,
+        ContentVersion contentVersion,
+        bool isMissing,
+        UtcTimestamp? missingSinceUtc,
+        UtcTimestamp? lastLinkedUtc,
+        string? currentFilePath,
+        string? originalFilePath,
+        FilePhysicalState physicalState)
+    {
+        Provider = provider;
+        RelativePath = relativePath;
+        Hash = hash;
+        Size = size;
+        Mime = mime;
+        Attributes = attributes;
+        OwnerSid = NormalizeOwnerSid(ownerSid);
+        IsEncrypted = isEncrypted;
+        CreatedUtc = createdUtc;
+        LastWriteUtc = lastWriteUtc;
+        LastAccessUtc = lastAccessUtc;
+        LastLinkedUtc = lastLinkedUtc;
+        ContentVersion = contentVersion;
+
+        ValidateAndSetPhysicalPaths(currentFilePath, originalFilePath);
+
+        var normalizedState = NormalizePhysicalState(physicalState, isMissing);
+        SetPhysicalState(normalizedState, missingSinceUtc);
     }
 
     /// <summary>
@@ -333,7 +334,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         Size = size;
         Mime = mime;
         IsEncrypted = isEncrypted;
-        SetPhysicalState(FilePhysicalState.ContentChanged);
+        MarkContentChanged();
         LastWriteUtc = whenUtc;
         LastAccessUtc = whenUtc;
         LastLinkedUtc = whenUtc;
@@ -441,22 +442,6 @@ public sealed partial class FileSystemEntity : AggregateRoot
     }
 
     /// <summary>
-    /// Marks the entity as missing from the underlying storage.
-    /// </summary>
-    /// <param name="whenUtc">The timestamp when the missing state was detected.</param>
-    private void MarkMissing(UtcTimestamp whenUtc)
-    {
-        if (IsMissing)
-        {
-            return;
-        }
-
-        SetPhysicalState(FilePhysicalState.Missing, whenUtc);
-
-        RaiseDomainEvent(new FileSystemMissingDetected(Id, RelativePath, whenUtc, MissingSinceUtc));
-    }
-
-    /// <summary>
     /// Clears the missing state and optionally updates the storage path.
     /// </summary>
     /// <param name="newPath">An optional new relative storage path.</param>
@@ -474,7 +459,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         }
 
         RelativePath = normalized;
-        SetPhysicalState(FilePhysicalState.Healthy);
+        MarkHealthy();
         LastLinkedUtc = whenUtc;
 
         RaiseDomainEvent(new FileSystemRehydrated(Id, Provider, normalized, wasMissing, previousMissingSince, whenUtc));
@@ -506,9 +491,7 @@ public sealed partial class FileSystemEntity : AggregateRoot
         string? originalFilePath = null,
         FilePhysicalState physicalState = FilePhysicalState.Unknown)
     {
-        ArgumentNullException.ThrowIfNull(relativePath);
-
-        return new FileSystemEntity(
+        return CreateCore(
             id,
             provider,
             relativePath,
@@ -527,7 +510,8 @@ public sealed partial class FileSystemEntity : AggregateRoot
             lastLinkedUtc,
             currentFilePath,
             originalFilePath,
-            physicalState);
+            physicalState,
+            raiseInitialEvents: false);
     }
 
     /// <summary>
@@ -555,20 +539,22 @@ public sealed partial class FileSystemEntity : AggregateRoot
         return ownerSid.Trim();
     }
 
-    private void InitializePaths(string? currentFilePath, string? originalFilePath)
+    private void ValidateAndSetPhysicalPaths(string? currentFilePath, string? originalFilePath)
     {
-        if (!string.IsNullOrWhiteSpace(originalFilePath))
+        var normalizedOriginal = NormalizeOptionalPhysicalPath(originalFilePath);
+        var normalizedCurrent = NormalizeOptionalPhysicalPath(currentFilePath);
+
+        if (!string.IsNullOrEmpty(normalizedOriginal))
         {
-            OriginalFilePath = NormalizePhysicalPath(originalFilePath);
+            OriginalFilePath = normalizedOriginal!;
         }
 
-        if (!string.IsNullOrWhiteSpace(currentFilePath))
+        if (!string.IsNullOrEmpty(normalizedCurrent))
         {
-            var normalized = NormalizePhysicalPath(currentFilePath);
-            CurrentFilePath = normalized;
+            CurrentFilePath = normalizedCurrent!;
             if (string.IsNullOrWhiteSpace(OriginalFilePath))
             {
-                OriginalFilePath = normalized;
+                OriginalFilePath = normalizedCurrent!;
             }
         }
         else if (!string.IsNullOrWhiteSpace(OriginalFilePath))
@@ -578,26 +564,32 @@ public sealed partial class FileSystemEntity : AggregateRoot
         else
         {
             CurrentFilePath = string.Empty;
+            OriginalFilePath = string.Empty;
         }
     }
 
-    private static string NormalizePhysicalPath(string rawPath)
+    private static string? NormalizeOptionalPhysicalPath(string? rawPath)
     {
         if (string.IsNullOrWhiteSpace(rawPath))
         {
-            throw new ArgumentException("Physical path cannot be empty.", nameof(rawPath));
+            return null;
         }
 
         var trimmed = rawPath.Trim();
-        var fullPath = Path.GetFullPath(trimmed);
-        if (fullPath.Contains("..", StringComparison.Ordinal))
+        if (trimmed.Contains("..", StringComparison.Ordinal))
         {
             throw new ArgumentException("Physical path cannot contain parent directory traversal.", nameof(rawPath));
         }
 
-        if (!Path.IsPathRooted(fullPath))
+        if (!Path.IsPathRooted(trimmed))
         {
             throw new ArgumentException("Physical path must be rooted under a validated storage root.", nameof(rawPath));
+        }
+
+        var fullPath = Path.GetFullPath(trimmed);
+        if (fullPath.Contains("..", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Physical path cannot contain parent directory traversal.", nameof(rawPath));
         }
 
         return fullPath;
@@ -641,29 +633,21 @@ public sealed partial class FileSystemEntity : AggregateRoot
 
     public void UpdatePath(string newPath)
     {
-        if (string.IsNullOrWhiteSpace(newPath))
-        {
-            throw new ArgumentException("Physical path must be provided.", nameof(newPath));
-        }
+        var normalized = NormalizeOptionalPhysicalPath(newPath)
+            ?? throw new ArgumentException("Physical path must be provided.", nameof(newPath));
 
-        var normalized = newPath.Trim();
         var pathChanged = !string.Equals(CurrentFilePath, normalized, StringComparison.Ordinal);
 
-        if (string.IsNullOrWhiteSpace(OriginalFilePath))
-        {
-            OriginalFilePath = normalized;
-        }
+        ValidateAndSetPhysicalPaths(normalized, OriginalFilePath);
 
         if (!pathChanged)
         {
             return;
         }
 
-        CurrentFilePath = normalized;
-
         if (PhysicalState != FilePhysicalState.Missing)
         {
-            PhysicalState = FilePhysicalState.MovedOrRenamed;
+            MarkMovedOrRenamed();
         }
     }
 
@@ -672,14 +656,12 @@ public sealed partial class FileSystemEntity : AggregateRoot
         ArgumentNullException.ThrowIfNull(clock);
 
         var whenUtc = UtcTimestamp.From(clock.UtcNow);
-        if (PhysicalState == FilePhysicalState.Missing)
+        if (PhysicalState != FilePhysicalState.Missing)
         {
-            return;
+            SetPhysicalState(FilePhysicalState.Missing, whenUtc);
+
+            RaiseDomainEvent(new FileSystemMissingDetected(Id, RelativePath, whenUtc, MissingSinceUtc));
         }
-
-        SetPhysicalState(FilePhysicalState.Missing, whenUtc);
-
-        RaiseDomainEvent(new FileSystemMissingDetected(Id, RelativePath, whenUtc, MissingSinceUtc));
     }
 
     public void MarkHealthy()
@@ -697,9 +679,23 @@ public sealed partial class FileSystemEntity : AggregateRoot
         SetPhysicalState(FilePhysicalState.ContentChanged);
     }
 
+    public void MarkMovedOrRenamed()
+    {
+        SetPhysicalState(FilePhysicalState.MovedOrRenamed);
+    }
+
     public void MarkMovedOrRenamed(string newPath)
     {
-        UpdatePath(newPath);
-        SetPhysicalState(FilePhysicalState.MovedOrRenamed);
+        var normalized = NormalizeOptionalPhysicalPath(newPath)
+            ?? throw new ArgumentException("Physical path must be provided.", nameof(newPath));
+
+        var pathChanged = !string.Equals(CurrentFilePath, normalized, StringComparison.Ordinal);
+
+        ValidateAndSetPhysicalPaths(normalized, OriginalFilePath);
+
+        if (pathChanged || PhysicalState != FilePhysicalState.MovedOrRenamed || IsMissing)
+        {
+            MarkMovedOrRenamed();
+        }
     }
 }

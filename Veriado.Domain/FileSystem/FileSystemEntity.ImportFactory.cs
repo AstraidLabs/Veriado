@@ -47,6 +47,6 @@ public sealed partial class FileSystemEntity
             currentFilePath,
             originalFilePath,
             physicalState,
-            raiseInitialEvents: true);
+            raiseInitialEvents: false);
     }
 }
