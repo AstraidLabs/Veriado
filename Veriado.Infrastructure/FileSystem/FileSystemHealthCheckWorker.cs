@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Veriado.Application.Abstractions;
+using Veriado.Appl.FileSystem;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
@@ -26,12 +27,14 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     private readonly FileSystemHealthCheckOptions _options;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
     private readonly ILogger<FileSystemHealthCheckWorker> _logger;
+    private readonly IFileSystemSyncService _syncService;
 
     public FileSystemHealthCheckWorker(
         IServiceScopeFactory scopeFactory,
         IFilePathResolver pathResolver,
         IOptions<FileSystemHealthCheckOptions> options,
         IOperationalPauseCoordinator pauseCoordinator,
+        IFileSystemSyncService syncService,
         ILogger<FileSystemHealthCheckWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -39,6 +42,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
+        _syncService = syncService ?? throw new ArgumentNullException(nameof(syncService));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -116,6 +120,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         IFileHashCalculator hashCalculator,
         CancellationToken cancellationToken)
     {
+        var syncActions = new List<FileSystemSyncAction>();
+
         if (_options.EnableParallelChecks)
         {
             var results = new ConcurrentBag<FileEvaluationResult>();
@@ -134,7 +140,11 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             var fileMap = batch.ToDictionary(f => f.Id);
             foreach (var result in results.OrderBy(r => r.Id))
             {
-                ApplyResult(fileMap[result.Id], result, clock);
+                var syncAction = ApplyResult(fileMap[result.Id], result, clock);
+                if (syncAction is not null)
+                {
+                    syncActions.Add(syncAction);
+                }
             }
         }
         else
@@ -142,11 +152,16 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             foreach (var file in batch)
             {
                 var result = await EvaluateFileAsync(file, hashCalculator, cancellationToken).ConfigureAwait(false);
-                ApplyResult(file, result, clock);
+                var syncAction = ApplyResult(file, result, clock);
+                if (syncAction is not null)
+                {
+                    syncActions.Add(syncAction);
+                }
             }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await DispatchSyncActionsAsync(syncActions, cancellationToken).ConfigureAwait(false);
         dbContext.ChangeTracker.Clear();
     }
 
@@ -184,27 +199,77 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         return FileEvaluationResult.ContentChanged(file.Id, size, created, lastWrite, lastAccess, hash);
     }
 
-    private static void ApplyResult(FileSystemEntity file, FileEvaluationResult result, DomainClock clock)
+    private static FileSystemSyncAction? ApplyResult(FileSystemEntity file, FileEvaluationResult result, DomainClock clock)
     {
+        var wasMissing = file.IsMissing;
+
         switch (result.Outcome)
         {
             case FileCheckOutcome.Missing:
                 file.MarkMissing(clock);
-                return;
+                return new FileSystemSyncAction(FileSystemSyncEvent.Missing, file.Id);
             case FileCheckOutcome.Unchanged:
                 file.MarkHealthy();
-                return;
+                if (wasMissing)
+                {
+                    return new FileSystemSyncAction(FileSystemSyncEvent.Rehydrated, file.Id);
+                }
+
+                return null;
             case FileCheckOutcome.MetadataChanged:
                 file.UpdateTimestamps(result.Created, result.LastWrite, result.LastAccess, UtcTimestamp.From(clock.UtcNow));
                 file.MarkHealthy();
-                return;
+                if (wasMissing)
+                {
+                    return new FileSystemSyncAction(FileSystemSyncEvent.Rehydrated, file.Id);
+                }
+
+                return null;
             case FileCheckOutcome.ContentChanged:
                 file.ReplaceContent(file.RelativePath, result.Hash, result.Size, file.Mime, file.IsEncrypted, result.LastWrite);
                 file.UpdateTimestamps(result.Created, result.LastWrite, result.LastAccess, UtcTimestamp.From(clock.UtcNow));
                 file.MarkContentChanged();
-                return;
+                return new FileSystemSyncAction(FileSystemSyncEvent.ContentChanged, file.Id);
             default:
                 throw new InvalidOperationException($"Unsupported file check outcome '{result.Outcome}'.");
+        }
+    }
+
+    private async Task DispatchSyncActionsAsync(IEnumerable<FileSystemSyncAction> syncActions, CancellationToken cancellationToken)
+    {
+        foreach (var action in syncActions)
+        {
+            try
+            {
+                switch (action.EventType)
+                {
+                    case FileSystemSyncEvent.Missing:
+                        await _syncService.HandleFileMissingAsync(action.FileSystemId, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case FileSystemSyncEvent.Rehydrated:
+                        await _syncService.HandleFileRehydratedAsync(action.FileSystemId, cancellationToken)
+                            .ConfigureAwait(false);
+                        break;
+                    case FileSystemSyncEvent.Moved:
+                        await _syncService.HandleFileMovedAsync(action.FileSystemId, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case FileSystemSyncEvent.ContentChanged:
+                        await _syncService.HandleFileContentChangedAsync(action.FileSystemId, cancellationToken)
+                            .ConfigureAwait(false);
+                        break;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to coordinate logical file update for file system id {FileSystemId} during health check.",
+                    action.FileSystemId);
+            }
         }
     }
 

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.FileSystem;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
@@ -22,6 +23,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     private readonly IFilePathResolver _pathResolver;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
+    private readonly IFileSystemSyncService _syncService;
     private readonly ApplicationClock _clock;
     private readonly ILogger<FileSystemMonitoringService> _logger;
     private readonly Channel<FileSystemEvent> _eventChannel;
@@ -34,12 +36,14 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         IFilePathResolver pathResolver,
         IServiceScopeFactory scopeFactory,
         IOperationalPauseCoordinator pauseCoordinator,
+        IFileSystemSyncService syncService,
         ApplicationClock clock,
         ILogger<FileSystemMonitoringService> logger)
     {
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
+        _syncService = syncService ?? throw new ArgumentNullException(nameof(syncService));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _eventChannel = Channel.CreateBounded<FileSystemEvent>(
@@ -232,31 +236,56 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
         var hashCalculator = scope.ServiceProvider.GetRequiredService<IFileHashCalculator>();
+        var syncActions = new List<FileSystemSyncAction>();
 
         foreach (var fileEvent in coalesced.Values.OrderBy(e => e.OccurredUtc))
         {
             switch (fileEvent.EventType)
             {
                 case FileSystemEventType.Created:
-                    await HandleCreatedAsync(fileEvent.FullPath, dbContext, clock, hashCalculator, cancellationToken)
+                    await HandleCreatedAsync(
+                            fileEvent.FullPath,
+                            dbContext,
+                            clock,
+                            hashCalculator,
+                            syncActions,
+                            cancellationToken)
                         .ConfigureAwait(false);
                     break;
                 case FileSystemEventType.Deleted:
-                    await HandleDeletedAsync(fileEvent.FullPath, dbContext, clock, cancellationToken)
+                    await HandleDeletedAsync(
+                            fileEvent.FullPath,
+                            dbContext,
+                            clock,
+                            syncActions,
+                            cancellationToken)
                         .ConfigureAwait(false);
                     break;
                 case FileSystemEventType.Renamed:
-                    await HandleRenamedAsync(fileEvent.OldFullPath, fileEvent.FullPath, dbContext, clock, cancellationToken)
+                    await HandleRenamedAsync(
+                            fileEvent.OldFullPath,
+                            fileEvent.FullPath,
+                            dbContext,
+                            clock,
+                            syncActions,
+                            cancellationToken)
                         .ConfigureAwait(false);
                     break;
                 case FileSystemEventType.Changed:
-                    await HandleChangedAsync(fileEvent.FullPath, dbContext, clock, hashCalculator, cancellationToken)
+                    await HandleChangedAsync(
+                            fileEvent.FullPath,
+                            dbContext,
+                            clock,
+                            hashCalculator,
+                            syncActions,
+                            cancellationToken)
                         .ConfigureAwait(false);
                     break;
             }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await DispatchSyncActionsAsync(syncActions, cancellationToken).ConfigureAwait(false);
     }
 
     private static FileSystemEvent MergeEvents(FileSystemEvent existing, FileSystemEvent incoming)
@@ -279,6 +308,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         AppDbContext dbContext,
         DomainClock clock,
         IFileHashCalculator hashCalculator,
+        List<FileSystemSyncAction> syncActions,
         CancellationToken cancellationToken)
     {
         if (!TryGetRelativePath(fullPath, out var relativePath))
@@ -299,6 +329,8 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
                 relativePath);
             return;
         }
+
+        var wasMissing = entity.IsMissing;
 
         var info = new FileInfo(fullPath);
         if (!info.Exists)
@@ -333,15 +365,22 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         else if (entity.Size != size)
         {
             entity.MarkContentChanged();
+            syncActions.Add(new FileSystemSyncAction(FileSystemSyncEvent.ContentChanged, entity.Id));
         }
 
         entity.UpdateTimestamps(createdUtc, lastWriteUtc, lastAccessUtc, observedUtc);
+
+        if (wasMissing)
+        {
+            syncActions.Add(new FileSystemSyncAction(FileSystemSyncEvent.Rehydrated, entity.Id));
+        }
     }
 
     private async Task HandleDeletedAsync(
         string fullPath,
         AppDbContext dbContext,
         DomainClock clock,
+        List<FileSystemSyncAction> syncActions,
         CancellationToken cancellationToken)
     {
         if (!TryGetRelativePath(fullPath, out var relativePath))
@@ -362,6 +401,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
 
         entity.MarkMissing(clock);
+        syncActions.Add(new FileSystemSyncAction(FileSystemSyncEvent.Missing, entity.Id));
     }
 
     private async Task HandleRenamedAsync(
@@ -369,6 +409,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         string newFullPath,
         AppDbContext dbContext,
         DomainClock clock,
+        List<FileSystemSyncAction> syncActions,
         CancellationToken cancellationToken)
     {
         if (!TryGetRelativePath(newFullPath, out var newRelativePath))
@@ -424,6 +465,8 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
                 UtcTimestamp.From(info.LastAccessTimeUtc),
                 whenUtc);
         }
+
+        syncActions.Add(new FileSystemSyncAction(FileSystemSyncEvent.Moved, entity.Id));
     }
 
     private async Task HandleChangedAsync(
@@ -431,6 +474,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         AppDbContext dbContext,
         DomainClock clock,
         IFileHashCalculator hashCalculator,
+        List<FileSystemSyncAction> syncActions,
         CancellationToken cancellationToken)
     {
         if (!TryGetRelativePath(fullPath, out var relativePath))
@@ -454,7 +498,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         if (!info.Exists)
         {
             _logger.LogDebug("Change notification treated as deletion for {RelativePath} because file is missing.", relativePath);
-            await HandleDeletedAsync(fullPath, dbContext, clock, cancellationToken).ConfigureAwait(false);
+            await HandleDeletedAsync(fullPath, dbContext, clock, syncActions, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -468,6 +512,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         var timestampsChanged = entity.CreatedUtc != createdUtc || entity.LastWriteUtc != lastWriteUtc || entity.LastAccessUtc != lastAccessUtc;
 
         FileHash? hash = null;
+        var contentChanged = false;
 
         if (sizeChanged)
         {
@@ -484,10 +529,12 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         if (hash is not null)
         {
             entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
+            contentChanged = true;
         }
         else if (sizeChanged)
         {
             entity.MarkContentChanged();
+            contentChanged = true;
         }
 
         entity.UpdatePath(fullPath);
@@ -496,6 +543,11 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         if (!sizeChanged && timestampsChanged)
         {
             entity.MarkHealthy();
+        }
+
+        if (contentChanged)
+        {
+            syncActions.Add(new FileSystemSyncAction(FileSystemSyncEvent.ContentChanged, entity.Id));
         }
     }
 
@@ -514,6 +566,53 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             return false;
         }
     }
+
+    private async Task DispatchSyncActionsAsync(IEnumerable<FileSystemSyncAction> syncActions, CancellationToken cancellationToken)
+    {
+        foreach (var action in syncActions)
+        {
+            try
+            {
+                switch (action.EventType)
+                {
+                    case FileSystemSyncEvent.Missing:
+                        await _syncService.HandleFileMissingAsync(action.FileSystemId, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case FileSystemSyncEvent.Rehydrated:
+                        await _syncService.HandleFileRehydratedAsync(action.FileSystemId, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case FileSystemSyncEvent.Moved:
+                        await _syncService.HandleFileMovedAsync(action.FileSystemId, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case FileSystemSyncEvent.ContentChanged:
+                        await _syncService.HandleFileContentChangedAsync(action.FileSystemId, cancellationToken)
+                            .ConfigureAwait(false);
+                        break;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unhandled exception while coordinating logical file updates for file system id {FileSystemId}.",
+                    action.FileSystemId);
+            }
+        }
+    }
+}
+
+internal sealed record FileSystemSyncAction(FileSystemSyncEvent EventType, Guid FileSystemId);
+
+internal enum FileSystemSyncEvent
+{
+    Missing,
+    Rehydrated,
+    Moved,
+    ContentChanged,
 }
 
 internal enum FileSystemEventType
