@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Veriado.Appl.Abstractions;
+using Veriado.Application.Abstractions;
 using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
 using Veriado.Infrastructure.Events.Handlers;
@@ -198,6 +199,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddScoped<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddScoped<IFilePathResolver, FilePathResolver>();
+        services.AddScoped<IStorageMigrationService, StorageMigrationService>();
         services.AddSingleton<IFileHashCalculator, FileHashCalculator>();
         services.AddSingleton<IFileSystemMonitoringService, FileSystemMonitoringService>();
 
