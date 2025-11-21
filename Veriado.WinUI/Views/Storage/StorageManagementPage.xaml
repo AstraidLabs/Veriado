@@ -1,0 +1,153 @@
+<Page
+    x:Class="Veriado.WinUI.Views.Storage.StorageManagementPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    mc:Ignorable="d">
+
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="Migrace, export a import" FontSize="28" FontWeight="SemiBold" />
+                <muxc:ProgressRing Width="28" Height="28" IsActive="{Binding IsBusy}" />
+                <Button Content="Zrušit" Command="{Binding CancelCommand}" />
+            </StackPanel>
+
+            <TextBlock
+                Text="Spravujte přesun úložiště a přípravu balíčků databáze a dokumentů."
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+            <muxc:InfoBar
+                IsOpen="{Binding HasError}"
+                Severity="Error"
+                IsClosable="False"
+                Title="Došlo k chybě"
+                Message="Detail najdete v oznamovací liště nebo protokolu." />
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Aktuální stav" FontSize="20" FontWeight="SemiBold" />
+                <Grid ColumnSpacing="12" RowSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Aktuální kořen" VerticalAlignment="Center" />
+                    <TextBox
+                        Grid.Row="0"
+                        Grid.Column="1"
+                        IsReadOnly="True"
+                        Text="{Binding CurrentRoot}" />
+                    <Button Grid.Row="0" Grid.Column="2" Content="Načíst" Command="{Binding RefreshCommand}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Efektivní kořen" VerticalAlignment="Center" />
+                    <TextBox
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        IsReadOnly="True"
+                        Text="{Binding EffectiveRoot}" />
+                </Grid>
+            </StackPanel>
+
+            <muxc:Expander IsExpanded="True">
+                <muxc:Expander.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Migrace úložiště" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Přesun dat na nové umístění" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </muxc:Expander.Header>
+                <StackPanel Spacing="12" Margin="0,8,0,0">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="Cílový kořen" />
+                        <TextBox Grid.Column="1" MinWidth="360" Text="{Binding MigrationTargetRoot, Mode=TwoWay}" />
+                        <Button Grid.Column="2" Content="Vybrat složku" Command="{Binding PickMigrationTargetCommand}" />
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="20">
+                        <CheckBox Content="Smazat zdroj po kopii" IsChecked="{Binding DeleteSourceAfterCopy, Mode=TwoWay}" />
+                        <CheckBox Content="Ověřit hashe" IsChecked="{Binding VerifyHashes, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="Spustit migraci" Command="{Binding RunMigrationCommand}" />
+                        <TextBlock VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Použije se pro přesun databáze i dokumentů." />
+                    </StackPanel>
+                </StackPanel>
+            </muxc:Expander>
+
+            <muxc:Expander IsExpanded="True">
+                <muxc:Expander.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Export balíčku" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Příprava pro přesun nebo zálohu" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </muxc:Expander.Header>
+                <StackPanel Spacing="12" Margin="0,8,0,0">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="Složka balíčku" />
+                        <TextBox Grid.Column="1" MinWidth="360" Text="{Binding ExportPackageRoot, Mode=TwoWay}" />
+                        <Button Grid.Column="2" Content="Vybrat složku" Command="{Binding PickExportRootCommand}" />
+                    </Grid>
+
+                    <CheckBox Content="Přepsat existující soubory" IsChecked="{Binding ExportOverwriteExisting, Mode=TwoWay}" />
+
+                    <Button Content="Exportovat databázi a dokumenty" Command="{Binding RunExportCommand}" />
+                </StackPanel>
+            </muxc:Expander>
+
+            <muxc:Expander IsExpanded="True">
+                <muxc:Expander.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Import balíčku" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Načtení exportovaných dat" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </muxc:Expander.Header>
+                <StackPanel Spacing="12" Margin="0,8,0,0">
+                    <Grid ColumnSpacing="12" RowSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Složka balíčku" />
+                        <TextBox Grid.Row="0" Grid.Column="1" MinWidth="360" Text="{Binding ImportPackageRoot, Mode=TwoWay}" />
+                        <Button Grid.Row="0" Grid.Column="2" Content="Vybrat složku" Command="{Binding PickImportPackageRootCommand}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Text="Cílový kořen" />
+                        <TextBox Grid.Row="1" Grid.Column="1" MinWidth="360" Text="{Binding ImportTargetRoot, Mode=TwoWay}" />
+                        <Button Grid.Row="1" Grid.Column="2" Content="Vybrat složku" Command="{Binding PickImportTargetRootCommand}" />
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="20">
+                        <CheckBox Content="Přepsat existující soubory" IsChecked="{Binding ImportOverwriteExisting, Mode=TwoWay}" />
+                        <CheckBox Content="Ověřit po kopii" IsChecked="{Binding ImportVerifyAfterCopy, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
+                </StackPanel>
+            </muxc:Expander>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

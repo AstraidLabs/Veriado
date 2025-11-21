@@ -17,6 +17,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<Views.Shell.MainShell>();
         services.AddTransient<Views.Files.FilesPage>();
         services.AddTransient<Views.Import.ImportPage>();
+        services.AddTransient<Views.Storage.StorageManagementPage>();
         services.AddTransient<Views.Settings.SettingsPage>();
 
         return services;

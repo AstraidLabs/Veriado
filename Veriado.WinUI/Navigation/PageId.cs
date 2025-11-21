@@ -4,5 +4,6 @@ public enum PageId
 {
     Files,
     Import,
+    Storage,
     Settings,
 }

@@ -14,6 +14,7 @@ using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.Services.DialogFactories;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
+using Veriado.WinUI.ViewModels.Storage;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.ViewModels.Shell;
 using Veriado.WinUI.Views.Files;
@@ -64,6 +65,7 @@ internal sealed class AppHost : IAsyncDisposable
                 services.AddTransient<FileDetailDialogViewModel>();
                 services.AddTransient<FilesPageViewModel>();
                 services.AddTransient<ImportPageViewModel>();
+                services.AddTransient<StorageManagementPageViewModel>();
                 services.AddTransient<SettingsPageViewModel>();
 
                 services.AddTransient<FileDetailDialog>();
