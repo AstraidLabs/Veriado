@@ -5,38 +5,28 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Domain.Metadata;
 using Veriado.Domain.ValueObjects;
+using Veriado.Infrastructure.FileSystem;
 
 namespace Veriado.Infrastructure.Storage;
 
 /// <summary>
-/// Provides a simple file-system based implementation of <see cref="IFileStorage"/> for local development scenarios.
+/// Provides a file-system based implementation of <see cref="IFileStorage"/> rooted at the configured storage root.
 /// </summary>
 internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 {
     private const string DefaultMimeType = "application/octet-stream";
-    private readonly string _rootPath;
     private readonly StorageProvider _provider = StorageProvider.Local;
+    private readonly IFilePathResolver _pathResolver;
+    private readonly ILogger<LocalFileStorage> _logger;
 
-    public LocalFileStorage(InfrastructureOptions options)
+    public LocalFileStorage(IFilePathResolver pathResolver, ILogger<LocalFileStorage> logger)
     {
-        ArgumentNullException.ThrowIfNull(options);
-
-        if (string.IsNullOrWhiteSpace(options.DbPath))
-        {
-            throw new ArgumentException("Infrastructure options must configure a database path to derive storage location.", nameof(options));
-        }
-
-        var baseDirectory = Path.GetDirectoryName(options.DbPath);
-        if (string.IsNullOrWhiteSpace(baseDirectory))
-        {
-            baseDirectory = AppContext.BaseDirectory;
-        }
-
-        _rootPath = Path.Combine(baseDirectory!, "storage");
-        Directory.CreateDirectory(_rootPath);
+        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public ValueTask<StorageReservation> ReservePathAsync(string? preferredPath, CancellationToken cancellationToken)
@@ -44,7 +34,7 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         cancellationToken.ThrowIfCancellationRequested();
 
         var relativePath = string.IsNullOrWhiteSpace(preferredPath)
-            ? BuildRelativePath()
+            ? BuildTemporaryPath()
             : NormalizePath(preferredPath!.Trim());
 
         var storagePath = StoragePath.From(relativePath);
@@ -83,7 +73,17 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         cancellationToken.ThrowIfCancellationRequested();
 
         var hash = FileHash.From(context.Sha256);
-        var snapshot = CreateSnapshot(reservation.Path.Value, hash, context.Length);
+        var targetRelativePath = NormalizePath(BuildRelativePath(hash.Value));
+        var currentPhysical = ResolvePath(reservation.Path.Value);
+        var targetPhysical = ResolvePath(targetRelativePath);
+
+        if (!string.Equals(currentPhysical, targetPhysical, StringComparison.OrdinalIgnoreCase))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPhysical)!);
+            File.Move(currentPhysical, targetPhysical, overwrite: true);
+        }
+
+        var snapshot = CreateSnapshot(targetRelativePath, hash, context.Length);
         return ValueTask.FromResult(snapshot);
     }
 
@@ -212,17 +212,26 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
             UtcTimestamp.From(info.LastAccessTimeUtc));
     }
 
-    private static string BuildRelativePath()
+    private static string BuildRelativePath(string sha256)
+    {
+        if (sha256.Length < 2)
+        {
+            return BuildTemporaryPath();
+        }
+
+        return Path.Combine(sha256[..2], sha256[2..]);
+    }
+
+    private static string BuildTemporaryPath()
     {
         var identifier = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        return Path.Combine(identifier[..2], identifier[2..]);
+        return Path.Combine("tmp", identifier[..2], identifier[2..]);
     }
 
     private string ResolvePath(string relativePath)
     {
         ArgumentNullException.ThrowIfNull(relativePath);
 
-        var rootFullPath = Path.GetFullPath(_rootPath);
         var trimmedRelative = relativePath.Trim();
         if (trimmedRelative.Length == 0)
         {
@@ -233,60 +242,35 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
             .Replace('\\', Path.DirectorySeparatorChar)
             .Replace('/', Path.DirectorySeparatorChar);
 
-        var fullPath = Path.GetFullPath(Path.Combine(rootFullPath, sanitizedRelative));
-
-        EnsureWithinRoot(rootFullPath, fullPath);
-
-        return fullPath;
+        try
+        {
+            var fullPath = _pathResolver.GetFullPath(sanitizedRelative);
+            EnsureWithinRoot(fullPath);
+            return fullPath;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve storage path for relative path {RelativePath}.", relativePath);
+            throw;
+        }
     }
 
-    private static void EnsureWithinRoot(string rootFullPath, string fullPath)
+    private void EnsureWithinRoot(string fullPath)
     {
-        if (!fullPath.StartsWith(rootFullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new StoragePathViolationException(rootFullPath, fullPath);
-        }
+        var storageRoot = Path.GetFullPath(_pathResolver.GetStorageRoot());
+        var normalizedFullPath = Path.GetFullPath(fullPath);
+        var relativeToRoot = Path.GetRelativePath(storageRoot, normalizedFullPath);
 
-        if (Path.EndsInDirectorySeparator(rootFullPath))
+        if (relativeToRoot.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativeToRoot))
         {
-            return;
-        }
+            _logger.LogWarning(
+                "Resolved path {FullPath} is outside of storage root {StorageRoot}.",
+                normalizedFullPath,
+                storageRoot);
 
-        var normalizedRoot = TrimTrailingSeparators(rootFullPath);
-        if (!fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new StoragePathViolationException(rootFullPath, fullPath);
-        }
-
-        if (fullPath.Length > normalizedRoot.Length)
-        {
-            var nextChar = fullPath[normalizedRoot.Length];
-            if (!IsDirectorySeparator(nextChar))
-            {
-                throw new StoragePathViolationException(rootFullPath, fullPath);
-            }
-        }
-
-        var relative = Path.GetRelativePath(rootFullPath, fullPath);
-        if (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
-        {
-            throw new StoragePathViolationException(rootFullPath, fullPath);
+            throw new StoragePathViolationException(storageRoot, normalizedFullPath);
         }
     }
-
-    private static string TrimTrailingSeparators(string path)
-    {
-        if (string.IsNullOrEmpty(path))
-        {
-            return path;
-        }
-
-        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return trimmed.Length == 0 ? path : trimmed;
-    }
-
-    private static bool IsDirectorySeparator(char character)
-        => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar;
 
     private static string NormalizePath(string relativePath)
     {
