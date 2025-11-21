@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
-using FileSystemSyncService = Veriado.Appl.FileSystem.IFileSystemSyncService;
+using Veriado.Appl.FileSystem;
+using Veriado.Application.Abstractions;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
@@ -24,7 +25,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     private readonly IFilePathResolver _pathResolver;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
-    private readonly FileSystemSyncService _syncService;
+    private readonly IFileSystemSyncService _syncService;
     private readonly ApplicationClock _clock;
     private readonly ILogger<FileSystemMonitoringService> _logger;
     private readonly Channel<FileSystemEvent> _eventChannel;
@@ -37,7 +38,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         IFilePathResolver pathResolver,
         IServiceScopeFactory scopeFactory,
         IOperationalPauseCoordinator pauseCoordinator,
-        FileSystemSyncService syncService,
+        IFileSystemSyncService syncService,
         ApplicationClock clock,
         ILogger<FileSystemMonitoringService> logger)
     {
@@ -359,9 +360,9 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         entity.MarkHealthy();
         entity.UpdatePath(fullPath);
-        if (hash is FileHash computedHash)
+        if (hash is not null)
         {
-            entity.ReplaceContent(entity.RelativePath, computedHash, size, entity.Mime, entity.IsEncrypted, observedUtc);
+            entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, observedUtc);
         }
         else if (entity.Size != size)
         {
@@ -527,9 +528,9 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             }
         }
 
-        if (hash is FileHash computedHash)
+        if (hash is not null)
         {
-            entity.ReplaceContent(entity.RelativePath, computedHash, size, entity.Mime, entity.IsEncrypted, whenUtc);
+            entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
             contentChanged = true;
         }
         else if (sizeChanged)
