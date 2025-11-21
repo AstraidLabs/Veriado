@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Infrastructure.FileSystem;

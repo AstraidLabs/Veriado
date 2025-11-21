@@ -10,7 +10,6 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Veriado.Appl.Files;
 using Veriado.Contracts.Files;
-using Veriado.Infrastructure.FileSystem;
 using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
@@ -27,8 +26,8 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IHotStateService _hotStateService;
     private readonly IHealthService _healthService;
     private readonly IFileService _fileService;
+    private readonly IFileOperationsService _fileOperationsService;
     private readonly IPickerService _pickerService;
-    private readonly IFileHashCalculator _fileHashCalculator;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
@@ -55,8 +54,8 @@ public partial class FilesPageViewModel : ViewModelBase
         IHotStateService hotStateService,
         IHealthService healthService,
         IFileService fileService,
+        IFileOperationsService fileOperationsService,
         IPickerService pickerService,
-        IFileHashCalculator fileHashCalculator,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
         IServerClock serverClock,
@@ -70,8 +69,8 @@ public partial class FilesPageViewModel : ViewModelBase
         _hotStateService = hotStateService ?? throw new ArgumentNullException(nameof(hotStateService));
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
+        _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
-        _fileHashCalculator = fileHashCalculator ?? throw new ArgumentNullException(nameof(fileHashCalculator));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
@@ -561,23 +560,34 @@ public partial class FilesPageViewModel : ViewModelBase
         await SafeExecuteAsync(
             async cancellationToken =>
             {
-                var hash = await _fileHashCalculator
-                    .ComputeSha256Async(filePath, cancellationToken)
+                var response = await _fileOperationsService
+                    .UpdateFileContentAsync(item.Dto.Id, filePath, cancellationToken)
                     .ConfigureAwait(false);
 
-                // TODO: Call backend command to reattach/refresh the physical file using filePath and hash.Value.
-                // The backend should validate the hash, update the stored path, and return an updated FileSummaryDto.
+                if (!response.IsSuccess || response.Data is null)
+                {
+                    var message = response.Errors.FirstOrDefault()?.Message
+                        ?? "Nepodařilo se aktualizovat obsah souboru.";
+                    await Dispatcher.Enqueue(() => StatusService.Error(message)).ConfigureAwait(false);
+                    return;
+                }
+
+                var updatedModel = new FileListItemModel(
+                    response.Data,
+                    _serverClock.NowLocal,
+                    _validityThresholds);
 
                 await Dispatcher.Enqueue(() =>
                 {
-                    item.UpdatePhysicalStatus("Healthy", null);
+                    var index = Items.IndexOf(item);
+                    if (index >= 0)
+                    {
+                        Items[index] = updatedModel;
+                    }
                 }).ConfigureAwait(false);
             },
             "Aktualizace souboru...")
             .ConfigureAwait(false);
-
-        // TODO: Replace with incremental model update once the backend returns the refreshed DTO.
-        await RefreshCommand.ExecuteAsync(null).ConfigureAwait(false);
     }
 
     private static string BuildIndexingWarningMessage(int staleDocuments)

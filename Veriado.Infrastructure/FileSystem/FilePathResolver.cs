@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.Abstractions;
 using Veriado.Domain.FileSystem;
 using Veriado.Infrastructure.Storage;
 using Veriado.Infrastructure.Persistence;
