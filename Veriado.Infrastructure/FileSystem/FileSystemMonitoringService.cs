@@ -16,6 +16,7 @@ using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using ApplicationClock = Veriado.Appl.Abstractions.IClock;
 using DomainClock = Veriado.Domain.Primitives.IClock;
+using Veriado.Application.Abstractions;
 
 namespace Veriado.Infrastructure.FileSystem;
 
