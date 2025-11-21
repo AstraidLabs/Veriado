@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Domain.FileSystem;
+using Veriado.Infrastructure.Storage;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Entities;
 
@@ -30,16 +31,24 @@ public sealed class FilePathResolver : IFilePathResolver
             return _cachedRoot!;
         }
 
-        var root = _dbContext.StorageRoots.AsNoTracking().SingleOrDefault();
-        if (root is null || string.IsNullOrWhiteSpace(root.RootPath))
+        try
         {
-            const string message = "Storage root is not configured. Run initialisation to set the root path.";
-            _logger.LogError("{Message}", message);
-            throw new InvalidOperationException(message);
-        }
+            var root = _dbContext.StorageRoots.AsNoTracking().SingleOrDefault();
+            if (root is null || string.IsNullOrWhiteSpace(root.RootPath))
+            {
+                const string message = "Storage root is not configured. Run initialisation to set the root path.";
+                _logger.LogError("{Message}", message);
+                throw new InvalidOperationException(message);
+            }
 
-        _cachedRoot = NormalizeRoot(root);
-        return _cachedRoot!;
+            _cachedRoot = NormalizeRoot(root, _logger);
+            return _cachedRoot!;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve storage root from persistence.");
+            throw;
+        }
     }
 
     public string GetFullPath(string relativePath)
@@ -49,10 +58,18 @@ public sealed class FilePathResolver : IFilePathResolver
             throw new ArgumentException("Relative path must be provided.", nameof(relativePath));
         }
 
-        var root = GetStorageRoot();
-        var normalizedRelative = NormalizeRelative(relativePath);
-        var fullPath = Path.Combine(root, normalizedRelative);
-        return Path.GetFullPath(fullPath);
+        try
+        {
+            var root = GetStorageRoot();
+            var normalizedRelative = NormalizeRelative(relativePath);
+            var fullPath = Path.Combine(root, normalizedRelative);
+            return Path.GetFullPath(fullPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve full path for relative path {RelativePath}.", relativePath);
+            throw;
+        }
     }
 
     public string GetFullPath(FileSystemEntity file)
@@ -68,31 +85,49 @@ public sealed class FilePathResolver : IFilePathResolver
             throw new ArgumentException("Full path must be provided.", nameof(fullPath));
         }
 
-        var storageRoot = Path.GetFullPath(GetStorageRoot());
-        var rootedFullPath = fullPath;
-        if (!Path.IsPathRooted(fullPath))
+        try
         {
-            rootedFullPath = Path.Combine(storageRoot, fullPath);
+            var storageRoot = Path.GetFullPath(GetStorageRoot());
+            var rootedFullPath = fullPath;
+            if (!Path.IsPathRooted(fullPath))
+            {
+                rootedFullPath = Path.Combine(storageRoot, fullPath);
+            }
+
+            var normalizedFull = Path.GetFullPath(rootedFullPath);
+            var relative = Path.GetRelativePath(storageRoot, normalizedFull);
+
+            if (IsOutsideRoot(relative))
+            {
+                _logger.LogWarning(
+                    "Full path {FullPath} is not located under storage root {RootPath}.",
+                    fullPath,
+                    storageRoot);
+                throw new InvalidOperationException("Full path does not reside under the configured storage root.");
+            }
+
+            var normalized = NormalizeRelative(relative);
+            if (IsOutsideRoot(normalized))
+            {
+                _logger.LogWarning(
+                    "Normalized relative path {RelativePath} escapes storage root {RootPath}.",
+                    normalized,
+                    storageRoot);
+                throw new InvalidOperationException("Relative path cannot escape the configured storage root.");
+            }
+
+            return normalized;
         }
-
-        var normalizedFull = Path.GetFullPath(rootedFullPath);
-        var relative = Path.GetRelativePath(storageRoot, normalizedFull);
-
-        if (IsOutsideRoot(relative))
+        catch (Exception ex)
         {
-            _logger.LogWarning(
-                "Full path {FullPath} is not located under storage root {RootPath}.",
-                fullPath,
-                storageRoot);
-            throw new InvalidOperationException("Full path does not reside under the configured storage root.");
+            _logger.LogError(ex, "Failed to resolve relative path from full path {FullPath}.", fullPath);
+            throw;
         }
-
-        return NormalizeRelative(relative);
     }
 
-    private static string NormalizeRoot(FileStorageRootEntity root)
+    private static string NormalizeRoot(FileStorageRootEntity root, ILogger logger)
     {
-        var normalized = Path.GetFullPath(root.RootPath.Trim());
+        var normalized = StorageRootValidator.ValidateWritableRoot(root.RootPath, logger);
         return normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
