@@ -194,9 +194,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<DomainClock>(sp => sp.GetRequiredService<SystemClock>());
         services.AddSingleton<SuggestionMaintenanceService>();
         services.AddSingleton<IDatabaseMaintenanceService, SqliteDatabaseMaintenanceService>();
-        services.AddSingleton<LocalFileStorage>();
-        services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
-        services.AddSingleton<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
+        services.AddScoped<LocalFileStorage>();
+        services.AddScoped<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
+        services.AddScoped<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddScoped<IFilePathResolver, FilePathResolver>();
         services.AddSingleton<IFileHashCalculator, FileHashCalculator>();
         services.AddSingleton<IFileSystemMonitoringService, FileSystemMonitoringService>();
@@ -334,7 +334,9 @@ public static class ServiceCollectionExtensions
                 .ConfigureAwait(false);
 
             await RunDevelopmentFulltextGuardAsync(scopedProvider, dbContext, cancellationToken).ConfigureAwait(false);
-            await EnsureStorageRootAsync(scopedProvider, dbContext, cancellationToken).ConfigureAwait(false);
+            var storageLogger = loggerFactory.CreateLogger("StorageRootInitializer");
+            await StorageRootInitializer.EnsureStorageRootAsync(dbContext, options, storageLogger, cancellationToken)
+                .ConfigureAwait(false);
             await dbContext.InitializeAsync(cancellationToken).ConfigureAwait(false);
             await StartupIntegrityCheck.EnsureConsistencyAsync(scopedProvider, cancellationToken).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
@@ -409,44 +411,4 @@ public static class ServiceCollectionExtensions
         }
     }
 
-    private static async Task EnsureStorageRootAsync(
-        IServiceProvider scopedProvider,
-        AppDbContext dbContext,
-        CancellationToken cancellationToken)
-    {
-        var existingRoot = await dbContext.StorageRoots
-            .AsNoTracking()
-            .SingleOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        if (existingRoot is not null)
-        {
-            return;
-        }
-
-        var options = scopedProvider.GetRequiredService<InfrastructureOptions>();
-        var loggerFactory = scopedProvider.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger("StorageRootBootstrap");
-        var defaultRoot = GetDefaultStorageRoot(options);
-
-        Directory.CreateDirectory(defaultRoot);
-        dbContext.StorageRoots.Add(new FileStorageRootEntity(defaultRoot));
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        logger.LogInformation(
-            "Storage root not configured; bootstrapped default path {StorageRoot}.",
-            defaultRoot);
-    }
-
-    private static string GetDefaultStorageRoot(InfrastructureOptions options)
-    {
-        var baseDirectory = Path.GetDirectoryName(options.DbPath);
-        if (string.IsNullOrWhiteSpace(baseDirectory))
-        {
-            baseDirectory = AppContext.BaseDirectory;
-        }
-
-        var root = Path.Combine(baseDirectory!, "storage");
-        return Path.GetFullPath(root);
-    }
 }

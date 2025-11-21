@@ -22,6 +22,12 @@ public sealed class InfrastructureOptions
     public string DbPath { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets an optional override for the file storage root path.
+    /// </summary>
+    public string? StorageRootOverride { get; set; }
+        = null;
+
+    /// <summary>
     /// Gets or sets the optional maximum number of bytes allowed for stored file content.
     /// </summary>
     public int? MaxContentBytes { get; set; }
