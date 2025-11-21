@@ -39,7 +39,7 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 
         var storagePath = StoragePath.From(relativePath);
         var physicalPath = ResolvePath(storagePath.Value);
-        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
+        TryCreateDirectory(Path.GetDirectoryName(physicalPath)!);
 
         return ValueTask.FromResult(new StorageReservation(_provider, storagePath));
     }
@@ -49,18 +49,26 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         ArgumentNullException.ThrowIfNull(reservation);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var physicalPath = ResolvePath(reservation.Path.Value);
-        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
+        try
+        {
+            var physicalPath = ResolvePath(reservation.Path.Value);
+            TryCreateDirectory(Path.GetDirectoryName(physicalPath)!);
 
-        Stream stream = new FileStream(
-            physicalPath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            81920,
-            useAsync: true);
+            Stream stream = new FileStream(
+                physicalPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                81920,
+                useAsync: true);
 
-        return ValueTask.FromResult(stream);
+            return ValueTask.FromResult(stream);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open write stream for reservation {ReservationPath}.", reservation.Path.Value);
+            throw;
+        }
     }
 
     public ValueTask<StorageResult> CommitAsync(
@@ -79,8 +87,35 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 
         if (!string.Equals(currentPhysical, targetPhysical, StringComparison.OrdinalIgnoreCase))
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPhysical)!);
-            File.Move(currentPhysical, targetPhysical, overwrite: true);
+            TryCreateDirectory(Path.GetDirectoryName(targetPhysical)!);
+            var tempPath = Path.Combine(Path.GetDirectoryName(targetPhysical)!, $".tmp-{Guid.NewGuid():N}");
+
+            try
+            {
+                File.Move(currentPhysical, tempPath, overwrite: true);
+                File.Move(tempPath, targetPhysical, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to commit storage reservation {ReservationPath} to {TargetPath}.",
+                    currentPhysical,
+                    targetPhysical);
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogWarning(cleanupEx, "Failed to clean up temporary file {TempFile} after commit failure.", tempPath);
+                }
+
+                throw;
+            }
         }
 
         var snapshot = CreateSnapshot(targetRelativePath, hash, context.Length);
@@ -135,9 +170,17 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 
         var sourcePath = ResolvePath(from.Value);
         var destinationPath = ResolvePath(to.Value);
-        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        TryCreateDirectory(Path.GetDirectoryName(destinationPath)!);
 
-        File.Move(sourcePath, destinationPath, overwrite: false);
+        try
+        {
+            File.Move(sourcePath, destinationPath, overwrite: false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to move storage file from {Source} to {Destination}.", sourcePath, destinationPath);
+            throw;
+        }
         cancellationToken.ThrowIfCancellationRequested();
 
         return Task.FromResult(StoragePath.From(NormalizePath(to.Value)));
@@ -149,9 +192,17 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         cancellationToken.ThrowIfCancellationRequested();
 
         var physicalPath = ResolvePath(path.Value);
-        if (!File.Exists(physicalPath))
+        try
         {
-            throw new FileNotFoundException($"File '{path.Value}' was not found in storage.", physicalPath);
+            if (!File.Exists(physicalPath))
+            {
+                throw new FileNotFoundException($"File '{path.Value}' was not found in storage.", physicalPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to stat file at {Path}.", physicalPath);
+            throw;
         }
 
         await using var source = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
@@ -275,6 +326,19 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
     private static string NormalizePath(string relativePath)
     {
         return relativePath.Replace("\\", "/", StringComparison.Ordinal);
+    }
+
+    private void TryCreateDirectory(string directory)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create directory {Directory} for storage operation.", directory);
+            throw;
+        }
     }
 
     private static FileAttributesFlags MapAttributes(FileAttributes attributes)

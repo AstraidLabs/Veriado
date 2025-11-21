@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Entities;
 using Veriado.Infrastructure.Persistence.Options;
+using Veriado.Infrastructure.Storage;
 
 namespace Veriado.Infrastructure.FileSystem;
 
@@ -34,7 +35,7 @@ internal static class StorageRootInitializer
 
         if (existingRoot is not null)
         {
-            var normalized = Path.GetFullPath(existingRoot.RootPath);
+            var normalized = StorageRootValidator.ValidateWritableRoot(existingRoot.RootPath, logger);
             Directory.CreateDirectory(normalized);
             logger.LogInformation("Using configured storage root {RootPath}.", normalized);
             return;
@@ -43,15 +44,15 @@ internal static class StorageRootInitializer
         string rootPath;
         if (!string.IsNullOrWhiteSpace(options.StorageRootOverride))
         {
-            rootPath = Path.GetFullPath(options.StorageRootOverride!);
+            rootPath = options.StorageRootOverride!;
         }
         else
         {
             var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             rootPath = Path.Combine(documents, "Veriado");
-            rootPath = Path.GetFullPath(rootPath);
         }
 
+        rootPath = StorageRootValidator.ValidateWritableRoot(rootPath, logger);
         Directory.CreateDirectory(rootPath);
 
         dbContext.StorageRoots.Add(new FileStorageRootEntity(rootPath));
