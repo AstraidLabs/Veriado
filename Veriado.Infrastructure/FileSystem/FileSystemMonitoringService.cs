@@ -1,16 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Veriado.Application.Abstractions;
+using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
-using DomainClock = Veriado.Domain.Primitives.IClock;
 using Veriado.Infrastructure.Persistence;
+using ApplicationClock = Veriado.Appl.Abstractions.IClock;
+using DomainClock = Veriado.Domain.Primitives.IClock;
 
 namespace Veriado.Infrastructure.FileSystem;
 
@@ -19,7 +22,11 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     private readonly IFilePathResolver _pathResolver;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
+    private readonly ApplicationClock _clock;
     private readonly ILogger<FileSystemMonitoringService> _logger;
+    private readonly Channel<FileSystemEvent> _eventChannel;
+    private readonly TimeSpan _debounceWindow = TimeSpan.FromMilliseconds(250);
+    private Task? _processingTask;
     private FileSystemWatcher? _watcher;
     private CancellationToken _cancellationToken;
 
@@ -27,12 +34,21 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         IFilePathResolver pathResolver,
         IServiceScopeFactory scopeFactory,
         IOperationalPauseCoordinator pauseCoordinator,
+        ApplicationClock clock,
         ILogger<FileSystemMonitoringService> logger)
     {
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _eventChannel = Channel.CreateBounded<FileSystemEvent>(
+            new BoundedChannelOptions(1024)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = false,
+            });
     }
 
     public void Start(CancellationToken cancellationToken)
@@ -68,6 +84,8 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         _watcher.Changed += OnChanged;
         _watcher.EnableRaisingEvents = true;
 
+        _processingTask ??= Task.Run(() => ProcessEventsAsync(_cancellationToken), _cancellationToken);
+
         _logger.LogInformation("File system monitoring started for root {Root}.", root);
     }
 
@@ -85,36 +103,47 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         _watcher.Changed -= OnChanged;
         _watcher.Dispose();
         _watcher = null;
+
+        _eventChannel.Writer.TryComplete();
+
+        try
+        {
+            _processingTask?.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is OperationCanceledException))
+        {
+        }
     }
 
     private void OnCreated(object sender, FileSystemEventArgs e)
     {
-        QueueHandling(() => HandleCreatedAsync(e.FullPath, _cancellationToken));
+        QueueEvent(FileSystemEventType.Created, e.FullPath, null);
     }
 
     private void OnDeleted(object sender, FileSystemEventArgs e)
     {
-        QueueHandling(() => HandleDeletedAsync(e.FullPath, _cancellationToken));
+        QueueEvent(FileSystemEventType.Deleted, e.FullPath, null);
     }
 
     private void OnRenamed(object sender, RenamedEventArgs e)
     {
-        QueueHandling(() => HandleRenamedAsync(e.OldFullPath, e.FullPath, _cancellationToken));
+        QueueEvent(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath);
     }
 
     private void OnChanged(object sender, FileSystemEventArgs e)
     {
-        QueueHandling(() => HandleChangedAsync(e.FullPath, _cancellationToken));
+        QueueEvent(FileSystemEventType.Changed, e.FullPath, null);
     }
 
-    private void QueueHandling(Func<Task> handler)
+    private void QueueEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath)
     {
+        var fileEvent = new FileSystemEvent(eventType, fullPath, oldFullPath, _clock.UtcNow.UtcDateTime);
+
         _ = Task.Run(async () =>
         {
             try
             {
-                await _pauseCoordinator.WaitIfPausedAsync(_cancellationToken).ConfigureAwait(false);
-                await handler().ConfigureAwait(false);
+                await _eventChannel.Writer.WriteAsync(fileEvent, _cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
             {
@@ -122,21 +151,140 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled error while processing file system event.");
+                _logger.LogError(ex, "Unhandled exception while queuing file system monitoring event.");
             }
         }, _cancellationToken);
     }
 
-    private async Task HandleCreatedAsync(string fullPath, CancellationToken cancellationToken)
+    private async Task ProcessEventsAsync(CancellationToken cancellationToken)
     {
-        if (!TryGetRelativePath(fullPath, out var relativePath))
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await _pauseCoordinator.WaitIfPausedAsync(cancellationToken).ConfigureAwait(false);
+
+                var initialEvent = await _eventChannel.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                var buffer = new List<FileSystemEvent> { initialEvent };
+                var debounceUntil = _clock.UtcNow + _debounceWindow;
+
+                while (true)
+                {
+                    var remaining = debounceUntil - _clock.UtcNow;
+                    if (remaining <= TimeSpan.Zero)
+                    {
+                        break;
+                    }
+
+                    var waitTask = _eventChannel.Reader.WaitToReadAsync(cancellationToken).AsTask();
+                    var completed = await Task.WhenAny(Task.Delay(remaining, cancellationToken), waitTask)
+                        .ConfigureAwait(false);
+
+                    if (completed != waitTask || !await waitTask.ConfigureAwait(false))
+                    {
+                        break;
+                    }
+
+                    while (_eventChannel.Reader.TryRead(out var nextEvent))
+                    {
+                        buffer.Add(nextEvent);
+                    }
+                }
+
+                await ProcessBufferAsync(buffer, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (ChannelClosedException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing file system events.");
+            }
+        }
+    }
+
+    private async Task ProcessBufferAsync(List<FileSystemEvent> buffer, CancellationToken cancellationToken)
+    {
+        if (buffer.Count == 0)
         {
             return;
+        }
+
+        var coalesced = new Dictionary<string, FileSystemEvent>(StringComparer.OrdinalIgnoreCase);
+        foreach (var fileEvent in buffer.OrderBy(e => e.OccurredUtc))
+        {
+            if (coalesced.TryGetValue(fileEvent.FullPath, out var existing))
+            {
+                coalesced[fileEvent.FullPath] = MergeEvents(existing, fileEvent);
+            }
+            else
+            {
+                coalesced[fileEvent.FullPath] = fileEvent;
+            }
         }
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
+        var hashCalculator = scope.ServiceProvider.GetRequiredService<IFileHashCalculator>();
+
+        foreach (var fileEvent in coalesced.Values.OrderBy(e => e.OccurredUtc))
+        {
+            switch (fileEvent.EventType)
+            {
+                case FileSystemEventType.Created:
+                    await HandleCreatedAsync(fileEvent.FullPath, dbContext, clock, hashCalculator, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                case FileSystemEventType.Deleted:
+                    await HandleDeletedAsync(fileEvent.FullPath, dbContext, clock, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                case FileSystemEventType.Renamed:
+                    await HandleRenamedAsync(fileEvent.OldFullPath, fileEvent.FullPath, dbContext, clock, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                case FileSystemEventType.Changed:
+                    await HandleChangedAsync(fileEvent.FullPath, dbContext, clock, hashCalculator, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static FileSystemEvent MergeEvents(FileSystemEvent existing, FileSystemEvent incoming)
+    {
+        if (incoming.EventType is FileSystemEventType.Deleted or FileSystemEventType.Renamed)
+        {
+            return incoming;
+        }
+
+        if (existing.EventType == FileSystemEventType.Renamed)
+        {
+            return new FileSystemEvent(existing.EventType, existing.FullPath, existing.OldFullPath, incoming.OccurredUtc);
+        }
+
+        return incoming;
+    }
+
+    private async Task HandleCreatedAsync(
+        string fullPath,
+        AppDbContext dbContext,
+        DomainClock clock,
+        IFileHashCalculator hashCalculator,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetRelativePath(fullPath, out var relativePath))
+        {
+            return;
+        }
 
         var relativeFilePath = RelativeFilePath.From(relativePath);
 
@@ -152,23 +300,54 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             return;
         }
 
+        var info = new FileInfo(fullPath);
+        if (!info.Exists)
+        {
+            _logger.LogDebug("Detected creation for {RelativePath} but file is not present on disk.", relativePath);
+            return;
+        }
+
+        var size = ByteSize.From(info.Length);
+        var createdUtc = UtcTimestamp.From(info.CreationTimeUtc);
+        var lastWriteUtc = UtcTimestamp.From(info.LastWriteTimeUtc);
+        var lastAccessUtc = UtcTimestamp.From(info.LastAccessTimeUtc);
+        var observedUtc = UtcTimestamp.From(clock.UtcNow);
+
+        FileHash? hash = null;
+
+        try
+        {
+            hash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Unable to compute hash for created path {RelativePath}; existing hash will be preserved.", relativePath);
+        }
+
         entity.MarkHealthy();
         entity.UpdatePath(fullPath);
-        entity.UpdateTimestamps(null, UtcTimestamp.From(clock.UtcNow), null, UtcTimestamp.From(clock.UtcNow));
+        if (hash is not null)
+        {
+            entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, observedUtc);
+        }
+        else if (entity.Size != size)
+        {
+            entity.MarkContentChanged();
+        }
 
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        entity.UpdateTimestamps(createdUtc, lastWriteUtc, lastAccessUtc, observedUtc);
     }
 
-    private async Task HandleDeletedAsync(string fullPath, CancellationToken cancellationToken)
+    private async Task HandleDeletedAsync(
+        string fullPath,
+        AppDbContext dbContext,
+        DomainClock clock,
+        CancellationToken cancellationToken)
     {
         if (!TryGetRelativePath(fullPath, out var relativePath))
         {
             return;
         }
-
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
         var relativeFilePath = RelativeFilePath.From(relativePath);
 
@@ -183,59 +362,81 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
 
         entity.MarkMissing(clock);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task HandleRenamedAsync(string oldFullPath, string newFullPath, CancellationToken cancellationToken)
+    private async Task HandleRenamedAsync(
+        string? oldFullPath,
+        string newFullPath,
+        AppDbContext dbContext,
+        DomainClock clock,
+        CancellationToken cancellationToken)
     {
-        if (!TryGetRelativePath(oldFullPath, out var oldRelativePath) ||
-            !TryGetRelativePath(newFullPath, out var newRelativePath))
+        if (!TryGetRelativePath(newFullPath, out var newRelativePath))
         {
             return;
         }
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
+        string? oldRelativePath = null;
+        if (!string.IsNullOrWhiteSpace(oldFullPath) && TryGetRelativePath(oldFullPath, out var resolvedOld))
+        {
+            oldRelativePath = resolvedOld;
+        }
 
-        var oldRelativeFilePath = RelativeFilePath.From(oldRelativePath);
+        var oldRelativeFilePath = oldRelativePath is null ? null : RelativeFilePath.From(oldRelativePath);
 
-        var entity = await dbContext.FileSystems
-            .SingleOrDefaultAsync(f => f.RelativePath == oldRelativeFilePath, cancellationToken)
-            .ConfigureAwait(false)
-            ?? await dbContext.FileSystems
+        FileSystemEntity? entity = null;
+
+        if (oldRelativeFilePath is not null)
+        {
+            entity = await dbContext.FileSystems
+                .SingleOrDefaultAsync(f => f.RelativePath == oldRelativeFilePath, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (entity is null && !string.IsNullOrWhiteSpace(oldFullPath))
+        {
+            entity = await dbContext.FileSystems
                 .Where(f => f.CurrentFilePath == oldFullPath)
                 .SingleOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
+        }
 
         if (entity is null)
         {
             _logger.LogDebug(
                 "No tracked file system entity found for rename from {OldRelativePath} to {NewRelativePath}.",
-                oldRelativePath,
+                oldRelativePath ?? oldFullPath,
                 newRelativePath);
-            await HandleDeletedAsync(oldFullPath, cancellationToken).ConfigureAwait(false);
-            await HandleCreatedAsync(newFullPath, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         var whenUtc = UtcTimestamp.From(clock.UtcNow);
-        entity.MoveTo(RelativeFilePath.From(newRelativePath), whenUtc);
+        var newRelativeFilePath = RelativeFilePath.From(newRelativePath);
+        entity.MoveTo(newRelativeFilePath, whenUtc);
         entity.MarkMovedOrRenamed(newFullPath);
 
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        var info = new FileInfo(newFullPath);
+        if (info.Exists)
+        {
+            entity.UpdateTimestamps(
+                UtcTimestamp.From(info.CreationTimeUtc),
+                UtcTimestamp.From(info.LastWriteTimeUtc),
+                UtcTimestamp.From(info.LastAccessTimeUtc),
+                whenUtc);
+        }
     }
 
-    private async Task HandleChangedAsync(string fullPath, CancellationToken cancellationToken)
+    private async Task HandleChangedAsync(
+        string fullPath,
+        AppDbContext dbContext,
+        DomainClock clock,
+        IFileHashCalculator hashCalculator,
+        CancellationToken cancellationToken)
     {
         if (!TryGetRelativePath(fullPath, out var relativePath))
         {
             return;
         }
-
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
         var relativeFilePath = RelativeFilePath.From(relativePath);
 
@@ -250,13 +451,52 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
 
         var info = new FileInfo(fullPath);
-        var whenUtc = UtcTimestamp.From(clock.UtcNow);
-        var size = ByteSize.From(info.Exists ? info.Length : 0);
-        entity.ReplaceContent(entity.RelativePath, entity.Hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
-        entity.UpdatePath(fullPath);
-        entity.UpdateTimestamps(UtcTimestamp.From(info.CreationTimeUtc), UtcTimestamp.From(info.LastWriteTimeUtc), UtcTimestamp.From(info.LastAccessTimeUtc), whenUtc);
+        if (!info.Exists)
+        {
+            _logger.LogDebug("Change notification treated as deletion for {RelativePath} because file is missing.", relativePath);
+            await HandleDeletedAsync(fullPath, dbContext, clock, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        var whenUtc = UtcTimestamp.From(clock.UtcNow);
+        var size = ByteSize.From(info.Length);
+        var createdUtc = UtcTimestamp.From(info.CreationTimeUtc);
+        var lastWriteUtc = UtcTimestamp.From(info.LastWriteTimeUtc);
+        var lastAccessUtc = UtcTimestamp.From(info.LastAccessTimeUtc);
+
+        var sizeChanged = entity.Size != size;
+        var timestampsChanged = entity.CreatedUtc != createdUtc || entity.LastWriteUtc != lastWriteUtc || entity.LastAccessUtc != lastAccessUtc;
+
+        FileHash? hash = null;
+
+        if (sizeChanged)
+        {
+            try
+            {
+                hash = await hashCalculator.ComputeSha256Async(fullPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to recompute hash for {RelativePath}; marking content changed based on size.", relativePath);
+            }
+        }
+
+        if (hash is not null)
+        {
+            entity.ReplaceContent(entity.RelativePath, hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
+        }
+        else if (sizeChanged)
+        {
+            entity.MarkContentChanged();
+        }
+
+        entity.UpdatePath(fullPath);
+        entity.UpdateTimestamps(createdUtc, lastWriteUtc, lastAccessUtc, whenUtc);
+
+        if (!sizeChanged && timestampsChanged)
+        {
+            entity.MarkHealthy();
+        }
     }
 
     private bool TryGetRelativePath(string fullPath, out string? relativePath)
@@ -274,4 +514,31 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             return false;
         }
     }
+}
+
+internal enum FileSystemEventType
+{
+    Created,
+    Deleted,
+    Renamed,
+    Changed,
+}
+
+internal sealed class FileSystemEvent
+{
+    public FileSystemEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath, DateTime occurredUtc)
+    {
+        EventType = eventType;
+        FullPath = fullPath ?? throw new ArgumentNullException(nameof(fullPath));
+        OldFullPath = oldFullPath;
+        OccurredUtc = occurredUtc;
+    }
+
+    public FileSystemEventType EventType { get; }
+
+    public string FullPath { get; }
+
+    public string? OldFullPath { get; }
+
+    public DateTime OccurredUtc { get; }
 }
