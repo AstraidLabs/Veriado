@@ -27,34 +27,26 @@ public sealed partial class FileSystemEntity
         string? originalFilePath = null,
         FilePhysicalState physicalState = FilePhysicalState.Unknown)
     {
-        var entity = new FileSystemEntity(id)
-        {
-            Provider = provider,
-            RelativePath = relativePath,
-            Hash = hash,
-            Size = size,
-            Mime = mime,
-            Attributes = attributes,
-            OwnerSid = string.IsNullOrWhiteSpace(ownerSid) ? null : ownerSid.Trim(),
-            IsEncrypted = isEncrypted,
-            CreatedUtc = createdUtc,
-            LastWriteUtc = lastWriteUtc,
-            LastAccessUtc = lastAccessUtc,
-            ContentVersion = contentVersion,
-            IsMissing = isMissing || physicalState == FilePhysicalState.Missing,
-            MissingSinceUtc = (isMissing || physicalState == FilePhysicalState.Missing) ? missingSinceUtc : null,
-            LastLinkedUtc = lastLinkedUtc,
-            CurrentFilePath = currentFilePath ?? string.Empty,
-            OriginalFilePath = string.IsNullOrWhiteSpace(originalFilePath)
-                ? currentFilePath ?? string.Empty
-                : originalFilePath.Trim(),
-            PhysicalState = isMissing
-                ? FilePhysicalState.Missing
-                : physicalState == FilePhysicalState.Unknown
-                    ? FilePhysicalState.Healthy
-                    : physicalState,
-        };
-
-        return entity;
+        return CreateCore(
+            id,
+            provider,
+            relativePath,
+            hash,
+            size,
+            mime,
+            attributes,
+            ownerSid,
+            isEncrypted,
+            createdUtc,
+            lastWriteUtc,
+            lastAccessUtc,
+            contentVersion,
+            isMissing,
+            missingSinceUtc,
+            lastLinkedUtc,
+            currentFilePath,
+            originalFilePath,
+            physicalState,
+            raiseInitialEvents: true);
     }
 }

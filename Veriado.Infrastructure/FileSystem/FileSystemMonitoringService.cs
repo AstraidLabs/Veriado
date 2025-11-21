@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -201,7 +202,11 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         var entity = await dbContext.FileSystems
             .SingleOrDefaultAsync(f => f.RelativePath == oldRelativeFilePath, cancellationToken)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false)
+            ?? await dbContext.FileSystems
+                .Where(f => f.CurrentFilePath == oldFullPath)
+                .SingleOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
 
         if (entity is null)
         {
@@ -209,6 +214,8 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
                 "No tracked file system entity found for rename from {OldRelativePath} to {NewRelativePath}.",
                 oldRelativePath,
                 newRelativePath);
+            await HandleDeletedAsync(oldFullPath, cancellationToken).ConfigureAwait(false);
+            await HandleCreatedAsync(newFullPath, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -228,6 +235,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var clock = scope.ServiceProvider.GetRequiredService<DomainClock>();
 
         var relativeFilePath = RelativeFilePath.From(relativePath);
 
@@ -241,8 +249,12 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             return;
         }
 
-        entity.MarkContentChanged();
+        var info = new FileInfo(fullPath);
+        var whenUtc = UtcTimestamp.From(clock.UtcNow);
+        var size = ByteSize.From(info.Exists ? info.Length : 0);
+        entity.ReplaceContent(entity.RelativePath, entity.Hash, size, entity.Mime, entity.IsEncrypted, whenUtc);
         entity.UpdatePath(fullPath);
+        entity.UpdateTimestamps(UtcTimestamp.From(info.CreationTimeUtc), UtcTimestamp.From(info.LastWriteTimeUtc), UtcTimestamp.From(info.LastAccessTimeUtc), whenUtc);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
