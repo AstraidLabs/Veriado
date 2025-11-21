@@ -200,6 +200,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStorageWriter>(sp => sp.GetRequiredService<LocalFileStorage>());
         services.AddSingleton<IOperationalPauseCoordinator, OperationalPauseCoordinator>();
         services.AddScoped<IFilePathResolver, FilePathResolver>();
+        services.AddScoped<IStorageRootSettingsService, StorageRootSettingsService>();
         services.AddScoped<IStorageMigrationService, StorageMigrationService>();
         services.AddScoped<IExportPackageService, ExportPackageService>();
         services.AddScoped<IImportPackageService, ImportPackageService>();
