@@ -1,3 +1,4 @@
+// File: Veriado.Services/Files/IFileContentService.cs
 namespace Veriado.Services.Files;
 
 /// <summary>
