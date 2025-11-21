@@ -128,34 +128,38 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         cancellationToken.ThrowIfCancellationRequested();
 
         var reservation = await ReservePathAsync(preferredPath: null, cancellationToken).ConfigureAwait(false);
-        await using var destination = await OpenWriteAsync(reservation, cancellationToken).ConfigureAwait(false);
         using var incrementalHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = ArrayPool<byte>.Shared.Rent(81920);
         long totalBytes = 0;
+        byte[] hashBytes;
 
         try
         {
-            while (true)
+            await using (var destination = await OpenWriteAsync(reservation, cancellationToken).ConfigureAwait(false))
             {
-                var read = await content.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false);
-                if (read == 0)
+                while (true)
                 {
-                    break;
+                    var read = await content.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        break;
+                    }
+
+                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    incrementalHash.AppendData(buffer, 0, read);
+                    totalBytes += read;
                 }
 
-                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                incrementalHash.AppendData(buffer, 0, read);
-                totalBytes += read;
+                await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            hashBytes = incrementalHash.GetHashAndReset();
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
-
-        var hashBytes = incrementalHash.GetHashAndReset();
         var hash = FileHash.From(Convert.ToHexString(hashBytes));
         var commitContext = new StorageCommitContext(totalBytes, hash.Value, Sha1: null);
         var snapshot = await CommitAsync(reservation, commitContext, cancellationToken).ConfigureAwait(false);
