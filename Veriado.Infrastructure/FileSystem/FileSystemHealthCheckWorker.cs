@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
-using Veriado.Appl.FileSystem;
+using FileSystemSyncService = Veriado.Appl.FileSystem.IFileSystemSyncService;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.ValueObjects;
@@ -28,14 +28,14 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     private readonly FileSystemHealthCheckOptions _options;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
     private readonly ILogger<FileSystemHealthCheckWorker> _logger;
-    private readonly IFileSystemSyncService _syncService;
+    private readonly FileSystemSyncService _syncService;
 
     public FileSystemHealthCheckWorker(
         IServiceScopeFactory scopeFactory,
         IFilePathResolver pathResolver,
         IOptions<FileSystemHealthCheckOptions> options,
         IOperationalPauseCoordinator pauseCoordinator,
-        IFileSystemSyncService syncService,
+        FileSystemSyncService syncService,
         ILogger<FileSystemHealthCheckWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
