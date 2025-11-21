@@ -44,6 +44,7 @@
         <controls:NavigationView.MenuItems>
             <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
             <controls:NavigationViewItem Tag="import" Content="Import souborů" Icon="OpenFile" />
+            <controls:NavigationViewItem Tag="storage" Content="Migrace a balíčky" Icon="Sync" />
             <controls:NavigationViewItem Tag="settings" Content="Nastavení" Icon="Setting" />
         </controls:NavigationView.MenuItems>
         <controls:NavigationView.Content>

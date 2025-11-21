@@ -2,9 +2,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Veriado.WinUI.Navigation;
 using Veriado.WinUI.ViewModels.Files;
 using Veriado.WinUI.ViewModels.Import;
+using Veriado.WinUI.ViewModels.Storage;
 using Veriado.WinUI.ViewModels.Settings;
 using Veriado.WinUI.Views.Files;
 using Veriado.WinUI.Views.Import;
+using Veriado.WinUI.Views.Storage;
 using Veriado.WinUI.Views.Settings;
 
 namespace Veriado.WinUI.Services;
@@ -18,10 +20,11 @@ public sealed class NavigationService : INavigationService
     public NavigationService(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        _registrations = new Dictionary<PageId, NavigationRegistration>
+            _registrations = new Dictionary<PageId, NavigationRegistration>
         {
             [PageId.Files] = new NavigationRegistration(typeof(FilesPage), typeof(FilesPageViewModel)),
             [PageId.Import] = new NavigationRegistration(typeof(ImportPage), typeof(ImportPageViewModel)),
+            [PageId.Storage] = new NavigationRegistration(typeof(StorageManagementPage), typeof(StorageManagementPageViewModel)),
             [PageId.Settings] = new NavigationRegistration(typeof(SettingsPage), typeof(SettingsPageViewModel)),
         };
     }

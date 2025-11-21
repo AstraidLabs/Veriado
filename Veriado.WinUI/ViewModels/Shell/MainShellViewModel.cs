@@ -42,6 +42,7 @@ public partial class MainShellViewModel : ObservableObject
         {
             "files" => PageId.Files,
             "import" => PageId.Import,
+            "storage" => PageId.Storage,
             "settings" => PageId.Settings,
             _ => CurrentPage,
         };
