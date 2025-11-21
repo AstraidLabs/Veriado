@@ -125,6 +125,17 @@ public sealed class FilePathResolver : IFilePathResolver
         }
     }
 
+    internal void OverrideCachedRoot(string normalizedRoot)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedRoot))
+        {
+            throw new ArgumentException("Root path cannot be empty.", nameof(normalizedRoot));
+        }
+
+        _cachedRoot = Path.GetFullPath(normalizedRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
     private static string NormalizeRoot(FileStorageRootEntity root, ILogger logger)
     {
         var normalized = StorageRootValidator.ValidateWritableRoot(root.RootPath, logger);

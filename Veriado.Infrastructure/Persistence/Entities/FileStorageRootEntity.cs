@@ -26,4 +26,14 @@ public sealed class FileStorageRootEntity
     /// Gets the absolute storage root path.
     /// </summary>
     public string RootPath { get; private set; } = string.Empty;
+
+    public void UpdateRootPath(string rootPath)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath))
+        {
+            throw new ArgumentException("Root path cannot be empty.", nameof(rootPath));
+        }
+
+        RootPath = rootPath;
+    }
 }
