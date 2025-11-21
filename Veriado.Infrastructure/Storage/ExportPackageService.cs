@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
@@ -72,8 +73,7 @@ public sealed class ExportPackageService : IExportPackageService
         var databaseTargetDirectory = Path.Combine(normalizedPackageRoot, DatabaseDirectory);
         Directory.CreateDirectory(databaseTargetDirectory);
         var targetDatabasePath = Path.Combine(databaseTargetDirectory, Path.GetFileName(_connectionStringProvider.DatabasePath));
-        await AtomicFileOperations.CopyAsync(_connectionStringProvider.DatabasePath, targetDatabasePath, overwrite: true, cancellationToken)
-            .ConfigureAwait(false);
+        await BackupDatabaseAsync(targetDatabasePath, cancellationToken).ConfigureAwait(false);
 
         var storageTargetRoot = Path.Combine(normalizedPackageRoot, StorageDirectory);
         Directory.CreateDirectory(storageTargetRoot);
@@ -156,5 +156,23 @@ public sealed class ExportPackageService : IExportPackageService
         await using var stream = File.Create(metadataPath);
         await JsonSerializer.SerializeAsync(stream, metadata, new JsonSerializerOptions { WriteIndented = true }, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task BackupDatabaseAsync(string targetDatabasePath, CancellationToken cancellationToken)
+    {
+        await using var sourceConnection = _connectionStringProvider.CreateConnection();
+        await sourceConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        var destinationBuilder = new SqliteConnectionStringBuilder
+        {
+            DataSource = targetDatabasePath,
+            Cache = SqliteCacheMode.Shared,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+        };
+
+        await using var destinationConnection = new SqliteConnection(destinationBuilder.ConnectionString);
+        await destinationConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        sourceConnection.BackupDatabase(destinationConnection);
     }
 }
