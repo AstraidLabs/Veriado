@@ -51,6 +51,11 @@ public sealed class FilePathResolver : IFilePathResolver
         }
     }
 
+    public void InvalidateRootCache()
+    {
+        _cachedRoot = null;
+    }
+
     public string GetFullPath(string relativePath)
         => GetFullPath(relativePath, null);
 
