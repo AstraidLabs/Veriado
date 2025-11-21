@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Veriado.Appl.DependencyInjection;
 using Veriado.Appl.Files;
+using Veriado.Appl.FileSystem;
 using Veriado.Contracts.Search.Abstractions;
 using Veriado.Services.Diagnostics;
+using Veriado.Services.FileSystem;
 using Veriado.Services.Files;
 using Veriado.Services.Import;
 using Veriado.Services.Maintenance;
@@ -34,6 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMaintenanceService, MaintenanceService>();
         services.AddScoped<IHealthService, HealthService>();
         services.AddSingleton<ISearchFacade, SearchFacade>();
+        services.AddSingleton<IFileSystemSyncService, FileSystemSyncService>();
 
         return services;
     }
