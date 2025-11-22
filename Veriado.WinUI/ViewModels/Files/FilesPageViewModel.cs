@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IHealthService _healthService;
     private readonly IFileService _fileService;
     private readonly IFileOperationsService _fileOperationsService;
+    private readonly IFileContentService _fileContentService;
     private readonly IPickerService _pickerService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
@@ -55,6 +57,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IHealthService healthService,
         IFileService fileService,
         IFileOperationsService fileOperationsService,
+        IFileContentService fileContentService,
         IPickerService pickerService,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
@@ -70,6 +73,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _healthService = healthService ?? throw new ArgumentNullException(nameof(healthService));
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
         _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
+        _fileContentService = fileContentService ?? throw new ArgumentNullException(nameof(fileContentService));
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
@@ -84,7 +88,9 @@ public partial class FilesPageViewModel : ViewModelBase
         _openDetailCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteOpenDetailAsync, CanOpenDetail);
         _selectFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteSelectFileAsync);
         _deleteFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteDeleteFileAsync, CanDeleteFile);
-        UpdateFileCommand = new AsyncRelayCommand<FileListItemModel?>(UpdateFileAsync);
+        UpdateFileContentCommand = new AsyncRelayCommand<FileListItemModel?>(UpdateFileContentAsync);
+        OpenFileCommand = new AsyncRelayCommand<FileListItemModel?>(OpenFileAsync);
+        ShowInFolderCommand = new AsyncRelayCommand<FileListItemModel?>(ShowInFolderAsync);
 
         _suppressTargetPageChange = true;
         TargetPage = 1;
@@ -115,7 +121,11 @@ public partial class FilesPageViewModel : ViewModelBase
 
     public IAsyncRelayCommand<FileSummaryDto?> DeleteFileCommand => _deleteFileCommand;
 
-    public IAsyncRelayCommand<FileListItemModel?> UpdateFileCommand { get; }
+    public IAsyncRelayCommand<FileListItemModel?> UpdateFileContentCommand { get; }
+
+    public IAsyncRelayCommand<FileListItemModel?> OpenFileCommand { get; }
+
+    public IAsyncRelayCommand<FileListItemModel?> ShowInFolderCommand { get; }
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
@@ -524,7 +534,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _previousPageCommand.NotifyCanExecuteChanged();
     }
 
-    private async Task UpdateFileAsync(FileListItemModel? item)
+    private async Task UpdateFileContentAsync(FileListItemModel? item)
     {
         if (item is null)
         {
@@ -557,11 +567,23 @@ public partial class FilesPageViewModel : ViewModelBase
             return;
         }
 
+        if (!File.Exists(filePath))
+        {
+            var exception = new FileNotFoundException($"Zdrojový soubor '{filePath}' nebyl nalezen.", filePath);
+            var message = _exceptionHandler.Handle(exception);
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                StatusService.Error(message);
+            }
+
+            return;
+        }
+
         await SafeExecuteAsync(
             async cancellationToken =>
             {
                 var response = await _fileOperationsService
-                    .UpdateFileContentAsync(item.Dto.Id, filePath, cancellationToken)
+                    .ReplaceFileContentAsync(item.Dto.Id, filePath, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (!response.IsSuccess || response.Data is null)
@@ -584,9 +606,41 @@ public partial class FilesPageViewModel : ViewModelBase
                     {
                         Items[index] = updatedModel;
                     }
+
+                    if (SelectedFile?.Id == response.Data.Id)
+                    {
+                        SelectedFile = response.Data;
+                        SelectedFileDetail = null;
+                    }
                 }).ConfigureAwait(false);
             },
             "Aktualizace souboru...")
+            .ConfigureAwait(false);
+    }
+
+    private async Task OpenFileAsync(FileListItemModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        await SafeExecuteAsync(
+            cancellationToken => _fileContentService.OpenInDefaultAppAsync(item.Dto.Id, cancellationToken),
+            "Otevírání souboru...")
+            .ConfigureAwait(false);
+    }
+
+    private async Task ShowInFolderAsync(FileListItemModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        await SafeExecuteAsync(
+            cancellationToken => _fileContentService.ShowInFolderAsync(item.Dto.Id, cancellationToken),
+            "Otevírání umístění souboru...")
             .ConfigureAwait(false);
     }
 

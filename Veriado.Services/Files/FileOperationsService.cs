@@ -161,6 +161,14 @@ public sealed class FileOperationsService : IFileOperationsService
         return ToIdResponse(result);
     }
 
+    public Task<ApiResponse<FileSummaryDto>> ReplaceFileContentAsync(
+        Guid fileId,
+        string sourceFileFullPath,
+        CancellationToken cancellationToken)
+    {
+        return UpdateFileContentAsync(fileId, sourceFileFullPath, cancellationToken);
+    }
+
     public async Task<ApiResponse<FileSummaryDto>> UpdateFileContentAsync(
         Guid fileId,
         string sourceFileFullPath,
