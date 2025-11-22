@@ -6,7 +6,15 @@ namespace Veriado.Services.Files;
 /// </summary>
 public interface IFileContentService
 {
-    Task<FileContentResponseDto?> GetContentAsync(Guid fileId, CancellationToken cancellationToken);
+    Task<FileContentResponseDto?> GetContentAsync(Guid fileId, CancellationToken cancellationToken = default);
 
-    Task<AppResult<Guid>> SaveContentToDiskAsync(Guid fileId, string targetPath, CancellationToken cancellationToken);
+    Task<FileContentLocationDto?> GetContentLocationAsync(Guid fileId, CancellationToken cancellationToken = default);
+
+    Task<AppResult<Guid>> SaveContentToDiskAsync(Guid fileId, string targetPath, CancellationToken cancellationToken = default);
+
+    Task<AppResult<Guid>> ExportContentAsync(Guid fileId, string targetPath, CancellationToken cancellationToken = default);
+
+    Task<AppResult<Guid>> OpenInDefaultAppAsync(Guid fileId, CancellationToken cancellationToken = default);
+
+    Task<AppResult<Guid>> ShowInFileExplorerAsync(Guid fileId, CancellationToken cancellationToken = default);
 }
