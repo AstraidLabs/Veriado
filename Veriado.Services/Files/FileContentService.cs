@@ -1,6 +1,7 @@
 // File: Veriado.Services/Files/FileContentService.cs
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 using Veriado.Domain.Files;
@@ -91,6 +92,49 @@ public sealed class FileContentService : IFileContentService
         CancellationToken cancellationToken = default) =>
         SaveContentToDiskAsync(fileId, targetPath, cancellationToken);
 
+    public async Task<string?> ExportToTempWithOriginalNameAsync(
+        Guid fileId,
+        CancellationToken cancellationToken = default)
+    {
+        var resolution = await ResolvePhysicalFileAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (resolution.IsFailure)
+        {
+            _logger.LogWarning("Unable to export file {FileId} to temp: {Reason}", fileId, resolution.Error);
+            return null;
+        }
+
+        var tempFolder = BuildTempFolderPath(fileId);
+        try
+        {
+            Directory.CreateDirectory(tempFolder);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create temp directory for file {FileId} at {TempFolder}.", fileId, tempFolder);
+            return null;
+        }
+
+        var safeName = SanitizeFileName(resolution.Value.File.Name, fileId);
+        var extension = resolution.Value.File.Extension ?? string.Empty;
+        var destination = Path.Combine(tempFolder, string.Concat(safeName, extension));
+
+        try
+        {
+            File.Copy(resolution.Value.FullPath, destination, overwrite: true);
+            return destination;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to copy file {FileId} from {Source} to temp destination {Destination}.",
+                fileId,
+                resolution.Value.FullPath,
+                destination);
+            return null;
+        }
+    }
+
     public async Task OpenInDefaultAppAsync(
         Guid fileId,
         CancellationToken cancellationToken = default)
@@ -101,31 +145,28 @@ public sealed class FileContentService : IFileContentService
             return;
         }
 
-        var location = await GetContentLocationAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (location is null)
+        var tempPath = await ExportToTempWithOriginalNameAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(tempPath))
         {
             _logger.LogWarning("Unable to open file {FileId}: content location missing.", fileId);
             return;
         }
 
-        if (!File.Exists(location.FullPath))
+        if (!File.Exists(tempPath))
         {
-            _logger.LogWarning(
-                "Unable to open file {FileId}: physical file missing at {FullPath}.",
-                fileId,
-                location.FullPath);
+            _logger.LogWarning("Unable to open file {FileId}: temp file missing at {FullPath}.", fileId, tempPath);
             return;
         }
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = location.FullPath,
+            FileName = tempPath,
             UseShellExecute = true,
         };
 
         if (!_processLauncher.TryStart(startInfo))
         {
-            _logger.LogWarning("Failed to open file {FileId} at {FullPath} in default application.", fileId, location.FullPath);
+            _logger.LogWarning("Failed to open file {FileId} at {FullPath} in default application.", fileId, tempPath);
         }
     }
 
@@ -139,26 +180,26 @@ public sealed class FileContentService : IFileContentService
             return;
         }
 
-        var location = await GetContentLocationAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (location is null)
+        var tempPath = await ExportToTempWithOriginalNameAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(tempPath))
         {
             _logger.LogWarning("Unable to show file {FileId} in explorer: content location missing.", fileId);
             return;
         }
 
-        if (!File.Exists(location.FullPath))
+        if (!File.Exists(tempPath))
         {
             _logger.LogWarning(
                 "Unable to show file {FileId} in explorer: physical file missing at {FullPath}.",
                 fileId,
-                location.FullPath);
+                tempPath);
             return;
         }
 
         var startInfo = new ProcessStartInfo
         {
             FileName = "explorer.exe",
-            Arguments = $"/select,\"{location.FullPath}\"",
+            Arguments = $"/select,\"{tempPath}\"",
             UseShellExecute = true,
         };
 
@@ -167,7 +208,7 @@ public sealed class FileContentService : IFileContentService
             _logger.LogWarning(
                 "Failed to show file {FileId} at {FullPath} in File Explorer.",
                 fileId,
-                location.FullPath);
+                tempPath);
         }
     }
 
@@ -225,6 +266,30 @@ public sealed class FileContentService : IFileContentService
         }
 
         return AppResult<ResolvedContentLocation>.Success(new ResolvedContentLocation(file, fileSystem, fullPath));
+    }
+
+    private static string BuildTempFolderPath(Guid fileId)
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return Path.Combine(localAppData, "Veriado", "temp", fileId.ToString("N"));
+    }
+
+    private static string SanitizeFileName(string? name, Guid fallbackId)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new string((name ?? string.Empty)
+            .Trim()
+            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
+            .ToArray());
+
+        sanitized = sanitized.TrimEnd('.');
+
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return fallbackId.ToString("N");
+        }
+
+        return sanitized;
     }
 
     private sealed record ResolvedContentLocation(FileEntity File, FileSystemEntity FileSystem, string FullPath);
