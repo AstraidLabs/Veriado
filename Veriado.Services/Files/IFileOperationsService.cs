@@ -25,6 +25,11 @@ public interface IFileOperationsService
 
     Task<ApiResponse<Guid>> ReplaceContentAsync(Guid fileId, byte[] content, CancellationToken cancellationToken);
 
+    Task<ApiResponse<FileSummaryDto>> ReplaceFileContentAsync(
+        Guid fileId,
+        string sourceFileFullPath,
+        CancellationToken cancellationToken);
+
     Task<ApiResponse<FileSummaryDto>> UpdateFileContentAsync(
         Guid fileId,
         string sourceFileFullPath,

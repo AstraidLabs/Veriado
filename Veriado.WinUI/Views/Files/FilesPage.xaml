@@ -183,6 +183,21 @@
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Center">
                                         <Button
+                                            x:Uid="FilesPage_ItemOpenButton"
+                                            Content="Otevřít"
+                                            Command="{Binding DataContext.OpenFileCommand, ElementName=PageRoot}"
+                                            CommandParameter="{x:Bind}" />
+                                        <Button
+                                            x:Uid="FilesPage_ItemShowInFolderButton"
+                                            Content="Ukázat ve složce"
+                                            Command="{Binding DataContext.ShowInFolderCommand, ElementName=PageRoot}"
+                                            CommandParameter="{x:Bind}" />
+                                        <Button
+                                            x:Uid="FilesPage_ItemUpdateButton"
+                                            Content="Aktualizovat soubor"
+                                            Command="{Binding DataContext.UpdateFileContentCommand, ElementName=PageRoot}"
+                                            CommandParameter="{x:Bind}" />
+                                        <Button
                                             x:Uid="FilesPage_ItemDetailButton"
                                             Content="Detail"
                                             Command="{Binding DataContext.OpenDetailCommand, ElementName=PageRoot}"
@@ -192,11 +207,6 @@
                                             Content="Smazat"
                                             Command="{Binding DataContext.DeleteFileCommand, ElementName=PageRoot}"
                                             CommandParameter="{x:Bind Dto}" />
-                                        <Button
-                                            Content="Aktualizovat soubor"
-                                            Command="{Binding DataContext.UpdateFileCommand, ElementName=PageRoot}"
-                                            CommandParameter="{x:Bind}"
-                                            Visibility="{x:Bind HasPhysicalIssue, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
