@@ -114,9 +114,12 @@ public sealed class FileContentService : IFileContentService
             return null;
         }
 
-        var safeName = SanitizeFileName(resolution.Value.File.Name, fileId);
-        var extension = resolution.Value.File.Extension ?? string.Empty;
-        var destination = Path.Combine(tempFolder, string.Concat(safeName, extension));
+        var safeName = SanitizeFileName(resolution.Value.File.Name.Value, fileId);
+        var extension = resolution.Value.File.Extension.Value;
+        var destinationFileName = string.IsNullOrEmpty(extension)
+            ? safeName
+            : string.Concat(safeName, ".", extension);
+        var destination = Path.Combine(tempFolder, destinationFileName);
 
         try
         {
