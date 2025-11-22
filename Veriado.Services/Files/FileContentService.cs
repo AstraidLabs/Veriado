@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using AutoMapper;
+using Microsoft.Extensions.Logging;
 using Veriado.Domain.Files;
 using Veriado.Domain.FileSystem;
 
@@ -15,12 +16,21 @@ public sealed class FileContentService : IFileContentService
     private readonly IFileRepository _repository;
     private readonly IFilePathResolver _pathResolver;
     private readonly IMapper _mapper;
+    private readonly IProcessLauncher _processLauncher;
+    private readonly ILogger<FileContentService> _logger;
 
-    public FileContentService(IFileRepository repository, IFilePathResolver pathResolver, IMapper mapper)
+    public FileContentService(
+        IFileRepository repository,
+        IFilePathResolver pathResolver,
+        IMapper mapper,
+        IProcessLauncher processLauncher,
+        ILogger<FileContentService> logger)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+        _processLauncher = processLauncher ?? throw new ArgumentNullException(nameof(processLauncher));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<FileContentResponseDto?> GetContentAsync(Guid fileId, CancellationToken cancellationToken = default)
@@ -81,58 +91,83 @@ public sealed class FileContentService : IFileContentService
         CancellationToken cancellationToken = default) =>
         SaveContentToDiskAsync(fileId, targetPath, cancellationToken);
 
-    public async Task<AppResult<Guid>> OpenInDefaultAppAsync(
+    public async Task OpenInDefaultAppAsync(
         Guid fileId,
         CancellationToken cancellationToken = default)
     {
-        var resolution = await ResolvePhysicalFileAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (resolution.IsFailure)
+        if (!OperatingSystem.IsWindows())
         {
-            return AppResult<Guid>.Failure(resolution.Error);
+            _logger.LogInformation("Opening files in default apps is only supported on Windows.");
+            return;
         }
 
-        try
+        var location = await GetContentLocationAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (location is null)
         {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = resolution.Value.FullPath,
-                UseShellExecute = true,
-            };
-
-            _ = Process.Start(startInfo);
-            return AppResult<Guid>.Success(fileId);
+            _logger.LogWarning("Unable to open file {FileId}: content location missing.", fileId);
+            return;
         }
-        catch (Exception ex)
+
+        if (!File.Exists(location.FullPath))
         {
-            return AppResult<Guid>.FromException(ex, "Unable to open the file in the default application.");
+            _logger.LogWarning(
+                "Unable to open file {FileId}: physical file missing at {FullPath}.",
+                fileId,
+                location.FullPath);
+            return;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = location.FullPath,
+            UseShellExecute = true,
+        };
+
+        if (!_processLauncher.TryStart(startInfo))
+        {
+            _logger.LogWarning("Failed to open file {FileId} at {FullPath} in default application.", fileId, location.FullPath);
         }
     }
 
-    public async Task<AppResult<Guid>> ShowInFileExplorerAsync(
+    public async Task ShowInFolderAsync(
         Guid fileId,
         CancellationToken cancellationToken = default)
     {
-        var resolution = await ResolvePhysicalFileAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (resolution.IsFailure)
+        if (!OperatingSystem.IsWindows())
         {
-            return AppResult<Guid>.Failure(resolution.Error);
+            _logger.LogInformation("Showing files in explorer is only supported on Windows.");
+            return;
         }
 
-        try
+        var location = await GetContentLocationAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (location is null)
         {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"/select,\"{resolution.Value.FullPath}\"",
-                UseShellExecute = true,
-            };
-
-            _ = Process.Start(startInfo);
-            return AppResult<Guid>.Success(fileId);
+            _logger.LogWarning("Unable to show file {FileId} in explorer: content location missing.", fileId);
+            return;
         }
-        catch (Exception ex)
+
+        if (!File.Exists(location.FullPath))
         {
-            return AppResult<Guid>.FromException(ex, "Unable to show the file in File Explorer.");
+            _logger.LogWarning(
+                "Unable to show file {FileId} in explorer: physical file missing at {FullPath}.",
+                fileId,
+                location.FullPath);
+            return;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{location.FullPath}\"",
+            UseShellExecute = true,
+        };
+
+        if (!_processLauncher.TryStart(startInfo))
+        {
+            _logger.LogWarning(
+                "Failed to show file {FileId} at {FullPath} in File Explorer.",
+                fileId,
+                location.FullPath);
         }
     }
 
