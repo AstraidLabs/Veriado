@@ -114,8 +114,9 @@ public sealed class FileContentService : IFileContentService
             return null;
         }
 
-        var safeName = SanitizeFileName(resolution.Value.File.Name, fileId);
-        var extension = resolution.Value.File.Extension ?? string.Empty;
+        var safeName = SanitizeFileName(resolution.Value.File.Name.Value, fileId);
+        var extensionValue = resolution.Value.File.Extension.Value;
+        var extension = string.IsNullOrEmpty(extensionValue) ? string.Empty : $".{extensionValue}";
         var destination = Path.Combine(tempFolder, string.Concat(safeName, extension));
 
         try
