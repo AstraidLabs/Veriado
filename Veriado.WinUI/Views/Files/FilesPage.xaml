@@ -184,29 +184,51 @@
                                         VerticalAlignment="Center">
                                         <Button
                                             x:Uid="FilesPage_ItemOpenButton"
-                                            Content="Otevřít"
+                                            IsEnabled="{x:Bind HasPhysicalFile, Mode=OneWay}"
                                             Command="{Binding DataContext.OpenFileCommand, ElementName=PageRoot}"
-                                            CommandParameter="{x:Bind}" />
+                                            CommandParameter="{x:Bind}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8E5;" />
+                                                <TextBlock Text="Otevřít" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button
                                             x:Uid="FilesPage_ItemShowInFolderButton"
-                                            Content="Ukázat ve složce"
+                                            IsEnabled="{x:Bind HasPhysicalFile, Mode=OneWay}"
                                             Command="{Binding DataContext.ShowInFolderCommand, ElementName=PageRoot}"
-                                            CommandParameter="{x:Bind}" />
+                                            CommandParameter="{x:Bind}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" />
+                                                <TextBlock Text="Ukázat ve složce" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button
                                             x:Uid="FilesPage_ItemUpdateButton"
-                                            Content="Aktualizovat soubor"
                                             Command="{Binding DataContext.UpdateFileContentCommand, ElementName=PageRoot}"
-                                            CommandParameter="{x:Bind}" />
+                                            CommandParameter="{x:Bind}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE72C;" />
+                                                <TextBlock Text="Aktualizovat" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button
                                             x:Uid="FilesPage_ItemDetailButton"
-                                            Content="Detail"
                                             Command="{Binding DataContext.OpenDetailCommand, ElementName=PageRoot}"
-                                            CommandParameter="{x:Bind Dto}" />
+                                            CommandParameter="{x:Bind Dto}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE946;" />
+                                                <TextBlock Text="Detail" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button
                                             x:Uid="FilesPage_ItemDeleteButton"
-                                            Content="Smazat"
                                             Command="{Binding DataContext.DeleteFileCommand, ElementName=PageRoot}"
-                                            CommandParameter="{x:Bind Dto}" />
+                                            CommandParameter="{x:Bind Dto}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;" />
+                                                <TextBlock Text="Smazat" />
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
                             </Border>
