@@ -94,8 +94,7 @@
                         ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
                         SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
                 </StackPanel>
-                <Button Content="Smazat vše"
-                        HorizontalAlignment="Right"
+                <Button HorizontalAlignment="Right"
                         Margin="8,0,0,0"
                         Command="{Binding DeleteAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
