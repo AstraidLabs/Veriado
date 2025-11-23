@@ -153,7 +153,7 @@ public sealed class UpdateFileContentCommandHandler
             bufferSize: 81920,
             useAsync: true);
         var extension = Path.GetExtension(sourceFullPath);
-        var storageOptions = new StorageSaveOptions(extension, mime: null, originalFileName: Path.GetFileName(sourceFullPath));
+        var storageOptions = new StorageSaveOptions(extension, Mime: null, OriginalFileName: Path.GetFileName(sourceFullPath));
         var storageResult = await _fileStorage.SaveAsync(stream, storageOptions, cancellationToken).ConfigureAwait(false);
 
         if (storageResult.Hash != expectedHash)

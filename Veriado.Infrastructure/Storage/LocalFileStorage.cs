@@ -330,7 +330,7 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         }
 
         var trimmed = extension.Trim();
-        if (!trimmed.StartsWith('.', StringComparison.Ordinal))
+        if (!trimmed.StartsWith(".", StringComparison.Ordinal))
         {
             trimmed = $".{trimmed}";
         }
