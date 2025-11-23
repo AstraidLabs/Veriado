@@ -94,6 +94,15 @@
                         ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
                         SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
                 </StackPanel>
+                <Button Content="Smazat vše"
+                        HorizontalAlignment="Right"
+                        Margin="8,0,0,0"
+                        Command="{Binding DeleteAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;"/>
+                        <TextBlock Text="Smazat vše"/>
+                    </StackPanel>
+                </Button>
             </StackPanel>
             <controls:InfoBar
                 x:Uid="FilesPage_IndexingInfoBar"

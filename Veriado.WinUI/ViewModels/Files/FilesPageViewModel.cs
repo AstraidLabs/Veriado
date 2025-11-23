@@ -4,17 +4,20 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.UI.Xaml.Controls;
 using Veriado.Appl.Files;
 using Veriado.Contracts.Files;
 using Veriado.Services.Files;
 using Veriado.Services.Diagnostics;
 using Veriado.WinUI.Services.Abstractions;
 using Veriado.WinUI.ViewModels.Base;
+using Veriado.WinUI.Views.Files;
 
 namespace Veriado.WinUI.ViewModels.Files;
 
@@ -30,6 +33,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IFileOperationsService _fileOperationsService;
     private readonly IFileContentService _fileContentService;
     private readonly IPickerService _pickerService;
+    private readonly ICatalogMaintenanceService _catalogMaintenanceService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
 
@@ -59,6 +63,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IFileOperationsService fileOperationsService,
         IFileContentService fileContentService,
         IPickerService pickerService,
+        ICatalogMaintenanceService catalogMaintenanceService,
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
         IServerClock serverClock,
@@ -75,6 +80,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _fileOperationsService = fileOperationsService ?? throw new ArgumentNullException(nameof(fileOperationsService));
         _fileContentService = fileContentService ?? throw new ArgumentNullException(nameof(fileContentService));
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
+        _catalogMaintenanceService = catalogMaintenanceService ?? throw new ArgumentNullException(nameof(catalogMaintenanceService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
@@ -82,6 +88,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
         Items = new ObservableCollection<FileListItemModel>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
+        DeleteAllCommand = new AsyncRelayCommand(DeleteAllAsync);
 
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
@@ -111,6 +118,8 @@ public partial class FilesPageViewModel : ViewModelBase
 
     public IAsyncRelayCommand RefreshCommand { get; }
 
+    public IAsyncRelayCommand DeleteAllCommand { get; }
+
     public IAsyncRelayCommand NextPageCommand => _nextPageCommand;
 
     public IAsyncRelayCommand PreviousPageCommand => _previousPageCommand;
@@ -126,6 +135,38 @@ public partial class FilesPageViewModel : ViewModelBase
     public IAsyncRelayCommand<FileListItemModel> OpenFileCommand { get; }
 
     public IAsyncRelayCommand<FileListItemModel?> ShowInFolderCommand { get; }
+
+    private string? _deleteAllConfirmationCode;
+
+    public string? DeleteAllConfirmationCode
+    {
+        get => _deleteAllConfirmationCode;
+        set
+        {
+            if (SetProperty(ref _deleteAllConfirmationCode, value))
+            {
+                OnPropertyChanged(nameof(CanConfirmDeleteAll));
+            }
+        }
+    }
+
+    private string? _deleteAllUserInput;
+
+    public string? DeleteAllUserInput
+    {
+        get => _deleteAllUserInput;
+        set
+        {
+            if (SetProperty(ref _deleteAllUserInput, value))
+            {
+                OnPropertyChanged(nameof(CanConfirmDeleteAll));
+            }
+        }
+    }
+
+    public bool CanConfirmDeleteAll =>
+        !string.IsNullOrWhiteSpace(DeleteAllConfirmationCode)
+        && string.Equals(DeleteAllConfirmationCode, DeleteAllUserInput, StringComparison.Ordinal);
 
     public IReadOnlyList<int> PageSizeOptions => _pageSizeOptions;
 
@@ -663,6 +704,79 @@ public partial class FilesPageViewModel : ViewModelBase
     private static bool CanOpenDetail(FileSummaryDto? summary) => summary is not null;
 
     private static bool CanDeleteFile(FileSummaryDto? summary) => summary is not null;
+
+    private static string GenerateDeleteAllCode()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        var bytes = RandomNumberGenerator.GetBytes(8);
+        var buffer = new char[8];
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            buffer[i] = chars[bytes[i] % chars.Length];
+        }
+
+        return new string(buffer);
+    }
+
+    private async Task DeleteAllAsync()
+    {
+        DeleteAllConfirmationCode = GenerateDeleteAllCode();
+        DeleteAllUserInput = string.Empty;
+        OnPropertyChanged(nameof(CanConfirmDeleteAll));
+
+        var dialog = new ContentDialog
+        {
+            Title = "Smazat celý katalog",
+            Content = new DeleteAllCatalogDialogContent
+            {
+                DataContext = this,
+            },
+            PrimaryButtonText = "Smazat vše",
+            CloseButtonText = "Zrušit",
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        dialog.IsPrimaryButtonEnabled = CanConfirmDeleteAll;
+        PropertyChangedEventHandler? handler = null;
+        handler = (s, e) =>
+        {
+            if (e.PropertyName == nameof(CanConfirmDeleteAll))
+            {
+                dialog.IsPrimaryButtonEnabled = CanConfirmDeleteAll;
+            }
+        };
+
+        PropertyChanged += handler;
+        ContentDialogResult result;
+        try
+        {
+            result = await _dialogService.ShowDialogAsync(dialog).ConfigureAwait(false);
+        }
+        finally
+        {
+            PropertyChanged -= handler;
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var cleared = false;
+        await SafeExecuteAsync(
+            async cancellationToken =>
+            {
+                await _catalogMaintenanceService.ClearCatalogAsync(cancellationToken).ConfigureAwait(false);
+                cleared = true;
+            },
+            "Mazání katalogu...")
+            .ConfigureAwait(false);
+
+        if (cleared)
+        {
+            await RefreshCommand.ExecuteAsync(null);
+        }
+    }
 
     private async Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
     {
