@@ -185,11 +185,13 @@
                                         <Button
                                             x:Uid="FilesPage_ItemOpenButton"
                                             Content="Otevřít"
+                                            IsEnabled="{x:Bind HasPhysicalFile, Mode=OneWay}"
                                             Command="{Binding DataContext.OpenFileCommand, ElementName=PageRoot}"
                                             CommandParameter="{x:Bind}" />
                                         <Button
                                             x:Uid="FilesPage_ItemShowInFolderButton"
                                             Content="Ukázat ve složce"
+                                            IsEnabled="{x:Bind HasPhysicalFile, Mode=OneWay}"
                                             Command="{Binding DataContext.ShowInFolderCommand, ElementName=PageRoot}"
                                             CommandParameter="{x:Bind}" />
                                         <Button
