@@ -62,6 +62,8 @@ public sealed partial class FileListItemModel : ObservableObject
 
     public bool HasPhysicalIssue => !string.IsNullOrWhiteSpace(PhysicalStatusMessage);
 
+    public bool HasPhysicalFile => !string.Equals(PhysicalState, "Missing", StringComparison.OrdinalIgnoreCase);
+
     public bool IsHealthy => string.Equals(PhysicalState, "Healthy", StringComparison.OrdinalIgnoreCase);
 
     public void RecomputeValidity(DateTimeOffset referenceTime, ValidityThresholds? thresholds = null)
@@ -82,6 +84,7 @@ public sealed partial class FileListItemModel : ObservableObject
 
     partial void OnPhysicalStateChanged(string? value)
     {
+        OnPropertyChanged(nameof(HasPhysicalFile));
         OnPropertyChanged(nameof(IsHealthy));
     }
 
