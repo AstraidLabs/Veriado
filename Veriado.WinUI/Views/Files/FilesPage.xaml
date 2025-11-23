@@ -24,6 +24,25 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="12">
+            <StackPanel Orientation="Vertical" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <FontIcon FontFamily="Segoe Fluent Icons"
+                              Glyph="&#xE8A5;"
+                              FontSize="28" />
+                    <TextBlock Text="Katalog dokumentů"
+                               FontSize="28"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+
+                <Rectangle Height="1"
+                           Fill="{ThemeResource SystemControlForegroundBaseLowBrush}"
+                           Margin="0,6,0,6" />
+
+                <TextBlock Text="Správa, validace a monitoring souborů"
+                           FontSize="14"
+                           Opacity="0.72"
+                           Margin="2,0,0,12" />
+            </StackPanel>
             <Grid x:Uid="FilesPage_SearchRow">
                 <AutoSuggestBox
                     x:Name="SearchAutoSuggestBox"
