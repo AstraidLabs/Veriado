@@ -50,8 +50,11 @@ public sealed class CreateFileWithUploadHandler : FileWriteHandlerBase, IRequest
             }
 
             await using var contentStream = new MemoryStream(request.Content, writable: false);
-            var storageResult = await _fileStorage.SaveAsync(contentStream, cancellationToken).ConfigureAwait(false);
-            storageResult = storageResult with { Mime = mime };
+            var storageOptions = new StorageSaveOptions(
+                string.IsNullOrWhiteSpace(request.Extension) ? null : $".{request.Extension.TrimStart('.')}",
+                request.Mime,
+                request.Name);
+            var storageResult = await _fileStorage.SaveAsync(contentStream, storageOptions, cancellationToken).ConfigureAwait(false);
 
             if (storageResult.Hash != hash)
             {

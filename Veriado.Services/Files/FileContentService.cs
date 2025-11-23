@@ -1,7 +1,6 @@
 // File: Veriado.Services/Files/FileContentService.cs
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 using Veriado.Domain.Files;
@@ -92,53 +91,7 @@ public sealed class FileContentService : IFileContentService
         CancellationToken cancellationToken = default) =>
         SaveContentToDiskAsync(fileId, targetPath, cancellationToken);
 
-    public async Task<string?> ExportToTempWithOriginalNameAsync(
-        Guid fileId,
-        CancellationToken cancellationToken = default)
-    {
-        var resolution = await ResolvePhysicalFileAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (resolution.IsFailure)
-        {
-            _logger.LogWarning("Unable to export file {FileId} to temp: {Reason}", fileId, resolution.Error);
-            return null;
-        }
-
-        var tempFolder = BuildTempFolderPath(fileId);
-        try
-        {
-            Directory.CreateDirectory(tempFolder);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create temp directory for file {FileId} at {TempFolder}.", fileId, tempFolder);
-            return null;
-        }
-
-        var safeName = SanitizeFileName(resolution.Value.File.Name.Value, fileId);
-        var extension = resolution.Value.File.Extension.Value;
-        var destinationFileName = string.IsNullOrEmpty(extension)
-            ? safeName
-            : string.Concat(safeName, ".", extension);
-        var destination = Path.Combine(tempFolder, destinationFileName);
-
-        try
-        {
-            File.Copy(resolution.Value.FullPath, destination, overwrite: true);
-            return destination;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed to copy file {FileId} from {Source} to temp destination {Destination}.",
-                fileId,
-                resolution.Value.FullPath,
-                destination);
-            return null;
-        }
-    }
-
-    public async Task OpenInDefaultAppAsync(
+    public async Task OpenFileAsync(
         Guid fileId,
         CancellationToken cancellationToken = default)
     {
@@ -148,28 +101,22 @@ public sealed class FileContentService : IFileContentService
             return;
         }
 
-        var tempPath = await ExportToTempWithOriginalNameAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(tempPath))
+        var resolution = await ResolvePhysicalFileAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (resolution.IsFailure)
         {
             _logger.LogWarning("Unable to open file {FileId}: content location missing.", fileId);
             return;
         }
 
-        if (!File.Exists(tempPath))
-        {
-            _logger.LogWarning("Unable to open file {FileId}: temp file missing at {FullPath}.", fileId, tempPath);
-            return;
-        }
-
         var startInfo = new ProcessStartInfo
         {
-            FileName = tempPath,
+            FileName = resolution.Value.FullPath,
             UseShellExecute = true,
         };
 
         if (!_processLauncher.TryStart(startInfo))
         {
-            _logger.LogWarning("Failed to open file {FileId} at {FullPath} in default application.", fileId, tempPath);
+            _logger.LogWarning("Failed to open file {FileId} at {FullPath} in default application.", fileId, resolution.Value.FullPath);
         }
     }
 
@@ -183,26 +130,17 @@ public sealed class FileContentService : IFileContentService
             return;
         }
 
-        var tempPath = await ExportToTempWithOriginalNameAsync(fileId, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(tempPath))
+        var resolution = await ResolvePhysicalFileAsync(fileId, cancellationToken).ConfigureAwait(false);
+        if (resolution.IsFailure)
         {
             _logger.LogWarning("Unable to show file {FileId} in explorer: content location missing.", fileId);
-            return;
-        }
-
-        if (!File.Exists(tempPath))
-        {
-            _logger.LogWarning(
-                "Unable to show file {FileId} in explorer: physical file missing at {FullPath}.",
-                fileId,
-                tempPath);
             return;
         }
 
         var startInfo = new ProcessStartInfo
         {
             FileName = "explorer.exe",
-            Arguments = $"/select,\"{tempPath}\"",
+            Arguments = $"/select,\"{resolution.Value.FullPath}\"",
             UseShellExecute = true,
         };
 
@@ -211,7 +149,7 @@ public sealed class FileContentService : IFileContentService
             _logger.LogWarning(
                 "Failed to show file {FileId} at {FullPath} in File Explorer.",
                 fileId,
-                tempPath);
+                resolution.Value.FullPath);
         }
     }
 
@@ -262,37 +200,48 @@ public sealed class FileContentService : IFileContentService
         }
 
         var fullPath = _pathResolver.GetFullPath(fileSystem.RelativePath.Value);
-        if (!File.Exists(fullPath))
+        var resolvedPath = ResolveExistingPath(fullPath);
+
+        if (resolvedPath is null)
         {
             return AppResult<ResolvedContentLocation>.NotFound(
                 $"Physical file for '{fileId}' was not found at '{fullPath}'.");
         }
 
-        return AppResult<ResolvedContentLocation>.Success(new ResolvedContentLocation(file, fileSystem, fullPath));
+        return AppResult<ResolvedContentLocation>.Success(new ResolvedContentLocation(file, fileSystem, resolvedPath));
     }
 
-    private static string BuildTempFolderPath(Guid fileId)
+    private string? ResolveExistingPath(string fullPath)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(localAppData, "Veriado", "temp", fileId.ToString("N"));
-    }
-
-    private static string SanitizeFileName(string? name, Guid fallbackId)
-    {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var sanitized = new string((name ?? string.Empty)
-            .Trim()
-            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
-            .ToArray());
-
-        sanitized = sanitized.TrimEnd('.');
-
-        if (string.IsNullOrWhiteSpace(sanitized))
+        if (File.Exists(fullPath))
         {
-            return fallbackId.ToString("N");
+            return fullPath;
         }
 
-        return sanitized;
+        var legacyPath = GetLegacyPathWithoutExtension(fullPath);
+        if (!string.IsNullOrWhiteSpace(legacyPath) && File.Exists(legacyPath))
+        {
+            _logger.LogWarning(
+                "Physical file missing at {ExpectedPath}; falling back to legacy path {LegacyPath}.",
+                fullPath,
+                legacyPath);
+            return legacyPath;
+        }
+
+        return null;
+    }
+
+    private static string? GetLegacyPathWithoutExtension(string fullPath)
+    {
+        var directory = Path.GetDirectoryName(fullPath);
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fullPath);
+
+        if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+        {
+            return null;
+        }
+
+        return Path.Combine(directory, fileNameWithoutExtension);
     }
 
     private sealed record ResolvedContentLocation(FileEntity File, FileSystemEntity FileSystem, string FullPath);

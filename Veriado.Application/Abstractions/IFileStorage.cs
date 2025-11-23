@@ -11,9 +11,10 @@ public interface IFileStorage
     /// Persists the provided content stream and returns the resulting metadata snapshot.
     /// </summary>
     /// <param name="content">The content stream to persist.</param>
+    /// <param name="options">The storage options.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The storage metadata describing the saved content.</returns>
-    Task<StorageResult> SaveAsync(Stream content, CancellationToken cancellationToken);
+    Task<StorageResult> SaveAsync(Stream content, StorageSaveOptions? options, CancellationToken cancellationToken);
 
     /// <summary>
     /// Moves existing stored content to a different logical path.
@@ -78,6 +79,14 @@ public readonly record struct StorageResult(
             LastWriteUtc,
             LastAccessUtc);
 }
+
+/// <summary>
+/// Provides optional parameters for saving content to storage.
+/// </summary>
+/// <param name="Extension">The preferred file extension including the leading dot.</param>
+/// <param name="Mime">The MIME type of the content.</param>
+/// <param name="OriginalFileName">The original file name used to infer an extension when needed.</param>
+public sealed record class StorageSaveOptions(string? Extension = null, string? Mime = null, string? OriginalFileName = null);
 
 /// <summary>
 /// Represents metadata describing stored content.

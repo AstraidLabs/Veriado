@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
@@ -19,6 +20,19 @@ namespace Veriado.Infrastructure.Storage;
 internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 {
     private const string DefaultMimeType = "application/octet-stream";
+    private const string DefaultExtension = ".bin";
+    private static readonly IReadOnlyDictionary<string, string> MimeToExtension = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["application/pdf"] = ".pdf",
+        ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = ".docx",
+        ["application/msword"] = ".doc",
+        ["application/vnd.ms-excel"] = ".xls",
+        ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = ".xlsx",
+        ["application/zip"] = ".zip",
+        ["image/jpeg"] = ".jpg",
+        ["image/png"] = ".png",
+        ["text/plain"] = ".txt",
+    };
     private readonly StorageProvider _provider = StorageProvider.Local;
     private readonly IFilePathResolver _pathResolver;
     private readonly ILogger<LocalFileStorage> _logger;
@@ -81,7 +95,8 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         cancellationToken.ThrowIfCancellationRequested();
 
         var hash = FileHash.From(context.Sha256);
-        var targetRelativePath = NormalizePath(BuildRelativePath(hash.Value));
+        var extension = ResolveExtension(context.Extension, context.Mime);
+        var targetRelativePath = NormalizePath(BuildRelativePath(hash.Value, extension));
         var currentPhysical = ResolvePath(reservation.Path.Value);
         var targetPhysical = ResolvePath(targetRelativePath);
 
@@ -118,11 +133,11 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
             }
         }
 
-        var snapshot = CreateSnapshot(targetRelativePath, hash, context.Length);
+        var snapshot = CreateSnapshot(targetRelativePath, hash, context.Length, MimeType.From(ResolveMime(context.Mime)));
         return ValueTask.FromResult(snapshot);
     }
 
-    public async Task<StorageResult> SaveAsync(Stream content, CancellationToken cancellationToken)
+    public async Task<StorageResult> SaveAsync(Stream content, StorageSaveOptions? options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
         cancellationToken.ThrowIfCancellationRequested();
@@ -161,9 +176,11 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
         }
 
         var hash = FileHash.From(Convert.ToHexString(hashBytes));
-        var commitContext = new StorageCommitContext(totalBytes, hash.Value, Sha1: null);
+        var resolvedMime = ResolveMime(options);
+        var resolvedExtension = ResolveExtension(options);
+        var commitContext = new StorageCommitContext(totalBytes, hash.Value, Sha1: null, resolvedExtension, resolvedMime);
         var snapshot = await CommitAsync(reservation, commitContext, cancellationToken).ConfigureAwait(false);
-        return snapshot;
+        return snapshot with { Mime = MimeType.From(resolvedMime) };
     }
 
     public Task<StoragePath> MoveAsync(StoragePath from, StoragePath to, CancellationToken cancellationToken)
@@ -235,11 +252,11 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 
         var hashBytes = incrementalHash.GetHashAndReset();
         var hash = FileHash.From(Convert.ToHexString(hashBytes));
-        var snapshot = CreateSnapshot(path.Value, hash, totalBytes);
+        var snapshot = CreateSnapshot(path.Value, hash, totalBytes, MimeType.From(DefaultMimeType));
         return snapshot.ToFileStat();
     }
 
-    private StorageResult CreateSnapshot(string relativePath, FileHash hash, long length)
+    private StorageResult CreateSnapshot(string relativePath, FileHash hash, long length, MimeType mime)
     {
         var physicalPath = ResolvePath(relativePath);
         var info = new FileInfo(physicalPath);
@@ -251,8 +268,6 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
 
         var attributes = MapAttributes(info.Attributes);
         var normalizedPath = NormalizePath(relativePath);
-        var mime = MimeType.From(DefaultMimeType);
-
         return new StorageResult(
             _provider,
             StoragePath.From(normalizedPath),
@@ -267,14 +282,99 @@ internal sealed class LocalFileStorage : IFileStorage, IStorageWriter
             UtcTimestamp.From(info.LastAccessTimeUtc));
     }
 
-    private static string BuildRelativePath(string sha256)
+    private string ResolveExtension(StorageSaveOptions? options)
+    {
+        var extension = NormalizeExtension(options?.Extension);
+        if (extension != DefaultExtension)
+        {
+            return extension;
+        }
+
+        var originalExtension = NormalizeExtension(Path.GetExtension(options?.OriginalFileName));
+        if (originalExtension != DefaultExtension)
+        {
+            return originalExtension;
+        }
+
+        var mimeExtension = MapMimeToExtension(options?.Mime);
+        if (!string.IsNullOrWhiteSpace(mimeExtension))
+        {
+            return NormalizeExtension(mimeExtension);
+        }
+
+        return DefaultExtension;
+    }
+
+    private string ResolveExtension(string? extension, string? mime)
+    {
+        var normalized = NormalizeExtension(extension);
+        if (normalized != DefaultExtension)
+        {
+            return normalized;
+        }
+
+        var mimeExtension = MapMimeToExtension(mime);
+        if (!string.IsNullOrWhiteSpace(mimeExtension))
+        {
+            return NormalizeExtension(mimeExtension);
+        }
+
+        return DefaultExtension;
+    }
+
+    private static string NormalizeExtension(string? extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            return DefaultExtension;
+        }
+
+        var trimmed = extension.Trim();
+        if (!trimmed.StartsWith('.', StringComparison.Ordinal))
+        {
+            trimmed = $".{trimmed}";
+        }
+
+        return trimmed
+            .Replace(Path.DirectorySeparatorChar, '.')
+            .Replace(Path.AltDirectorySeparatorChar, '.');
+    }
+
+    private static string? MapMimeToExtension(string? mime)
+    {
+        if (string.IsNullOrWhiteSpace(mime))
+        {
+            return null;
+        }
+
+        if (MimeToExtension.TryGetValue(mime, out var mapped))
+        {
+            return mapped;
+        }
+
+        return null;
+    }
+
+    private static string ResolveMime(StorageSaveOptions? options)
+    {
+        return string.IsNullOrWhiteSpace(options?.Mime)
+            ? DefaultMimeType
+            : options!.Mime!;
+    }
+
+    private static string ResolveMime(string? mime)
+    {
+        return string.IsNullOrWhiteSpace(mime) ? DefaultMimeType : mime;
+    }
+
+    private static string BuildRelativePath(string sha256, string extension)
     {
         if (sha256.Length < 2)
         {
             return BuildTemporaryPath();
         }
 
-        return Path.Combine(sha256[..2], sha256[2..]);
+        return Path.Combine(sha256[..2], string.Concat(sha256[2..], extension));
     }
 
     private static string BuildTemporaryPath()

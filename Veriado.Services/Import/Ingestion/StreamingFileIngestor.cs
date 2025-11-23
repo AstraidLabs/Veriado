@@ -81,7 +81,8 @@ public sealed class StreamingFileIngestor : IFileIngestor
 
         var sha256Hex = Convert.ToHexString(sha256.Hash ?? Array.Empty<byte>());
         var sha1Hex = Convert.ToHexString(sha1.Hash ?? Array.Empty<byte>());
-        var commitContext = new StorageCommitContext(totalBytes, sha256Hex, sha1Hex);
+        var extension = request.Extension ?? Path.GetExtension(request.OriginalFileName ?? request.SourcePath);
+        var commitContext = new StorageCommitContext(totalBytes, sha256Hex, sha1Hex, extension, request.Mime);
 
         var storageResult = await _storage
             .CommitAsync(reservation, commitContext, cancellationToken)

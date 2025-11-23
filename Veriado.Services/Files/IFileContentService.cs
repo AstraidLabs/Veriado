@@ -14,9 +14,7 @@ public interface IFileContentService
 
     Task<AppResult<Guid>> ExportContentAsync(Guid fileId, string targetPath, CancellationToken cancellationToken = default);
 
-    Task<string?> ExportToTempWithOriginalNameAsync(Guid fileId, CancellationToken cancellationToken = default);
-
-    Task OpenInDefaultAppAsync(Guid fileId, CancellationToken cancellationToken = default);
+    Task OpenFileAsync(Guid fileId, CancellationToken cancellationToken = default);
 
     Task ShowInFolderAsync(Guid fileId, CancellationToken cancellationToken = default);
 }

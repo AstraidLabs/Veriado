@@ -54,8 +54,11 @@ public sealed class RelinkFileContentHandler : FileWriteHandlerBase, IRequestHan
             var newSize = ByteSize.From(request.Content.LongLength);
 
             await using var contentStream = new MemoryStream(request.Content, writable: false);
-            var storageResult = await _fileStorage.SaveAsync(contentStream, cancellationToken).ConfigureAwait(false);
-            storageResult = storageResult with { Mime = newMime };
+            var storageOptions = new StorageSaveOptions(
+                string.IsNullOrWhiteSpace(file.Extension.Value) ? null : $".{file.Extension.Value.TrimStart('.')}",
+                request.Mime,
+                file.Name.Value);
+            var storageResult = await _fileStorage.SaveAsync(contentStream, storageOptions, cancellationToken).ConfigureAwait(false);
 
             if (storageResult.Hash != newHash)
             {
