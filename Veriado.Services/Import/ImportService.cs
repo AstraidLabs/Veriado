@@ -993,7 +993,14 @@ public sealed class ImportService : IImportService
             import.ContentStream.Seek(0, SeekOrigin.Begin);
         }
 
-        var storageResult = await _fileStorage.SaveAsync(import.ContentStream, cancellationToken).ConfigureAwait(false);
+        var extensionWithDot = string.IsNullOrWhiteSpace(request.Extension)
+            ? null
+            : $".{request.Extension.TrimStart('.') }";
+        var originalFileName = string.IsNullOrWhiteSpace(extensionWithDot)
+            ? request.Name
+            : $"{request.Name}{extensionWithDot}";
+        var storageOptions = new StorageSaveOptions(extensionWithDot, request.Mime, originalFileName);
+        var storageResult = await _fileStorage.SaveAsync(import.ContentStream, storageOptions, cancellationToken).ConfigureAwait(false);
 
         if (!string.Equals(storageResult.Hash.Value, import.ContentHash, StringComparison.Ordinal))
         {

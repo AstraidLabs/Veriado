@@ -89,7 +89,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _selectFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteSelectFileAsync);
         _deleteFileCommand = new AsyncRelayCommand<FileSummaryDto?>(ExecuteDeleteFileAsync, CanDeleteFile);
         UpdateFileContentCommand = new AsyncRelayCommand<FileListItemModel?>(UpdateFileContentAsync);
-        OpenFileCommand = new AsyncRelayCommand<FileListItemModel?>(OpenFileAsync);
+        OpenFileCommand = new AsyncRelayCommand<FileListItemModel>(OnOpenFileAsync);
         ShowInFolderCommand = new AsyncRelayCommand<FileListItemModel?>(ShowInFolderAsync);
 
         _suppressTargetPageChange = true;
@@ -123,7 +123,7 @@ public partial class FilesPageViewModel : ViewModelBase
 
     public IAsyncRelayCommand<FileListItemModel?> UpdateFileContentCommand { get; }
 
-    public IAsyncRelayCommand<FileListItemModel?> OpenFileCommand { get; }
+    public IAsyncRelayCommand<FileListItemModel> OpenFileCommand { get; }
 
     public IAsyncRelayCommand<FileListItemModel?> ShowInFolderCommand { get; }
 
@@ -618,7 +618,7 @@ public partial class FilesPageViewModel : ViewModelBase
             .ConfigureAwait(false);
     }
 
-    private async Task OpenFileAsync(FileListItemModel? item)
+    private async Task OnOpenFileAsync(FileListItemModel item)
     {
         if (item is null)
         {
@@ -626,7 +626,7 @@ public partial class FilesPageViewModel : ViewModelBase
         }
 
         await SafeExecuteAsync(
-            cancellationToken => _fileContentService.OpenInDefaultAppAsync(item.Dto.Id, cancellationToken),
+            cancellationToken => _fileContentService.OpenFileAsync(item.Dto.Id, cancellationToken),
             "Otevírání souboru...")
             .ConfigureAwait(false);
     }

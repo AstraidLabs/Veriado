@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Appl.Abstractions;
@@ -24,13 +25,24 @@ public interface IFileIngestor
 /// </summary>
 public sealed record class FileIngestRequest
 {
-    public FileIngestRequest(string sourcePath, string? preferredStoragePath, ImportOptions? options = null)
+    public FileIngestRequest(
+        string sourcePath,
+        string? preferredStoragePath,
+        ImportOptions? options = null,
+        string? extension = null,
+        string? mime = null,
+        string? originalFileName = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(sourcePath);
 
         SourcePath = sourcePath;
         PreferredStoragePath = preferredStoragePath;
         Options = options ?? new ImportOptions();
+        Extension = extension;
+        Mime = mime;
+        OriginalFileName = string.IsNullOrWhiteSpace(originalFileName)
+            ? Path.GetFileName(sourcePath)
+            : originalFileName;
     }
 
     /// <summary>
@@ -47,6 +59,21 @@ public sealed record class FileIngestRequest
     /// Gets the ingestion options.
     /// </summary>
     public ImportOptions Options { get; }
+
+    /// <summary>
+    /// Gets the preferred extension for the stored file.
+    /// </summary>
+    public string? Extension { get; }
+
+    /// <summary>
+    /// Gets the MIME type of the content.
+    /// </summary>
+    public string? Mime { get; }
+
+    /// <summary>
+    /// Gets the original file name if provided.
+    /// </summary>
+    public string? OriginalFileName { get; }
 }
 
 /// <summary>

@@ -49,4 +49,6 @@ public sealed record class StorageReservation(StorageProvider Provider, StorageP
 /// <param name="Length">The total number of bytes written.</param>
 /// <param name="Sha256">The SHA-256 hash of the written content.</param>
 /// <param name="Sha1">The optional SHA-1 hash of the written content.</param>
-public sealed record class StorageCommitContext(long Length, string Sha256, string? Sha1);
+/// <param name="Extension">The preferred file extension.</param>
+/// <param name="Mime">The MIME type of the content.</param>
+public sealed record class StorageCommitContext(long Length, string Sha256, string? Sha1, string? Extension = null, string? Mime = null);
