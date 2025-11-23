@@ -31,7 +31,11 @@
                     PlaceholderText="Hledat soubory"
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     QuerySubmitted="OnSearchQuerySubmitted"
-                    TextChanged="OnSearchTextChanged" />
+                    TextChanged="OnSearchTextChanged">
+                    <AutoSuggestBox.QueryIcon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE721;" />
+                    </AutoSuggestBox.QueryIcon>
+                </AutoSuggestBox>
             </Grid>
 
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
