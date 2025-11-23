@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileOperationsService, FileOperationsService>();
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IFileContentService, FileContentService>();
+        services.AddScoped<ICatalogMaintenanceService, CatalogMaintenanceService>();
         services.AddScoped<IProcessLauncher, ProcessLauncher>();
         services.AddScoped<IMaintenanceService, MaintenanceService>();
         services.AddScoped<IHealthService, HealthService>();
