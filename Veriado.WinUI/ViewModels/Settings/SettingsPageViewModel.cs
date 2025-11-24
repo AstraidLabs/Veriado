@@ -99,13 +99,16 @@ public partial class SettingsPageViewModel : ViewModelBase
                 .GetStorageSettingsAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            CurrentStorageRoot = dto.CurrentRootPath;
-            CanChangeStorageRoot = dto.CanChangeRoot;
-            NewStorageRootCandidate = dto.CurrentRootPath;
+            await Dispatcher.Enqueue(() =>
+            {
+                CurrentStorageRoot = dto.CurrentRootPath;
+                CanChangeStorageRoot = dto.CanChangeRoot;
+                NewStorageRootCandidate = dto.CurrentRootPath;
 
-            StorageChangeMessage = dto.CanChangeRoot
-                ? null
-                : "Pro změnu úložiště je nutná migrace.";
+                StorageChangeMessage = dto.CanChangeRoot
+                    ? null
+                    : "Pro změnu úložiště je nutná migrace.";
+            });
         });
     }
 
@@ -121,7 +124,7 @@ public partial class SettingsPageViewModel : ViewModelBase
             var folder = await _pickerService.PickFolderAsync().ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(folder))
             {
-                NewStorageRootCandidate = folder;
+                await Dispatcher.Enqueue(() => NewStorageRootCandidate = folder);
             }
         });
     }
@@ -139,33 +142,36 @@ public partial class SettingsPageViewModel : ViewModelBase
                 .ChangeStorageRootAsync(NewStorageRootCandidate!, cancellationToken)
                 .ConfigureAwait(false);
 
-            switch (result)
+            await Dispatcher.Enqueue(() =>
             {
-                case ChangeStorageRootResult.Success:
-                    StorageChangeMessage = "Složka úložiště byla úspěšně změněna.";
-                    CurrentStorageRoot = NewStorageRootCandidate;
-                    break;
+                switch (result)
+                {
+                    case ChangeStorageRootResult.Success:
+                        StorageChangeMessage = "Složka úložiště byla úspěšně změněna.";
+                        CurrentStorageRoot = NewStorageRootCandidate;
+                        break;
 
-                case ChangeStorageRootResult.CatalogNotEmpty:
-                    StorageChangeMessage = "Pro změnu úložiště je nutná migrace.";
-                    CanChangeStorageRoot = false;
-                    break;
+                    case ChangeStorageRootResult.CatalogNotEmpty:
+                        StorageChangeMessage = "Pro změnu úložiště je nutná migrace.";
+                        CanChangeStorageRoot = false;
+                        break;
 
-                case ChangeStorageRootResult.InvalidPath:
-                    StorageChangeMessage = "Neplatná cesta k úložišti. Zkontrolujte prosím složku.";
-                    break;
+                    case ChangeStorageRootResult.InvalidPath:
+                        StorageChangeMessage = "Neplatná cesta k úložišti. Zkontrolujte prosím složku.";
+                        break;
 
-                case ChangeStorageRootResult.IoError:
-                    StorageChangeMessage = "Složku úložiště nelze použít kvůli chybě při přístupu na disk.";
-                    break;
+                    case ChangeStorageRootResult.IoError:
+                        StorageChangeMessage = "Složku úložiště nelze použít kvůli chybě při přístupu na disk.";
+                        break;
 
-                default:
-                    StorageChangeMessage = "Došlo k neočekávané chybě při změně úložiště.";
-                    break;
-            }
+                    default:
+                        StorageChangeMessage = "Došlo k neočekávané chybě při změně úložiště.";
+                        break;
+                }
 
-            _browseStorageRootCommand.NotifyCanExecuteChanged();
-            _saveStorageRootCommand.NotifyCanExecuteChanged();
+                _browseStorageRootCommand.NotifyCanExecuteChanged();
+                _saveStorageRootCommand.NotifyCanExecuteChanged();
+            });
         });
     }
 
