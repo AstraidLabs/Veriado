@@ -137,7 +137,7 @@ public sealed class FilePathResolver : IFilePathResolver
         }
     }
 
-    internal void OverrideCachedRoot(string normalizedRoot)
+    public void OverrideCachedRoot(string normalizedRoot)
     {
         if (string.IsNullOrWhiteSpace(normalizedRoot))
         {

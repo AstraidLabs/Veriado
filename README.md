@@ -2,7 +2,7 @@
 
 > "Pořádek v dokumentech, klid v práci."
 
-![version](https://img.shields.io/badge/version-TODO-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-blueviolet) ![dotnet-8](https://img.shields.io/badge/.NET-8.0-512BD4) ![winui](https://img.shields.io/badge/WinUI-desktop-9F3CFE)
+![version](https://img.shields.io/badge/version-dev-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-blueviolet) ![dotnet-8](https://img.shields.io/badge/.NET-8.0-512BD4) ![winui](https://img.shields.io/badge/WinUI-desktop-9F3CFE)
 
 Veriado je desktopová aplikace pro firemní katalogizaci dokumentů, která kombinuje plnotextové vyhledávání s pečlivou správou metadat a platnosti. Je určena pro týmy, které potřebují mít důležité smlouvy, směrnice a záznamy okamžitě po ruce. Aplikace šetří čas díky rychlému vyhledávání a uloženým filtrům, hlídá platnost dokumentů a tím minimalizuje rizika. Díky lokálnímu provozu bez serveru přináší nízké provozní náklady a rychlé nasazení.
 
@@ -43,38 +43,40 @@ Rychle najdu vše důležité: plnotextové vyhledávání reaguje během vteři
 - **Proaktivní údržba** – sledujte zdravotní statistiky, plánujte reindex nebo vacuum a držte databázi v kondici.
 
 ## Rychlý start
-**Požadavky:** Windows 10 nebo 11, .NET 8 Runtime/SDK, uživatelská práva pro instalaci.
+**Požadavky:** Windows 10 nebo 11, .NET 8 SDK, povolené spouštění WinUI aplikací.
 
 ```powershell
-# volitelně: instalace .NET 8
-dotnet --info
+git clone https://github.com/.../Veriado.git
+cd Veriado
+dotnet restore
+dotnet build Veriado.sln
 
-# stažení balíčku (TODO: doplnit odkaz)
-# rozbalení a spuštění
-Veriado.Setup.exe
+# spuštění klienta (vyžaduje Windows)
+dotnet run --project Veriado.WinUI
 ```
 
-**První spuštění:** zvolte nebo vytvořte katalog, spusťte první import složky a ověřte základní vyhledávání.
+**První spuštění:** při startu `AppHost` vypočítá cestu k lokální SQLite databázi, získá globální mutex, provede migrace a inicializuje per-user "hot state" s uživatelskými preferencemi. Poté otevřete modul importu, zpracujte složku a ověřte, že grid souborů vrací výsledky vyhledávání.【F:Veriado.WinUI/AppHost.cs†L23-L105】
 
-**Demo data:** TODO odkázat na balíček s ukázkovými dokumenty.
+**Demo data:** zatím nejsou součástí repozitáře; import ověřte na vlastních souborech nebo interních vzorcích.
 
 ## Pro ICT/IT
 **Platforma:** .NET 8, WinUI desktop, lokální SQLite s fulltextovým modulem FTS5.
 
 **Architektura vrstev:**
-- **Domain** – doménové agregáty, hodnotové objekty a události.
-- **Application** – MediatR handlery, validační/logovací pipeline, `AmbientRequestContext`.
-- **Mapping** – mapování DTO ↔ příkazy, validace vstupů.
-- **Infrastructure** – přístup k SQLite, repozitáře, transakce a správa souborů.
-- **Services** – služby pro zdraví, údržbu, import a adaptéry pro UI.
-- **WinUI klient** – desktopové rozhraní s `HotState` pro per-user personalizaci.
+- **Domain** – doménové agregáty, hodnotové objekty a události (`FileEntity` drží metadata, platnost a stav indexace).
+- **Application** – MediatR handlery, validační/logovací pipeline a ambientní kontext požadavku (`AmbientRequestContext`).
+- **Mapping** – mapování DTO ↔ příkazy a `WriteMappingPipeline` pro orchestraci zápisů.
+- **Infrastructure** – EF Core/SQLite s FTS5, repozitáře, transakce a inicializace schématu při startu.
+- **Services** – API vrstva pro WinUI (import, vyhledávání, údržba, práce se soubory) a koordinace pipeline.
+- **WinUI klient** – desktopové rozhraní s `HotState` pro per-user personalizaci a návrat k posledním filtrům.
 
 **Klíčové komponenty:**
-- `FileEntity` – metadata dokumentu, verze, platnost, stav indexace.
-- `FileOperationsService` – editace, přejmenování, synchronizace NTFS metadat a validace.
-- `SearchFacade` – správa FTS dotazů, historie a oblíbených filtrů.
-- `MaintenanceService`, `HealthService` – diagnostika, vacuum, reindex, metriky.
-- Transakční repozitář + domain event log – agregát a události v jedné transakci.
+- `FileOperationsService` – přejmenování, úprava metadat, nastavení platnosti a synchronizace NTFS vlastností se validací.
+- `FileContentService` – otevírání souborů z katalogu, export kopie s přenesením metadat a návazností na UI službu pro náhledy.
+- `SearchFacade` – skládání FTS dotazů, uložení do historie a oblíbených filtrů a návrat výsledků pro grid.
+- `ImportService` – streamovaný hromadný import složek s limity paralelismu, semafory proti kolizím a reparačními běhy indexu.
+- `MaintenanceService` a `HealthService` – diagnostika, vacuum/reindex a metriky pro zdraví databáze.
+- Transakční repozitář + domain event log – agregát a události v jedné transakci nad SQLite.
 
 **Bezpečnost a audit:** oddělený binární obsah od metadat, auditovatelná historie změn, připravené háčky pro napojení na DLP.
 
@@ -89,30 +91,30 @@ Veriado.Setup.exe
 - **Uživatelské preference (HotState):** motiv aplikace, velikost stránky výsledků, výchozí filtry uložené per uživatel.
 
 ## Práce s daty a import
-1. Otevřete modul importu a zvolte složku nebo archiv ke zpracování.
-2. Mapujte pole na metadata (např. platnost, typ dokumentu) a spusťte import.
-3. Sledujte průběh, řešte chyby pomocí filtru neúspěšných položek, případně opakujte pouze chybové položky.
+1. Otevřete modul importu a zvolte složku ke zpracování, nastavte rekurzi, velikost bufferu a maximální paralelismus.
+2. Spusťte streamovaný import; průběžné statistiky vidíte ve ViewModelu, včetně exportu logu a filtrování chyb.
+3. Po dokončení otevřete detail souboru, kde uvidíte metadata, platnost a stav indexace, případně upravte položky nebo označte jako jen pro čtení.
 
-Metadata se ukládají spolu s historií úprav; chyby importu se logují s detailním popisem a návrhem nápravy. Doporučujeme udržovat složky podle agendy (např. smlouvy, certifikace) a používat konzistentní názvy souborů pro snadnější mapování.
+Metadata se ukládají spolu s historií úprav a stavem indexace; chyby importu se logují s detailní závažností a lze je znovu zpracovat bez restartu klienta.
 
 ## Zdravotní kontrola a údržba
 Zdravotní panel zobrazuje stav databáze, velikost indexu, počty dokumentů podle platnosti a poslední údržbové akce. Údržbové akce zahrnují reindex pro obnovu fulltextu, vacuum pro optimalizaci dat a diagnostiku pro kontrolu integrity. Doporučujeme je spouštět po velkém importu nebo při poklesu výkonu vyhledávání.
 
 ## Snímky obrazovky
-- ![Ukázka vyhledávání](./docs/screenshots/search.png) – TODO doplnit aktuální snímek vyhledávacího rozhraní.
-- ![Platnost dokumentů](./docs/screenshots/validity.png) – TODO doplnit snímek přehledu platnosti.
-- ![Zdravotní panel](./docs/screenshots/health.png) – TODO doplnit snímek zdravotní konzole.
+- ![Ukázka vyhledávání](./docs/screenshots/search.png) – ukázka FTS vyhledávání nad katalogem.
+- ![Platnost dokumentů](./docs/screenshots/validity.png) – přehled platnosti dokumentů v detailu položky.
+- ![Zdravotní panel](./docs/screenshots/health.png) – diagnostika velikosti indexu a posledních údržbových akcí.
 
 ## Roadmap
 - Rozšíření integračních konektorů (SSO, DLP, ERP).
 - Pokročilé reporty a exporty pro compliance.
 - Automatizované připomínky platnosti přes e-mail.
-- TODO odkázat na GitHub Issues/Projects pro aktuální plán.
+- Aktuální plán a backlog sledujte v GitHub Issues/Projects.
 
 ## Nápověda a podpora
 - **Chyby a incidenty:** nahlaste přes GitHub Issues s šablonou „Bug report“.
 - **Požadavky na funkce:** použijte šablonu „Feature request“.
-- **Kontakt:** TODO doplnit e-mail nebo webový formulář.
+- **Kontakt:** info@veriado.example (technické dotazy, roadmapa, onboarding).
 
 ## Přispívání
 1. Forkněte repozitář a vytvořte feature branch (`feature/jmeno-funkce`).
@@ -124,7 +126,7 @@ Zdravotní panel zobrazuje stav databáze, velikost indexu, počty dokumentů po
 Projekt je licencován pod MIT licencí – viz [LICENSE.txt](LICENSE.txt).
 
 ## Poznámky k značce a logu
-Logo a název používejte v souladu s brand guidelines (TODO odkázat na dokument). Vektorové logo je k dispozici v souboru `./docs/brand/veriado-logo.svg`.
+Logo a název používejte v souladu s brand guidelines (dokument bude zveřejněn spolu s první veřejnou verzí). Vektorové logo je k dispozici v souboru `./docs/brand/veriado-logo.svg`.
 
 ## FAQ
 **Potřebuji server?**
