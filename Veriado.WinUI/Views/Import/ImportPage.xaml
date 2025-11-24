@@ -54,7 +54,29 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock Text="Import souborů" FontSize="28" FontWeight="SemiBold" />
+
+            <!-- Header similar to FilesPage -->
+            <StackPanel Orientation="Vertical" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <FontIcon FontFamily="Segoe Fluent Icons"
+                              Glyph="&#xE896;"
+                              FontSize="28" />
+                    <TextBlock Text="Import souborů"
+                               FontSize="28"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+
+                <Rectangle Height="1"
+                           Fill="{ThemeResource SystemControlForegroundBaseLowBrush}"
+                           Margin="0,6,0,6" />
+
+                <TextBlock Text="Hromadný import a kontrola dokumentů před zařazením do katalogu"
+                           FontSize="14"
+                           Opacity="0.72"
+                           Margin="2,0,0,12" />
+            </StackPanel>
+
+            <!-- Existing content: keep as is -->
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
