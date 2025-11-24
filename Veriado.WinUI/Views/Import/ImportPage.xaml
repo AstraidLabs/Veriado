@@ -76,6 +76,27 @@
                            Margin="2,0,0,12" />
             </StackPanel>
 
+            <StackPanel Spacing="12">
+                <StackPanel.Transitions>
+                    <TransitionCollection>
+                        <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
+                    </TransitionCollection>
+                </StackPanel.Transitions>
+                <TextBlock Text="Zdroj importu" FontSize="20" FontWeight="SemiBold" />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="Vybrat složku" Command="{Binding PickFolderCommand}" />
+                    <TextBox
+                        Grid.Column="1"
+                        MinWidth="320"
+                        IsReadOnly="True"
+                        Text="{Binding SelectedFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
+            </StackPanel>
+
             <!-- Existing content: keep as is -->
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
@@ -86,8 +107,6 @@
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
                     <Button Content="Zastavit" Command="{Binding StopImportCommand}" IsEnabled="{Binding IsImporting}" />
-                    <Button Content="Vymazat výsledky" Command="{Binding ClearResultsCommand}" />
-                    <Button Content="Exportovat protokol" Command="{Binding ExportLogCommand}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
@@ -151,30 +170,8 @@
             </muxc:InfoBar>
         </StackPanel>
 
-        <!-- Zdroj -->
-        <StackPanel Grid.Row="1" Spacing="12">
-            <StackPanel.Transitions>
-                <TransitionCollection>
-                    <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
-                </TransitionCollection>
-            </StackPanel.Transitions>
-            <TextBlock Text="Zdroj importu" FontSize="20" FontWeight="SemiBold" />
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="Vybrat složku" Command="{Binding PickFolderCommand}" />
-                <TextBox
-                    Grid.Column="1"
-                    MinWidth="320"
-                    IsReadOnly="True"
-                    Text="{Binding SelectedFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-            </Grid>
-        </StackPanel>
-
         <!-- Volby -->
-        <StackPanel Grid.Row="2" Spacing="12">
+        <StackPanel Grid.Row="1" Spacing="12">
             <StackPanel.Transitions>
                 <TransitionCollection>
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
@@ -234,13 +231,17 @@
         </StackPanel>
 
         <!-- Protokol -->
-        <StackPanel Grid.Row="3" Spacing="12">
+        <StackPanel Grid.Row="2" Spacing="12">
             <StackPanel.Transitions>
                 <TransitionCollection>
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
             <TextBlock Text="Protokol importu" FontSize="20" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Vymazat výsledky" Command="{Binding ClearResultsCommand}" />
+                <Button Content="Exportovat protokol" Command="{Binding ExportLogCommand}" />
+            </StackPanel>
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
