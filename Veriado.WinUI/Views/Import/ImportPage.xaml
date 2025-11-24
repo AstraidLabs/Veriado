@@ -61,7 +61,7 @@
                     <FontIcon FontFamily="Segoe Fluent Icons"
                               Glyph="&#xE896;"
                               FontSize="28" />
-                    <TextBlock Text="Import souborů"
+                    <TextBlock Text="Nahrát soubory do uložiště"
                                FontSize="28"
                                FontWeight="SemiBold" />
                 </StackPanel>
@@ -70,7 +70,7 @@
                            Fill="{ThemeResource SystemControlForegroundBaseLowBrush}"
                            Margin="0,6,0,6" />
 
-                <TextBlock Text="Hromadný import a kontrola dokumentů před zařazením do katalogu"
+                <TextBlock Text="Vyberte složku se soubory a nahrajte je do centrálního uložiště Veriado."
                            FontSize="14"
                            Opacity="0.72"
                            Margin="2,0,0,12" />
