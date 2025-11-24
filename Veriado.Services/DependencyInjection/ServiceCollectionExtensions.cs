@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProcessLauncher, ProcessLauncher>();
         services.AddScoped<IMaintenanceService, MaintenanceService>();
         services.AddScoped<IHealthService, HealthService>();
+        services.AddScoped<IStorageSettingsService, StorageSettingsService>();
         services.AddScoped<IStorageManagementService, StorageManagementService>();
         services.AddSingleton<ISearchFacade, SearchFacade>();
         services.AddSingleton<ApplicationFileSystemSyncService, FileSystemSyncService>();

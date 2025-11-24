@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Veriado.Infrastructure.Storage;
 
-internal static class StorageRootValidator
+public static class StorageRootValidator
 {
     public static string ValidateWritableRoot(string proposedRoot, ILogger logger)
     {
