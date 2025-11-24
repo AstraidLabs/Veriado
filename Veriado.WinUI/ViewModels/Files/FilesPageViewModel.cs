@@ -44,6 +44,7 @@ public partial class FilesPageViewModel : ViewModelBase
     
     private static readonly TimeSpan HealthPollingInterval = TimeSpan.FromSeconds(15);
     private CancellationTokenSource? _searchDebounceSource;
+    private readonly AsyncRelayCommand _deleteAllCommand;
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly AsyncRelayCommand<FileSummaryDto?> _openDetailCommand;
@@ -88,7 +89,8 @@ public partial class FilesPageViewModel : ViewModelBase
 
         Items = new ObservableCollection<FileListItemModel>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
-        DeleteAllCommand = new AsyncRelayCommand(DeleteAllAsync);
+        _deleteAllCommand = new AsyncRelayCommand(DeleteAllAsync, CanDeleteAll);
+        DeleteAllCommand = _deleteAllCommand;
 
         _nextPageCommand = new AsyncRelayCommand(LoadNextPageAsync, CanLoadNextPage);
         _previousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, CanLoadPreviousPage);
@@ -187,6 +189,11 @@ public partial class FilesPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private int totalCount;
+
+    partial void OnTotalCountChanged(int value)
+    {
+        _deleteAllCommand.NotifyCanExecuteChanged();
+    }
 
     [ObservableProperty]
     private double targetPage;
@@ -705,6 +712,8 @@ public partial class FilesPageViewModel : ViewModelBase
 
     private static bool CanDeleteFile(FileSummaryDto? summary) => summary is not null;
 
+    private bool CanDeleteAll() => TotalCount > 0;
+
     private static string GenerateDeleteAllCode()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -731,7 +740,7 @@ public partial class FilesPageViewModel : ViewModelBase
             {
                 DataContext = this,
             },
-            PrimaryButtonText = "Smazat vše",
+            PrimaryButtonText = "Smazat databázi",
             CloseButtonText = "Zrušit",
             DefaultButton = ContentDialogButton.Close,
         };
