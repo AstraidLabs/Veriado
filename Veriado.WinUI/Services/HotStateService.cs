@@ -125,9 +125,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         }
     }
 
-    partial void OnLastQueryChanged(string? value) => PersistAsync();
+    partial void OnLastQueryChanged(string? value) => SchedulePersistAsync();
 
-    partial void OnLastFolderChanged(string? value) => PersistAsync();
+    partial void OnLastFolderChanged(string? value) => SchedulePersistAsync();
 
     partial void OnPageSizeChanged(int value)
     {
@@ -137,18 +137,18 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(PageSize));
         }
 
-        PersistAsync();
+        SchedulePersistAsync();
     }
 
-    partial void OnImportRecursiveChanged(bool value) => PersistAsync();
+    partial void OnImportRecursiveChanged(bool value) => SchedulePersistAsync();
 
-    partial void OnImportKeepFsMetadataChanged(bool value) => PersistAsync();
+    partial void OnImportKeepFsMetadataChanged(bool value) => SchedulePersistAsync();
 
-    partial void OnImportSetReadOnlyChanged(bool value) => PersistAsync();
+    partial void OnImportSetReadOnlyChanged(bool value) => SchedulePersistAsync();
 
-    partial void OnImportUseParallelChanged(bool value) => PersistAsync();
+    partial void OnImportUseParallelChanged(bool value) => SchedulePersistAsync();
 
-    partial void OnImportAutoExportLogChanged(bool value) => PersistAsync();
+    partial void OnImportAutoExportLogChanged(bool value) => SchedulePersistAsync();
 
     partial void OnImportMaxDegreeOfParallelismChanged(int value)
     {
@@ -158,10 +158,10 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportMaxDegreeOfParallelism));
         }
 
-        PersistAsync();
+        SchedulePersistAsync();
     }
 
-    partial void OnImportDefaultAuthorChanged(string? value) => PersistAsync();
+    partial void OnImportDefaultAuthorChanged(string? value) => SchedulePersistAsync();
 
     partial void OnImportMaxFileSizeMegabytesChanged(double? value)
     {
@@ -171,7 +171,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(ImportMaxFileSizeMegabytes));
         }
 
-        PersistAsync();
+        SchedulePersistAsync();
     }
 
     private void UpdateValidityThresholds(int? red = null, int? orange = null, int? green = null)
@@ -199,18 +199,28 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
         if (persist)
         {
-            PersistAsync();
+            SchedulePersistAsync();
         }
     }
 
-    private void PersistAsync()
+    private Task PersistAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_initialized)
+        {
+            return Task.CompletedTask;
+        }
+
+        return PersistStateAsync(cancellationToken);
+    }
+
+    private void SchedulePersistAsync(CancellationToken cancellationToken = default)
     {
         if (!_initialized)
         {
             return;
         }
 
-        _ = PersistStateAsync().ContinueWith(
+        _ = PersistAsync(cancellationToken).ContinueWith(
             t =>
             {
                 if (t.Exception is not null)
@@ -223,9 +233,9 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             TaskScheduler.Default);
     }
 
-    private async Task PersistStateAsync()
+    private async Task PersistStateAsync(CancellationToken cancellationToken)
     {
-        var result = await PersistStateInternalAsync().ConfigureAwait(false);
+        var result = await PersistStateInternalAsync(cancellationToken).ConfigureAwait(false);
         if (!result.Success)
         {
             var message = "Nepodařilo se uložit poslední použitý stav.";
@@ -238,11 +248,11 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         }
     }
 
-    private async Task<PersistStateResult> PersistStateInternalAsync()
+    private async Task<PersistStateResult> PersistStateInternalAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await _gate.WaitAsync().ConfigureAwait(false);
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await _settingsService.UpdateAsync(settings =>
@@ -269,7 +279,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
                     settings.Validity.RedThresholdDays = ValidityRedThresholdDays;
                     settings.Validity.OrangeThresholdDays = ValidityOrangeThresholdDays;
                     settings.Validity.GreenThresholdDays = ValidityGreenThresholdDays;
-                }).ConfigureAwait(false);
+                }, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -277,6 +287,10 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             }
 
             return PersistStateResult.CreateSuccess();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
