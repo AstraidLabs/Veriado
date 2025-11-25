@@ -286,7 +286,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     private async Task ExecuteSaveCommandAsync()
     {
-        _ = await ExecuteSaveAsync().ConfigureAwait(false);
+        await ExecuteSaveAsync().ConfigureAwait(false);
     }
 
     private void ExecuteCancel()

@@ -24,8 +24,8 @@ public partial class ImportPageViewModel : ViewModelBase
     private readonly IDialogService _dialogService;
     private readonly AsyncRelayCommand _pickFolderCommand;
     private readonly AsyncRelayCommand _runImportCommand;
-    private readonly RelayCommand _stopImportCommand;
-    private readonly RelayCommand _clearResultsCommand;
+    private readonly AsyncRelayCommand _stopImportCommand;
+    private readonly AsyncRelayCommand _clearResultsCommand;
     private readonly AsyncRelayCommand<ImportError> _openErrorDetailCommand;
     private readonly AsyncRelayCommand _exportLogCommand;
     private CancellationTokenSource? _importCancellation;
@@ -61,8 +61,8 @@ public partial class ImportPageViewModel : ViewModelBase
 
         _pickFolderCommand = new AsyncRelayCommand(ExecutePickFolderAsync, () => !IsImporting);
         _runImportCommand = new AsyncRelayCommand(ExecuteRunImportAsync, CanRunImport);
-        _stopImportCommand = new RelayCommand(ExecuteStopImport, () => IsImporting);
-        _clearResultsCommand = new RelayCommand(ExecuteClearResults, CanClearResults);
+        _stopImportCommand = new AsyncRelayCommand(ExecuteStopImportAsync, () => IsImporting);
+        _clearResultsCommand = new AsyncRelayCommand(ExecuteClearResultsAsync, CanClearResults);
         _openErrorDetailCommand = new AsyncRelayCommand<ImportError>(ExecuteOpenErrorDetailAsync);
         _exportLogCommand = new AsyncRelayCommand(ExecuteExportLogAsync, () => Log.Count > 0);
 
@@ -244,9 +244,9 @@ public partial class ImportPageViewModel : ViewModelBase
 
     public IAsyncRelayCommand RunImportCommand => _runImportCommand;
 
-    public IRelayCommand StopImportCommand => _stopImportCommand;
+    public IAsyncRelayCommand StopImportCommand => _stopImportCommand;
 
-    public IRelayCommand ClearResultsCommand => _clearResultsCommand;
+    public IAsyncRelayCommand ClearResultsCommand => _clearResultsCommand;
 
     public IAsyncRelayCommand<ImportError> OpenErrorDetailCommand => _openErrorDetailCommand;
 
@@ -295,15 +295,15 @@ public partial class ImportPageViewModel : ViewModelBase
         return SafeExecuteAsync(RunImportAsync, "Importuji…");
     }
 
-    private void ExecuteStopImport()
+    private async Task ExecuteStopImportAsync()
     {
         _importCancellation?.Cancel();
         TryCancelRunning();
-        _ = SetActiveStatusAsync("Import zrušen", "Import byl zastaven uživatelem.", InfoBarSeverity.Warning);
-        _ = ClearDynamicStatusAsync();
+        await SetActiveStatusAsync("Import zrušen", "Import byl zastaven uživatelem.", InfoBarSeverity.Warning).ConfigureAwait(false);
+        await ClearDynamicStatusAsync().ConfigureAwait(false);
     }
 
-    private void ExecuteClearResults()
+    private async Task ExecuteClearResultsAsync()
     {
         Log.Clear();
         Errors.Clear();
@@ -321,8 +321,8 @@ public partial class ImportPageViewModel : ViewModelBase
         _fileSizeCache.Clear();
         _exportLogCommand.NotifyCanExecuteChanged();
         StatusService.Info("Výsledky importu byly vymazány.");
-        _ = ClearActiveStatusAsync();
-        _ = ClearDynamicStatusAsync();
+        await ClearActiveStatusAsync().ConfigureAwait(false);
+        await ClearDynamicStatusAsync().ConfigureAwait(false);
     }
 
     private Task ExecuteOpenErrorDetailAsync(ImportError? error)

@@ -36,6 +36,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly ICatalogMaintenanceService _catalogMaintenanceService;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
+    private Task? _healthMonitorTask;
 
     private readonly IDialogService _dialogService;
     private readonly IExceptionHandler _exceptionHandler;
@@ -250,28 +251,33 @@ public partial class FilesPageViewModel : ViewModelBase
         OnPropertyChanged(nameof(TargetPageMaximum));
     }
 
-    public void StartHealthMonitoring()
+    public Task StartHealthMonitoringAsync()
     {
         lock (_healthMonitorGate)
         {
             if (_healthMonitorSource is not null)
             {
-                return;
+                return _healthMonitorTask ?? Task.CompletedTask;
             }
 
             var cts = new CancellationTokenSource();
             _healthMonitorSource = cts;
-            _ = MonitorHealthStatusAsync(cts.Token);
+            _healthMonitorTask = MonitorHealthStatusAsync(cts.Token);
+            ObserveBackgroundTask(_healthMonitorTask);
+            return _healthMonitorTask;
         }
     }
 
-    public void StopHealthMonitoring()
+    public async Task StopHealthMonitoringAsync()
     {
         CancellationTokenSource? source;
+        Task? monitorTask;
         lock (_healthMonitorGate)
         {
             source = _healthMonitorSource;
             _healthMonitorSource = null;
+            monitorTask = _healthMonitorTask;
+            _healthMonitorTask = null;
         }
 
         if (source is null)
@@ -282,11 +288,30 @@ public partial class FilesPageViewModel : ViewModelBase
         source.Cancel();
         source.Dispose();
 
-        _ = Dispatcher.Enqueue(() =>
+        await Dispatcher.Enqueue(() =>
         {
             IsIndexingPending = false;
             IndexingWarningMessage = null;
-        });
+        }).ConfigureAwait(false);
+
+        if (monitorTask is not null)
+        {
+            try
+            {
+                await monitorTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                var message = _exceptionHandler.Handle(ex);
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    StatusService.Error(message);
+                }
+            }
+        }
     }
 
     partial void OnSearchTextChanged(string? value)
@@ -329,7 +354,7 @@ public partial class FilesPageViewModel : ViewModelBase
             return;
         }
 
-        _ = RefreshAsync(false, clamped);
+        ObserveBackgroundTask(RefreshAsync(false, clamped));
     }
 
     partial void OnPageSizeChanged(int value)
@@ -352,7 +377,7 @@ public partial class FilesPageViewModel : ViewModelBase
         var cts = new CancellationTokenSource();
         _searchDebounceSource = cts;
 
-        _ = DebounceRefreshAsync(cts);
+        ObserveBackgroundTask(DebounceRefreshAsync(cts));
     }
 
     private async Task DebounceRefreshAsync(CancellationTokenSource cts)
@@ -493,6 +518,45 @@ public partial class FilesPageViewModel : ViewModelBase
         {
             // Intentionally ignored.
         }
+        catch (Exception ex)
+        {
+            var message = _exceptionHandler.Handle(ex);
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                StatusService.Error(message);
+            }
+        }
+    }
+
+    private void ObserveBackgroundTask(Task task)
+    {
+        if (task.IsCompleted)
+        {
+            if (task.IsFaulted && task.Exception is { } exception)
+            {
+                var message = _exceptionHandler.Handle(exception.GetBaseException());
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    StatusService.Error(message);
+                }
+            }
+
+            return;
+        }
+
+        task.ContinueWith(t =>
+        {
+            if (t.Exception is null)
+            {
+                return;
+            }
+
+            var message = _exceptionHandler.Handle(t.Exception.GetBaseException());
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                StatusService.Error(message);
+            }
+        }, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private async Task UpdateIndexingStatusAsync(CancellationToken cancellationToken)
