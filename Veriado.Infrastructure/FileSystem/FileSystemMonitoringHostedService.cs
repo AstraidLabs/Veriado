@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Veriado.Infrastructure.FileSystem;
 
-internal sealed class FileSystemMonitoringHostedService : BackgroundService
+internal sealed class FileSystemMonitoringHostedService : BackgroundService, IAsyncDisposable
 {
     private readonly IFileSystemMonitoringService _monitoringService;
 
@@ -26,9 +26,9 @@ internal sealed class FileSystemMonitoringHostedService : BackgroundService
         base.Dispose();
     }
 
-    public override async ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _monitoringService.DisposeAsync().ConfigureAwait(false);
-        await base.DisposeAsync().ConfigureAwait(false);
+        Dispose();
     }
 }
