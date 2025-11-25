@@ -95,7 +95,7 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
                 .ConfigureAwait(false);
             await db.Database.ExecuteSqlRawAsync("DELETE FROM search_document;", cancellationToken).ConfigureAwait(false);
         }
-        catch (SqliteException ex)
+        catch (SqliteException ex) when (!ex.IndicatesFatalFulltextFailure())
         {
             rebuildFulltext = true;
             _logger.LogWarning(ex, "Failed to clear full-text catalog; forcing full rebuild.");
