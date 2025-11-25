@@ -1,4 +1,5 @@
 using Microsoft.UI.Dispatching;
+using System.Threading.Tasks;
 
 namespace Veriado.WinUI.Services;
 
@@ -156,7 +157,17 @@ public sealed class DispatcherService : IDispatcherService
         }
     }
 
-    private static async void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
+    private static void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
+    {
+        _ = ExecuteAsyncCore(action, completion);
+    }
+
+    private static void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
+    {
+        _ = ExecuteAsyncCore(action, completion);
+    }
+
+    private static async Task ExecuteAsyncCore(Func<Task> action, TaskCompletionSource<object?> completion)
     {
         try
         {
@@ -176,7 +187,7 @@ public sealed class DispatcherService : IDispatcherService
         }
     }
 
-    private static async void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
+    private static async Task ExecuteAsyncCore<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
     {
         try
         {
