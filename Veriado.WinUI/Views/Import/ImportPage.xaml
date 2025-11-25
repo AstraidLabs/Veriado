@@ -87,7 +87,12 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" Content="Vybrat složku" Command="{Binding PickFolderCommand}" VerticalAlignment="Center" />
+                    <Button Grid.Column="0" Command="{Binding PickFolderCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="16" />
+                                <TextBlock Text="Vybrat složku" />
+                        </StackPanel>
+                    </Button>
                     <TextBox
                         Grid.Column="1"
                         MinWidth="320"
@@ -97,49 +102,74 @@
                 </Grid>
             </StackPanel>
 
-            <!-- Existing content: keep as is -->
+            <!-- Akce -->
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
+                <!-- Tlačítka vlevo -->
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
-                    <Button Content="Zastavit" Command="{Binding StopImportCommand}" IsEnabled="{Binding IsImporting}" />
-                </StackPanel>
+                    <Button Command="{Binding RunImportCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE898;" FontSize="16" />
+                                <TextBlock Text="Nahrát" />
+                        </StackPanel>
+                    </Button>
 
-                <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4">
-                    <StackPanel.Transitions>
-                        <TransitionCollection>
-                            <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
-                        </TransitionCollection>
-                    </StackPanel.Transitions>
-                    <muxc:ProgressBar
-                        Minimum="0"
-                        Maximum="100"
-                        Value="{Binding ProgressPercentValue, Mode=OneWay}"
-                        IsIndeterminate="{Binding IsIndeterminate}" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock FontWeight="SemiBold" Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
-                        <TextBlock Text="{Binding ProgressText}" />
-                    </StackPanel>
-                    <TextBlock
-                        FontWeight="SemiBold"
-                        Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
-                    <TextBlock
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="{Binding CurrentFilePath, TargetNullValue=''}"
-                        TextTrimming="CharacterEllipsis"
-                        MaxLines="2" />
-                    <TextBlock>
-                        <Run Text="Zpracováno: " />
-                        <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
-                        <Run Text=" / " />
-                        <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
-                    </TextBlock>
+                    <Button Command="{Binding StopImportCommand}"
+                IsEnabled="{Binding IsImporting}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71A;" FontSize="16" />
+                                <TextBlock Text="Zastavit nahrávání" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
+
+            <!-- Progres přes celou šířku -->
+            <StackPanel Spacing="4" Margin="0,8,0,0">
+            <!-- Stav + procenta v jedné řádce -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+             <TextBlock
+                FontWeight="SemiBold"
+                Text="{Binding ProgressText}" />
+                    <TextBlock
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{Binding ProgressPercentDisplay, Mode=OneWay}" />
+                </StackPanel>
+
+                <!-- Samotný progress bar -->
+                <muxc:ProgressBar
+                   Minimum="0"
+                   Maximum="100"
+                   Margin="0,2,0,0"
+                   Value="{Binding ProgressPercentValue, Mode=OneWay}"
+                   IsIndeterminate="{Binding IsIndeterminate}" />
+
+                <!-- Soubor + cesta + velikost, jemnější text -->
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Margin="0,4,0,0"
+                    Text="{Binding CurrentFileName, TargetNullValue='(Žádný soubor)'}" />
+
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{Binding CurrentFilePath, TargetNullValue=''}"
+                    TextTrimming="CharacterEllipsis"
+                    MaxLines="1"
+                    ToolTipService.ToolTip="{Binding CurrentFilePath}" />
+
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                    <Run Text="Zpracováno: " />
+                    <Run Text="{Binding ProcessedBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                    <Run Text=" / " />
+                    <Run Text="{Binding TotalBytes, Converter={StaticResource SizeToHumanConverter}}" />
+                </TextBlock>
+            </StackPanel>
 
             <muxc:InfoBar
                 Margin="0,8,0,0"
