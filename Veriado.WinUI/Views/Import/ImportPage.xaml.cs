@@ -171,11 +171,11 @@ public sealed partial class ImportPage : Page
         }
     }
 
-    private void OnEscapeAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    private async void OnEscapeAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         if (ViewModel?.StopImportCommand.CanExecute(null) == true)
         {
-            ViewModel.StopImportCommand.Execute(null);
+            await ViewModel.StopImportCommand.ExecuteAsync(null);
             args.Handled = true;
         }
     }
