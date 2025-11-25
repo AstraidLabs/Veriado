@@ -129,29 +129,29 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
     }
 
-    private void OnCreated(object sender, FileSystemEventArgs e)
+    private async void OnCreated(object sender, FileSystemEventArgs e)
     {
-        HandleWatcherEvent(FileSystemEventType.Created, e.FullPath, null);
+        await HandleWatcherEventAsync(FileSystemEventType.Created, e.FullPath, null).ConfigureAwait(false);
     }
 
-    private void OnDeleted(object sender, FileSystemEventArgs e)
+    private async void OnDeleted(object sender, FileSystemEventArgs e)
     {
-        HandleWatcherEvent(FileSystemEventType.Deleted, e.FullPath, null);
+        await HandleWatcherEventAsync(FileSystemEventType.Deleted, e.FullPath, null).ConfigureAwait(false);
     }
 
-    private void OnRenamed(object sender, RenamedEventArgs e)
+    private async void OnRenamed(object sender, RenamedEventArgs e)
     {
-        HandleWatcherEvent(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath);
+        await HandleWatcherEventAsync(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath).ConfigureAwait(false);
     }
 
-    private void OnChanged(object sender, FileSystemEventArgs e)
+    private async void OnChanged(object sender, FileSystemEventArgs e)
     {
-        HandleWatcherEvent(FileSystemEventType.Changed, e.FullPath, null);
+        await HandleWatcherEventAsync(FileSystemEventType.Changed, e.FullPath, null).ConfigureAwait(false);
     }
 
-    private void HandleWatcherEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    private Task HandleWatcherEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
     {
-        _ = QueueEventAndLogAsync(eventType, fullPath, oldFullPath);
+        return QueueEventAndLogAsync(eventType, fullPath, oldFullPath);
     }
 
     private async Task QueueEventAndLogAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
