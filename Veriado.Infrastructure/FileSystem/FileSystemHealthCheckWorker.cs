@@ -60,33 +60,51 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             interval,
             _options.BatchSize);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await _maintenanceCoordinator.WaitForResumeAsync(stoppingToken).ConfigureAwait(false);
-                await _pauseCoordinator.WaitIfPausedAsync(stoppingToken).ConfigureAwait(false);
-                await RunHealthCheckIterationAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (TaskCanceledException)
-            {
-                // shutting down
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "File system health check iteration failed.");
-            }
+                try
+                {
+                    await _maintenanceCoordinator.WaitForResumeAsync(stoppingToken).ConfigureAwait(false);
+                    await _pauseCoordinator.WaitIfPausedAsync(stoppingToken).ConfigureAwait(false);
+                    await RunHealthCheckIterationAsync(stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    // normální ukonèení workeru – žádný error
+                    _logger.LogDebug("File system health check worker cancelled during iteration.");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "File system health check iteration failed.");
+                }
 
-            try
-            {
-                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
-            }
-            catch (TaskCanceledException)
-            {
-                // shutting down
+                try
+                {
+                    await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogDebug("File system health check worker delay cancelled.");
+                    break;
+                }
             }
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // fallback – kdyby nìco vyletìlo mimo vnitøní try,
+            // tady to rozlišíme jako normální stop, ne jako chybu
+            _logger.LogDebug("File system health check worker cancelled (outer catch).");
+        }
+        catch (TaskCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // pokud nìkdo hodí pøímo TaskCanceledException, poøád to bereme jako cancel
+            _logger.LogDebug("File system health check worker task cancelled (outer catch).");
+        }
     }
+
 
     private async Task RunHealthCheckIterationAsync(CancellationToken cancellationToken)
     {
@@ -100,6 +118,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var batch = await dbContext.FileSystems
                 .AsTracking()
                 .Where(file => file.Id.CompareTo(lastId) > 0)
@@ -157,6 +177,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         {
             foreach (var file in batch)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var result = await EvaluateFileAsync(file, hashCalculator, cancellationToken).ConfigureAwait(false);
                 var syncAction = ApplyResult(file, result, clock);
                 if (syncAction is not null)
@@ -189,7 +211,9 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         var lastAccess = UtcTimestamp.From(info.LastAccessTimeUtc);
 
         var sizeChanged = size != file.Size;
-        var timestampsChanged = file.CreatedUtc != created || file.LastWriteUtc != lastWrite || file.LastAccessUtc != lastAccess;
+        var timestampsChanged = file.CreatedUtc != created ||
+                                file.LastWriteUtc != lastWrite ||
+                                file.LastAccessUtc != lastAccess;
 
         if (!sizeChanged && !timestampsChanged)
         {
@@ -214,6 +238,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             case FileCheckOutcome.Missing:
                 file.MarkMissing(clock);
                 return new FileSystemSyncAction(FileSystemSyncEvent.Missing, file.Id);
+
             case FileCheckOutcome.Unchanged:
                 file.MarkHealthy();
                 if (wasMissing)
@@ -222,6 +247,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
                 }
 
                 return null;
+
             case FileCheckOutcome.MetadataChanged:
                 file.UpdateTimestamps(result.Created, result.LastWrite, result.LastAccess, UtcTimestamp.From(clock.UtcNow));
                 file.MarkHealthy();
@@ -231,11 +257,13 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
                 }
 
                 return null;
+
             case FileCheckOutcome.ContentChanged:
                 file.ReplaceContent(file.RelativePath, result.Hash, result.Size, file.Mime, file.IsEncrypted, result.LastWrite);
                 file.UpdateTimestamps(result.Created, result.LastWrite, result.LastAccess, UtcTimestamp.From(clock.UtcNow));
                 file.MarkContentChanged();
                 return new FileSystemSyncAction(FileSystemSyncEvent.ContentChanged, file.Id);
+
             default:
                 throw new InvalidOperationException($"Unsupported file check outcome '{result.Outcome}'.");
         }
@@ -305,7 +333,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             UtcTimestamp created,
             UtcTimestamp lastWrite,
             UtcTimestamp lastAccess,
-            FileHash hash) => new(id, FileCheckOutcome.Unchanged, size, created, lastWrite, lastAccess, hash);
+            FileHash hash) =>
+            new(id, FileCheckOutcome.Unchanged, size, created, lastWrite, lastAccess, hash);
 
         public static FileEvaluationResult MetadataChanged(
             Guid id,
@@ -313,7 +342,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             UtcTimestamp created,
             UtcTimestamp lastWrite,
             UtcTimestamp lastAccess,
-            FileHash hash) => new(id, FileCheckOutcome.MetadataChanged, size, created, lastWrite, lastAccess, hash);
+            FileHash hash) =>
+            new(id, FileCheckOutcome.MetadataChanged, size, created, lastWrite, lastAccess, hash);
 
         public static FileEvaluationResult ContentChanged(
             Guid id,
@@ -321,6 +351,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
             UtcTimestamp created,
             UtcTimestamp lastWrite,
             UtcTimestamp lastAccess,
-            FileHash hash) => new(id, FileCheckOutcome.ContentChanged, size, created, lastWrite, lastAccess, hash);
+            FileHash hash) =>
+            new(id, FileCheckOutcome.ContentChanged, size, created, lastWrite, lastAccess, hash);
     }
 }
