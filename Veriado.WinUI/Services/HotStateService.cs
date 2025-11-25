@@ -131,17 +131,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
 
     partial void OnLastFolderChanged(string? value) => SchedulePersistAsync();
 
-    partial void OnPageSizeChanged(int value)
-    {
-        if (value <= 0)
-        {
-            pageSize = AppSettings.DefaultPageSize;
-            OnPropertyChanged(nameof(PageSize));
-        }
-
-        SchedulePersistAsync(cancellationToken);
-        await _persistTask.ConfigureAwait(false);
-    }
+    partial void OnPageSizeChanged(int value) => _ = OnPageSizeChangedAsync(value);
 
     partial void OnImportRecursiveChanged(bool value) => SchedulePersistAsync();
 
@@ -214,6 +204,18 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
         }
 
         return PersistStateAsync(cancellationToken);
+    }
+
+    private async Task OnPageSizeChangedAsync(int value)
+    {
+        if (value <= 0)
+        {
+            pageSize = AppSettings.DefaultPageSize;
+            OnPropertyChanged(nameof(PageSize));
+        }
+
+        SchedulePersistAsync();
+        await _persistTask.ConfigureAwait(false);
     }
 
     private void SchedulePersistAsync(CancellationToken cancellationToken = default)
