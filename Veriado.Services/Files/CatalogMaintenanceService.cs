@@ -56,7 +56,8 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
         db.ReindexQueue.RemoveRange(db.ReindexQueue);
         db.DomainEventLog.RemoveRange(db.DomainEventLog);
 
-        await db.Database.ExecuteSqlRawAsync("DELETE FROM search_document_fts;", cancellationToken).ConfigureAwait(false);
+        await db.Database.ExecuteSqlRawAsync("INSERT INTO search_document_fts(search_document_fts) VALUES ('delete-all');", cancellationToken)
+            .ConfigureAwait(false);
         await db.Database.ExecuteSqlRawAsync("DELETE FROM search_document;", cancellationToken).ConfigureAwait(false);
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
