@@ -151,11 +151,23 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
     private void HandleWatcherEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath)
     {
-        _ = QueueEventAsync(eventType, fullPath, oldFullPath).ContinueWith(
-            t => _logger.LogError(t.Exception!, "Unhandled exception while queuing file system monitoring event."),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted,
-            TaskScheduler.Default);
+        _ = QueueEventAndLogAsync(eventType, fullPath, oldFullPath);
+    }
+
+    private async Task QueueEventAndLogAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    {
+        try
+        {
+            await QueueEventAsync(eventType, fullPath, oldFullPath).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("File system monitoring operation canceled while queuing an event.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception while queuing file system monitoring event.");
+        }
     }
 
     private async Task QueueEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)

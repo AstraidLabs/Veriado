@@ -220,17 +220,22 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             return;
         }
 
-        _ = PersistAsync(cancellationToken).ContinueWith(
-            t =>
-            {
-                if (t.Exception is not null)
-                {
-                    _logger.LogError(t.Exception, "Failed to persist hot state.");
-                }
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted,
-            TaskScheduler.Default);
+        _ = PersistAndLogAsync(cancellationToken);
+    }
+
+    private async Task PersistAndLogAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await PersistAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist hot state.");
+        }
     }
 
     private async Task PersistStateAsync(CancellationToken cancellationToken)
