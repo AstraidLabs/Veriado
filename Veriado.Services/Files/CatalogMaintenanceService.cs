@@ -16,13 +16,15 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
     private readonly IFulltextIntegrityService _fulltextIntegrityService;
     private readonly ILogger<CatalogMaintenanceService> _logger;
     private readonly InfrastructureOptions _options;
+    private readonly IApplicationMaintenanceCoordinator _maintenanceCoordinator;
 
     public CatalogMaintenanceService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         IFilePathResolver pathResolver,
         IFulltextIntegrityService fulltextIntegrityService,
         ILogger<CatalogMaintenanceService> logger,
-        InfrastructureOptions options)
+        InfrastructureOptions options,
+        IApplicationMaintenanceCoordinator maintenanceCoordinator)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
@@ -30,10 +32,13 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
             ?? throw new ArgumentNullException(nameof(fulltextIntegrityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _maintenanceCoordinator = maintenanceCoordinator ?? throw new ArgumentNullException(nameof(maintenanceCoordinator));
     }
 
     public async Task ClearCatalogAsync(CancellationToken cancellationToken = default)
     {
+        await _maintenanceCoordinator.PauseBackgroundWorkAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             await ClearCatalogInternalAsync(cancellationToken).ConfigureAwait(false);
@@ -51,6 +56,10 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
         {
             _logger.LogWarning(ex, "Unexpected failure while clearing catalog; recreating database file.");
             await RecreateDatabaseAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await _maintenanceCoordinator.ResumeBackgroundWorkAsync(CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -121,12 +130,12 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
             return;
         }
 
+        SqliteConnection.ClearAllPools();
+
         try
         {
-            if (File.Exists(_options.DbPath))
-            {
-                File.Delete(_options.DbPath);
-            }
+            await DeleteDatabaseFileWithRetryAsync(_options.DbPath, _logger, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -139,5 +148,38 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
         await db.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Recreated SQLite database at {DbPath} after corruption was detected.", _options.DbPath);
+    }
+
+    private static async Task DeleteDatabaseFileWithRetryAsync(
+        string dbPath,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(dbPath))
+        {
+            return;
+        }
+
+        const int maxAttempts = 5;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                File.Delete(dbPath);
+                return;
+            }
+            catch (IOException ex) when (attempt < maxAttempts)
+            {
+                logger.LogWarning(ex,
+                    "Attempt {Attempt}/{MaxAttempts} to delete database file {DbPath} failed; retrying...",
+                    attempt, maxAttempts, dbPath);
+
+                await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), cancellationToken)
+                          .ConfigureAwait(false);
+            }
+        }
+
+        File.Delete(dbPath);
     }
 }

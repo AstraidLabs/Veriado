@@ -25,6 +25,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     private readonly IFilePathResolver _pathResolver;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
+    private readonly IApplicationMaintenanceCoordinator _maintenanceCoordinator;
     private readonly ApplicationFileSystemSyncService _syncService;
     private readonly ApplicationClock _clock;
     private readonly ILogger<FileSystemMonitoringService> _logger;
@@ -38,6 +39,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         IFilePathResolver pathResolver,
         IServiceScopeFactory scopeFactory,
         IOperationalPauseCoordinator pauseCoordinator,
+        IApplicationMaintenanceCoordinator maintenanceCoordinator,
         ApplicationFileSystemSyncService syncService,
         ApplicationClock clock,
         ILogger<FileSystemMonitoringService> logger)
@@ -45,6 +47,8 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
+        _maintenanceCoordinator = maintenanceCoordinator
+            ?? throw new ArgumentNullException(nameof(maintenanceCoordinator));
         _syncService = syncService ?? throw new ArgumentNullException(nameof(syncService));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -228,6 +232,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         {
             try
             {
+                await _maintenanceCoordinator.WaitForResumeAsync(cancellationToken).ConfigureAwait(false);
                 await _pauseCoordinator.WaitIfPausedAsync(cancellationToken).ConfigureAwait(false);
 
                 var initialEvent = await _eventChannel.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);

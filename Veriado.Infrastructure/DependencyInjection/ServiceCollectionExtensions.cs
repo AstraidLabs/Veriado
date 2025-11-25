@@ -218,6 +218,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<INeedsReindexEvaluator, NeedsReindexEvaluator>();
         services.AddSingleton<AuditEventProjector>();
         services.AddSingleton<IIdempotencyStore, SqliteIdempotencyStore>();
+        services.AddSingleton<IApplicationMaintenanceCoordinator, ApplicationMaintenanceCoordinator>();
 
         services.AddScoped<ISearchProjectionScope, SearchProjectionScopeEf>();
         services.AddScoped<IFileSearchProjection, SearchProjectionService>();
