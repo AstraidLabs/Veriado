@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace Veriado.Infrastructure.FileSystem;
 
-public interface IFileSystemMonitoringService : IDisposable
+public interface IFileSystemMonitoringService : IDisposable, IAsyncDisposable
 {
     void Start(CancellationToken cancellationToken);
 }

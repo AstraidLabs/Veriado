@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Veriado.Contracts.Files;
 using Veriado.WinUI.Services.Abstractions;
@@ -209,7 +210,17 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             return;
         }
 
-        _ = PersistStateAsync();
+        _ = PersistStateAsync().ContinueWith(
+            t =>
+            {
+                if (t.Exception is not null)
+                {
+                    _logger.LogError(t.Exception, "Failed to persist hot state.");
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 
     private async Task PersistStateAsync()
