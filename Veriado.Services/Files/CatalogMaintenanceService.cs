@@ -1,4 +1,5 @@
 using System.IO;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
@@ -10,15 +11,18 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
 {
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly IFilePathResolver _pathResolver;
+    private readonly IFulltextIntegrityService _fulltextIntegrityService;
     private readonly ILogger<CatalogMaintenanceService> _logger;
 
     public CatalogMaintenanceService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         IFilePathResolver pathResolver,
+        IFulltextIntegrityService fulltextIntegrityService,
         ILogger<CatalogMaintenanceService> logger)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
+        _fulltextIntegrityService = fulltextIntegrityService ?? throw new ArgumentNullException(nameof(fulltextIntegrityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -56,10 +60,24 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
         db.ReindexQueue.RemoveRange(db.ReindexQueue);
         db.DomainEventLog.RemoveRange(db.DomainEventLog);
 
-        await db.Database.ExecuteSqlRawAsync("INSERT INTO search_document_fts(search_document_fts) VALUES ('delete-all');", cancellationToken)
-            .ConfigureAwait(false);
-        await db.Database.ExecuteSqlRawAsync("DELETE FROM search_document;", cancellationToken).ConfigureAwait(false);
+        var rebuildFulltext = false;
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("INSERT INTO search_document_fts(search_document_fts) VALUES ('delete-all');", cancellationToken)
+                .ConfigureAwait(false);
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM search_document;", cancellationToken).ConfigureAwait(false);
+        }
+        catch (SqliteException ex)
+        {
+            rebuildFulltext = true;
+            _logger.LogWarning(ex, "Failed to clear full-text catalog; forcing full rebuild.");
+        }
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (rebuildFulltext)
+        {
+            await _fulltextIntegrityService.RepairAsync(reindexAll: true, cancellationToken).ConfigureAwait(false);
+        }
     }
 }
