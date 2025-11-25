@@ -97,6 +97,11 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
     public void Dispose()
     {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
         if (_watcher is null)
         {
             return;
@@ -112,33 +117,45 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
 
         _eventChannel.Writer.TryComplete();
 
-        try
+        if (_processingTask is not null)
         {
-            _processingTask?.Wait(TimeSpan.FromSeconds(5));
+            try
+            {
+                await _processingTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+            {
+            }
         }
-        catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is OperationCanceledException))
-        {
-        }
     }
 
-    private async void OnCreated(object sender, FileSystemEventArgs e)
+    private void OnCreated(object sender, FileSystemEventArgs e)
     {
-        await QueueEventAsync(FileSystemEventType.Created, e.FullPath, null).ConfigureAwait(false);
+        HandleWatcherEvent(FileSystemEventType.Created, e.FullPath, null);
     }
 
-    private async void OnDeleted(object sender, FileSystemEventArgs e)
+    private void OnDeleted(object sender, FileSystemEventArgs e)
     {
-        await QueueEventAsync(FileSystemEventType.Deleted, e.FullPath, null).ConfigureAwait(false);
+        HandleWatcherEvent(FileSystemEventType.Deleted, e.FullPath, null);
     }
 
-    private async void OnRenamed(object sender, RenamedEventArgs e)
+    private void OnRenamed(object sender, RenamedEventArgs e)
     {
-        await QueueEventAsync(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath).ConfigureAwait(false);
+        HandleWatcherEvent(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath);
     }
 
-    private async void OnChanged(object sender, FileSystemEventArgs e)
+    private void OnChanged(object sender, FileSystemEventArgs e)
     {
-        await QueueEventAsync(FileSystemEventType.Changed, e.FullPath, null).ConfigureAwait(false);
+        HandleWatcherEvent(FileSystemEventType.Changed, e.FullPath, null);
+    }
+
+    private void HandleWatcherEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    {
+        _ = QueueEventAsync(eventType, fullPath, oldFullPath).ContinueWith(
+            t => _logger.LogError(t.Exception!, "Unhandled exception while queuing file system monitoring event."),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 
     private async Task QueueEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)

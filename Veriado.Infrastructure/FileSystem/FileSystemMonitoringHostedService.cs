@@ -25,4 +25,10 @@ internal sealed class FileSystemMonitoringHostedService : BackgroundService
         _monitoringService.Dispose();
         base.Dispose();
     }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await _monitoringService.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeAsync().ConfigureAwait(false);
+    }
 }
