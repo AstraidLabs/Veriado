@@ -129,38 +129,52 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
     }
 
-    private async void OnCreated(object sender, FileSystemEventArgs e)
+    private void OnCreated(object sender, FileSystemEventArgs e)
     {
-        await HandleWatcherEventAsync(FileSystemEventType.Created, e.FullPath, null).ConfigureAwait(false);
+        EnqueueWatcherEvent(FileSystemEventType.Created, e.FullPath, null, _cancellationToken);
     }
 
-    private async void OnDeleted(object sender, FileSystemEventArgs e)
+    private void OnDeleted(object sender, FileSystemEventArgs e)
     {
-        await HandleWatcherEventAsync(FileSystemEventType.Deleted, e.FullPath, null).ConfigureAwait(false);
+        EnqueueWatcherEvent(FileSystemEventType.Deleted, e.FullPath, null, _cancellationToken);
     }
 
-    private async void OnRenamed(object sender, RenamedEventArgs e)
+    private void OnRenamed(object sender, RenamedEventArgs e)
     {
-        await HandleWatcherEventAsync(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath).ConfigureAwait(false);
+        EnqueueWatcherEvent(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath, _cancellationToken);
     }
 
-    private async void OnChanged(object sender, FileSystemEventArgs e)
+    private void OnChanged(object sender, FileSystemEventArgs e)
     {
-        await HandleWatcherEventAsync(FileSystemEventType.Changed, e.FullPath, null).ConfigureAwait(false);
+        EnqueueWatcherEvent(FileSystemEventType.Changed, e.FullPath, null, _cancellationToken);
     }
 
-    private Task HandleWatcherEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    private void EnqueueWatcherEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath, CancellationToken cancellationToken)
     {
-        return QueueEventAndLogAsync(eventType, fullPath, oldFullPath);
+        var task = HandleWatcherEventAsync(eventType, fullPath, oldFullPath, cancellationToken);
+
+        if (!task.IsCompleted)
+        {
+            _ = task.ContinueWith(
+                static (t, state) => ((FileSystemMonitoringService)state!).LogUnhandledWatcherException(t),
+                this,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+        else
+        {
+            LogUnhandledWatcherException(task);
+        }
     }
 
-    private async Task QueueEventAndLogAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    private async Task HandleWatcherEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath, CancellationToken cancellationToken)
     {
         try
         {
-            await QueueEventAsync(eventType, fullPath, oldFullPath).ConfigureAwait(false);
+            await QueueEventAsync(eventType, fullPath, oldFullPath, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogDebug("File system monitoring operation canceled while queuing an event.");
         }
@@ -170,15 +184,35 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
     }
 
-    private async Task QueueEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    private void LogUnhandledWatcherException(Task task)
+    {
+        if (!task.IsFaulted)
+        {
+            return;
+        }
+
+        var exception = task.Exception?.GetBaseException();
+        if (exception is OperationCanceledException && _cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("File system monitoring operation canceled while processing watcher event.");
+            return;
+        }
+
+        if (exception is not null)
+        {
+            _logger.LogError(exception, "Unhandled exception while processing file system watcher event.");
+        }
+    }
+
+    private async Task QueueEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath, CancellationToken cancellationToken)
     {
         var fileEvent = new FileSystemEvent(eventType, fullPath, oldFullPath, _clock.UtcNow.UtcDateTime);
 
         try
         {
-            await _eventChannel.Writer.WriteAsync(fileEvent, _cancellationToken).ConfigureAwait(false);
+            await _eventChannel.Writer.WriteAsync(fileEvent, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogDebug("File system monitoring operation canceled.");
         }
