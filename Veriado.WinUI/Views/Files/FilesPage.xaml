@@ -99,7 +99,7 @@
                         Command="{Binding DeleteAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;"/>
-                        <TextBlock Text="Smazat databázi"/>
+                        <TextBlock Text="Smazat katalog"/>
                     </StackPanel>
                 </Button>
             </StackPanel>
