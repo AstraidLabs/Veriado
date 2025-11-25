@@ -12,6 +12,7 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
     private readonly IStatusService _statusService;
     private readonly ILogger<HotStateService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private Task _persistTask = Task.CompletedTask;
     private bool _initialized;
     private ValidityThresholds _validityThresholds = AppSettings.CreateDefaultValidityThresholds();
 
@@ -138,7 +139,8 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             OnPropertyChanged(nameof(PageSize));
         }
 
-        SchedulePersistAsync();
+        SchedulePersistAsync(cancellationToken);
+        await _persistTask.ConfigureAwait(false);
     }
 
     partial void OnImportRecursiveChanged(bool value) => SchedulePersistAsync();
@@ -221,7 +223,17 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             return;
         }
 
-        _ = RunInBackgroundAsync(() => PersistAsync(cancellationToken), cancellationToken);
+        _persistTask = _persistTask.ContinueWith(
+                static async (_, state) =>
+                {
+                    var (service, token) = ((HotStateService Service, CancellationToken Token))state!;
+                    await service.RunInBackgroundAsync(() => service.PersistAsync(token), token).ConfigureAwait(false);
+                },
+                (this, cancellationToken),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default)
+            .Unwrap();
     }
 
     private async Task RunInBackgroundAsync(Func<Task> action, CancellationToken cancellationToken)
