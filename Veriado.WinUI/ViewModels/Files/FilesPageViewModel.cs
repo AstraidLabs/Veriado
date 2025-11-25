@@ -824,7 +824,7 @@ public partial class FilesPageViewModel : ViewModelBase
         ContentDialogResult result;
         try
         {
-            result = await _dialogService.ShowDialogAsync(dialog).ConfigureAwait(false);
+            result = await _dialogService.ShowDialogAsync(dialog);
         }
         finally
         {
