@@ -43,6 +43,15 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
             _logger.LogWarning(ex, "Database corruption detected while clearing catalog; recreating database file.");
             await RecreateDatabaseAsync(cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unexpected failure while clearing catalog; recreating database file.");
+            await RecreateDatabaseAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task ClearCatalogInternalAsync(CancellationToken cancellationToken)
