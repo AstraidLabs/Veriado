@@ -396,7 +396,7 @@ public partial class ImportPageViewModel : ViewModelBase
         StatusService.Info($"Protokol byl exportován do souboru '{targetPath}'.");
     }
 
-    private async Task TryAutoExportLogAsync()
+    private async Task TryAutoExportLogAsync(CancellationToken cancellationToken = default)
     {
         if (!AutoExportLog)
         {
@@ -405,7 +405,10 @@ public partial class ImportPageViewModel : ViewModelBase
 
         try
         {
-            await ExportLogInternalAsync(CancellationToken.None, notifyWhenEmpty: false).ConfigureAwait(false);
+            await ExportLogInternalAsync(cancellationToken, notifyWhenEmpty: false).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -505,7 +508,7 @@ public partial class ImportPageViewModel : ViewModelBase
                 StatusService.Info("Import dokončen.");
                 await SetActiveStatusAsync("Import dokončen", "Import dokončen.", InfoBarSeverity.Informational).ConfigureAwait(false);
                 await ClearDynamicStatusAsync().ConfigureAwait(false);
-                await TryAutoExportLogAsync().ConfigureAwait(false);
+                await TryAutoExportLogAsync(_importCancellation?.Token ?? cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -889,7 +892,7 @@ public partial class ImportPageViewModel : ViewModelBase
         var severity = MapStatusToSeverity(aggregate.Status);
         await SetActiveStatusAsync("Stav importu", summary, severity).ConfigureAwait(false);
         await SetDynamicStatusAsync("Shrnutí importu", summary, severity).ConfigureAwait(false);
-        await TryAutoExportLogAsync().ConfigureAwait(false);
+        await TryAutoExportLogAsync(_importCancellation?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task EnsureAggregateErrorsAsync(ImportAggregateResult aggregate)
@@ -1033,7 +1036,7 @@ public partial class ImportPageViewModel : ViewModelBase
         var severity = MapStatusToSeverity(result.Status);
         await SetActiveStatusAsync("Stav importu", summary, severity).ConfigureAwait(false);
         await SetDynamicStatusAsync("Shrnutí importu", summary, severity).ConfigureAwait(false);
-        await TryAutoExportLogAsync().ConfigureAwait(false);
+        await TryAutoExportLogAsync(_importCancellation?.Token ?? CancellationToken.None).ConfigureAwait(false);
 
         return true;
     }
