@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.Appl.Files;
 using Veriado.Contracts.Files;
@@ -836,19 +837,69 @@ public partial class FilesPageViewModel : ViewModelBase
         }
 
         var cleared = false;
+        var progressText = new TextBlock
+        {
+            Text = "Mazání databáze...",
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var progressBar = new ProgressBar
+        {
+            IsIndeterminate = true,
+            Width = 320,
+        };
+
+        var progressDialog = new ContentDialog
+        {
+            Title = "Mazání databáze",
+            Content = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    progressText,
+                    progressBar,
+                },
+            },
+            PrimaryButtonText = "Hotovo",
+            IsPrimaryButtonEnabled = false,
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        var dialogTask = _dialogService.ShowDialogAsync(progressDialog);
         await SafeExecuteAsync(
             async cancellationToken =>
             {
                 await _catalogMaintenanceService.ClearCatalogAsync(cancellationToken).ConfigureAwait(false);
                 cleared = true;
+
+                await Dispatcher.Enqueue(() =>
+                {
+                    progressBar.IsIndeterminate = false;
+                    progressBar.Value = 100;
+                    progressText.Text = "Mazání databáze dokončeno.";
+                    progressDialog.IsPrimaryButtonEnabled = true;
+                });
             },
             "Mazání katalogu...")
             .ConfigureAwait(false);
+
+        await Dispatcher.Enqueue(() =>
+        {
+            if (!progressDialog.IsPrimaryButtonEnabled)
+            {
+                progressBar.IsIndeterminate = false;
+                progressText.Text = "Mazání databáze nebylo dokončeno.";
+                progressDialog.IsPrimaryButtonEnabled = true;
+            }
+        });
 
         if (cleared)
         {
             await RefreshCommand.ExecuteAsync(null);
         }
+
+        await dialogTask.ConfigureAwait(false);
     }
 
     private async Task ExecuteOpenDetailAsync(FileSummaryDto? summary)
