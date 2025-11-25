@@ -157,14 +157,14 @@ public sealed class DispatcherService : IDispatcherService
         }
     }
 
-    private static void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
+    private static async void ExecuteAsync(Func<Task> action, TaskCompletionSource<object?> completion)
     {
-        _ = ExecuteAsyncCore(action, completion);
+        await ExecuteAsyncCore(action, completion).ConfigureAwait(true);
     }
 
-    private static void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
+    private static async void ExecuteAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completion)
     {
-        _ = ExecuteAsyncCore(action, completion);
+        await ExecuteAsyncCore(action, completion).ConfigureAwait(true);
     }
 
     private static async Task ExecuteAsyncCore(Func<Task> action, TaskCompletionSource<object?> completion)
