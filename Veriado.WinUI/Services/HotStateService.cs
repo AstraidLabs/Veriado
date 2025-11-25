@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Veriado.Contracts.Files;
@@ -220,14 +221,14 @@ public sealed partial class HotStateService : ObservableObject, IHotStateService
             return;
         }
 
-        _ = PersistAndLogAsync(cancellationToken);
+        _ = RunInBackgroundAsync(() => PersistAsync(cancellationToken), cancellationToken);
     }
 
-    private async Task PersistAndLogAsync(CancellationToken cancellationToken)
+    private async Task RunInBackgroundAsync(Func<Task> action, CancellationToken cancellationToken)
     {
         try
         {
-            await PersistAsync(cancellationToken).ConfigureAwait(false);
+            await action().ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
