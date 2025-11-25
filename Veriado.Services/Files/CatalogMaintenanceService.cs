@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Infrastructure.Persistence;
+using Veriado.Infrastructure.Persistence.Options;
+using Veriado.Infrastructure.Search;
 
 namespace Veriado.Services.Files;
 
@@ -13,20 +15,37 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
     private readonly IFilePathResolver _pathResolver;
     private readonly IFulltextIntegrityService _fulltextIntegrityService;
     private readonly ILogger<CatalogMaintenanceService> _logger;
+    private readonly InfrastructureOptions _options;
 
     public CatalogMaintenanceService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         IFilePathResolver pathResolver,
         IFulltextIntegrityService fulltextIntegrityService,
-        ILogger<CatalogMaintenanceService> logger)
+        ILogger<CatalogMaintenanceService> logger,
+        InfrastructureOptions options)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
-        _fulltextIntegrityService = fulltextIntegrityService ?? throw new ArgumentNullException(nameof(fulltextIntegrityService));
+        _fulltextIntegrityService = fulltextIntegrityService
+            ?? throw new ArgumentNullException(nameof(fulltextIntegrityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     public async Task ClearCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await ClearCatalogInternalAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (SqliteException ex) when (ex.IndicatesDatabaseCorruption())
+        {
+            _logger.LogWarning(ex, "Database corruption detected while clearing catalog; recreating database file.");
+            await RecreateDatabaseAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task ClearCatalogInternalAsync(CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
@@ -79,5 +98,33 @@ public sealed class CatalogMaintenanceService : ICatalogMaintenanceService
         {
             await _fulltextIntegrityService.RepairAsync(reindexAll: true, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task RecreateDatabaseAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.DbPath))
+        {
+            _logger.LogWarning("Cannot recreate database because DbPath is not configured.");
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(_options.DbPath))
+            {
+                File.Delete(_options.DbPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete corrupted database file at {DbPath}.", _options.DbPath);
+            throw;
+        }
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await db.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+        await db.InitializeAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Recreated SQLite database at {DbPath} after corruption was detected.", _options.DbPath);
     }
 }
