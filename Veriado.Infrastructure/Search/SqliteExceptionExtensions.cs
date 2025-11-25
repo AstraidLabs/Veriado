@@ -1,6 +1,6 @@
 namespace Veriado.Infrastructure.Search;
 
-internal static class SqliteExceptionExtensions
+public static class SqliteExceptionExtensions
 {
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
