@@ -844,7 +844,9 @@ public partial class FilesPageViewModel : ViewModelBase
         {
             IsBusy = true;
             await _catalogMaintenanceService.ClearCatalogAsync(CancellationToken.None).ConfigureAwait(false);
-            await _dialogService.ShowInfoAsync("Databáze a katalog byly úspěšně smazány.");
+            await _dialogService.ShowInfoAsync(
+                "Smazání databáze",
+                "Databáze a katalog byly úspěšně smazány.");
         }
         catch (OperationCanceledException)
         {
@@ -852,7 +854,9 @@ public partial class FilesPageViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to clear catalog from UI.");
-            await _dialogService.ShowErrorAsync("Nepodařilo se smazat databázi. Podrobnosti jsou v logu.");
+            await _dialogService.ShowErrorAsync(
+                "Chyba mazání databáze",
+                "Nepodařilo se smazat databázi. Podrobnosti jsou v logu.");
             return;
         }
         finally
