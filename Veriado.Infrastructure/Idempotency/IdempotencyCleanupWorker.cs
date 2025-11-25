@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.Abstractions;
 using Veriado.Infrastructure.Search;
 
 namespace Veriado.Infrastructure.Idempotency;
@@ -16,17 +17,21 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
 {
     private readonly InfrastructureOptions _options;
     private readonly IClock _clock;
+    private readonly IApplicationMaintenanceCoordinator _maintenanceCoordinator;
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ILogger<IdempotencyCleanupWorker> _logger;
 
     public IdempotencyCleanupWorker(
         InfrastructureOptions options,
         IClock clock,
+        IApplicationMaintenanceCoordinator maintenanceCoordinator,
         ISqliteConnectionFactory connectionFactory,
         ILogger<IdempotencyCleanupWorker> logger)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _maintenanceCoordinator = maintenanceCoordinator
+            ?? throw new ArgumentNullException(nameof(maintenanceCoordinator));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -52,6 +57,7 @@ internal sealed class IdempotencyCleanupWorker : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                await _maintenanceCoordinator.WaitForResumeAsync(stoppingToken).ConfigureAwait(false);
                 await ExecuteCleanupAsync(stoppingToken).ConfigureAwait(false);
                 await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
             }

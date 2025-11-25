@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
+using Veriado.Appl.Abstractions;
 using Veriado.Infrastructure.Persistence.Options;
 
 namespace Veriado.Infrastructure.Integrity;
@@ -17,15 +18,19 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromHours(1);
 
     private readonly IIndexAuditor _auditor;
+    private readonly IApplicationMaintenanceCoordinator _maintenanceCoordinator;
     private readonly InfrastructureOptions _options;
     private readonly ILogger<IndexAuditBackgroundService> _logger;
 
     public IndexAuditBackgroundService(
         IIndexAuditor auditor,
+        IApplicationMaintenanceCoordinator maintenanceCoordinator,
         InfrastructureOptions options,
         ILogger<IndexAuditBackgroundService> logger)
     {
         _auditor = auditor ?? throw new ArgumentNullException(nameof(auditor));
+        _maintenanceCoordinator = maintenanceCoordinator
+            ?? throw new ArgumentNullException(nameof(maintenanceCoordinator));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -52,6 +57,7 @@ internal sealed class IndexAuditBackgroundService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                await _maintenanceCoordinator.WaitForResumeAsync(stoppingToken).ConfigureAwait(false);
                 await RunAuditCycleAsync(interval, stoppingToken).ConfigureAwait(false);
             }
         }

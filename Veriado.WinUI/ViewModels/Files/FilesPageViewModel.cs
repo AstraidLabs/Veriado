@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Veriado.Appl.Files;
@@ -35,6 +36,7 @@ public partial class FilesPageViewModel : ViewModelBase
     private readonly IFileContentService _fileContentService;
     private readonly IPickerService _pickerService;
     private readonly ICatalogMaintenanceService _catalogMaintenanceService;
+    private readonly ILogger<FilesPageViewModel> _logger;
     private readonly object _healthMonitorGate = new();
     private CancellationTokenSource? _healthMonitorSource;
     private Task? _healthMonitorTask;
@@ -70,6 +72,7 @@ public partial class FilesPageViewModel : ViewModelBase
         IDialogService dialogService,
         ITimeFormattingService timeFormattingService,
         IServerClock serverClock,
+        ILogger<FilesPageViewModel> logger,
         IMessenger messenger,
         IStatusService statusService,
         IDispatcherService dispatcher,
@@ -85,6 +88,7 @@ public partial class FilesPageViewModel : ViewModelBase
         _pickerService = pickerService ?? throw new ArgumentNullException(nameof(pickerService));
         _catalogMaintenanceService = catalogMaintenanceService ?? throw new ArgumentNullException(nameof(catalogMaintenanceService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
         _timeFormattingService = timeFormattingService ?? throw new ArgumentNullException(nameof(timeFormattingService));
         _serverClock = serverClock ?? throw new ArgumentNullException(nameof(serverClock));
@@ -836,70 +840,36 @@ public partial class FilesPageViewModel : ViewModelBase
             return;
         }
 
-        var cleared = false;
-        var progressText = new TextBlock
+        try
         {
-            Text = "Mazání databáze...",
-            TextWrapping = TextWrapping.Wrap,
-        };
-
-        var progressBar = new ProgressBar
+            IsBusy = true;
+            await _catalogMaintenanceService.ClearCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+            await _dialogService.ShowInfoAsync("Databáze a katalog byly úspěšně smazány.");
+        }
+        catch (OperationCanceledException)
         {
-            IsIndeterminate = true,
-            Width = 320,
-        };
-
-        var progressDialog = new ContentDialog
+        }
+        catch (Exception ex)
         {
-            Title = "Mazání databáze",
-            Content = new StackPanel
-            {
-                Spacing = 12,
-                Children =
-                {
-                    progressText,
-                    progressBar,
-                },
-            },
-            PrimaryButtonText = "Hotovo",
-            IsPrimaryButtonEnabled = false,
-            DefaultButton = ContentDialogButton.Primary,
-        };
-
-        var dialogTask = _dialogService.ShowDialogAsync(progressDialog);
-        await SafeExecuteAsync(
-            async cancellationToken =>
-            {
-                await _catalogMaintenanceService.ClearCatalogAsync(cancellationToken).ConfigureAwait(false);
-                cleared = true;
-
-                await Dispatcher.Enqueue(() =>
-                {
-                    progressBar.IsIndeterminate = false;
-                    progressBar.Value = 100;
-                    progressText.Text = "Mazání databáze dokončeno.";
-                    progressDialog.IsPrimaryButtonEnabled = true;
-                });
-            },
-            "Mazání katalogu...")
-            .ConfigureAwait(false);
+            _logger.LogError(ex, "Failed to clear catalog from UI.");
+            await _dialogService.ShowErrorAsync("Nepodařilo se smazat databázi. Podrobnosti jsou v logu.");
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
 
         await Dispatcher.Enqueue(() =>
         {
-            if (!progressDialog.IsPrimaryButtonEnabled)
-            {
-                progressBar.IsIndeterminate = false;
-                progressText.Text = "Mazání databáze nebylo dokončeno.";
-                progressDialog.IsPrimaryButtonEnabled = true;
-            }
-        });
+            Items.Clear();
+            ClearDetailState();
+            TotalCount = 0;
+            TotalPages = 0;
+            CurrentPage = 0;
+        }).ConfigureAwait(false);
 
-        if (cleared)
-        {
-            await RefreshCommand.ExecuteAsync(null);
-        }
-
-        await dialogTask.ConfigureAwait(false);
+        await RefreshCommand.ExecuteAsync(null);
     }
 
     private async Task ExecuteOpenDetailAsync(FileSummaryDto? summary)

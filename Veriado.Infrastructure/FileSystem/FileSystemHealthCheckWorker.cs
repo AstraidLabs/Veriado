@@ -27,6 +27,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
     private readonly IFilePathResolver _pathResolver;
     private readonly FileSystemHealthCheckOptions _options;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
+    private readonly IApplicationMaintenanceCoordinator _maintenanceCoordinator;
     private readonly ILogger<FileSystemHealthCheckWorker> _logger;
     private readonly FileSystemSyncService _syncService;
 
@@ -35,6 +36,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         IFilePathResolver pathResolver,
         IOptions<FileSystemHealthCheckOptions> options,
         IOperationalPauseCoordinator pauseCoordinator,
+        IApplicationMaintenanceCoordinator maintenanceCoordinator,
         FileSystemSyncService syncService,
         ILogger<FileSystemHealthCheckWorker> logger)
     {
@@ -43,6 +45,8 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
+        _maintenanceCoordinator = maintenanceCoordinator
+            ?? throw new ArgumentNullException(nameof(maintenanceCoordinator));
         _syncService = syncService ?? throw new ArgumentNullException(nameof(syncService));
     }
 
@@ -60,6 +64,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         {
             try
             {
+                await _maintenanceCoordinator.WaitForResumeAsync(stoppingToken).ConfigureAwait(false);
                 await _pauseCoordinator.WaitIfPausedAsync(stoppingToken).ConfigureAwait(false);
                 await RunHealthCheckIterationAsync(stoppingToken).ConfigureAwait(false);
             }
