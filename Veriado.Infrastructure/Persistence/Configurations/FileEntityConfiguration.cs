@@ -64,7 +64,8 @@ internal sealed class FileEntityConfiguration : IEntityTypeConfiguration<FileEnt
 
         builder.Property(file => file.ContentRevision)
             .HasColumnName("content_revision")
-            .IsRequired();
+            .IsRequired()
+            .IsConcurrencyToken();
 
         builder.OwnsOne(file => file.Content, owned =>
         {
