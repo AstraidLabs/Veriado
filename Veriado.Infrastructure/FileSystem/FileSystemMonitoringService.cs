@@ -121,45 +121,42 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
         }
     }
 
-    private void OnCreated(object sender, FileSystemEventArgs e)
+    private async void OnCreated(object sender, FileSystemEventArgs e)
     {
-        QueueEvent(FileSystemEventType.Created, e.FullPath, null);
+        await QueueEventAsync(FileSystemEventType.Created, e.FullPath, null).ConfigureAwait(false);
     }
 
-    private void OnDeleted(object sender, FileSystemEventArgs e)
+    private async void OnDeleted(object sender, FileSystemEventArgs e)
     {
-        QueueEvent(FileSystemEventType.Deleted, e.FullPath, null);
+        await QueueEventAsync(FileSystemEventType.Deleted, e.FullPath, null).ConfigureAwait(false);
     }
 
-    private void OnRenamed(object sender, RenamedEventArgs e)
+    private async void OnRenamed(object sender, RenamedEventArgs e)
     {
-        QueueEvent(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath);
+        await QueueEventAsync(FileSystemEventType.Renamed, e.FullPath, e.OldFullPath).ConfigureAwait(false);
     }
 
-    private void OnChanged(object sender, FileSystemEventArgs e)
+    private async void OnChanged(object sender, FileSystemEventArgs e)
     {
-        QueueEvent(FileSystemEventType.Changed, e.FullPath, null);
+        await QueueEventAsync(FileSystemEventType.Changed, e.FullPath, null).ConfigureAwait(false);
     }
 
-    private void QueueEvent(FileSystemEventType eventType, string fullPath, string? oldFullPath)
+    private async Task QueueEventAsync(FileSystemEventType eventType, string fullPath, string? oldFullPath)
     {
         var fileEvent = new FileSystemEvent(eventType, fullPath, oldFullPath, _clock.UtcNow.UtcDateTime);
 
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                await _eventChannel.Writer.WriteAsync(fileEvent, _cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogDebug("File system monitoring operation canceled.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unhandled exception while queuing file system monitoring event.");
-            }
-        }, _cancellationToken);
+            await _eventChannel.Writer.WriteAsync(fileEvent, _cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("File system monitoring operation canceled.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception while queuing file system monitoring event.");
+        }
     }
 
     private async Task ProcessEventsAsync(CancellationToken cancellationToken)
