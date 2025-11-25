@@ -45,7 +45,7 @@ public sealed partial class FilesPage : Page
         Loaded -= OnLoaded;
         _validityRefreshTimer.Start();
         RefreshValidityIndicators();
-        await ViewModel.StartHealthMonitoringAsync().ConfigureAwait(true);
+        _ = ViewModel.StartHealthMonitoringAsync();
         await ExecuteInitialRefreshAsync().ConfigureAwait(true);
         RefreshValidityIndicators();
     }
