@@ -30,7 +30,7 @@ public sealed class StreamingFileIngestor : IFileIngestor
         cancellationToken.ThrowIfCancellationRequested();
 
         var options = request.Options ?? new ImportOptions();
-        var bufferSize = Math.Max(options.BufferSize, 16 * 1024);
+        var bufferSize = Math.Max(options.ReadBufferSize, 16 * 1024);
 
         var reservation = await _storage
             .ReservePathAsync(request.PreferredStoragePath, cancellationToken)

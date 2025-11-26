@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Veriado.Contracts.Import;
 
 namespace Veriado.Application.Import;
 
@@ -26,7 +27,12 @@ public sealed record ImportItem(
     DateTimeOffset? ModifiedUtc,
     object? Metadata);
 
-public sealed record ImportOptions(int BatchSize = 500, bool UpsertFts = true, bool DetachAfterBatch = true);
+public sealed record ImportOptions(
+    int BatchSize = 500,
+    bool UpsertFts = true,
+    bool DetachAfterBatch = true,
+    PerformanceProfile PerformanceProfile = PerformanceProfile.Normal,
+    int MaxDegreeOfParallelism = 1);
 
 public sealed record ImportResult(int Imported, int Skipped, int Updated);
 

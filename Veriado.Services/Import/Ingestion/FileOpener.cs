@@ -21,7 +21,7 @@ internal static class FileOpener
         ArgumentException.ThrowIfNullOrEmpty(path);
         ArgumentNullException.ThrowIfNull(options);
 
-        var normalizedBufferSize = Math.Max(options.BufferSize, 4096);
+        var normalizedBufferSize = Math.Max(options.ReadBufferSize, 4096);
         var share = ResolveShare(options.SharePolicy);
         var attempts = 0;
         var delay = NormalizeDelay(options.RetryBaseDelay);

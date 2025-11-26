@@ -29,6 +29,7 @@ public partial class ImportPageViewModel : ViewModelBase
     private readonly AsyncRelayCommand<ImportError> _openErrorDetailCommand;
     private readonly AsyncRelayCommand _exportLogCommand;
     private CancellationTokenSource? _importCancellation;
+    private readonly SemaphoreSlim _importExecutionGate = new(1, 1);
 
     private int _okCount;
     private int _errorCount;
@@ -91,6 +92,18 @@ public partial class ImportPageViewModel : ViewModelBase
     private int? _maxDegreeOfParallelism = Environment.ProcessorCount;
 
     [ObservableProperty]
+    private int? _maxConcurrentReads = Environment.ProcessorCount;
+
+    [ObservableProperty]
+    private int? _readBufferSize = 128 * 1024;
+
+    [ObservableProperty]
+    private int? _batchSize = 200;
+
+    [ObservableProperty]
+    private PerformanceProfile _performanceProfile = PerformanceProfile.Normal;
+
+    [ObservableProperty]
     private string? _defaultAuthor;
 
     [ObservableProperty]
@@ -131,6 +144,15 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _hasParallelismError;
+
+    [ObservableProperty]
+    private bool _hasConcurrentReadError;
+
+    [ObservableProperty]
+    private bool _hasBufferSizeError;
+
+    [ObservableProperty]
+    private bool _hasBatchSizeError;
 
     [ObservableProperty]
     private bool _isActiveStatusVisible;
@@ -184,6 +206,16 @@ public partial class ImportPageViewModel : ViewModelBase
         ImportErrorSeverity.Error,
         ImportErrorSeverity.Fatal,
     };
+
+    public IReadOnlyList<PerformanceProfile> PerformanceProfiles { get; } = new[]
+    {
+        PerformanceProfile.Low,
+        PerformanceProfile.Normal,
+        PerformanceProfile.High,
+        PerformanceProfile.Custom,
+    };
+
+    public bool IsCustomProfile => PerformanceProfile == PerformanceProfile.Custom;
 
     public int OkCount
     {
@@ -262,6 +294,9 @@ public partial class ImportPageViewModel : ViewModelBase
         !IsImporting
         && !string.IsNullOrWhiteSpace(SelectedFolder)
         && !HasParallelismError
+        && !HasConcurrentReadError
+        && !HasBufferSizeError
+        && !HasBatchSizeError
         && !HasMaxFileSizeError;
 
     private bool CanClearResults() => Log.Count > 0 || Errors.Count > 0 || Processed > 0 || Total > 0 || OkCount > 0 || ErrorCount > 0 || SkipCount > 0;
@@ -427,6 +462,16 @@ public partial class ImportPageViewModel : ViewModelBase
             return;
         }
 
+        var gateAcquired = false;
+        try
+        {
+            gateAcquired = await _importExecutionGate.WaitAsync(0, cancellationToken).ConfigureAwait(false);
+            if (!gateAcquired)
+            {
+                StatusService.Warning("Import již běží. Počkejte na dokončení aktuálního běhu.");
+                return;
+            }
+
         await ClearDynamicStatusAsync().ConfigureAwait(false);
         var initialFolder = SelectedFolder;
         var preparationMessage = string.IsNullOrWhiteSpace(initialFolder)
@@ -521,6 +566,14 @@ public partial class ImportPageViewModel : ViewModelBase
                 IsIndeterminate = false;
             });
         }
+        }
+        finally
+        {
+            if (gateAcquired)
+            {
+                _importExecutionGate.Release();
+            }
+        }
     }
 
     private ImportFolderRequest BuildRequest()
@@ -534,6 +587,10 @@ public partial class ImportPageViewModel : ViewModelBase
             KeepFsMetadata = KeepFsMetadata,
             SetReadOnly = SetReadOnly,
             MaxDegreeOfParallelism = ResolveParallelism(),
+            MaxConcurrentReads = ResolveMaxConcurrentReads(),
+            ReadBufferSize = ResolveReadBufferSize(),
+            BatchSize = ResolveBatchSize(),
+            PerformanceProfile = PerformanceProfile,
             DefaultAuthor = string.IsNullOrWhiteSpace(DefaultAuthor) ? null : DefaultAuthor,
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
         };
@@ -545,6 +602,10 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             MaxFileSizeBytes = CalculateMaxFileSizeBytes(),
             MaxDegreeOfParallelism = ResolveParallelism(),
+            MaxConcurrentReads = ResolveMaxConcurrentReads(),
+            ReadBufferSize = ResolveReadBufferSize(),
+            BatchSize = ResolveBatchSize(),
+            PerformanceProfile = PerformanceProfile,
             KeepFileSystemMetadata = KeepFsMetadata,
             SetReadOnly = SetReadOnly,
             Recursive = Recursive,
@@ -566,6 +627,48 @@ public partial class ImportPageViewModel : ViewModelBase
         }
 
         return MaxDegreeOfParallelism.Value;
+    }
+
+    private int ResolveMaxConcurrentReads()
+    {
+        if (!UseParallel)
+        {
+            return 1;
+        }
+
+        if (!MaxConcurrentReads.HasValue || MaxConcurrentReads.Value <= 0)
+        {
+            return Math.Max(1, Environment.ProcessorCount);
+        }
+
+        return MaxConcurrentReads.Value;
+    }
+
+    private int ResolveReadBufferSize()
+    {
+        const int fallback = 128 * 1024;
+        const int minBuffer = 4 * 1024;
+        const int maxBuffer = 1024 * 1024;
+
+        if (!ReadBufferSize.HasValue || ReadBufferSize.Value <= 0)
+        {
+            return fallback;
+        }
+
+        return (int)Math.Clamp(ReadBufferSize.Value, minBuffer, maxBuffer);
+    }
+
+    private int ResolveBatchSize()
+    {
+        const int fallback = 200;
+        const int maxBatch = 1000;
+
+        if (!BatchSize.HasValue || BatchSize.Value <= 0)
+        {
+            return fallback;
+        }
+
+        return Math.Min(BatchSize.Value, maxBatch);
     }
 
     private long? CalculateMaxFileSizeBytes()
@@ -1444,6 +1547,7 @@ public partial class ImportPageViewModel : ViewModelBase
         }
 
         HasParallelismError = value && (!MaxDegreeOfParallelism.HasValue || MaxDegreeOfParallelism.Value <= 0);
+        HasConcurrentReadError = value && (!MaxConcurrentReads.HasValue || MaxConcurrentReads.Value <= 0);
         _runImportCommand.NotifyCanExecuteChanged();
     }
 
@@ -1457,6 +1561,30 @@ public partial class ImportPageViewModel : ViewModelBase
         }
 
         HasParallelismError = UseParallel && (!value.HasValue || value.Value <= 0);
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnMaxConcurrentReadsChanged(int? value)
+    {
+        HasConcurrentReadError = UseParallel && (!value.HasValue || value.Value <= 0);
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnReadBufferSizeChanged(int? value)
+    {
+        HasBufferSizeError = value.HasValue && value.Value <= 0;
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnBatchSizeChanged(int? value)
+    {
+        HasBatchSizeError = value.HasValue && value.Value <= 0;
+        _runImportCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnPerformanceProfileChanged(PerformanceProfile value)
+    {
+        OnPropertyChanged(nameof(IsCustomProfile));
         _runImportCommand.NotifyCanExecuteChanged();
     }
 

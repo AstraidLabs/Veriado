@@ -20,11 +20,31 @@ public sealed record class ImportOptions
         = 1;
 
     /// <summary>
+    /// Gets or sets the maximum number of files that can be read concurrently from disk.
+    /// Values lower than one are normalized to one.
+    /// </summary>
+    public int MaxConcurrentReads { get; init; }
+        = 1;
+
+    /// <summary>
     /// Gets or sets the buffer size used while streaming file content from disk.
     /// Values lower than four kilobytes are normalized to four kilobytes.
     /// </summary>
-    public int BufferSize { get; init; }
+    public int ReadBufferSize { get; init; }
         = 64 * 1024;
+
+    /// <summary>
+    /// Gets or sets the maximum number of items persisted in a single database batch.
+    /// Values lower than one are normalized to one.
+    /// </summary>
+    public int BatchSize { get; init; }
+        = 200;
+
+    /// <summary>
+    /// Gets or sets the performance profile that influences normalization of other values.
+    /// </summary>
+    public PerformanceProfile PerformanceProfile { get; init; }
+        = PerformanceProfile.Normal;
 
     /// <summary>
     /// Gets or sets a value indicating whether the source file can be deleted by other processes while it is being imported.

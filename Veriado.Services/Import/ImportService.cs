@@ -91,7 +91,7 @@ public sealed class ImportService : IImportService
             normalized.Content.LongLength,
             new MemoryStream(normalized.Content, writable: false));
 
-        return await ImportFileInternalAsync(import, descriptor, cancellationToken)
+        return await ImportFileInternalAsync(import, descriptor, options: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -152,7 +152,7 @@ public sealed class ImportService : IImportService
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = NormalizeOptions(options);
+        var normalized = NormalizeOptions(options, folderPath);
 
         await foreach (var progress in ImportFolderStreamCoreAsync(folderPath, normalized, cancellationToken).ConfigureAwait(false))
         {
@@ -227,7 +227,10 @@ public sealed class ImportService : IImportService
                 options.SetReadOnly,
                 options.MaxFileSizeBytes,
                 options.MaxDegreeOfParallelism,
-                options.BufferSize,
+                options.MaxConcurrentReads,
+                options.ReadBufferSize,
+                options.BatchSize,
+                options.PerformanceProfile,
             });
 
         if (!Directory.Exists(folderPath))
@@ -373,7 +376,10 @@ public sealed class ImportService : IImportService
             yield break;
         }
 
-        var channelCapacity = Math.Clamp(options.MaxDegreeOfParallelism * 4, 8, 256);
+        var channelCapacity = Math.Clamp(
+            (options.MaxDegreeOfParallelism + options.MaxConcurrentReads) * 4,
+            8,
+            512);
         var channel = Channel.CreateBounded<ImportProgressEvent>(new BoundedChannelOptions(channelCapacity)
         {
             FullMode = BoundedChannelFullMode.Wait,
@@ -423,6 +429,8 @@ public sealed class ImportService : IImportService
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var ioSemaphore = new SemaphoreSlim(options.MaxConcurrentReads);
+
         var writerTask = Task.Run(async () =>
         {
             try
@@ -435,6 +443,9 @@ public sealed class ImportService : IImportService
 
                 await Parallel.ForEachAsync(files, parallelOptions, async (filePath, token) =>
                 {
+                    await ioSemaphore.WaitAsync(token).ConfigureAwait(false);
+                    try
+                    {
                     token.ThrowIfCancellationRequested();
 
                     await WriteProgressAsync(
@@ -494,7 +505,7 @@ public sealed class ImportService : IImportService
                             return;
                         }
 
-                        var response = await ImportFileInternalAsync(createRequest, filePath, token).ConfigureAwait(false);
+                        var response = await ImportFileInternalAsync(createRequest, filePath, options, token).ConfigureAwait(false);
 
                         if (!response.IsSuccess
                             && ShouldAttemptFulltextRepair(response.Errors)
@@ -503,7 +514,7 @@ public sealed class ImportService : IImportService
                             _logger.LogInformation(
                                 "Retrying import for {FilePath} after repairing the full-text index.",
                                 filePath);
-                            response = await ImportFileInternalAsync(createRequest, filePath, token)
+                            response = await ImportFileInternalAsync(createRequest, filePath, options, token)
                                 .ConfigureAwait(false);
                         }
 
@@ -717,6 +728,10 @@ public sealed class ImportService : IImportService
                                 token)
                             .ConfigureAwait(false);
                     }
+                    finally
+                    {
+                        ioSemaphore.Release();
+                    }
                 }).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -779,12 +794,26 @@ public sealed class ImportService : IImportService
             }
         }, cancellationToken);
 
-        await foreach (var progress in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            yield return progress;
+            await foreach (var progress in channel.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
+            {
+                yield return progress;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Channel consumption is shielded from external cancellation to keep teardown graceful.
         }
 
-        await writerTask.ConfigureAwait(false);
+        try
+        {
+            await writerTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is handled by progress aggregation.
+        }
 
         var processedFinal = Volatile.Read(ref processed);
         var succeededFinal = Volatile.Read(ref succeeded);
@@ -970,6 +999,7 @@ public sealed class ImportService : IImportService
     private async Task<ApiResponse<Guid>> ImportFileInternalAsync(
         CreateFileImport import,
         string? descriptor,
+        NormalizedImportOptions? options,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(import);
@@ -1013,7 +1043,16 @@ public sealed class ImportService : IImportService
         }
 
         var importItem = CreateImportItem(fileId, request, mapped, storageResult, import.ContentHash);
-        var importResult = await InvokeImportAsync(importItem, cancellationToken).ConfigureAwait(false);
+        var writerOptions = options is null
+            ? new ApplicationImportOptions()
+            : new ApplicationImportOptions(
+                options.BatchSize,
+                UpsertFts: true,
+                DetachAfterBatch: true,
+                PerformanceProfile: options.PerformanceProfile,
+                MaxDegreeOfParallelism: options.MaxDegreeOfParallelism);
+
+        var importResult = await InvokeImportAsync(importItem, writerOptions, cancellationToken).ConfigureAwait(false);
 
         if (importResult.Imported + importResult.Updated > 0)
         {
@@ -1139,7 +1178,7 @@ public sealed class ImportService : IImportService
             }
 
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = ArrayPool<byte>.Shared.Rent(streamingOptions.BufferSize);
+            var buffer = ArrayPool<byte>.Shared.Rent(streamingOptions.ReadBufferSize);
             long total = 0;
 
             try
@@ -1187,7 +1226,7 @@ public sealed class ImportService : IImportService
     private static StreamingImportOptions CreateStreamingOptions(NormalizedImportOptions options)
         => new()
         {
-            BufferSize = options.BufferSize,
+            ReadBufferSize = options.ReadBufferSize,
             MaxRetryCount = options.FileOpenRetryCount,
             RetryBaseDelay = options.FileOpenRetryBaseDelay,
             MaxRetryDelay = options.FileOpenMaxRetryDelay,
@@ -1440,7 +1479,7 @@ public sealed class ImportService : IImportService
         => new(filePath, code, message, suggestion, null, _clock.UtcNow);
 
 
-    private static NormalizedImportOptions NormalizeOptions(ContractsImportOptions? options)
+    private NormalizedImportOptions NormalizeOptions(ContractsImportOptions? options, string folderPath)
     {
         var rawSearchPattern = options?.SearchPattern;
         var searchPatternResult = rawSearchPattern is null
@@ -1473,18 +1512,6 @@ public sealed class ImportService : IImportService
         if (maxFileSize.HasValue && maxFileSize.Value <= 0)
         {
             maxFileSize = null;
-        }
-
-        var maxDegree = options?.MaxDegreeOfParallelism ?? 1;
-        if (maxDegree <= 0)
-        {
-            maxDegree = 1;
-        }
-
-        var bufferSize = options?.BufferSize ?? 64 * 1024;
-        if (bufferSize < 4096)
-        {
-            bufferSize = 4096;
         }
 
         var recursive = options?.Recursive ?? true;
@@ -1520,6 +1547,29 @@ public sealed class ImportService : IImportService
             ? FileOpenSharePolicy.ReadWriteDelete
             : FileOpenSharePolicy.ReadWrite;
 
+        var performanceProfile = options?.PerformanceProfile ?? PerformanceProfile.Normal;
+        var normalizedPerformance = NormalizePerformance(performanceProfile, folderPath);
+        var maxDegree = NormalizeBounded(
+            options?.MaxDegreeOfParallelism,
+            normalizedPerformance.MaxDegreeOfParallelism,
+            min: 1,
+            max: normalizedPerformance.MaxParallelCap);
+        var maxConcurrentReads = NormalizeBounded(
+            options?.MaxConcurrentReads,
+            normalizedPerformance.MaxConcurrentReads,
+            min: 1,
+            max: normalizedPerformance.MaxConcurrentCap);
+        var readBufferSize = NormalizeBounded(
+            options?.ReadBufferSize,
+            normalizedPerformance.ReadBufferSize,
+            min: 4 * 1024,
+            max: 1024 * 1024);
+        var batchSize = NormalizeBounded(
+            options?.BatchSize,
+            normalizedPerformance.BatchSize,
+            min: 1,
+            max: 1000);
+
         return new NormalizedImportOptions(
             normalizedSearchPattern,
             recursive,
@@ -1528,7 +1578,10 @@ public sealed class ImportService : IImportService
             setReadOnly,
             maxFileSize,
             maxDegree,
-            bufferSize,
+            maxConcurrentReads,
+            readBufferSize,
+            batchSize,
+            normalizedPerformance.PerformanceProfile,
             originalPattern,
             searchPatternSanitized,
             warningMessage,
@@ -1539,18 +1592,95 @@ public sealed class ImportService : IImportService
             sharePolicy);
     }
 
-    private static NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
+    private NormalizedImportOptions NormalizeOptions(ImportFolderRequest request)
     {
         return NormalizeOptions(new ContractsImportOptions
         {
             MaxFileSizeBytes = request.MaxFileSizeBytes,
             MaxDegreeOfParallelism = request.MaxDegreeOfParallelism,
+            MaxConcurrentReads = request.MaxConcurrentReads,
+            ReadBufferSize = request.ReadBufferSize,
+            BatchSize = request.BatchSize,
+            PerformanceProfile = request.PerformanceProfile,
             DefaultAuthor = request.DefaultAuthor,
             KeepFileSystemMetadata = request.KeepFsMetadata,
             SetReadOnly = request.SetReadOnly,
             SearchPattern = request.SearchPattern,
             Recursive = request.Recursive,
-        });
+        }, request.FolderPath);
+    }
+
+    private static NormalizedPerformance NormalizePerformance(PerformanceProfile profile, string folderPath)
+    {
+        var cpuCount = Math.Max(1, Environment.ProcessorCount);
+        var isNetwork = IsLikelyNetworkPath(folderPath);
+        var resolvedProfile = profile == PerformanceProfile.Custom ? PerformanceProfile.Custom : profile;
+
+        static int ClampParallel(int value, int cpu, int multiplier)
+            => Math.Clamp(value, 1, Math.Max(cpu * multiplier, 1));
+
+        var defaults = resolvedProfile switch
+        {
+            PerformanceProfile.Low => new NormalizedPerformance(
+                resolvedProfile,
+                MaxDegreeOfParallelism: Math.Max(1, cpuCount / 2),
+                MaxParallelCap: cpuCount,
+                MaxConcurrentReads: isNetwork ? 1 : Math.Max(1, Math.Min(2, cpuCount)),
+                MaxConcurrentCap: Math.Max(4, cpuCount),
+                ReadBufferSize: isNetwork ? 64 * 1024 : 96 * 1024,
+                BatchSize: 75),
+            PerformanceProfile.High => new NormalizedPerformance(
+                resolvedProfile,
+                MaxDegreeOfParallelism: ClampParallel(cpuCount * 2, cpuCount, 2),
+                MaxParallelCap: Math.Max(cpuCount * 2, cpuCount),
+                MaxConcurrentReads: ClampParallel(isNetwork ? cpuCount : cpuCount * 2, cpuCount, 2),
+                MaxConcurrentCap: Math.Max(8, cpuCount * 2),
+                ReadBufferSize: isNetwork ? 128 * 1024 : 256 * 1024,
+                BatchSize: 200),
+            _ => new NormalizedPerformance(
+                resolvedProfile,
+                MaxDegreeOfParallelism: Math.Max(2, cpuCount),
+                MaxParallelCap: Math.Max(cpuCount * 2, cpuCount),
+                MaxConcurrentReads: Math.Clamp(cpuCount, 2, Math.Max(cpuCount * 2, 4)),
+                MaxConcurrentCap: Math.Max(cpuCount * 2, 8),
+                ReadBufferSize: isNetwork ? 96 * 1024 : 128 * 1024,
+                BatchSize: 150),
+        };
+
+        if (resolvedProfile == PerformanceProfile.Custom)
+        {
+            return defaults with
+            {
+                PerformanceProfile = profile,
+                MaxParallelCap = Math.Max(cpuCount * 2, 1),
+                MaxConcurrentCap = Math.Max(cpuCount * 2, 8),
+            };
+        }
+
+        return defaults;
+    }
+
+    private static int NormalizeBounded(int? rawValue, int fallback, int min, int max)
+    {
+        var value = rawValue.GetValueOrDefault(fallback);
+        if (value <= 0)
+        {
+            value = fallback;
+        }
+
+        return Math.Clamp(value, min, max);
+    }
+
+    private static bool IsLikelyNetworkPath(string folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath))
+        {
+            return false;
+        }
+
+        var trimmed = folderPath.Trim();
+        return trimmed.StartsWith("\\\\", StringComparison.Ordinal)
+            || trimmed.StartsWith("//", StringComparison.Ordinal);
     }
 
     private static SearchPatternResult NormalizeAndValidatePattern(string raw)
@@ -1775,13 +1905,16 @@ public sealed class ImportService : IImportService
             metadata);
     }
 
-    private async Task<ImportResult> InvokeImportAsync(ImportItem item, CancellationToken cancellationToken)
+    private async Task<ImportResult> InvokeImportAsync(
+        ImportItem item,
+        ApplicationImportOptions options,
+        CancellationToken cancellationToken)
     {
         await _importSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             return await _importWriter
-                .ImportAsync(new[] { item }, new ApplicationImportOptions(), cancellationToken)
+                .ImportAsync(new[] { item }, options, cancellationToken)
                 .ConfigureAwait(false);
         }
         finally
@@ -1819,7 +1952,10 @@ public sealed class ImportService : IImportService
         bool SetReadOnly,
         long? MaxFileSizeBytes,
         int MaxDegreeOfParallelism,
-        int BufferSize,
+        int MaxConcurrentReads,
+        int ReadBufferSize,
+        int BatchSize,
+        PerformanceProfile PerformanceProfile,
         string? OriginalSearchPattern,
         bool SearchPatternSanitized,
         string? SearchPatternWarningMessage,
@@ -1828,6 +1964,15 @@ public sealed class ImportService : IImportService
         TimeSpan FileOpenRetryBaseDelay,
         TimeSpan FileOpenMaxRetryDelay,
         FileOpenSharePolicy SharePolicy);
+
+    private readonly record struct NormalizedPerformance(
+        PerformanceProfile PerformanceProfile,
+        int MaxDegreeOfParallelism,
+        int MaxParallelCap,
+        int MaxConcurrentReads,
+        int MaxConcurrentCap,
+        int ReadBufferSize,
+        int BatchSize);
 
     private readonly record struct SearchPatternResult(
         string Normalized,

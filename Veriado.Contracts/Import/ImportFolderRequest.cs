@@ -35,6 +35,24 @@ public sealed record class ImportFolderRequest
         = 4;
 
     /// <summary>
+    /// Gets or sets the maximum number of concurrently opened files.
+    /// </summary>
+    public int MaxConcurrentReads { get; init; }
+        = 2;
+
+    /// <summary>
+    /// Gets or sets the configured read buffer size in bytes.
+    /// </summary>
+    public int ReadBufferSize { get; init; }
+        = 128 * 1024;
+
+    /// <summary>
+    /// Gets or sets the maximum number of items in a database batch.
+    /// </summary>
+    public int BatchSize { get; init; }
+        = 200;
+
+    /// <summary>
     /// Gets or sets the search pattern applied when enumerating files.
     /// </summary>
     public string? SearchPattern { get; init; }
@@ -52,4 +70,10 @@ public sealed record class ImportFolderRequest
     /// </summary>
     public long? MaxFileSizeBytes { get; init; }
         = null;
+
+    /// <summary>
+    /// Gets or sets the desired performance profile.
+    /// </summary>
+    public PerformanceProfile PerformanceProfile { get; init; }
+        = PerformanceProfile.Normal;
 }
