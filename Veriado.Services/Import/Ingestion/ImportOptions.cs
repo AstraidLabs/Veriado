@@ -10,7 +10,7 @@ public sealed record class ImportOptions
     /// <summary>
     /// Gets or sets the buffer size used while copying content between streams.
     /// </summary>
-    public int BufferSize { get; init; } = 128 * 1024;
+    public int ReadBufferSize { get; init; } = 128 * 1024;
 
     /// <summary>
     /// Gets or sets the maximum number of retries when the source file is temporarily unavailable.

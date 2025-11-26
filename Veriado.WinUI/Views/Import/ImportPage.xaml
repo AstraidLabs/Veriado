@@ -9,6 +9,7 @@
     xmlns:datagrid="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:import="using:Veriado.WinUI.ViewModels.Import"
+    xmlns:contracts="using:Veriado.Contracts.Import"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:animations="using:Microsoft.UI.Xaml.Media.Animation"
     d:DataContext="{d:DesignInstance Type=import:ImportPageViewModel}"
@@ -216,6 +217,22 @@
                         Content="Automaticky exportovat protokol po dokončení"
                         IsChecked="{Binding AutoExportLog, Mode=TwoWay}" />
                 </StackPanel>
+                <StackPanel Orientation="Vertical" Spacing="8" Width="220">
+                    <TextBlock Text="Výkonový profil" FontWeight="SemiBold" />
+                    <ComboBox
+                        ItemsSource="{Binding PerformanceProfiles}"
+                        SelectedItem="{Binding PerformanceProfile, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Pro ruční ladění zvolte profil Custom." />
+                </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8">
                     <CheckBox Content="Nastavit jen pro čtení" IsChecked="{Binding SetReadOnly, Mode=TwoWay}" />
                     <CheckBox Content="Paralelně" IsChecked="{Binding UseParallel, Mode=TwoWay}" />
@@ -223,9 +240,16 @@
                         Header="Max. paralelních vláken"
                         Minimum="1"
                         SpinButtonPlacementMode="Compact"
-                        IsEnabled="{Binding UseParallel}"
+                        IsEnabled="{Binding IsCustomProfile}"
                         ValidationMode="InvalidInputOverwritten"
                         Value="{Binding MaxDegreeOfParallelism, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}, TargetNullValue=1}" />
+                    <NumberBox
+                        Header="Max. souběžných čtení"
+                        Minimum="1"
+                        SpinButtonPlacementMode="Compact"
+                        IsEnabled="{Binding IsCustomProfile}"
+                        ValidationMode="InvalidInputOverwritten"
+                        Value="{Binding MaxConcurrentReads, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}, TargetNullValue=1}" />
                     <muxc:InfoBar
                         Margin="0,4,0,0"
                         IsOpen="{Binding HasParallelismError}"
@@ -233,12 +257,32 @@
                         Title="Neplatný počet vláken"
                         Message="Zadejte kladné celé číslo větší než nula."
                         IsClosable="False" />
+                    <muxc:InfoBar
+                        Margin="0,4,0,0"
+                        IsOpen="{Binding HasConcurrentReadError}"
+                        Severity="Error"
+                        Title="Neplatný počet čtení"
+                        Message="Zadejte kladné celé číslo pro souběžná čtení." />
                 </StackPanel>
                 <StackPanel Orientation="Vertical" Spacing="8" Width="200">
                     <TextBox
                         Header="Výchozí autor"
                         PlaceholderText="(nevyplněno)"
                         Text="{Binding DefaultAuthor, Mode=TwoWay}" />
+                    <NumberBox
+                        Header="Velikost čtecího bufferu (B)"
+                        Minimum="4096"
+                        SpinButtonPlacementMode="Compact"
+                        IsEnabled="{Binding IsCustomProfile}"
+                        ValidationMode="InvalidInputOverwritten"
+                        Value="{Binding ReadBufferSize, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}, TargetNullValue=131072}" />
+                    <muxc:InfoBar
+                        Margin="0,4,0,0"
+                        IsOpen="{Binding HasBufferSizeError}"
+                        Severity="Error"
+                        Title="Neplatná velikost bufferu"
+                        Message="Použijte kladnou hodnotu v bajtech (min. 4096)."
+                        IsClosable="False" />
                     <NumberBox
                         Header="Max. velikost souboru (MB)"
                         Minimum="0"
@@ -256,6 +300,20 @@
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Text="0 = bez limitu" />
+                    <NumberBox
+                        Header="Velikost batch (DB)"
+                        Minimum="1"
+                        SpinButtonPlacementMode="Compact"
+                        IsEnabled="{Binding IsCustomProfile}"
+                        ValidationMode="InvalidInputOverwritten"
+                        Value="{Binding BatchSize, Mode=TwoWay, Converter={StaticResource NullableIntToDoubleConverter}, TargetNullValue=200}" />
+                    <muxc:InfoBar
+                        Margin="0,4,0,0"
+                        IsOpen="{Binding HasBatchSizeError}"
+                        Severity="Error"
+                        Title="Neplatná velikost batch"
+                        Message="Zadejte kladné číslo (doporučeno 50–200)."
+                        IsClosable="False" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>
