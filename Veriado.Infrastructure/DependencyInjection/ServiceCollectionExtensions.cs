@@ -204,6 +204,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStorageMigrationService, StorageMigrationService>();
         services.AddScoped<IExportPackageService, ExportPackageService>();
         services.AddScoped<IImportPackageService, ImportPackageService>();
+        services.AddSingleton<IStorageSpaceAnalyzer, StorageSpaceAnalyzer>();
         services.AddSingleton<IFileHashCalculator, FileHashCalculator>();
         services.AddSingleton<IFileSystemMonitoringService, FileSystemMonitoringService>();
 

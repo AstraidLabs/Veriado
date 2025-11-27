@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Veriado.Infrastructure.Storage;
 
@@ -19,4 +20,6 @@ public sealed record StoragePackageMetadata
     public string DatabaseFileName { get; init; } = string.Empty;
     public string? DatabaseSha256 { get; init; }
     public DateTimeOffset ExportedAtUtc { get; init; }
+
+    public IReadOnlyDictionary<string, string> FileHashes { get; init; } = new Dictionary<string, string>();
 }

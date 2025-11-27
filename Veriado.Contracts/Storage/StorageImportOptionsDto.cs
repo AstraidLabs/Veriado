@@ -9,6 +9,5 @@ public sealed record StorageImportOptionsDto
     /// <summary>Gets a value indicating whether existing database and files may be overwritten.</summary>
     public bool OverwriteExisting { get; init; }
 
-    /// <summary>Gets a value indicating whether imported files should be verified after copy.</summary>
-    public bool VerifyAfterCopy { get; init; }
+    public StorageVerificationOptionsDto Verification { get; init; } = new();
 }

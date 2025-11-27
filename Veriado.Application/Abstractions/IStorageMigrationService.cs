@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,7 +29,7 @@ public interface IOperationalPauseCoordinator
 public interface IStorageMigrationService
 {
     /// <summary>Migrates the storage root to a new location on disk.</summary>
-    Task<StorageMigrationResult> MigrateStorageRootAsync(
+    Task<StorageOperationResult> MigrateStorageRootAsync(
         string newRootPath,
         StorageMigrationOptions? options,
         CancellationToken cancellationToken);
@@ -37,7 +38,7 @@ public interface IStorageMigrationService
 /// <summary>Provides operations for exporting the database and managed storage into a portable package.</summary>
 public interface IExportPackageService
 {
-    Task<StorageExportResult> ExportPackageAsync(
+    Task<StorageOperationResult> ExportPackageAsync(
         string packageRoot,
         StorageExportOptions? options,
         CancellationToken cancellationToken);
@@ -46,11 +47,22 @@ public interface IExportPackageService
 /// <summary>Provides operations for importing a portable package into the current environment.</summary>
 public interface IImportPackageService
 {
-    Task<StorageImportResult> ImportPackageAsync(
+    Task<StorageOperationResult> ImportPackageAsync(
         string packageRoot,
         string targetStorageRoot,
         StorageImportOptions? options,
         CancellationToken cancellationToken);
+}
+
+/// <summary>Options controlling verification of storage operations.</summary>
+public sealed class StorageVerificationOptions
+{
+    public bool VerifyFilesBySize { get; init; } = true;
+
+    public bool VerifyFilesByHash { get; init; }
+        = false;
+
+    public bool VerifyDatabaseHash { get; init; } = true;
 }
 
 /// <summary>Options controlling storage root migration.</summary>
@@ -59,8 +71,8 @@ public sealed record StorageMigrationOptions
     /// <summary>Gets a value indicating whether the original files should be deleted after a successful copy.</summary>
     public bool DeleteSourceAfterCopy { get; init; }
 
-    /// <summary>Gets a value indicating whether migrated files should be validated using SHA-256 hashes.</summary>
-    public bool VerifyHashes { get; init; }
+    /// <summary>Verification configuration for migrated files.</summary>
+    public StorageVerificationOptions Verification { get; init; } = new();
 }
 
 /// <summary>Options controlling export behaviour.</summary>
@@ -68,6 +80,12 @@ public sealed record StorageExportOptions
 {
     /// <summary>Gets a value indicating whether existing package contents may be overwritten.</summary>
     public bool OverwriteExisting { get; init; }
+
+    /// <summary>Gets a value indicating whether per-file hashes should be computed during export.</summary>
+    public bool IncludeFileHashes { get; init; }
+
+    /// <summary>Verification configuration for exported assets.</summary>
+    public StorageVerificationOptions Verification { get; init; } = new();
 }
 
 /// <summary>Options controlling import behaviour.</summary>
@@ -76,31 +94,48 @@ public sealed record StorageImportOptions
     /// <summary>Gets a value indicating whether existing database and files may be overwritten.</summary>
     public bool OverwriteExisting { get; init; }
 
-    /// <summary>Gets a value indicating whether imported files should be validated after copy.</summary>
-    public bool VerifyAfterCopy { get; init; }
+    /// <summary>Verification configuration for imported assets.</summary>
+    public StorageVerificationOptions Verification { get; init; } = new();
 }
 
-/// <summary>Result information for storage migrations.</summary>
-public sealed record StorageMigrationResult(string OldRoot, string NewRoot)
+public enum StorageOperationStatus
 {
-    public int MigratedFiles { get; init; }
-    public int MissingSources { get; init; }
-    public int VerificationFailures { get; init; }
-    public IReadOnlyCollection<string> Errors { get; init; } = new List<string>();
+    Success,
+    PartialSuccess,
+    Failed,
+    InsufficientSpace,
+    InvalidPackage,
+    SchemaMismatch,
+    PendingMigrations,
 }
 
-/// <summary>Result information for export operations.</summary>
-public sealed record StorageExportResult(string PackageRoot)
+public sealed class StorageOperationResult
 {
-    public string DatabasePath { get; init; } = string.Empty;
-    public int ExportedFiles { get; init; }
-    public int MissingFiles { get; init; }
-}
+    public StorageOperationStatus Status { get; init; }
 
-/// <summary>Result information for import operations.</summary>
-public sealed record StorageImportResult(string PackageRoot, string TargetStorageRoot)
-{
-    public int ImportedFiles { get; init; }
-    public int VerificationFailures { get; init; }
-    public IReadOnlyCollection<string> Errors { get; init; } = new List<string>();
+    public string? Message { get; init; }
+
+    public IReadOnlyList<string> MissingFiles { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> FailedFiles { get; init; } = Array.Empty<string>();
+
+    public bool DatabaseHashMatched { get; init; }
+
+    public int VerifiedFilesCount { get; init; }
+
+    public int FailedVerificationCount { get; init; }
+
+    public long? RequiredBytes { get; init; }
+
+    public long? AvailableBytes { get; init; }
+
+    public string? PackageRoot { get; init; }
+
+    public string? TargetStorageRoot { get; init; }
+
+    public string? DatabasePath { get; init; }
+
+    public int AffectedFiles { get; init; }
+
+    public IReadOnlyCollection<string> Errors { get; init; } = Array.Empty<string>();
 }

@@ -20,25 +20,29 @@ public sealed class ExportPackageService : IExportPackageService
     private const string MetadataFileName = "metadata.json";
     private const string DatabaseDirectory = "db";
     private const string StorageDirectory = "storage";
+    private const double SafetyMargin = 1.1d;
 
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly IConnectionStringProvider _connectionStringProvider;
     private readonly IFileHashCalculator _hashCalculator;
+    private readonly IStorageSpaceAnalyzer _spaceAnalyzer;
     private readonly ILogger<ExportPackageService> _logger;
 
     public ExportPackageService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         IConnectionStringProvider connectionStringProvider,
         IFileHashCalculator hashCalculator,
+        IStorageSpaceAnalyzer spaceAnalyzer,
         ILogger<ExportPackageService> logger)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
         _hashCalculator = hashCalculator ?? throw new ArgumentNullException(nameof(hashCalculator));
+        _spaceAnalyzer = spaceAnalyzer ?? throw new ArgumentNullException(nameof(spaceAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<StorageExportResult> ExportPackageAsync(
+    public async Task<StorageOperationResult> ExportPackageAsync(
         string packageRoot,
         StorageExportOptions? options,
         CancellationToken cancellationToken)
@@ -54,7 +58,12 @@ public sealed class ExportPackageService : IExportPackageService
 
         if (pendingMigrations.Any())
         {
-            throw new InvalidOperationException("Cannot export while database migrations are pending. Please update the database first.");
+            return new StorageOperationResult
+            {
+                Status = StorageOperationStatus.PendingMigrations,
+                Message = "Cannot export while database migrations are pending. Please update the database first.",
+                PackageRoot = normalizedPackageRoot,
+            };
         }
 
         var storageRoot = await dbContext.StorageRoots
@@ -70,6 +79,25 @@ public sealed class ExportPackageService : IExportPackageService
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var databaseSize = await _spaceAnalyzer.GetFileSizeAsync(_connectionStringProvider.DatabasePath, cancellationToken)
+            .ConfigureAwait(false);
+        var totalSize = files.Sum(f => f.Size?.Value ?? 0) + databaseSize;
+        var available = await _spaceAnalyzer.GetAvailableBytesAsync(normalizedPackageRoot, cancellationToken)
+            .ConfigureAwait(false);
+
+        var required = (long)Math.Ceiling(totalSize * SafetyMargin);
+        if (available < required)
+        {
+            return new StorageOperationResult
+            {
+                Status = StorageOperationStatus.InsufficientSpace,
+                Message = $"Insufficient disk space for export. Required {required} bytes, available {available} bytes.",
+                RequiredBytes = required,
+                AvailableBytes = available,
+                PackageRoot = normalizedPackageRoot,
+            };
+        }
+
         var databaseTargetDirectory = Path.Combine(normalizedPackageRoot, DatabaseDirectory);
         Directory.CreateDirectory(databaseTargetDirectory);
         var targetDatabasePath = Path.Combine(databaseTargetDirectory, Path.GetFileName(_connectionStringProvider.DatabasePath));
@@ -79,9 +107,11 @@ public sealed class ExportPackageService : IExportPackageService
         var storageTargetRoot = Path.Combine(normalizedPackageRoot, StorageDirectory);
         Directory.CreateDirectory(storageTargetRoot);
 
-        var missingFiles = 0;
+        var missingFiles = new List<string>();
         var exportedFiles = 0;
         long totalBytes = 0;
+        var fileHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var shouldHashFiles = options.IncludeFileHashes || options.Verification.VerifyFilesByHash;
 
         foreach (var file in files)
         {
@@ -98,16 +128,22 @@ public sealed class ExportPackageService : IExportPackageService
 
                 try
                 {
-                    totalBytes += new FileInfo(sourcePath).Length;
+                    var length = new FileInfo(sourcePath).Length;
+                    totalBytes += length;
+                    if (shouldHashFiles)
+                    {
+                        var hash = await _hashCalculator.ComputeSha256Async(sourcePath, cancellationToken).ConfigureAwait(false);
+                        fileHashes[relativePath] = hash.Value;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to read size information for {SourcePath} while exporting.", sourcePath);
+                    _logger.LogWarning(ex, "Failed to read metadata for {SourcePath} while exporting.", sourcePath);
                 }
             }
             catch (FileNotFoundException)
             {
-                missingFiles++;
+                missingFiles.Add(relativePath);
                 _logger.LogWarning("Source file {SourcePath} missing during export.", sourcePath);
             }
         }
@@ -119,11 +155,14 @@ public sealed class ExportPackageService : IExportPackageService
             SchemaVersion = (await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken).ConfigureAwait(false)).LastOrDefault(),
             OriginalStorageRoot = normalizedRoot,
             FileCount = files.Count,
-            MissingFiles = missingFiles,
+            MissingFiles = missingFiles.Count,
             TotalSize = totalBytes,
             DatabaseFileName = Path.GetFileName(targetDatabasePath),
-            DatabaseSha256 = (await _hashCalculator.ComputeSha256Async(targetDatabasePath, cancellationToken).ConfigureAwait(false)).Value,
+            DatabaseSha256 = options.Verification.VerifyDatabaseHash
+                ? (await _hashCalculator.ComputeSha256Async(targetDatabasePath, cancellationToken).ConfigureAwait(false)).Value
+                : null,
             ExportedAtUtc = DateTimeOffset.UtcNow,
+            FileHashes = shouldHashFiles ? fileHashes : new Dictionary<string, string>(),
         };
 
         await WriteMetadataAsync(Path.Combine(normalizedPackageRoot, MetadataFileName), metadata, cancellationToken).ConfigureAwait(false);
@@ -132,13 +171,19 @@ public sealed class ExportPackageService : IExportPackageService
             "Export completed to {PackageRoot}. Files exported: {ExportedFiles}, missing: {MissingFiles}.",
             normalizedPackageRoot,
             exportedFiles,
-            missingFiles);
+            missingFiles.Count);
 
-        return new StorageExportResult(normalizedPackageRoot)
+        return new StorageOperationResult
         {
+            Status = missingFiles.Count == 0 ? StorageOperationStatus.Success : StorageOperationStatus.PartialSuccess,
+            PackageRoot = normalizedPackageRoot,
             DatabasePath = targetDatabasePath,
-            ExportedFiles = exportedFiles,
+            AffectedFiles = exportedFiles,
             MissingFiles = missingFiles,
+            VerifiedFilesCount = shouldHashFiles ? fileHashes.Count : 0,
+            FailedVerificationCount = 0,
+            DatabaseHashMatched = metadata.DatabaseSha256 != null,
+            Message = missingFiles.Count == 0 ? "Export completed." : "Export completed with missing files.",
         };
     }
 
