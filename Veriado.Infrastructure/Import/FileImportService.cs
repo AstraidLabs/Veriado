@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Veriado.Application.Abstractions;
@@ -129,13 +130,15 @@ public sealed class FileImportService : IFileImportWriter
             normalizedBatch[i] = item;
         }
 
-        var deduped = Deduplicate(normalizedBatch);
+        var deduped = DeduplicateByRelativePath(Deduplicate(normalizedBatch));
         if (deduped.Count == 0)
         {
             return (new ImportResult(0, 0, 0), 0);
         }
 
-        var ids = deduped.Select(item => item.FileId).ToArray();
+        var resolvedItems = ResolveRelativePaths(deduped);
+        var ids = resolvedItems.Select(item => item.Item.FileId).ToArray();
+        var relativePaths = resolvedItems.Select(item => item.RelativePath).ToArray();
         var database = _dbContext.Database;
         var currentTransaction = database.CurrentTransaction;
         var ownsTransaction = currentTransaction is null;
@@ -163,25 +166,29 @@ public sealed class FileImportService : IFileImportWriter
 
         try
         {
-            var existingFiles = await _dbContext.Files
-                .AsNoTracking()
-                .Where(file => ids.Contains(file.Id))
-                .Include(file => file.Validity)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
+            var existingFiles = await LoadExistingFilesAsync(ids, relativePaths, ct).ConfigureAwait(false);
+            var existingById = existingFiles.ToDictionary(file => file.Id, file => file);
+            var existingByPath = existingFiles
+                .Where(file => file.FileSystem is not null)
+                .ToDictionary(file => file.FileSystem!.RelativePath.Value, file => file, StringComparer.Ordinal);
 
             var imported = 0;
             var skipped = 0;
             var updated = 0;
 
-            foreach (var item in deduped)
+            foreach (var item in resolvedItems)
             {
                 ct.ThrowIfCancellationRequested();
-                var existing = existingFiles.FirstOrDefault(file => file.Id == item.FileId);
-                var relativePath = RelativeFilePath.From(_filePathResolver.GetRelativePath(item.StoragePath));
+                var existing = existingByPath.TryGetValue(item.RelativePath.Value, out var pathExisting)
+                    ? pathExisting
+                    : existingById.GetValueOrDefault(item.Item.FileId);
+
+                var itemForMapping = existing is not null
+                    ? item.Item with { FileId = existing.Id }
+                    : item.Item;
 
                 // FileSystemEntity stores only relative paths; full paths are derived via IFilePathResolver.
-                var mapped = ImportMapping.MapToAggregate(item, relativePath, existing?.FileSystemId);
+                var mapped = ImportMapping.MapToAggregate(itemForMapping, item.RelativePath, existing?.FileSystemId);
 
                 if (existing is not null)
                 {
@@ -234,6 +241,12 @@ public sealed class FileImportService : IFileImportWriter
             catch (DbUpdateConcurrencyException ex)
             {
                 throw new FileConcurrencyException("The file was modified by another operation during import.", ex);
+            }
+            catch (DbUpdateException ex) when (IsUniqueFileSystemPathViolation(ex))
+            {
+                throw new FileConcurrencyException(
+                    "The file system path was claimed by another operation during import.",
+                    ex);
             }
 
             var busyRetries = 0;
@@ -380,13 +393,13 @@ public sealed class FileImportService : IFileImportWriter
             {
                 if (transaction is not null)
                 {
-                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                    await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 }
             }
             else if (savepointName is not null)
             {
                 await currentTransaction!
-                    .RollbackToSavepointAsync(savepointName, ct)
+                    .RollbackToSavepointAsync(savepointName, CancellationToken.None)
                     .ConfigureAwait(false);
             }
 
@@ -459,4 +472,87 @@ public sealed class FileImportService : IFileImportWriter
 
         return order;
     }
+
+    /// <summary>
+    /// Deduplicates items by their resolved relative path, keeping the last occurrence ("last write wins").
+    /// </summary>
+    private IReadOnlyList<ImportItem> DeduplicateByRelativePath(IReadOnlyList<ImportItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return Array.Empty<ImportItem>();
+        }
+
+        var order = new List<ImportItem>(items.Count);
+        var index = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var relativePath = _filePathResolver.GetRelativePath(item.StoragePath);
+
+            if (index.TryGetValue(relativePath, out var existingIndex))
+            {
+                order[existingIndex] = item;
+            }
+            else
+            {
+                index[relativePath] = order.Count;
+                order.Add(item);
+            }
+        }
+
+        return order;
+    }
+
+    private List<ResolvedImportItem> ResolveRelativePaths(IReadOnlyList<ImportItem> items)
+    {
+        var resolved = new List<ResolvedImportItem>(items.Count);
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var relativePath = RelativeFilePath.From(_filePathResolver.GetRelativePath(item.StoragePath));
+            resolved.Add(new ResolvedImportItem(item, relativePath));
+        }
+
+        return resolved;
+    }
+
+    private async Task<List<FileEntity>> LoadExistingFilesAsync(
+        IReadOnlyCollection<Guid> ids,
+        IReadOnlyCollection<RelativeFilePath> relativePaths,
+        CancellationToken ct)
+    {
+        var pathValues = relativePaths.Select(path => path.Value).ToArray();
+
+        var query = _dbContext.Files
+            .AsNoTracking()
+            .Include(file => file.Validity)
+            .Include(file => file.FileSystem);
+
+        if (pathValues.Length == 0)
+        {
+            return await query
+                .Where(file => ids.Contains(file.Id))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+
+        return await query
+            .Where(file => ids.Contains(file.Id) || pathValues.Contains(file.FileSystem!.RelativePath.Value))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Detects a SQLite UNIQUE constraint violation on filesystem_entities.relative_path so that it can be
+    /// translated to a domain-level concurrency exception.
+    /// </summary>
+    private static bool IsUniqueFileSystemPathViolation(DbUpdateException ex)
+        => ex.InnerException is SqliteException sqlite
+            && sqlite.SqliteErrorCode == 19
+            && sqlite.Message.Contains("filesystem_entities.relative_path", StringComparison.Ordinal);
+
+    private sealed record ResolvedImportItem(ImportItem Item, RelativeFilePath RelativePath);
 }
