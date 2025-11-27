@@ -79,7 +79,7 @@ public sealed class ImportService : IImportService
     public async Task<ApiResponse<Guid>> ImportFileAsync(CreateFileRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        cancellationToken.ThrowIfCancellationRequested();
+        pipelineToken.ThrowIfCancellationRequested();
 
         var normalized = NormalizeRequest(request);
         var descriptor = string.IsNullOrWhiteSpace(normalized.Name) ? normalized.Extension : normalized.Name;
@@ -376,6 +376,9 @@ public sealed class ImportService : IImportService
             yield break;
         }
 
+        using var pipelineCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var pipelineToken = pipelineCts.Token;
+
         var channelCapacity = Math.Clamp(
             (options.MaxDegreeOfParallelism + options.MaxConcurrentReads) * 4,
             8,
@@ -445,7 +448,7 @@ public sealed class ImportService : IImportService
             {
                 var parallelOptions = new ParallelOptions
                 {
-                    CancellationToken = cancellationToken,
+                    CancellationToken = pipelineToken,
                     MaxDegreeOfParallelism = options.MaxDegreeOfParallelism,
                 };
 
@@ -583,35 +586,38 @@ public sealed class ImportService : IImportService
                     }
                 }).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (pipelineToken.IsCancellationRequested)
             {
-                cancellationEncountered = true;
-                if (!cancellationReported)
+                if (!fatalEncountered)
                 {
-                    cancellationReported = true;
-                    var error = new ImportError(
-                        folderPath,
-                        "canceled",
-                        "The import operation was canceled.",
-                        "Restart the import when ready.",
-                        null,
-                        _clock.UtcNow);
-                    errors.Add(error);
+                    cancellationEncountered = true;
+                    if (!cancellationReported)
+                    {
+                        cancellationReported = true;
+                        var error = new ImportError(
+                            folderPath,
+                            "canceled",
+                            "The import operation was canceled.",
+                            "Restart the import when ready.",
+                            null,
+                            _clock.UtcNow);
+                        errors.Add(error);
 
-                    _logger.LogInformation("Import canceled for {FolderPath}", folderPath);
+                        _logger.LogInformation("Import canceled for {FolderPath}", folderPath);
 
-                    await WriteProgressAsync(
-                            channel.Writer,
-                            ImportProgressEvent.ErrorOccurred(
-                                error,
-                                Volatile.Read(ref processed),
-                                total,
-                                Volatile.Read(ref succeeded),
-                                Volatile.Read(ref failed),
-                                Volatile.Read(ref skipped),
-                                _clock.UtcNow),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                        await WriteProgressAsync(
+                                channel.Writer,
+                                ImportProgressEvent.ErrorOccurred(
+                                    error,
+                                    Volatile.Read(ref processed),
+                                    total,
+                                    Volatile.Read(ref succeeded),
+                                    Volatile.Read(ref failed),
+                                    Volatile.Read(ref skipped),
+                                    _clock.UtcNow),
+                                pipelineToken)
+                            .ConfigureAwait(false);
+                    }
                 }
             }
             catch (Exception ex)
@@ -638,35 +644,35 @@ public sealed class ImportService : IImportService
                             Volatile.Read(ref failed),
                             Volatile.Read(ref skipped),
                             _clock.UtcNow),
-                        cancellationToken)
+                        pipelineToken)
                     .ConfigureAwait(false);
             }
             finally
             {
                 workChannel.Writer.TryComplete();
             }
-        }, cancellationToken);
+        }, pipelineToken);
 
         var writerTask = Task.Run(async () =>
         {
             var batch = new List<ImportWorkItem>(options.BatchSize);
             try
             {
-                await foreach (var item in workChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+                await foreach (var item in workChannel.Reader.ReadAllAsync(pipelineToken).ConfigureAwait(false))
                 {
                     batch.Add(item);
                     if (batch.Count >= options.BatchSize)
                     {
-                        await FlushBatchAsync(batch, cancellationToken).ConfigureAwait(false);
+                        await FlushBatchAsync(batch, pipelineToken).ConfigureAwait(false);
                     }
                 }
 
                 if (batch.Count > 0)
                 {
-                    await FlushBatchAsync(batch, cancellationToken).ConfigureAwait(false);
+                    await FlushBatchAsync(batch, pipelineToken).ConfigureAwait(false);
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (pipelineToken.IsCancellationRequested)
             {
                 cancellationEncountered = true;
                 if (!cancellationReported)
@@ -685,16 +691,16 @@ public sealed class ImportService : IImportService
 
                     await WriteProgressAsync(
                             channel.Writer,
-                            ImportProgressEvent.ErrorOccurred(
-                                error,
-                                Volatile.Read(ref processed),
-                                total,
-                                Volatile.Read(ref succeeded),
-                                Volatile.Read(ref failed),
-                                Volatile.Read(ref skipped),
-                                _clock.UtcNow),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                        ImportProgressEvent.ErrorOccurred(
+                            error,
+                            Volatile.Read(ref processed),
+                            total,
+                            Volatile.Read(ref succeeded),
+                            Volatile.Read(ref failed),
+                            Volatile.Read(ref skipped),
+                            _clock.UtcNow),
+                        pipelineToken)
+                    .ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -721,14 +727,17 @@ public sealed class ImportService : IImportService
                             Volatile.Read(ref failed),
                             Volatile.Read(ref skipped),
                             _clock.UtcNow),
-                        cancellationToken)
+                        pipelineToken)
                     .ConfigureAwait(false);
+
+                pipelineCts.Cancel();
+                workChannel.Writer.TryComplete(ex);
             }
             finally
             {
                 channel.Writer.TryComplete();
             }
-        }, cancellationToken);
+        }, pipelineToken);
 
         async Task FlushBatchAsync(List<ImportWorkItem> batchItems, CancellationToken token)
         {
