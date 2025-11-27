@@ -35,7 +35,7 @@ public sealed class StorageManagementService : IStorageManagementService
     public Task ChangeRootAsync(string newRoot, CancellationToken cancellationToken)
         => _rootSettings.ChangeRootAsync(newRoot, cancellationToken);
 
-    public async Task<StorageMigrationResultDto> MigrateRootAsync(
+    public async Task<StorageOperationResultDto> MigrateRootAsync(
         string newRoot,
         StorageMigrationOptionsDto? options,
         CancellationToken cancellationToken)
@@ -44,16 +44,10 @@ public sealed class StorageManagementService : IStorageManagementService
             .MigrateStorageRootAsync(newRoot, Map(options), cancellationToken)
             .ConfigureAwait(false);
 
-        return new StorageMigrationResultDto(
-            result.OldRoot,
-            result.NewRoot,
-            result.MigratedFiles,
-            result.MissingSources,
-            result.VerificationFailures,
-            result.Errors);
+        return Map(result);
     }
 
-    public async Task<StorageExportResultDto> ExportAsync(
+    public async Task<StorageOperationResultDto> ExportAsync(
         string packageRoot,
         StorageExportOptionsDto? options,
         CancellationToken cancellationToken)
@@ -62,14 +56,10 @@ public sealed class StorageManagementService : IStorageManagementService
             .ExportPackageAsync(packageRoot, Map(options), cancellationToken)
             .ConfigureAwait(false);
 
-        return new StorageExportResultDto(
-            result.PackageRoot,
-            result.DatabasePath,
-            result.ExportedFiles,
-            result.MissingFiles);
+        return Map(result);
     }
 
-    public async Task<StorageImportResultDto> ImportAsync(
+    public async Task<StorageOperationResultDto> ImportAsync(
         string packageRoot,
         string targetStorageRoot,
         StorageImportOptionsDto? options,
@@ -79,12 +69,7 @@ public sealed class StorageManagementService : IStorageManagementService
             .ImportPackageAsync(packageRoot, targetStorageRoot, Map(options), cancellationToken)
             .ConfigureAwait(false);
 
-        return new StorageImportResultDto(
-            result.PackageRoot,
-            result.TargetStorageRoot,
-            result.ImportedFiles,
-            result.VerificationFailures,
-            result.Errors);
+        return Map(result);
     }
 
     private static StorageMigrationOptions? Map(StorageMigrationOptionsDto? dto)
@@ -97,7 +82,7 @@ public sealed class StorageManagementService : IStorageManagementService
         return new StorageMigrationOptions
         {
             DeleteSourceAfterCopy = dto.DeleteSourceAfterCopy,
-            VerifyHashes = dto.VerifyHashes,
+            Verification = Map(dto.Verification),
         };
     }
 
@@ -111,6 +96,8 @@ public sealed class StorageManagementService : IStorageManagementService
         return new StorageExportOptions
         {
             OverwriteExisting = dto.OverwriteExisting,
+            IncludeFileHashes = dto.IncludeFileHashes,
+            Verification = Map(dto.Verification),
         };
     }
 
@@ -124,7 +111,54 @@ public sealed class StorageManagementService : IStorageManagementService
         return new StorageImportOptions
         {
             OverwriteExisting = dto.OverwriteExisting,
-            VerifyAfterCopy = dto.VerifyAfterCopy,
+            Verification = Map(dto.Verification),
         };
     }
+
+    private static StorageOperationResultDto Map(StorageOperationResult result)
+    {
+        return new StorageOperationResultDto
+        {
+            Status = Map(result.Status),
+            Message = result.Message,
+            MissingFiles = result.MissingFiles,
+            FailedFiles = result.FailedFiles,
+            DatabaseHashMatched = result.DatabaseHashMatched,
+            VerifiedFilesCount = result.VerifiedFilesCount,
+            FailedVerificationCount = result.FailedVerificationCount,
+            RequiredBytes = result.RequiredBytes,
+            AvailableBytes = result.AvailableBytes,
+            PackageRoot = result.PackageRoot,
+            TargetStorageRoot = result.TargetStorageRoot,
+            DatabasePath = result.DatabasePath,
+            AffectedFiles = result.AffectedFiles,
+            Errors = result.Errors,
+        };
+    }
+
+    private static StorageVerificationOptions Map(StorageVerificationOptionsDto dto)
+    {
+        return new StorageVerificationOptions
+        {
+            VerifyDatabaseHash = dto.VerifyDatabaseHash,
+            VerifyFilesByHash = dto.VerifyFilesByHash,
+            VerifyFilesBySize = dto.VerifyFilesBySize,
+        };
+    }
+
+    private static StorageVerificationOptions Map(StorageVerificationOptionsDto? dto)
+        => dto is null ? new StorageVerificationOptions() : Map(dto);
+
+    private static StorageOperationStatusDto Map(StorageOperationStatus status)
+        => status switch
+        {
+            StorageOperationStatus.Success => StorageOperationStatusDto.Success,
+            StorageOperationStatus.PartialSuccess => StorageOperationStatusDto.PartialSuccess,
+            StorageOperationStatus.Failed => StorageOperationStatusDto.Failed,
+            StorageOperationStatus.InsufficientSpace => StorageOperationStatusDto.InsufficientSpace,
+            StorageOperationStatus.InvalidPackage => StorageOperationStatusDto.InvalidPackage,
+            StorageOperationStatus.SchemaMismatch => StorageOperationStatusDto.SchemaMismatch,
+            StorageOperationStatus.PendingMigrations => StorageOperationStatusDto.PendingMigrations,
+            _ => StorageOperationStatusDto.Failed,
+        };
 }

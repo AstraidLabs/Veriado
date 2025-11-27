@@ -14,17 +14,17 @@ public interface IStorageManagementService
 
     Task ChangeRootAsync(string newRoot, CancellationToken cancellationToken);
 
-    Task<StorageMigrationResultDto> MigrateRootAsync(
+    Task<StorageOperationResultDto> MigrateRootAsync(
         string newRoot,
         StorageMigrationOptionsDto? options,
         CancellationToken cancellationToken);
 
-    Task<StorageExportResultDto> ExportAsync(
+    Task<StorageOperationResultDto> ExportAsync(
         string packageRoot,
         StorageExportOptionsDto? options,
         CancellationToken cancellationToken);
 
-    Task<StorageImportResultDto> ImportAsync(
+    Task<StorageOperationResultDto> ImportAsync(
         string packageRoot,
         string targetStorageRoot,
         StorageImportOptionsDto? options,

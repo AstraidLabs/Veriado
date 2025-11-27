@@ -124,7 +124,12 @@ public partial class StorageManagementPageViewModel : ViewModelBase
             var options = new StorageMigrationOptionsDto
             {
                 DeleteSourceAfterCopy = DeleteSourceAfterCopy,
-                VerifyHashes = VerifyHashes,
+                Verification = new StorageVerificationOptionsDto
+                {
+                    VerifyFilesBySize = true,
+                    VerifyFilesByHash = VerifyHashes,
+                    VerifyDatabaseHash = true,
+                },
             };
 
             var result = await _storageService
@@ -133,11 +138,14 @@ public partial class StorageManagementPageViewModel : ViewModelBase
 
             await Dispatcher.Enqueue(() =>
             {
-                CurrentRoot = result.NewRoot;
-                EffectiveRoot = result.NewRoot;
+                if (result.TargetStorageRoot is not null)
+                {
+                    CurrentRoot = result.TargetStorageRoot;
+                    EffectiveRoot = result.TargetStorageRoot;
+                }
             });
 
-            StatusService.Info($"Migrace dokončena. Přeneseno {result.MigratedFiles} souborů.");
+            StatusService.Info(result.Message ?? "Migrace dokončena.");
         }, "Provádím migraci úložiště...");
     }
 
@@ -160,7 +168,7 @@ public partial class StorageManagementPageViewModel : ViewModelBase
                 .ExportAsync(ExportPackageRoot, options, cancellationToken)
                 .ConfigureAwait(false);
 
-            StatusService.Info($"Export dokončen. Databáze: {result.DatabasePath}.");
+            StatusService.Info(result.Message ?? "Export dokončen.");
         }, "Exportuji databázi a dokumenty...");
     }
 
@@ -183,7 +191,12 @@ public partial class StorageManagementPageViewModel : ViewModelBase
             var options = new StorageImportOptionsDto
             {
                 OverwriteExisting = ImportOverwriteExisting,
-                VerifyAfterCopy = ImportVerifyAfterCopy,
+                Verification = new StorageVerificationOptionsDto
+                {
+                    VerifyFilesBySize = ImportVerifyAfterCopy,
+                    VerifyFilesByHash = ImportVerifyAfterCopy,
+                    VerifyDatabaseHash = true,
+                },
             };
 
             var result = await _storageService
@@ -192,11 +205,14 @@ public partial class StorageManagementPageViewModel : ViewModelBase
 
             await Dispatcher.Enqueue(() =>
             {
-                CurrentRoot = result.TargetStorageRoot;
-                EffectiveRoot = result.TargetStorageRoot;
+                if (result.TargetStorageRoot is not null)
+                {
+                    CurrentRoot = result.TargetStorageRoot;
+                    EffectiveRoot = result.TargetStorageRoot;
+                }
             });
 
-            StatusService.Info($"Import dokončen. Načteno {result.ImportedFiles} souborů.");
+            StatusService.Info(result.Message ?? "Import dokončen.");
         }, "Importuji databázi a dokumenty...");
     }
 

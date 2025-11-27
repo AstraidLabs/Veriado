@@ -19,10 +19,13 @@ namespace Veriado.Infrastructure.Storage;
 /// </summary>
 public sealed class StorageMigrationService : IStorageMigrationService
 {
+    private const double SafetyMargin = 1.1d;
+
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly IFilePathResolver _pathResolver;
     private readonly IFileHashCalculator _hashCalculator;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
+    private readonly IStorageSpaceAnalyzer _spaceAnalyzer;
     private readonly ILogger<StorageMigrationService> _logger;
 
     public StorageMigrationService(
@@ -30,16 +33,18 @@ public sealed class StorageMigrationService : IStorageMigrationService
         IFilePathResolver pathResolver,
         IFileHashCalculator hashCalculator,
         IOperationalPauseCoordinator pauseCoordinator,
+        IStorageSpaceAnalyzer spaceAnalyzer,
         ILogger<StorageMigrationService> logger)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _hashCalculator = hashCalculator ?? throw new ArgumentNullException(nameof(hashCalculator));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
+        _spaceAnalyzer = spaceAnalyzer ?? throw new ArgumentNullException(nameof(spaceAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<StorageMigrationResult> MigrateStorageRootAsync(
+    public async Task<StorageOperationResult> MigrateStorageRootAsync(
         string newRootPath,
         StorageMigrationOptions? options,
         CancellationToken cancellationToken)
@@ -60,7 +65,11 @@ public sealed class StorageMigrationService : IStorageMigrationService
             if (SafePathUtilities.ArePathsEquivalent(normalizedOldRoot, normalizedTargetRoot))
             {
                 _logger.LogInformation("Requested storage root matches the current value; skipping migration.");
-                return new StorageMigrationResult(normalizedOldRoot, normalizedTargetRoot);
+                return new StorageOperationResult
+                {
+                    Status = StorageOperationStatus.Success,
+                    TargetStorageRoot = normalizedTargetRoot,
+                };
             }
 
             var files = await dbContext.FileSystems
@@ -69,9 +78,25 @@ public sealed class StorageMigrationService : IStorageMigrationService
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            var totalSize = files.Sum(f => f.Size?.Value ?? 0);
+            var available = await _spaceAnalyzer.GetAvailableBytesAsync(normalizedTargetRoot, cancellationToken).ConfigureAwait(false);
+            var required = (long)Math.Ceiling(totalSize * SafetyMargin);
+            if (available < required)
+            {
+                return new StorageOperationResult
+                {
+                    Status = StorageOperationStatus.InsufficientSpace,
+                    Message = $"Insufficient space for migration. Required {required} bytes, available {available} bytes.",
+                    RequiredBytes = required,
+                    AvailableBytes = available,
+                    TargetStorageRoot = normalizedTargetRoot,
+                };
+            }
+
             var errors = new List<string>();
             var migrated = 0;
             var missing = 0;
+            var missingPaths = new List<string>();
             var verificationFailures = 0;
 
             foreach (var file in files)
@@ -95,6 +120,7 @@ public sealed class StorageMigrationService : IStorageMigrationService
                 catch (FileNotFoundException)
                 {
                     missing++;
+                    missingPaths.Add(relativePath);
                     _logger.LogWarning("Source file {SourcePath} missing during migration.", sourcePath);
                 }
                 catch (Exception ex)
@@ -120,14 +146,14 @@ public sealed class StorageMigrationService : IStorageMigrationService
                     }
 
                     var info = new FileInfo(destinationPath);
-                    if (info.Length != file.Size.Value)
+                    if (options.Verification.VerifyFilesBySize && file.Size.HasValue && info.Length != file.Size.Value)
                     {
                         verificationFailures++;
                         errors.Add($"Size mismatch for {relativePath}: expected {file.Size.Value} bytes, found {info.Length} bytes.");
                         continue;
                     }
 
-                    if (options.VerifyHashes)
+                    if (options.Verification.VerifyFilesByHash && !string.IsNullOrWhiteSpace(file.Hash?.Value))
                     {
                         var computedHash = await _hashCalculator
                             .ComputeSha256Async(destinationPath, cancellationToken)
@@ -171,12 +197,20 @@ public sealed class StorageMigrationService : IStorageMigrationService
                     errors.Count);
             }
 
-            return new StorageMigrationResult(normalizedOldRoot, normalizedTargetRoot)
+            var status = errors.Count == 0 && missing == 0 && verificationFailures == 0
+                ? StorageOperationStatus.Success
+                : StorageOperationStatus.PartialSuccess;
+
+            return new StorageOperationResult
             {
-                MigratedFiles = migrated,
-                MissingSources = missing,
-                VerificationFailures = verificationFailures,
+                Status = status,
+                TargetStorageRoot = normalizedTargetRoot,
+                AffectedFiles = migrated,
+                MissingFiles = missingPaths,
+                FailedVerificationCount = verificationFailures,
+                VerifiedFilesCount = files.Count - missing,
                 Errors = errors,
+                Message = status == StorageOperationStatus.Success ? "Migration completed." : "Migration completed with warnings.",
             };
         }
         finally
