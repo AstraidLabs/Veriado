@@ -113,17 +113,40 @@ public sealed class ImportPackageService : IImportPackageService
 
         var storageSize = await _spaceAnalyzer.CalculateDirectorySizeAsync(storageSourceRoot, cancellationToken).ConfigureAwait(false);
         var dbSize = await _spaceAnalyzer.GetFileSizeAsync(sourceDbPath, cancellationToken).ConfigureAwait(false);
-        var required = (long)Math.Ceiling((storageSize + dbSize) * SafetyMargin);
-        var available = Math.Min(
-            await _spaceAnalyzer.GetAvailableBytesAsync(_connectionStringProvider.DatabasePath, cancellationToken).ConfigureAwait(false),
-            await _spaceAnalyzer.GetAvailableBytesAsync(normalizedTargetRoot, cancellationToken).ConfigureAwait(false));
+        var databasePath = _connectionStringProvider.DatabasePath;
+        var databaseDrive = Path.GetPathRoot(Path.GetFullPath(databasePath));
+        var storageDrive = Path.GetPathRoot(Path.GetFullPath(normalizedTargetRoot));
 
-        if (available < required)
+        var databaseAvailable = await _spaceAnalyzer.GetAvailableBytesAsync(databasePath, cancellationToken).ConfigureAwait(false);
+        var storageAvailable = await _spaceAnalyzer.GetAvailableBytesAsync(normalizedTargetRoot, cancellationToken).ConfigureAwait(false);
+
+        var requiredStorage = (long)Math.Ceiling(storageSize * SafetyMargin);
+        var requiredDatabase = (long)Math.Ceiling(dbSize * SafetyMargin);
+
+        var drivesMatch = string.Equals(databaseDrive, storageDrive, StringComparison.OrdinalIgnoreCase);
+        var combinedRequired = (long)Math.Ceiling((storageSize + dbSize) * SafetyMargin);
+        var combinedAvailable = drivesMatch ? Math.Min(databaseAvailable, storageAvailable) : 0L;
+
+        var insufficientSpace = drivesMatch
+            ? combinedAvailable < combinedRequired
+            : databaseAvailable < requiredDatabase || storageAvailable < requiredStorage;
+
+        if (insufficientSpace)
         {
+            var required = drivesMatch
+                ? combinedRequired
+                : requiredDatabase + requiredStorage;
+
+            var available = drivesMatch
+                ? combinedAvailable
+                : databaseAvailable + storageAvailable;
+
             return new StorageOperationResult
             {
                 Status = StorageOperationStatus.InsufficientSpace,
-                Message = $"Insufficient space for import. Required {required} bytes, available {available} bytes.",
+                Message = drivesMatch
+                    ? $"Insufficient space for import. Required {required} bytes, available {available} bytes."
+                    : $"Insufficient space for import. Database requires {requiredDatabase} bytes (available {databaseAvailable} bytes) and storage requires {requiredStorage} bytes (available {storageAvailable} bytes).",
                 RequiredBytes = required,
                 AvailableBytes = available,
             };
