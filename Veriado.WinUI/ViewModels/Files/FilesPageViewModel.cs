@@ -492,12 +492,15 @@ public partial class FilesPageViewModel : ViewModelBase
             or nameof(IHotStateService.ValidityGreenThresholdDays)
             or nameof(IHotStateService.ValidityThresholds))
         {
-            var updated = _hotStateService.ValidityThresholds;
-            if (updated != _validityThresholds)
+            _ = Dispatcher.Enqueue(() =>
             {
-                _validityThresholds = updated;
-                RefreshValidityStates(_serverClock.NowLocal);
-            }
+                var updated = _hotStateService.ValidityThresholds;
+                if (updated != _validityThresholds)
+                {
+                    _validityThresholds = updated;
+                    RefreshValidityStates(_serverClock.NowLocal);
+                }
+            });
         }
     }
 
