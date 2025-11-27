@@ -178,18 +178,18 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         try
         {
             IsLoading = true;
-            var detail = await _fileService.GetDetailAsync(id, cancellationToken).ConfigureAwait(false);
+            var detail = await _fileService.GetDetailAsync(id, cancellationToken);
             Attach(detail);
             ErrorMessage = null;
         }
         catch (FileDetailNotFoundException ex)
         {
-            await _dialogService.ShowErrorAsync("Soubor nenalezen", ex.Message).ConfigureAwait(false);
+            await _dialogService.ShowErrorAsync("Soubor nenalezen", ex.Message);
             throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            await _dialogService.ShowErrorAsync("Chyba načítání", ex.Message).ConfigureAwait(false);
+            await _dialogService.ShowErrorAsync("Chyba načítání", ex.Message);
             throw;
         }
         finally
@@ -222,7 +222,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             IsSaving = true;
             ErrorMessage = null;
             var request = BuildUpdateRequestFromScope(scope);
-            var updated = await _fileService.UpdateAsync(request, cancellationToken).ConfigureAwait(false);
+            var updated = await _fileService.UpdateAsync(request, cancellationToken);
             var normalized = NormalizeDetail(updated);
             _snapshot = normalized;
             File.UpdateSnapshot(normalized);
@@ -242,19 +242,19 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         catch (FileDetailConcurrencyException ex)
         {
             ErrorMessage = ex.Message;
-            await HandleConcurrencyAsync(cancellationToken).ConfigureAwait(false);
+            await HandleConcurrencyAsync(cancellationToken);
             return false;
         }
         catch (FileDetailServiceException ex)
         {
             ErrorMessage = ex.Message;
-            await _dialogService.ShowErrorAsync("Uložení selhalo", ex.Message).ConfigureAwait(false);
+            await _dialogService.ShowErrorAsync("Uložení selhalo", ex.Message);
             return false;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ErrorMessage = ex.Message;
-            await _dialogService.ShowErrorAsync("Uložení selhalo", ex.Message).ConfigureAwait(false);
+            await _dialogService.ShowErrorAsync("Uložení selhalo", ex.Message);
             return false;
         }
         finally
@@ -276,7 +276,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
         _saveCancellation = cts;
         try
         {
-            return await SaveAsync(cts.Token).ConfigureAwait(false);
+            return await SaveAsync(cts.Token);
         }
         finally
         {
@@ -286,7 +286,7 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
 
     private async Task ExecuteSaveCommandAsync()
     {
-        await ExecuteSaveAsync().ConfigureAwait(false);
+        await ExecuteSaveAsync();
     }
 
     private void ExecuteCancel()
@@ -328,10 +328,10 @@ public sealed partial class FileDetailDialogViewModel : ObservableObject, IDialo
             SecondaryButtonText: "Zavřít",
             DefaultButton: ContentDialogButton.Primary);
 
-        var result = await _dialogService.ShowDialogAsync(request, cancellationToken).ConfigureAwait(false);
+        var result = await _dialogService.ShowDialogAsync(request, cancellationToken);
         if (result.IsPrimary)
         {
-            await LoadAsync(_snapshot.Id, cancellationToken).ConfigureAwait(false);
+            await LoadAsync(_snapshot.Id, cancellationToken);
         }
         else if (result.IsSecondary)
         {
