@@ -524,33 +524,18 @@ public sealed class FileImportService : IFileImportWriter
         IReadOnlyCollection<RelativeFilePath> relativePaths,
         CancellationToken ct)
     {
-        var pathValues = relativePaths
-            .Select(path => path.Value)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
         var filesQuery = _dbContext.Files
             .AsNoTracking()
             .Include(file => file.Validity)
             .Include(file => file.FileSystem);
 
-        if (pathValues.Length == 0)
+        if (ids.Count == 0)
         {
-            return await filesQuery
-                .Where(file => ids.Contains(file.Id))
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
+            return new List<FileEntity>();
         }
 
-        var fileSystemIds = await _dbContext.FileSystems
-            .AsNoTracking()
-            .Where(fs => pathValues.Contains(fs.RelativePath.Value))
-            .Select(fs => fs.Id)
-            .ToArrayAsync(ct)
-            .ConfigureAwait(false);
-
         return await filesQuery
-            .Where(file => ids.Contains(file.Id) || fileSystemIds.Contains(file.FileSystemId))
+            .Where(file => ids.Contains(file.Id))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }
