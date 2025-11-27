@@ -22,6 +22,17 @@ public sealed class StatusService : IStatusService
         _messenger.Send(new StatusChangedMessage(false, message));
     }
 
+    public void Warning(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            Clear();
+            return;
+        }
+
+        _messenger.Send(new StatusChangedMessage(false, message));
+    }
+
     public void Error(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))

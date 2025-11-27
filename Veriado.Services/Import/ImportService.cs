@@ -972,16 +972,9 @@ public sealed class ImportService : IImportService
             }
         }
 
-        try
+        await foreach (var progress in channel.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
         {
-            await foreach (var progress in channel.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
-            {
-                yield return progress;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Channel consumption is shielded from external cancellation to keep teardown graceful.
+            yield return progress;
         }
 
         try
