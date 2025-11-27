@@ -78,7 +78,7 @@ public sealed class StorageMigrationService : IStorageMigrationService
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            var totalSize = files.Sum(f => f.Size?.Value ?? 0);
+            var totalSize = files.Sum(f => f.Size.Value);
             var available = await _spaceAnalyzer.GetAvailableBytesAsync(normalizedTargetRoot, cancellationToken).ConfigureAwait(false);
             var required = (long)Math.Ceiling(totalSize * SafetyMargin);
             if (available < required)
@@ -146,14 +146,14 @@ public sealed class StorageMigrationService : IStorageMigrationService
                     }
 
                     var info = new FileInfo(destinationPath);
-                    if (options.Verification.VerifyFilesBySize && file.Size.HasValue && info.Length != file.Size.Value)
+                    if (options.Verification.VerifyFilesBySize && info.Length != file.Size.Value)
                     {
                         verificationFailures++;
                         errors.Add($"Size mismatch for {relativePath}: expected {file.Size.Value} bytes, found {info.Length} bytes.");
                         continue;
                     }
 
-                    if (options.Verification.VerifyFilesByHash && !string.IsNullOrWhiteSpace(file.Hash?.Value))
+                    if (options.Verification.VerifyFilesByHash && !string.IsNullOrWhiteSpace(file.Hash.Value))
                     {
                         var computedHash = await _hashCalculator
                             .ComputeSha256Async(destinationPath, cancellationToken)

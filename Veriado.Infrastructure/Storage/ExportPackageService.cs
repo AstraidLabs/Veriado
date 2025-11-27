@@ -81,7 +81,7 @@ public sealed class ExportPackageService : IExportPackageService
 
         var databaseSize = await _spaceAnalyzer.GetFileSizeAsync(_connectionStringProvider.DatabasePath, cancellationToken)
             .ConfigureAwait(false);
-        var totalSize = files.Sum(f => f.Size?.Value ?? 0) + databaseSize;
+        var totalSize = files.Sum(f => f.Size.Value) + databaseSize;
         var available = await _spaceAnalyzer.GetAvailableBytesAsync(normalizedPackageRoot, cancellationToken)
             .ConfigureAwait(false);
 
