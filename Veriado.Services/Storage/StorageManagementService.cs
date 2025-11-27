@@ -136,8 +136,13 @@ public sealed class StorageManagementService : IStorageManagementService
         };
     }
 
-    private static StorageVerificationOptions Map(StorageVerificationOptionsDto dto)
+    private static StorageVerificationOptions Map(StorageVerificationOptionsDto? dto)
     {
+        if (dto is null)
+        {
+            return new StorageVerificationOptions();
+        }
+
         return new StorageVerificationOptions
         {
             VerifyDatabaseHash = dto.VerifyDatabaseHash,
@@ -145,9 +150,6 @@ public sealed class StorageManagementService : IStorageManagementService
             VerifyFilesBySize = dto.VerifyFilesBySize,
         };
     }
-
-    private static StorageVerificationOptions Map(StorageVerificationOptionsDto? dto)
-        => dto is null ? new StorageVerificationOptions() : Map(dto);
 
     private static StorageOperationStatusDto Map(StorageOperationStatus status)
         => status switch
