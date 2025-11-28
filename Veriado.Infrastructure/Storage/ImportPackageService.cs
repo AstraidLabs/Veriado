@@ -11,7 +11,6 @@ using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
 using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
-using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Entities;
 using Veriado.Infrastructure.Storage.Vpf;
 
@@ -19,13 +18,7 @@ namespace Veriado.Infrastructure.Storage;
 
 public sealed class ImportPackageService : IImportPackageService
 {
-    private const string MetadataFileName = "metadata.json";
-    private const string DatabaseDirectory = "db";
-    private const string StorageDirectory = "storage";
-    private const double SafetyMargin = 1.1d;
-
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
-    private readonly IConnectionStringProvider _connectionStringProvider;
     private readonly IFileHashCalculator _hashCalculator;
     private readonly IFilePathResolver _pathResolver;
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
@@ -35,7 +28,6 @@ public sealed class ImportPackageService : IImportPackageService
 
     public ImportPackageService(
         IDbContextFactory<AppDbContext> dbContextFactory,
-        IConnectionStringProvider connectionStringProvider,
         IFileHashCalculator hashCalculator,
         IFilePathResolver pathResolver,
         IOperationalPauseCoordinator pauseCoordinator,
@@ -43,7 +35,6 @@ public sealed class ImportPackageService : IImportPackageService
         ILogger<ImportPackageService> logger)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
-        _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
         _hashCalculator = hashCalculator ?? throw new ArgumentNullException(nameof(hashCalculator));
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
@@ -60,67 +51,32 @@ public sealed class ImportPackageService : IImportPackageService
     {
         options ??= new StorageImportOptions();
 
-        var normalizedPackageRoot = Path.GetFullPath(packageRoot);
-        if (!Directory.Exists(normalizedPackageRoot))
+        var request = new ImportRequest
+        {
+            PackagePath = packageRoot,
+            TargetStorageRoot = targetStorageRoot,
+            DefaultConflictStrategy = options.OverwriteExisting
+                ? ImportConflictStrategy.AlwaysOverwrite
+                : ImportConflictStrategy.UpdateIfNewer,
+        };
+
+        var validation = await ValidateLogicalPackageAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!validation.IsValid)
         {
             return new StorageOperationResult
             {
                 Status = StorageOperationStatus.InvalidPackage,
-                Message = $"Package directory '{normalizedPackageRoot}' was not found.",
+                Message = "Package failed validation; see issues for details.",
+                PackageRoot = Path.GetFullPath(packageRoot),
+                Errors = validation.Issues.Select(i => i.Message).ToArray(),
             };
         }
 
-        var metadataPath = Path.Combine(normalizedPackageRoot, MetadataFileName);
-        if (!File.Exists(metadataPath))
-        {
-            return new StorageOperationResult
-            {
-                Status = StorageOperationStatus.InvalidPackage,
-                Message = "Package is missing metadata.json.",
-            };
-        }
-
-        var metadata = await ReadMetadataAsync(metadataPath, cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(metadata.FormatVersion, StoragePackageMetadata.CurrentFormatVersion, StringComparison.Ordinal))
-        {
-            return new StorageOperationResult
-            {
-                Status = StorageOperationStatus.InvalidPackage,
-                Message = $"Unsupported package format version '{metadata.FormatVersion}'.",
-            };
-        }
-
-        var normalizedTargetRoot = SafePathUtilities.NormalizeAndValidateRoot(targetStorageRoot, _logger);
-        var dbDirectory = Path.Combine(normalizedPackageRoot, DatabaseDirectory);
-        var sourceDbPath = Path.Combine(dbDirectory, metadata.DatabaseFileName);
-        if (!File.Exists(sourceDbPath))
-        {
-            return new StorageOperationResult
-            {
-                Status = StorageOperationStatus.InvalidPackage,
-                Message = "Package database file is missing.",
-            };
-        }
-
-        var storageSourceRoot = Path.Combine(normalizedPackageRoot, StorageDirectory);
-        if (!Directory.Exists(storageSourceRoot))
-        {
-            return new StorageOperationResult
-            {
-                Status = StorageOperationStatus.InvalidPackage,
-                Message = "Package storage directory is missing.",
-            };
-        }
-
-        var packageFileHashes = metadata.FileHashes ?? new Dictionary<string, string>();
-
-        var storageSize = await _spaceAnalyzer.CalculateDirectorySizeAsync(storageSourceRoot, cancellationToken).ConfigureAwait(false);
-        var dbSize = await _spaceAnalyzer.GetFileSizeAsync(sourceDbPath, cancellationToken).ConfigureAwait(false);
-        var required = (long)Math.Ceiling((storageSize + dbSize) * SafetyMargin);
-        var available = Math.Min(
-            await _spaceAnalyzer.GetAvailableBytesAsync(_connectionStringProvider.DatabasePath, cancellationToken).ConfigureAwait(false),
-            await _spaceAnalyzer.GetAvailableBytesAsync(normalizedTargetRoot, cancellationToken).ConfigureAwait(false));
-
+        // Optional lightweight space check to avoid starting imports that cannot fit on disk.
+        var required = validation.TotalBytes;
+        var available = await _spaceAnalyzer
+            .GetAvailableBytesAsync(targetStorageRoot, cancellationToken)
+            .ConfigureAwait(false);
         if (available < required)
         {
             return new StorageOperationResult
@@ -129,184 +85,30 @@ public sealed class ImportPackageService : IImportPackageService
                 Message = $"Insufficient space for import. Required {required} bytes, available {available} bytes.",
                 RequiredBytes = required,
                 AvailableBytes = available,
+                PackageRoot = Path.GetFullPath(packageRoot),
+                TargetStorageRoot = targetStorageRoot,
             };
         }
 
-        await _pauseCoordinator.PauseAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var strategy = request.DefaultConflictStrategy ?? ImportConflictStrategy.UpdateIfNewer;
+        var commit = await CommitLogicalPackageAsync(request, strategy, cancellationToken).ConfigureAwait(false);
+
+        return new StorageOperationResult
         {
-            var destinationDbPath = _connectionStringProvider.DatabasePath;
-            SafePathUtilities.EnsureDirectoryForFile(destinationDbPath);
-
-            await AtomicFileOperations.CopyAsync(sourceDbPath, destinationDbPath, options.OverwriteExisting, cancellationToken)
-                .ConfigureAwait(false);
-
-            var errors = new List<string>();
-            var failedFiles = new List<string>();
-            var missingFiles = new List<string>();
-            var importedFiles = 0;
-            var verificationFailures = 0;
-            var verifiedFiles = 0;
-            var databaseHashMatched = true;
-
-            if (options.Verification.VerifyDatabaseHash && !string.IsNullOrWhiteSpace(metadata.DatabaseSha256))
+            Status = commit.Status switch
             {
-                var dbHash = await _hashCalculator.ComputeSha256Async(destinationDbPath, cancellationToken).ConfigureAwait(false);
-                databaseHashMatched = string.Equals(dbHash.Value, metadata.DatabaseSha256, StringComparison.OrdinalIgnoreCase);
-                if (!databaseHashMatched)
-                {
-                    errors.Add($"Database hash mismatch. Expected {metadata.DatabaseSha256} but found {dbHash.Value}.");
-                    _logger.LogWarning(
-                        "Database hash mismatch detected after import. Expected={ExpectedHash}, Actual={ActualHash}.",
-                        metadata.DatabaseSha256,
-                        dbHash.Value);
-                }
-            }
-
-            foreach (var sourceFile in Directory.EnumerateFiles(storageSourceRoot, "*", SearchOption.AllDirectories))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var relativePath = Path.GetRelativePath(storageSourceRoot, sourceFile);
-                if (SafePathUtilities.IsOutsideRoot(relativePath))
-                {
-                    errors.Add($"Package file {relativePath} is invalid or escapes the storage root.");
-                    continue;
-                }
-
-                var destinationPath = Path.Combine(normalizedTargetRoot, SafePathUtilities.NormalizeRelative(relativePath, _logger));
-                SafePathUtilities.EnsureDirectoryForFile(destinationPath);
-
-                try
-                {
-                    await AtomicFileOperations.CopyAsync(sourceFile, destinationPath, options.OverwriteExisting, cancellationToken)
-                        .ConfigureAwait(false);
-                    importedFiles++;
-
-                    if (options.Verification.VerifyFilesBySize)
-                    {
-                        var sourceInfo = new FileInfo(sourceFile);
-                        var destinationInfo = new FileInfo(destinationPath);
-                        if (sourceInfo.Length != destinationInfo.Length)
-                        {
-                            verificationFailures++;
-                            failedFiles.Add(relativePath);
-                            errors.Add($"Size mismatch for imported file {relativePath}: expected {sourceInfo.Length} bytes, found {destinationInfo.Length} bytes.");
-                            continue;
-                        }
-                    }
-
-                    if (options.Verification.VerifyFilesByHash && packageFileHashes.TryGetValue(relativePath, out var expectedHash))
-                    {
-                        var computed = await _hashCalculator.ComputeSha256Async(destinationPath, cancellationToken).ConfigureAwait(false);
-                        if (!string.Equals(expectedHash, computed.Value, StringComparison.OrdinalIgnoreCase))
-                        {
-                            verificationFailures++;
-                            failedFiles.Add(relativePath);
-                            errors.Add($"Hash mismatch for imported file {relativePath}.");
-                            continue;
-                        }
-                    }
-
-                    verifiedFiles++;
-                }
-                catch (FileNotFoundException)
-                {
-                    missingFiles.Add(relativePath);
-                    _logger.LogWarning("Missing imported file {RelativePath}.", relativePath);
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Failed to import {relativePath}: {ex.Message}");
-                    _logger.LogError(ex, "Failed to import {RelativePath} from package.", relativePath);
-                }
-            }
-
-            await using (var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
-            {
-                var pendingMigrations = await dbContext.Database
-                    .GetPendingMigrationsAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (pendingMigrations.Any())
-                {
-                    return new StorageOperationResult
-                    {
-                        Status = StorageOperationStatus.PendingMigrations,
-                        Message = "Imported database requires migrations. Apply migrations before continuing.",
-                        PackageRoot = normalizedPackageRoot,
-                        TargetStorageRoot = normalizedTargetRoot,
-                        MissingFiles = missingFiles,
-                        FailedFiles = failedFiles,
-                        Errors = errors,
-                        FailedVerificationCount = verificationFailures,
-                        VerifiedFilesCount = verifiedFiles,
-                        DatabaseHashMatched = databaseHashMatched,
-                        AffectedFiles = importedFiles,
-                    };
-                }
-
-                var appliedMigrations = await dbContext.Database
-                    .GetAppliedMigrationsAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
-                var currentSchema = appliedMigrations.LastOrDefault();
-                if (!string.IsNullOrWhiteSpace(metadata.SchemaVersion)
-                    && !string.Equals(metadata.SchemaVersion, currentSchema, StringComparison.Ordinal))
-                {
-                    errors.Add($"Schema version mismatch between package ({metadata.SchemaVersion}) and imported database ({currentSchema ?? "<none>"}).");
-                }
-
-                var storageRoot = await dbContext.StorageRoots.SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-                if (storageRoot is null)
-                {
-                    dbContext.StorageRoots.Add(new FileStorageRootEntity(normalizedTargetRoot));
-                }
-                else
-                {
-                    storageRoot.UpdateRootPath(normalizedTargetRoot);
-                }
-
-                await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-                if (_pathResolver is FilePathResolver resolver)
-                {
-                    resolver.OverrideCachedRoot(normalizedTargetRoot);
-                }
-            }
-
-            _logger.LogInformation(
-                "Import completed from {PackageRoot} to {TargetRoot}. Files imported: {ImportedFiles} (verification failures: {VerificationFailures}).",
-                normalizedPackageRoot,
-                normalizedTargetRoot,
-                importedFiles,
-                verificationFailures);
-
-            var status = StorageOperationStatus.Success;
-            if (errors.Any() || missingFiles.Any() || verificationFailures > 0 || !databaseHashMatched)
-            {
-                status = errors.Any() ? StorageOperationStatus.PartialSuccess : StorageOperationStatus.PartialSuccess;
-            }
-
-            return new StorageOperationResult
-            {
-                Status = status,
-                PackageRoot = normalizedPackageRoot,
-                TargetStorageRoot = normalizedTargetRoot,
-                AffectedFiles = importedFiles,
-                MissingFiles = missingFiles,
-                FailedFiles = failedFiles,
-                Errors = errors,
-                FailedVerificationCount = verificationFailures,
-                VerifiedFilesCount = verifiedFiles,
-                DatabaseHashMatched = databaseHashMatched,
-                Message = status == StorageOperationStatus.Success ? "Import completed." : "Import completed with warnings.",
-            };
-        }
-        finally
-        {
-            _pauseCoordinator.Resume();
-        }
+                ImportCommitStatus.Success => StorageOperationStatus.Success,
+                ImportCommitStatus.PartialSuccess => StorageOperationStatus.PartialSuccess,
+                _ => StorageOperationStatus.Failed,
+            },
+            PackageRoot = Path.GetFullPath(packageRoot),
+            TargetStorageRoot = targetStorageRoot,
+            AffectedFiles = commit.ImportedFiles,
+            Errors = commit.Issues.Select(i => i.Message).ToArray(),
+            Message = commit.Status == ImportCommitStatus.Success
+                ? "Import completed."
+                : "Import completed with warnings or conflicts.",
+        };
     }
 
     public Task<ImportValidationResult> ValidateLogicalPackageAsync(
@@ -336,60 +138,78 @@ public sealed class ImportPackageService : IImportPackageService
         var skipped = 0;
         var conflicted = 0;
 
-        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        foreach (var item in validation.Items)
+        var targetRoot = SafePathUtilities.NormalizeAndValidateRoot(
+            request.TargetStorageRoot ?? _pathResolver.GetStorageRoot(),
+            _logger);
+
+        var filesRoot = Path.Combine(Path.GetFullPath(request.PackagePath), VpfPackagePaths.FilesDirectory);
+        var descriptorLookup = validation.ValidatedFiles.ToDictionary(
+            f => f.FileId,
+            f => f,
+            StringComparer.OrdinalIgnoreCase);
+
+        await _pauseCoordinator.PauseAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            switch (item.Status)
+            foreach (var item in validation.Items)
             {
-                case ImportItemStatus.New:
-                    imported++;
-                    break;
-                case ImportItemStatus.DuplicateOlderInDb:
-                    if (conflictStrategy == ImportConflictStrategy.UpdateIfNewer
-                        || conflictStrategy == ImportConflictStrategy.AlwaysOverwrite)
-                    {
-                        imported++;
-                    }
-                    else if (conflictStrategy == ImportConflictStrategy.CreateDuplicate)
-                    {
-                        imported++;
-                    }
-                    else
-                    {
-                        skipped++;
-                    }
-                    break;
-                case ImportItemStatus.DuplicateSameVersion:
-                    skipped++;
-                    break;
-                case ImportItemStatus.DuplicateNewerInDb:
-                    if (conflictStrategy == ImportConflictStrategy.AlwaysOverwrite)
-                    {
-                        imported++;
-                    }
-                    else
-                    {
-                        skipped++;
-                        conflicted++;
-                        issues.Add(new ImportValidationIssue(
-                            ImportIssueType.ConflictExistingFile,
-                            ImportIssueSeverity.Warning,
-                            item.RelativePath,
-                            item.ConflictReason ?? "Newer version exists in database."));
-                    }
+                cancellationToken.ThrowIfCancellationRequested();
 
-                    break;
-                default:
+                if (!descriptorLookup.TryGetValue(item.FileId, out var validatedFile))
+                {
+                    issues.Add(new ImportValidationIssue(
+                        ImportIssueType.MissingDescriptor,
+                        ImportIssueSeverity.Error,
+                        item.RelativePath,
+                        "Validated descriptor missing during commit."));
+                    conflicted++;
+                    continue;
+                }
+
+                if (!ShouldImport(item.Status, conflictStrategy, issues, item))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var relativePath = CombineRelative(validatedFile.RelativePath, validatedFile.FileName);
+                var sourcePath = Path.Combine(filesRoot, relativePath);
+                var destinationPath = Path.Combine(targetRoot, SafePathUtilities.NormalizeRelative(relativePath, _logger));
+
+                if (conflictStrategy == ImportConflictStrategy.CreateDuplicate && item.Status != ImportItemStatus.New)
+                {
+                    destinationPath = GetDuplicatePath(destinationPath, validatedFile.FileId);
+                }
+
+                SafePathUtilities.EnsureDirectoryForFile(destinationPath);
+
+                try
+                {
+                    await AtomicFileOperations.CopyAsync(
+                            sourcePath,
+                            destinationPath,
+                            overwrite: conflictStrategy is ImportConflictStrategy.AlwaysOverwrite
+                                or ImportConflictStrategy.UpdateIfNewer,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    imported++;
+                }
+                catch (Exception ex)
+                {
                     conflicted++;
                     issues.Add(new ImportValidationIssue(
                         ImportIssueType.ConflictExistingFile,
-                        ImportIssueSeverity.Warning,
-                        item.RelativePath,
-                        item.ConflictReason ?? "Conflicting entry detected."));
-                    break;
+                        ImportIssueSeverity.Error,
+                        relativePath,
+                        $"Failed to copy file: {ex.Message}"));
+                    _logger.LogError(ex, "Failed to commit import for {RelativePath}", relativePath);
+                }
             }
+        }
+        finally
+        {
+            _pauseCoordinator.Resume();
         }
 
         var status = ImportCommitStatus.Success;
@@ -564,6 +384,63 @@ public sealed class ImportPackageService : IImportPackageService
         }
 
         return ImportItemStatus.DuplicateSameVersion;
+    }
+
+    private static string CombineRelative(string relativePath, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return fileName;
+        }
+
+        return Path.Combine(relativePath, fileName).Replace('\\', '/');
+    }
+
+    private static string GetDuplicatePath(string destinationPath, Guid fileId)
+    {
+        var directory = Path.GetDirectoryName(destinationPath) ?? string.Empty;
+        var fileName = Path.GetFileNameWithoutExtension(destinationPath);
+        var extension = Path.GetExtension(destinationPath);
+        var deduped = $"{fileName}-{fileId}{extension}";
+        return Path.Combine(directory, deduped);
+    }
+
+    private static bool ShouldImport(
+        ImportItemStatus status,
+        ImportConflictStrategy strategy,
+        ICollection<ImportValidationIssue> issues,
+        ImportItemPreview item)
+    {
+        switch (status)
+        {
+            case ImportItemStatus.New:
+                return true;
+            case ImportItemStatus.DuplicateOlderInDb:
+                return strategy is ImportConflictStrategy.UpdateIfNewer
+                    or ImportConflictStrategy.AlwaysOverwrite
+                    or ImportConflictStrategy.CreateDuplicate;
+            case ImportItemStatus.DuplicateSameVersion:
+                return strategy == ImportConflictStrategy.AlwaysOverwrite;
+            case ImportItemStatus.DuplicateNewerInDb:
+                if (strategy == ImportConflictStrategy.AlwaysOverwrite || strategy == ImportConflictStrategy.CreateDuplicate)
+                {
+                    return true;
+                }
+
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.ConflictExistingFile,
+                    ImportIssueSeverity.Warning,
+                    item.RelativePath,
+                    item.ConflictReason ?? "Newer version exists in database."));
+                return false;
+            default:
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.ConflictExistingFile,
+                    ImportIssueSeverity.Warning,
+                    item.RelativePath,
+                    item.ConflictReason ?? "Conflicting entry detected."));
+                return false;
+        }
     }
 
     private static async Task<StoragePackageMetadata> ReadMetadataAsync(string metadataPath, CancellationToken cancellationToken)
