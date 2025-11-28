@@ -1,4 +1,5 @@
 // File: Veriado.Services/Storage/StorageManagementService.cs
+using System.Linq;
 using Veriado.Application.Abstractions;
 using Veriado.Contracts.Storage;
 
@@ -72,6 +73,29 @@ public sealed class StorageManagementService : IStorageManagementService
         return Map(result);
     }
 
+    public async Task<ImportValidationResultDto> ValidateImportAsync(
+        ImportRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var validation = await _importService
+            .ValidateLogicalPackageAsync(Map(request), cancellationToken)
+            .ConfigureAwait(false);
+
+        return Map(validation);
+    }
+
+    public async Task<ImportCommitResultDto> CommitImportAsync(
+        ImportRequestDto request,
+        ImportConflictStrategy conflictStrategy,
+        CancellationToken cancellationToken)
+    {
+        var commit = await _importService
+            .CommitLogicalPackageAsync(Map(request), conflictStrategy, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Map(commit);
+    }
+
     private static StorageMigrationOptions? Map(StorageMigrationOptionsDto? dto)
     {
         if (dto is null)
@@ -97,6 +121,7 @@ public sealed class StorageManagementService : IStorageManagementService
         {
             OverwriteExisting = dto.OverwriteExisting,
             IncludeFileHashes = dto.IncludeFileHashes,
+            ExportMode = dto.ExportMode,
             Verification = Map(dto.Verification),
         };
     }
@@ -114,6 +139,14 @@ public sealed class StorageManagementService : IStorageManagementService
             Verification = Map(dto.Verification),
         };
     }
+
+    private static ImportRequest Map(ImportRequestDto dto)
+        => new()
+        {
+            PackagePath = dto.PackagePath,
+            ScopeFilter = dto.ScopeFilter,
+            TargetStorageRoot = dto.TargetStorageRoot,
+        };
 
     private static StorageOperationResultDto Map(StorageOperationResult result)
     {
@@ -135,6 +168,41 @@ public sealed class StorageManagementService : IStorageManagementService
             Errors = result.Errors,
         };
     }
+
+    private static ImportValidationResultDto Map(ImportValidationResult result)
+    {
+        return new ImportValidationResultDto
+        {
+            IsValid = result.IsValid,
+            DiscoveredDescriptors = result.DiscoveredDescriptors,
+            DiscoveredFiles = result.DiscoveredFiles,
+            TotalBytes = result.TotalBytes,
+            Issues = result.Issues
+                .Select(Map)
+                .ToArray(),
+        };
+    }
+
+    private static ImportCommitResultDto Map(ImportCommitResult result)
+    {
+        return new ImportCommitResultDto
+        {
+            Status = result.Status,
+            ImportedFiles = result.ImportedFiles,
+            SkippedFiles = result.SkippedFiles,
+            ConflictedFiles = result.ConflictedFiles,
+            Issues = result.Issues.Select(Map).ToArray(),
+        };
+    }
+
+    private static ImportValidationIssueDto Map(ImportValidationIssue issue)
+        => new()
+        {
+            Type = issue.Type,
+            Severity = issue.Severity,
+            RelativePath = issue.RelativePath,
+            Message = issue.Message,
+        };
 
     private static StorageVerificationOptions Map(StorageVerificationOptionsDto? dto)
     {

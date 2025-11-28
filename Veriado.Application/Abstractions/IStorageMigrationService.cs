@@ -52,6 +52,15 @@ public interface IImportPackageService
         string targetStorageRoot,
         StorageImportOptions? options,
         CancellationToken cancellationToken);
+
+    Task<ImportValidationResult> ValidateLogicalPackageAsync(
+        ImportRequest request,
+        CancellationToken cancellationToken);
+
+    Task<ImportCommitResult> CommitLogicalPackageAsync(
+        ImportRequest request,
+        ImportConflictStrategy conflictStrategy,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>Options controlling verification of storage operations.</summary>
@@ -86,6 +95,15 @@ public sealed record StorageExportOptions
 
     /// <summary>Verification configuration for exported assets.</summary>
     public StorageVerificationOptions Verification { get; init; } = new();
+
+    /// <summary>Defines the logical export mode used for the package.</summary>
+    public StorageExportMode ExportMode { get; init; } = StorageExportMode.PhysicalWithDatabase;
+}
+
+public enum StorageExportMode
+{
+    PhysicalWithDatabase,
+    LogicalPerFile,
 }
 
 /// <summary>Options controlling import behaviour.</summary>

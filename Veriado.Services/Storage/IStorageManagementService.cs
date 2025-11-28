@@ -1,4 +1,5 @@
 // File: Veriado.Services/Storage/IStorageManagementService.cs
+using Veriado.Application.Abstractions;
 using Veriado.Contracts.Storage;
 
 namespace Veriado.Services.Storage;
@@ -28,5 +29,14 @@ public interface IStorageManagementService
         string packageRoot,
         string targetStorageRoot,
         StorageImportOptionsDto? options,
+        CancellationToken cancellationToken);
+
+    Task<ImportValidationResultDto> ValidateImportAsync(
+        ImportRequestDto request,
+        CancellationToken cancellationToken);
+
+    Task<ImportCommitResultDto> CommitImportAsync(
+        ImportRequestDto request,
+        ImportConflictStrategy conflictStrategy,
         CancellationToken cancellationToken);
 }

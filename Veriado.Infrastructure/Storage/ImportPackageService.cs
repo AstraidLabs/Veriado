@@ -13,6 +13,7 @@ using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Persistence.Entities;
+using Veriado.Infrastructure.Storage.Vpf;
 
 namespace Veriado.Infrastructure.Storage;
 
@@ -30,6 +31,7 @@ public sealed class ImportPackageService : IImportPackageService
     private readonly IOperationalPauseCoordinator _pauseCoordinator;
     private readonly IStorageSpaceAnalyzer _spaceAnalyzer;
     private readonly ILogger<ImportPackageService> _logger;
+    private readonly VpfPackageValidator _vpfValidator;
 
     public ImportPackageService(
         IDbContextFactory<AppDbContext> dbContextFactory,
@@ -47,6 +49,7 @@ public sealed class ImportPackageService : IImportPackageService
         _pauseCoordinator = pauseCoordinator ?? throw new ArgumentNullException(nameof(pauseCoordinator));
         _spaceAnalyzer = spaceAnalyzer ?? throw new ArgumentNullException(nameof(spaceAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _vpfValidator = new VpfPackageValidator(_hashCalculator);
     }
 
     public async Task<StorageOperationResult> ImportPackageAsync(
@@ -304,6 +307,34 @@ public sealed class ImportPackageService : IImportPackageService
         {
             _pauseCoordinator.Resume();
         }
+    }
+
+    public Task<ImportValidationResult> ValidateLogicalPackageAsync(
+        ImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return _vpfValidator.ValidateAsync(request.PackagePath, cancellationToken);
+    }
+
+    public async Task<ImportCommitResult> CommitLogicalPackageAsync(
+        ImportRequest request,
+        ImportConflictStrategy conflictStrategy,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var validation = await ValidateLogicalPackageAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!validation.IsValid)
+        {
+            return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues);
+        }
+
+        _ = conflictStrategy;
+
+        // Future work: hydrate descriptors into domain entities and upsert via application layer.
+        return new ImportCommitResult(ImportCommitStatus.PartialSuccess, 0, 0, 0, validation.Issues);
     }
 
     private static async Task<StoragePackageMetadata> ReadMetadataAsync(string metadataPath, CancellationToken cancellationToken)
