@@ -146,6 +146,7 @@ public sealed class StorageManagementService : IStorageManagementService
             PackagePath = dto.PackagePath,
             ScopeFilter = dto.ScopeFilter,
             TargetStorageRoot = dto.TargetStorageRoot,
+            DefaultConflictStrategy = dto.DefaultConflictStrategy,
         };
 
     private static StorageOperationResultDto Map(StorageOperationResult result)

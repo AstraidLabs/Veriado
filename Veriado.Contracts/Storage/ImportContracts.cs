@@ -11,6 +11,8 @@ public sealed record ImportRequestDto
         = null;
     public string? TargetStorageRoot { get; init; }
         = null;
+    public ImportConflictStrategy? DefaultConflictStrategy { get; init; }
+        = null;
 }
 
 public sealed record ImportValidationIssueDto

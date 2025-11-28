@@ -17,6 +17,10 @@ public sealed record ImportRequest
     /// <summary>Optional explicit target storage root for commit stage.</summary>
     public string? TargetStorageRoot { get; init; }
         = null;
+
+    /// <summary>Optional default conflict strategy to use for commit when caller does not pass one explicitly.</summary>
+    public ImportConflictStrategy? DefaultConflictStrategy { get; init; }
+        = null;
 }
 
 public enum ImportConflictStrategy
