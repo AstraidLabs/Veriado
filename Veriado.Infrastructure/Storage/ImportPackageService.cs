@@ -465,9 +465,9 @@ public sealed class ImportPackageService : IImportPackageService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var pathKey = string.IsNullOrWhiteSpace(file.RelativePath)
+            var pathKey = (string.IsNullOrWhiteSpace(file.RelativePath)
                 ? file.FileName
-                : Path.Combine(file.RelativePath, file.FileName).Replace('\\', '/');
+                : file.RelativePath).Replace('\\', '/');
 
             ImportItemStatus status;
             string? reason = null;
