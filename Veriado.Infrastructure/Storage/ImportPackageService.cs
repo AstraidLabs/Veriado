@@ -315,7 +315,7 @@ public sealed class ImportPackageService : IImportPackageService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return _vpfValidator.ValidateAsync(request.PackagePath, cancellationToken);
+        return ValidateAndClassifyAsync(request, cancellationToken);
     }
 
     public async Task<ImportCommitResult> CommitLogicalPackageAsync(
@@ -328,7 +328,7 @@ public sealed class ImportPackageService : IImportPackageService
         var validation = await ValidateLogicalPackageAsync(request, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
-            return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues);
+            return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues, validation.Items);
         }
 
         var issues = new List<ImportValidationIssue>(validation.Issues);
@@ -337,29 +337,59 @@ public sealed class ImportPackageService : IImportPackageService
         var conflicted = 0;
 
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        foreach (var file in validation.ValidatedFiles)
+        foreach (var item in validation.Items)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var exists = await dbContext.FileSystems
-                .AsNoTracking()
-                .AnyAsync(f => f.Id == file.FileId, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (exists)
+            switch (item.Status)
             {
-                conflicted++;
-                issues.Add(new ImportValidationIssue(
-                    ImportIssueType.ConflictExistingFile,
-                    ImportIssueSeverity.Warning,
-                    file.RelativePath,
-                    "File already exists in target database; commit requires conflict resolution."));
+                case ImportItemStatus.New:
+                    imported++;
+                    break;
+                case ImportItemStatus.DuplicateOlderInDb:
+                    if (conflictStrategy == ImportConflictStrategy.UpdateIfNewer
+                        || conflictStrategy == ImportConflictStrategy.AlwaysOverwrite)
+                    {
+                        imported++;
+                    }
+                    else if (conflictStrategy == ImportConflictStrategy.CreateDuplicate)
+                    {
+                        imported++;
+                    }
+                    else
+                    {
+                        skipped++;
+                    }
+                    break;
+                case ImportItemStatus.DuplicateSameVersion:
+                    skipped++;
+                    break;
+                case ImportItemStatus.DuplicateNewerInDb:
+                    if (conflictStrategy == ImportConflictStrategy.AlwaysOverwrite)
+                    {
+                        imported++;
+                    }
+                    else
+                    {
+                        skipped++;
+                        conflicted++;
+                        issues.Add(new ImportValidationIssue(
+                            ImportIssueType.ConflictExistingFile,
+                            ImportIssueSeverity.Warning,
+                            item.RelativePath,
+                            item.ConflictReason ?? "Newer version exists in database."));
+                    }
 
-                skipped += conflictStrategy == ImportConflictStrategy.SkipExisting ? 1 : 0;
-                continue;
+                    break;
+                default:
+                    conflicted++;
+                    issues.Add(new ImportValidationIssue(
+                        ImportIssueType.ConflictExistingFile,
+                        ImportIssueSeverity.Warning,
+                        item.RelativePath,
+                        item.ConflictReason ?? "Conflicting entry detected."));
+                    break;
             }
-
-            imported++;
         }
 
         var status = ImportCommitStatus.Success;
@@ -372,7 +402,168 @@ public sealed class ImportPackageService : IImportPackageService
             status = ImportCommitStatus.PartialSuccess;
         }
 
-        return new ImportCommitResult(status, imported, skipped, conflicted, issues);
+        return new ImportCommitResult(status, imported, skipped, conflicted, issues, validation.Items);
+    }
+
+    private async Task<ImportValidationResult> ValidateAndClassifyAsync(
+        ImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _vpfValidator.ValidateAsync(request.PackagePath, cancellationToken).ConfigureAwait(false);
+        if (!result.IsValid)
+        {
+            return result;
+        }
+
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var ids = result.ValidatedFiles.Select(v => v.FileId).ToArray();
+        var hashes = result.ValidatedFiles.Select(v => v.ContentHash).Distinct().ToArray();
+
+        var existingById = await dbContext.FileSystems
+            .AsNoTracking()
+            .Where(f => ids.Contains(f.Id))
+            .Select(f => new
+            {
+                f.Id,
+                Hash = f.Hash.Value,
+                RelativePath = f.RelativePath.Value,
+                f.LastWriteUtc,
+            })
+            .ToDictionaryAsync(f => f.Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        var existingByHash = await dbContext.FileSystems
+            .AsNoTracking()
+            .Where(f => hashes.Contains(f.Hash.Value))
+            .Select(f => new
+            {
+                f.Id,
+                Hash = f.Hash.Value,
+                RelativePath = f.RelativePath.Value,
+                f.LastWriteUtc,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var existingByPath = await dbContext.FileSystems
+            .AsNoTracking()
+            .Select(f => new
+            {
+                RelativePath = f.RelativePath.Value,
+                Hash = f.Hash.Value,
+                f.LastWriteUtc,
+            })
+            .ToDictionaryAsync(f => f.RelativePath, cancellationToken)
+            .ConfigureAwait(false);
+
+        var previews = new List<ImportItemPreview>();
+        var newItems = 0;
+        var updatable = 0;
+        var skipped = 0;
+
+        foreach (var file in result.ValidatedFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var pathKey = string.IsNullOrWhiteSpace(file.RelativePath)
+                ? file.FileName
+                : Path.Combine(file.RelativePath, file.FileName).Replace('\\', '/');
+
+            ImportItemStatus status;
+            string? reason = null;
+
+            if (existingById.TryGetValue(file.FileId, out var existingByIdEntry))
+            {
+                status = Classify(existingByIdEntry.LastWriteUtc.ToDateTimeOffset(), existingByIdEntry.Hash, file, out reason);
+            }
+            else
+            {
+                var hashMatch = existingByHash.FirstOrDefault(e => string.Equals(e.Hash, file.ContentHash, StringComparison.OrdinalIgnoreCase));
+                if (hashMatch is not null)
+                {
+                    status = Classify(hashMatch.LastWriteUtc.ToDateTimeOffset(), hashMatch.Hash, file, out reason);
+                }
+                else if (existingByPath.TryGetValue(pathKey, out var pathEntry))
+                {
+                    status = ImportItemStatus.ConflictOther;
+                    reason = "A file exists at the same path with different content.";
+                }
+                else
+                {
+                    status = ImportItemStatus.New;
+                }
+            }
+
+            switch (status)
+            {
+                case ImportItemStatus.New:
+                    newItems++;
+                    break;
+                case ImportItemStatus.DuplicateOlderInDb:
+                    updatable++;
+                    break;
+                default:
+                    skipped++;
+                    break;
+            }
+
+            previews.Add(new ImportItemPreview(
+                file.FileId,
+                file.RelativePath,
+                file.FileName,
+                file.ContentHash,
+                file.SizeBytes,
+                file.LastModifiedAtUtc,
+                status,
+                reason));
+        }
+
+        return new ImportValidationResult(
+            result.IsValid,
+            result.Issues,
+            result.DiscoveredFiles,
+            result.DiscoveredDescriptors,
+            result.TotalBytes,
+            result.ValidatedFiles,
+            previews,
+            newItems,
+            updatable,
+            skipped);
+    }
+
+    private static ImportItemStatus Classify(
+        DateTimeOffset existingLastWrite,
+        string existingHash,
+        ValidatedImportFile file,
+        out string? reason)
+    {
+        reason = null;
+        var hashEqual = string.Equals(existingHash, file.ContentHash, StringComparison.OrdinalIgnoreCase);
+
+        if (hashEqual && existingLastWrite == file.LastModifiedAtUtc)
+        {
+            return ImportItemStatus.DuplicateSameVersion;
+        }
+
+        if (file.LastModifiedAtUtc > existingLastWrite)
+        {
+            reason = "Package contains a newer version than the target database.";
+            return ImportItemStatus.DuplicateOlderInDb;
+        }
+
+        if (file.LastModifiedAtUtc < existingLastWrite)
+        {
+            reason = "Target database contains a newer version.";
+            return ImportItemStatus.DuplicateNewerInDb;
+        }
+
+        if (!hashEqual)
+        {
+            reason = "Content hash differs while timestamps are equal.";
+            return ImportItemStatus.ConflictOther;
+        }
+
+        return ImportItemStatus.DuplicateSameVersion;
     }
 
     private static async Task<StoragePackageMetadata> ReadMetadataAsync(string metadataPath, CancellationToken cancellationToken)

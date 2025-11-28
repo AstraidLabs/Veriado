@@ -112,7 +112,7 @@ public sealed class VpfPackageValidator
                 null,
                 "Package does not contain a files directory."));
 
-            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles);
+            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0);
         }
 
         var totalFiles = 0;
@@ -191,11 +191,13 @@ public sealed class VpfPackageValidator
 
             validatedFiles.Add(new ValidatedImportFile(
                 relativePath,
+                descriptor.FileName,
                 Path.GetRelativePath(normalized, descriptorPath),
                 descriptor.FileId,
                 descriptor.ContentHash,
                 descriptor.SizeBytes,
-                descriptor.MimeType));
+                descriptor.MimeType,
+                descriptor.LastModifiedAtUtc));
         }
 
         foreach (var descriptorPath in Directory.EnumerateFiles(filesRoot, "*.json", SearchOption.AllDirectories))
@@ -249,7 +251,7 @@ public sealed class VpfPackageValidator
             }
         }
 
-        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles);
+        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0);
     }
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)

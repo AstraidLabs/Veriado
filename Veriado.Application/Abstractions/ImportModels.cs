@@ -21,9 +21,10 @@ public sealed record ImportRequest
 
 public enum ImportConflictStrategy
 {
-    SkipExisting,
-    Overwrite,
-    Duplicate,
+    SkipIfExists,
+    UpdateIfNewer,
+    AlwaysOverwrite,
+    CreateDuplicate,
 }
 
 public enum ImportIssueType
@@ -58,11 +59,32 @@ public sealed record ImportValidationIssue(
 
 public sealed record ValidatedImportFile(
     string RelativePath,
+    string FileName,
     string DescriptorPath,
     Guid FileId,
     string ContentHash,
     long SizeBytes,
-    string? MimeType);
+    string? MimeType,
+    DateTimeOffset LastModifiedAtUtc);
+
+public enum ImportItemStatus
+{
+    New,
+    DuplicateSameVersion,
+    DuplicateOlderInDb,
+    DuplicateNewerInDb,
+    ConflictOther,
+}
+
+public sealed record ImportItemPreview(
+    Guid FileId,
+    string RelativePath,
+    string FileName,
+    string ContentHash,
+    long SizeBytes,
+    DateTimeOffset LastModifiedAtUtc,
+    ImportItemStatus Status,
+    string? ConflictReason);
 
 public sealed record ImportValidationResult(
     bool IsValid,
@@ -70,10 +92,24 @@ public sealed record ImportValidationResult(
     int DiscoveredFiles,
     int DiscoveredDescriptors,
     long TotalBytes,
-    IReadOnlyList<ValidatedImportFile> ValidatedFiles)
+    IReadOnlyList<ValidatedImportFile> ValidatedFiles,
+    IReadOnlyList<ImportItemPreview> Items,
+    int NewItems,
+    int UpdatableItems,
+    int SkippedItems)
 {
     public static ImportValidationResult FromIssues(IReadOnlyList<ImportValidationIssue> issues)
-        => new(issues.Count == 0, issues, 0, 0, 0, Array.Empty<ValidatedImportFile>());
+        => new(
+            issues.Count == 0,
+            issues,
+            0,
+            0,
+            0,
+            Array.Empty<ValidatedImportFile>(),
+            Array.Empty<ImportItemPreview>(),
+            0,
+            0,
+            0);
 }
 
 public enum ImportCommitStatus
@@ -88,4 +124,5 @@ public sealed record ImportCommitResult(
     int ImportedFiles,
     int SkippedFiles,
     int ConflictedFiles,
-    IReadOnlyList<ImportValidationIssue> Issues);
+    IReadOnlyList<ImportValidationIssue> Issues,
+    IReadOnlyList<ImportItemPreview> Items);
