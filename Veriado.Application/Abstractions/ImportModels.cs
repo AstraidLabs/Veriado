@@ -56,15 +56,24 @@ public sealed record ImportValidationIssue(
     string? RelativePath,
     string Message);
 
+public sealed record ValidatedImportFile(
+    string RelativePath,
+    string DescriptorPath,
+    Guid FileId,
+    string ContentHash,
+    long SizeBytes,
+    string? MimeType);
+
 public sealed record ImportValidationResult(
     bool IsValid,
     IReadOnlyList<ImportValidationIssue> Issues,
     int DiscoveredFiles,
     int DiscoveredDescriptors,
-    long TotalBytes)
+    long TotalBytes,
+    IReadOnlyList<ValidatedImportFile> ValidatedFiles)
 {
     public static ImportValidationResult FromIssues(IReadOnlyList<ImportValidationIssue> issues)
-        => new(issues.Count == 0, issues, 0, 0, 0);
+        => new(issues.Count == 0, issues, 0, 0, 0, Array.Empty<ValidatedImportFile>());
 }
 
 public enum ImportCommitStatus

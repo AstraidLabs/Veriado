@@ -97,7 +97,7 @@ public sealed record StorageExportOptions
     public StorageVerificationOptions Verification { get; init; } = new();
 
     /// <summary>Defines the logical export mode used for the package.</summary>
-    public StorageExportMode ExportMode { get; init; } = StorageExportMode.PhysicalWithDatabase;
+    public StorageExportMode ExportMode { get; init; } = StorageExportMode.LogicalPerFile;
 }
 
 public enum StorageExportMode

@@ -24,6 +24,7 @@ public sealed class VpfPackageValidator
     {
         var issues = new List<ImportValidationIssue>();
         var normalized = Path.GetFullPath(packageRoot);
+        var validatedFiles = new List<ValidatedImportFile>();
         if (!Directory.Exists(normalized))
         {
             issues.Add(new ImportValidationIssue(
@@ -111,12 +112,13 @@ public sealed class VpfPackageValidator
                 null,
                 "Package does not contain a files directory."));
 
-            return new ImportValidationResult(false, issues, 0, 0, 0);
+            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles);
         }
 
         var totalFiles = 0;
         var totalBytes = 0L;
         var descriptorCount = 0;
+        var seenDescriptors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var filePath in Directory.EnumerateFiles(filesRoot, "*", SearchOption.AllDirectories))
         {
@@ -144,6 +146,7 @@ public sealed class VpfPackageValidator
 
             descriptorCount++;
             var descriptor = await DeserializeAsync<VpfFileDescriptor>(descriptorPath, cancellationToken).ConfigureAwait(false);
+            seenDescriptors.Add(descriptorPath);
 
             if (!string.Equals(descriptor.Schema, "Veriado.FileDescriptor", StringComparison.Ordinal))
             {
@@ -185,6 +188,35 @@ public sealed class VpfPackageValidator
                         "Content hash does not match descriptor."));
                 }
             }
+
+            validatedFiles.Add(new ValidatedImportFile(
+                relativePath,
+                Path.GetRelativePath(normalized, descriptorPath),
+                descriptor.FileId,
+                descriptor.ContentHash,
+                descriptor.SizeBytes,
+                descriptor.MimeType));
+        }
+
+        foreach (var descriptorPath in Directory.EnumerateFiles(filesRoot, "*.json", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (seenDescriptors.Contains(descriptorPath))
+            {
+                continue;
+            }
+
+            var relativeDescriptor = Path.GetRelativePath(filesRoot, descriptorPath);
+            var referencedFile = descriptorPath.Substring(0, descriptorPath.Length - 5); // trim .json
+            if (!File.Exists(referencedFile))
+            {
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.MissingFile,
+                    ImportIssueSeverity.Error,
+                    relativeDescriptor,
+                    "Descriptor is present but the referenced file is missing."));
+            }
         }
 
         if (metadata is not null)
@@ -217,7 +249,7 @@ public sealed class VpfPackageValidator
             }
         }
 
-        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes);
+        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles);
     }
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)
