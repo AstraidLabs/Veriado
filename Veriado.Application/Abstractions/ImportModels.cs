@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Veriado.Contracts.Storage;
 
 namespace Veriado.Application.Abstractions;
 
@@ -23,38 +24,6 @@ public sealed record ImportRequest
         = null;
 }
 
-public enum ImportConflictStrategy
-{
-    SkipIfExists,
-    UpdateIfNewer,
-    AlwaysOverwrite,
-    CreateDuplicate,
-}
-
-public enum ImportIssueType
-{
-    PackageMissing,
-    ManifestMissing,
-    ManifestUnsupported,
-    MetadataMissing,
-    MetadataUnsupported,
-    FilesRootMissing,
-    MissingDescriptor,
-    MissingFile,
-    SizeMismatch,
-    HashMismatch,
-    SchemaUnsupported,
-    FileCountMismatch,
-    FileBytesMismatch,
-    ConflictExistingFile,
-}
-
-public enum ImportIssueSeverity
-{
-    Warning,
-    Error,
-}
-
 public sealed record ImportValidationIssue(
     ImportIssueType Type,
     ImportIssueSeverity Severity,
@@ -70,15 +39,6 @@ public sealed record ValidatedImportFile(
     long SizeBytes,
     string? MimeType,
     DateTimeOffset LastModifiedAtUtc);
-
-public enum ImportItemStatus
-{
-    New,
-    DuplicateSameVersion,
-    DuplicateOlderInDb,
-    DuplicateNewerInDb,
-    ConflictOther,
-}
 
 public sealed record ImportItemPreview(
     Guid FileId,
@@ -114,13 +74,6 @@ public sealed record ImportValidationResult(
             0,
             0,
             0);
-}
-
-public enum ImportCommitStatus
-{
-    Success,
-    PartialSuccess,
-    Failed,
 }
 
 public sealed record ImportCommitResult(

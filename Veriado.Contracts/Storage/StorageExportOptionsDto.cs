@@ -4,6 +4,15 @@ using Veriado.Application.Abstractions;
 namespace Veriado.Contracts.Storage;
 
 /// <summary>
+/// Defines the logical export mode used for the package.
+/// </summary>
+public enum StorageExportMode
+{
+    PhysicalWithDatabase,
+    LogicalPerFile,
+}
+
+/// <summary>
 /// Options controlling export behaviour.
 /// </summary>
 public sealed record StorageExportOptionsDto

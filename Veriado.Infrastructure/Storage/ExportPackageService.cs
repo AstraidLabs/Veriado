@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
+using Veriado.Contracts.Storage;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Storage.Vpf;
