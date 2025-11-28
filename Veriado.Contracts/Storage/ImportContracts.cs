@@ -1,8 +1,55 @@
 using System;
 using System.Collections.Generic;
-using Veriado.Application.Abstractions;
 
 namespace Veriado.Contracts.Storage;
+
+public enum ImportConflictStrategy
+{
+    SkipIfExists,
+    UpdateIfNewer,
+    AlwaysOverwrite,
+    CreateDuplicate,
+}
+
+public enum ImportIssueType
+{
+    PackageMissing,
+    ManifestMissing,
+    ManifestUnsupported,
+    MetadataMissing,
+    MetadataUnsupported,
+    FilesRootMissing,
+    MissingDescriptor,
+    MissingFile,
+    SizeMismatch,
+    HashMismatch,
+    SchemaUnsupported,
+    FileCountMismatch,
+    FileBytesMismatch,
+    ConflictExistingFile,
+}
+
+public enum ImportIssueSeverity
+{
+    Warning,
+    Error,
+}
+
+public enum ImportItemStatus
+{
+    New,
+    DuplicateSameVersion,
+    DuplicateOlderInDb,
+    DuplicateNewerInDb,
+    ConflictOther,
+}
+
+public enum ImportCommitStatus
+{
+    Success,
+    PartialSuccess,
+    Failed,
+}
 
 public sealed record ImportRequestDto
 {

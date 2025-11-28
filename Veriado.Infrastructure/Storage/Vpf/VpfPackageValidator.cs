@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Abstractions;
+using Veriado.Contracts.Storage;
 
 namespace Veriado.Infrastructure.Storage.Vpf;
 
