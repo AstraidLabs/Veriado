@@ -183,6 +183,12 @@ public sealed class StorageManagementService : IStorageManagementService
             ValidatedFiles = result.ValidatedFiles
                 .Select(Map)
                 .ToArray(),
+            Items = result.Items
+                .Select(Map)
+                .ToArray(),
+            NewItems = result.NewItems,
+            UpdatableItems = result.UpdatableItems,
+            SkippedItems = result.SkippedItems,
         };
     }
 
@@ -195,6 +201,7 @@ public sealed class StorageManagementService : IStorageManagementService
             SkippedFiles = result.SkippedFiles,
             ConflictedFiles = result.ConflictedFiles,
             Issues = result.Issues.Select(Map).ToArray(),
+            Items = result.Items.Select(Map).ToArray(),
         };
     }
 
@@ -211,11 +218,26 @@ public sealed class StorageManagementService : IStorageManagementService
         => new()
         {
             RelativePath = file.RelativePath,
+            FileName = file.FileName,
             DescriptorPath = file.DescriptorPath,
             FileId = file.FileId,
             ContentHash = file.ContentHash,
             SizeBytes = file.SizeBytes,
             MimeType = file.MimeType,
+            LastModifiedAtUtc = file.LastModifiedAtUtc,
+        };
+
+    private static ImportItemPreviewDto Map(ImportItemPreview preview)
+        => new()
+        {
+            FileId = preview.FileId,
+            RelativePath = preview.RelativePath,
+            FileName = preview.FileName,
+            ContentHash = preview.ContentHash,
+            SizeBytes = preview.SizeBytes,
+            LastModifiedAtUtc = preview.LastModifiedAtUtc,
+            Status = preview.Status,
+            ConflictReason = preview.ConflictReason,
         };
 
     private static StorageVerificationOptions Map(StorageVerificationOptionsDto? dto)

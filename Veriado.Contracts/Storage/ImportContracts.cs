@@ -29,16 +29,22 @@ public sealed record ImportValidationResultDto
     public int DiscoveredDescriptors { get; init; }
     public long TotalBytes { get; init; }
     public IReadOnlyList<ValidatedImportFileDto> ValidatedFiles { get; init; } = Array.Empty<ValidatedImportFileDto>();
+    public IReadOnlyList<ImportItemPreviewDto> Items { get; init; } = Array.Empty<ImportItemPreviewDto>();
+    public int NewItems { get; init; }
+    public int UpdatableItems { get; init; }
+    public int SkippedItems { get; init; }
 }
 
 public sealed record ValidatedImportFileDto
 {
     public string RelativePath { get; init; } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
     public string DescriptorPath { get; init; } = string.Empty;
     public Guid FileId { get; init; }
     public string ContentHash { get; init; } = string.Empty;
     public long SizeBytes { get; init; }
     public string? MimeType { get; init; }
+    public DateTimeOffset LastModifiedAtUtc { get; init; }
 }
 
 public sealed record ImportCommitResultDto
@@ -48,4 +54,17 @@ public sealed record ImportCommitResultDto
     public int SkippedFiles { get; init; }
     public int ConflictedFiles { get; init; }
     public IReadOnlyList<ImportValidationIssueDto> Issues { get; init; } = Array.Empty<ImportValidationIssueDto>();
+    public IReadOnlyList<ImportItemPreviewDto> Items { get; init; } = Array.Empty<ImportItemPreviewDto>();
+}
+
+public sealed record ImportItemPreviewDto
+{
+    public Guid FileId { get; init; }
+    public string RelativePath { get; init; } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
+    public string ContentHash { get; init; } = string.Empty;
+    public long SizeBytes { get; init; }
+    public DateTimeOffset LastModifiedAtUtc { get; init; }
+    public ImportItemStatus Status { get; init; }
+    public string? ConflictReason { get; init; }
 }
