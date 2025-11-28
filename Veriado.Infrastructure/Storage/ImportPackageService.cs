@@ -146,8 +146,7 @@ public sealed class ImportPackageService : IImportPackageService
         var filesRoot = Path.Combine(Path.GetFullPath(request.PackagePath), VpfPackagePaths.FilesDirectory);
         var descriptorLookup = validation.ValidatedFiles.ToDictionary(
             f => f.FileId,
-            f => f,
-            StringComparer.OrdinalIgnoreCase);
+            f => f);
 
         await _pauseCoordinator.PauseAsync(cancellationToken).ConfigureAwait(false);
         try
