@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 
 namespace Veriado.Contracts.Storage;
 
