@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Veriado.Contracts.Storage;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -98,12 +99,6 @@ public sealed record StorageExportOptions
 
     /// <summary>Defines the logical export mode used for the package.</summary>
     public StorageExportMode ExportMode { get; init; } = StorageExportMode.LogicalPerFile;
-}
-
-public enum StorageExportMode
-{
-    PhysicalWithDatabase,
-    LogicalPerFile,
 }
 
 /// <summary>Options controlling import behaviour.</summary>
