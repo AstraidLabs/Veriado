@@ -16,7 +16,7 @@ public sealed record StorageExportOptionsDto
 
     /// <summary>Defines the logical export mode used for the package.</summary>
     public StorageExportMode ExportMode { get; init; }
-        = StorageExportMode.PhysicalWithDatabase;
+        = StorageExportMode.LogicalPerFile;
 
     public StorageVerificationOptionsDto Verification { get; init; } = new();
 }

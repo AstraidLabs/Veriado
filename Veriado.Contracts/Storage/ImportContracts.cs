@@ -28,6 +28,17 @@ public sealed record ImportValidationResultDto
     public int DiscoveredFiles { get; init; }
     public int DiscoveredDescriptors { get; init; }
     public long TotalBytes { get; init; }
+    public IReadOnlyList<ValidatedImportFileDto> ValidatedFiles { get; init; } = Array.Empty<ValidatedImportFileDto>();
+}
+
+public sealed record ValidatedImportFileDto
+{
+    public string RelativePath { get; init; } = string.Empty;
+    public string DescriptorPath { get; init; } = string.Empty;
+    public Guid FileId { get; init; }
+    public string ContentHash { get; init; } = string.Empty;
+    public long SizeBytes { get; init; }
+    public string? MimeType { get; init; }
 }
 
 public sealed record ImportCommitResultDto

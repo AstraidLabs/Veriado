@@ -180,6 +180,9 @@ public sealed class StorageManagementService : IStorageManagementService
             Issues = result.Issues
                 .Select(Map)
                 .ToArray(),
+            ValidatedFiles = result.ValidatedFiles
+                .Select(Map)
+                .ToArray(),
         };
     }
 
@@ -202,6 +205,17 @@ public sealed class StorageManagementService : IStorageManagementService
             Severity = issue.Severity,
             RelativePath = issue.RelativePath,
             Message = issue.Message,
+        };
+
+    private static ValidatedImportFileDto Map(ValidatedImportFile file)
+        => new()
+        {
+            RelativePath = file.RelativePath,
+            DescriptorPath = file.DescriptorPath,
+            FileId = file.FileId,
+            ContentHash = file.ContentHash,
+            SizeBytes = file.SizeBytes,
+            MimeType = file.MimeType,
         };
 
     private static StorageVerificationOptions Map(StorageVerificationOptionsDto? dto)

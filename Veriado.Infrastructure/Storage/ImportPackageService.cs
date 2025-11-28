@@ -331,10 +331,48 @@ public sealed class ImportPackageService : IImportPackageService
             return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues);
         }
 
-        _ = conflictStrategy;
+        var issues = new List<ImportValidationIssue>(validation.Issues);
+        var imported = 0;
+        var skipped = 0;
+        var conflicted = 0;
 
-        // Future work: hydrate descriptors into domain entities and upsert via application layer.
-        return new ImportCommitResult(ImportCommitStatus.PartialSuccess, 0, 0, 0, validation.Issues);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var file in validation.ValidatedFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var exists = await dbContext.FileSystems
+                .AsNoTracking()
+                .AnyAsync(f => f.Id == file.FileId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (exists)
+            {
+                conflicted++;
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.ConflictExistingFile,
+                    ImportIssueSeverity.Warning,
+                    file.RelativePath,
+                    "File already exists in target database; commit requires conflict resolution."));
+
+                skipped += conflictStrategy == ImportConflictStrategy.SkipExisting ? 1 : 0;
+                continue;
+            }
+
+            imported++;
+        }
+
+        var status = ImportCommitStatus.Success;
+        if (issues.Any(i => i.Severity == ImportIssueSeverity.Error))
+        {
+            status = ImportCommitStatus.Failed;
+        }
+        else if (conflicted > 0)
+        {
+            status = ImportCommitStatus.PartialSuccess;
+        }
+
+        return new ImportCommitResult(status, imported, skipped, conflicted, issues);
     }
 
     private static async Task<StoragePackageMetadata> ReadMetadataAsync(string metadataPath, CancellationToken cancellationToken)
