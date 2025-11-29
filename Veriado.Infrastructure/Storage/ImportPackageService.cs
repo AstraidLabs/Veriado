@@ -57,6 +57,8 @@ public sealed class ImportPackageService : IImportPackageService
     {
         options ??= new StorageImportOptions();
 
+        var vtp = await TryReadVtpAsync(packageRoot, cancellationToken).ConfigureAwait(false);
+
         var request = new ImportRequest
         {
             PackagePath = packageRoot,
@@ -75,6 +77,14 @@ public sealed class ImportPackageService : IImportPackageService
                 Message = "Package failed validation; see issues for details.",
                 PackageRoot = Path.GetFullPath(packageRoot),
                 Errors = validation.Issues.Select(i => i.Message).ToArray(),
+                Warnings = validation.Issues
+                    .Where(i => i.Severity == ImportIssueSeverity.Warning)
+                    .Select(i => i.Message)
+                    .ToArray(),
+                WarningCount = validation.Issues.Count(i => i.Severity == ImportIssueSeverity.Warning),
+                MissingFilesCount = validation.Issues.Count(i => i.Type == ImportIssueType.MissingFile),
+                FailedFilesCount = validation.Issues.Count(i => i.Severity == ImportIssueSeverity.Error),
+                Vtp = vtp,
             };
         }
 
@@ -93,6 +103,11 @@ public sealed class ImportPackageService : IImportPackageService
                 AvailableBytes = available,
                 PackageRoot = Path.GetFullPath(packageRoot),
                 TargetStorageRoot = targetStorageRoot,
+                MissingFilesCount = 0,
+                FailedFilesCount = 0,
+                WarningCount = 0,
+                Warnings = Array.Empty<string>(),
+                Vtp = vtp,
             };
         }
 
@@ -111,10 +126,40 @@ public sealed class ImportPackageService : IImportPackageService
             TargetStorageRoot = targetStorageRoot,
             AffectedFiles = commit.ImportedFiles,
             Errors = commit.Issues.Select(i => i.Message).ToArray(),
+            Warnings = commit.Issues
+                .Where(i => i.Severity == ImportIssueSeverity.Warning)
+                .Select(i => i.Message)
+                .ToArray(),
+            MissingFilesCount = 0,
+            FailedFilesCount = commit.ConflictedFiles,
+            WarningCount = commit.Issues.Count(i => i.Severity == ImportIssueSeverity.Warning),
+            Vtp = vtp,
             Message = commit.Status == ImportCommitStatus.Success
                 ? "Import completed."
                 : "Import completed with warnings or conflicts.",
         };
+    }
+
+    private static async Task<VtpPackageInfo?> TryReadVtpAsync(string packageRoot, CancellationToken cancellationToken)
+    {
+        var manifestPath = Path.Combine(Path.GetFullPath(packageRoot), VpfPackagePaths.PackageManifestFile);
+        if (!File.Exists(manifestPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var stream = File.OpenRead(manifestPath);
+            var manifest = await JsonSerializer
+                .DeserializeAsync<PackageJsonModel>(stream, VpfSerialization.Options, cancellationToken)
+                .ConfigureAwait(false);
+            return manifest?.Vtp;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public Task<ImportValidationResult> ValidateLogicalPackageAsync(

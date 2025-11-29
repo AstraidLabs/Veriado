@@ -85,6 +85,8 @@ public sealed class ExportPackageService : IExportPackageService
                 Status = StorageOperationStatus.Failed,
                 Message = $"Destination '{normalizedDestination}' already exists.",
                 PackageRoot = normalizedDestination,
+                WarningCount = 0,
+                MissingFilesCount = 0,
             };
         }
 
@@ -115,6 +117,7 @@ public sealed class ExportPackageService : IExportPackageService
                     EncryptPayload = request.EncryptPayload,
                     Password = request.Password,
                     SignPayload = request.SignPayload,
+                    Vtp = result.Vtp,
                 };
 
                 await _vpackService.CreateContainerAsync(payloadStream, output, vpackOptions, cancellationToken).ConfigureAwait(false);
@@ -165,6 +168,8 @@ public sealed class ExportPackageService : IExportPackageService
                 Status = StorageOperationStatus.PendingMigrations,
                 Message = "Cannot export while database migrations are pending. Please update the database first.",
                 PackageRoot = normalizedPackageRoot,
+                WarningCount = 0,
+                MissingFilesCount = 0,
             };
         }
 
@@ -203,6 +208,8 @@ public sealed class ExportPackageService : IExportPackageService
                 RequiredBytes = required,
                 AvailableBytes = available,
                 PackageRoot = normalizedPackageRoot,
+                WarningCount = 0,
+                MissingFilesCount = 0,
             };
         }
 
@@ -311,6 +318,11 @@ public sealed class ExportPackageService : IExportPackageService
             PackageRoot = normalizedPackageRoot,
             AffectedFiles = exportedFiles,
             MissingFiles = missingFiles,
+            MissingFilesCount = missingFiles.Count,
+            FailedFilesCount = 0,
+            WarningCount = missingFiles.Count,
+            Warnings = missingFiles,
+            Vtp = vtpInfo,
             Message = missingFiles.Count == 0 ? "Export completed." : "Export completed with missing files.",
         };
     }

@@ -69,6 +69,10 @@ public sealed class StorageMigrationService : IStorageMigrationService
                 {
                     Status = StorageOperationStatus.Success,
                     TargetStorageRoot = normalizedTargetRoot,
+                    MissingFilesCount = 0,
+                    FailedFilesCount = 0,
+                    WarningCount = 0,
+                    Warnings = Array.Empty<string>(),
                 };
             }
 
@@ -90,6 +94,10 @@ public sealed class StorageMigrationService : IStorageMigrationService
                     RequiredBytes = required,
                     AvailableBytes = available,
                     TargetStorageRoot = normalizedTargetRoot,
+                    MissingFilesCount = 0,
+                    FailedFilesCount = 0,
+                    WarningCount = 0,
+                    Warnings = Array.Empty<string>(),
                 };
             }
 
@@ -207,6 +215,10 @@ public sealed class StorageMigrationService : IStorageMigrationService
                 TargetStorageRoot = normalizedTargetRoot,
                 AffectedFiles = migrated,
                 MissingFiles = missingPaths,
+                MissingFilesCount = missingPaths.Count,
+                FailedFilesCount = errors.Count + verificationFailures,
+                WarningCount = missingPaths.Count + verificationFailures + errors.Count,
+                Warnings = missingPaths,
                 FailedVerificationCount = verificationFailures,
                 VerifiedFilesCount = files.Count - missing,
                 Errors = errors,
