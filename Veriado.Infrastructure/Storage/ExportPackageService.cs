@@ -269,11 +269,14 @@ public sealed class ExportPackageService : IExportPackageService
 
         var vtpInfo = new VtpPackageInfo
         {
+            Protocol = "Veriado.Transfer",
+            ProtocolVersion = "1.0",
             PackageId = packageId,
             CorrelationId = correlationId,
             SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
+            SourceInstanceName = request.SourceInstanceName,
             TargetInstanceId = Guid.Empty,
-            PayloadType = VtpPayloadType.VpfPackage,
+            PayloadType = VtpPayloadType.FullExport,
         };
 
         var manifest = new PackageJsonModel

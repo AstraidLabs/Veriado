@@ -192,6 +192,11 @@ public sealed class VPackContainerService : IVPackContainerService
             return new VPackOpenResult { Success = false, Error = "Unsupported VPack container." };
         }
 
+        if (!ValidateVtp(header.Vtp, out var vtpError))
+        {
+            return new VPackOpenResult { Success = false, Error = vtpError };
+        }
+
         using var payloadBuffer = new MemoryStream();
         await input.CopyToAsync(payloadBuffer, cancellationToken).ConfigureAwait(false);
         var payloadBytes = payloadBuffer.ToArray();
@@ -226,6 +231,48 @@ public sealed class VPackContainerService : IVPackContainerService
         await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
         return buffer.ToArray();
     }
+
+    private static bool ValidateVtp(VtpPackageInfo? vtp, out string? error)
+    {
+        if (vtp is null)
+        {
+            error = "VPack header missing VTP metadata.";
+            return false;
+        }
+
+        if (!string.Equals(vtp.Protocol, "Veriado.Transfer", StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"Unsupported VTP protocol '{vtp.Protocol}'.";
+            return false;
+        }
+
+        if (!string.Equals(vtp.ProtocolVersion, "1.0", StringComparison.Ordinal))
+        {
+            error = $"Unsupported VTP protocolVersion '{vtp.ProtocolVersion}'.";
+            return false;
+        }
+
+        if (vtp.PackageId == Guid.Empty || vtp.CorrelationId == Guid.Empty)
+        {
+            error = "VTP packageId or correlationId is missing.";
+            return false;
+        }
+
+        if (!IsSupportedPayload(vtp.PayloadType))
+        {
+            error = $"VTP payloadType '{vtp.PayloadType}' is not supported.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool IsSupportedPayload(VtpPayloadType payloadType)
+        => payloadType is VtpPayloadType.VpfPackage
+            or VtpPayloadType.FullExport
+            or VtpPayloadType.DeltaExport
+            or VtpPayloadType.Backup;
 
     private static EncryptionHeader CreateEncryptionHeader()
     {

@@ -7,20 +7,27 @@ public enum VtpPayloadType
 {
     Unknown = 0,
     VpfPackage = 1,
+    FullExport = 2,
+    DeltaExport = 3,
+    Backup = 4,
 }
 
 public enum VtpImportItemStatus
 {
     Unknown = 0,
-    Imported = 1,
-    Skipped = 2,
-    Conflicted = 3,
+    New = 1,
+    Same = 2,
+    Updated = 3,
+    SkippedOlder = 4,
+    Conflict = 5,
+    Failed = 6,
 }
 
 public enum VtpImportResultCode
 {
-    Unknown = 0,
-    Success = 1,
+    Unknown = -1,
+    Ok = 0,
+    OkWithWarnings = 1,
     PartialSuccess = 2,
     Failed = 3,
 }
@@ -32,17 +39,21 @@ public sealed record VtpPackageInfo(
     Guid PackageId,
     Guid CorrelationId,
     Guid SourceInstanceId,
-    Guid TargetInstanceId)
+    string? SourceInstanceName,
+    Guid TargetInstanceId,
+    string? TargetInstanceName)
 {
     public static VtpPackageInfo Default(Guid? packageId = null, Guid? correlationId = null, Guid? sourceInstanceId = null, Guid? targetInstanceId = null)
         => new(
-            "VTP",
+            "Veriado.Transfer",
             "1.0",
             VtpPayloadType.VpfPackage,
             packageId ?? Guid.NewGuid(),
             correlationId ?? Guid.NewGuid(),
             sourceInstanceId ?? Guid.Empty,
-            targetInstanceId ?? Guid.Empty);
+            null,
+            targetInstanceId ?? Guid.Empty,
+            null);
 }
 
 public static class VtpMappings
@@ -55,7 +66,9 @@ public static class VtpMappings
             dto.PackageId,
             dto.CorrelationId,
             dto.SourceInstanceId,
-            dto.TargetInstanceId);
+            dto.SourceInstanceName,
+            dto.TargetInstanceId,
+            dto.TargetInstanceName);
 
     public static Contracts.VtpPackageInfo ToContract(this VtpPackageInfo model)
         => new()
@@ -66,7 +79,9 @@ public static class VtpMappings
             PackageId = model.PackageId,
             CorrelationId = model.CorrelationId,
             SourceInstanceId = model.SourceInstanceId,
+            SourceInstanceName = model.SourceInstanceName,
             TargetInstanceId = model.TargetInstanceId,
+            TargetInstanceName = model.TargetInstanceName,
         };
 
     public static VtpImportItemStatus ToModel(this Contracts.VtpImportItemStatus status)
