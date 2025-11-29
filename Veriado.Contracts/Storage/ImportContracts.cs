@@ -37,11 +37,14 @@ public enum ImportIssueSeverity
 
 public enum ImportItemStatus
 {
-    New,
-    Same,
-    NewerInPackage,
-    OlderInPackage,
-    Conflict,
+    New = 0,
+    Same = 1,
+    Updated = 2,
+    NewerInPackage = Updated,
+    SkippedOlder = 3,
+    OlderInPackage = SkippedOlder,
+    Conflict = 4,
+    Failed = 5,
 }
 
 public enum ImportCommitStatus

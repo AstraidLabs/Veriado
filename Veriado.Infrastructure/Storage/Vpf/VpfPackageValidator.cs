@@ -291,7 +291,7 @@ public sealed class VpfPackageValidator
         ImportIssueType issueType,
         ICollection<ImportValidationIssue> issues)
     {
-        if (!string.Equals(vtp.Protocol, "VTP", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(vtp.Protocol, "Veriado.Transfer", StringComparison.OrdinalIgnoreCase))
         {
             issues.Add(new ImportValidationIssue(
                 issueType,
@@ -309,7 +309,7 @@ public sealed class VpfPackageValidator
                 $"{source} declares unsupported VTP protocolVersion '{vtp.ProtocolVersion}'."));
         }
 
-        if (vtp.PayloadType != VtpPayloadType.VpfPackage)
+        if (!IsSupportedPayload(vtp.PayloadType))
         {
             issues.Add(new ImportValidationIssue(
                 issueType,
@@ -318,6 +318,12 @@ public sealed class VpfPackageValidator
                 $"{source} payloadType '{vtp.PayloadType}' is not supported."));
         }
     }
+
+    private static bool IsSupportedPayload(VtpPayloadType payloadType)
+        => payloadType is VtpPayloadType.VpfPackage
+            or VtpPayloadType.FullExport
+            or VtpPayloadType.DeltaExport
+            or VtpPayloadType.Backup;
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)
     {

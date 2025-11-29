@@ -182,6 +182,7 @@ public sealed class StorageManagementService : IStorageManagementService
             Status = Map(result.Status),
             Message = result.Message,
             Vtp = result.Vtp?.ToContract(),
+            VtpResultCode = result.VtpResultCode?.ToContract(),
             MissingFiles = result.MissingFiles,
             FailedFiles = result.FailedFiles,
             Warnings = result.Warnings,

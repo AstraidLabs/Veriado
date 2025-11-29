@@ -12,6 +12,8 @@ public sealed record StorageOperationResultDto
 
     public VtpPackageInfo? Vtp { get; init; }
 
+    public VtpImportResultCode? VtpResultCode { get; init; }
+
     public IReadOnlyList<string> MissingFiles { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> FailedFiles { get; init; } = Array.Empty<string>();
