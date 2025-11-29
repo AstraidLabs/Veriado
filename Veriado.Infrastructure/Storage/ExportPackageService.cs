@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
+using Veriado.Contracts.Storage;
 using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
 using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
 using Veriado.Infrastructure.Persistence;
