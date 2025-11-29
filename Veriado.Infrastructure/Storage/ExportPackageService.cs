@@ -269,16 +269,13 @@ public sealed class ExportPackageService : IExportPackageService
         var packageId = Guid.NewGuid();
         var correlationId = Guid.NewGuid();
 
-        var vtpInfo = new AppVtpPackageInfo(
-            "Veriado.Transfer",
-            "1.0",
-            AppVtpPayloadType.FullExport,
-            packageId,
-            correlationId,
-            request.SourceInstanceId ?? Guid.Empty,
-            request.SourceInstanceName,
-            Guid.Empty,
-            targetInstanceName: null);
+        var vtpInfo = AppVtpPackageInfo
+            .Default(packageId, correlationId, request.SourceInstanceId ?? Guid.Empty, targetInstanceId: Guid.Empty)
+            with
+            {
+                PayloadType = AppVtpPayloadType.FullExport,
+                SourceInstanceName = request.SourceInstanceName,
+            };
 
         var manifest = new PackageJsonModel
         {
