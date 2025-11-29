@@ -135,7 +135,7 @@ public enum StorageOperationStatus
     PendingMigrations,
 }
 
-public sealed class StorageOperationResult
+public sealed record StorageOperationResult
 {
     public StorageOperationStatus Status { get; init; }
 
