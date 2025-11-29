@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -14,6 +15,7 @@ using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Entities;
 using Veriado.Infrastructure.Storage.Vpf;
+using Veriado.Infrastructure.Storage.Vpack;
 
 namespace Veriado.Infrastructure.Storage;
 
@@ -26,6 +28,7 @@ public sealed class ImportPackageService : IImportPackageService
     private readonly IStorageSpaceAnalyzer _spaceAnalyzer;
     private readonly ILogger<ImportPackageService> _logger;
     private readonly VpfPackageValidator _vpfValidator;
+    private readonly IVPackContainerService _vpackService;
 
     public ImportPackageService(
         IDbContextFactory<AppDbContext> dbContextFactory,
@@ -33,7 +36,8 @@ public sealed class ImportPackageService : IImportPackageService
         IFilePathResolver pathResolver,
         IOperationalPauseCoordinator pauseCoordinator,
         IStorageSpaceAnalyzer spaceAnalyzer,
-        ILogger<ImportPackageService> logger)
+        ILogger<ImportPackageService> logger,
+        IVPackContainerService vpackService)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _hashCalculator = hashCalculator ?? throw new ArgumentNullException(nameof(hashCalculator));
@@ -42,6 +46,7 @@ public sealed class ImportPackageService : IImportPackageService
         _spaceAnalyzer = spaceAnalyzer ?? throw new ArgumentNullException(nameof(spaceAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _vpfValidator = new VpfPackageValidator(_hashCalculator);
+        _vpackService = vpackService ?? throw new ArgumentNullException(nameof(vpackService));
     }
 
     public async Task<StorageOperationResult> ImportPackageAsync(
@@ -61,7 +66,7 @@ public sealed class ImportPackageService : IImportPackageService
                 : ImportConflictStrategy.UpdateIfNewer,
         };
 
-        var validation = await ValidateLogicalPackageAsync(request, cancellationToken).ConfigureAwait(false);
+        var validation = await ValidateImportAsync(request, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
             return new StorageOperationResult
@@ -92,7 +97,7 @@ public sealed class ImportPackageService : IImportPackageService
         }
 
         var strategy = request.DefaultConflictStrategy ?? ImportConflictStrategy.UpdateIfNewer;
-        var commit = await CommitLogicalPackageAsync(request, strategy, cancellationToken).ConfigureAwait(false);
+        var commit = await CommitImportAsync(request, strategy, cancellationToken).ConfigureAwait(false);
 
         return new StorageOperationResult
         {
@@ -225,6 +230,61 @@ public sealed class ImportPackageService : IImportPackageService
         return new ImportCommitResult(status, imported, skipped, conflicted, issues, validation.Items);
     }
 
+    public async Task<ImportValidationResult> ValidateImportAsync(
+        ImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!File.Exists(request.PackagePath))
+        {
+            return ImportValidationResult.FromIssues(new[]
+            {
+                new ImportValidationIssue(ImportIssueType.PackageMissing, ImportIssueSeverity.Error, null, "VPack package not found."),
+            });
+        }
+
+        var (tempRoot, issue) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
+        if (issue is not null)
+        {
+            return ImportValidationResult.FromIssues(new[] { issue });
+        }
+
+        try
+        {
+            var logicalRequest = request with { PackagePath = tempRoot };
+            return await ValidateLogicalPackageAsync(logicalRequest, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            CleanupTemp(tempRoot);
+        }
+    }
+
+    public async Task<ImportCommitResult> CommitImportAsync(
+        ImportRequest request,
+        ImportConflictStrategy conflictStrategy,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var (tempRoot, issue) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
+        if (issue is not null)
+        {
+            var validation = ImportValidationResult.FromIssues(new[] { issue });
+            return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues, Array.Empty<ImportItemPreview>());
+        }
+
+        try
+        {
+            var logicalRequest = request with { PackagePath = tempRoot };
+            return await CommitLogicalPackageAsync(logicalRequest, conflictStrategy, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            CleanupTemp(tempRoot);
+        }
+    }
+
     private async Task<ImportValidationResult> ValidateAndClassifyAsync(
         ImportRequest request,
         CancellationToken cancellationToken)
@@ -242,44 +302,41 @@ public sealed class ImportPackageService : IImportPackageService
         var existingById = await dbContext.FileSystems
             .AsNoTracking()
             .Where(f => ids.Contains(f.Id))
-            .Select(f => new
-            {
+            .Select(f => new LocalExistingFile(
                 f.Id,
-                Hash = f.Hash.Value,
-                RelativePath = f.RelativePath.Value,
-                f.LastWriteUtc,
-            })
+                f.Hash.Value,
+                f.RelativePath.Value,
+                f.LastWriteUtc.ToDateTimeOffset()))
             .ToDictionaryAsync(f => f.Id, cancellationToken)
             .ConfigureAwait(false);
 
         var existingByHash = await dbContext.FileSystems
             .AsNoTracking()
             .Where(f => hashes.Contains(f.Hash.Value))
-            .Select(f => new
-            {
+            .Select(f => new LocalExistingFile(
                 f.Id,
-                Hash = f.Hash.Value,
-                RelativePath = f.RelativePath.Value,
-                f.LastWriteUtc,
-            })
+                f.Hash.Value,
+                f.RelativePath.Value,
+                f.LastWriteUtc.ToDateTimeOffset()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
         var existingByPath = await dbContext.FileSystems
             .AsNoTracking()
-            .Select(f => new
-            {
-                RelativePath = f.RelativePath.Value,
-                Hash = f.Hash.Value,
-                f.LastWriteUtc,
-            })
+            .Select(f => new LocalExistingFile(
+                f.Id,
+                f.Hash.Value,
+                f.RelativePath.Value,
+                f.LastWriteUtc.ToDateTimeOffset()))
             .ToDictionaryAsync(f => f.RelativePath, cancellationToken)
             .ConfigureAwait(false);
 
         var previews = new List<ImportItemPreview>();
         var newItems = 0;
-        var updatable = 0;
-        var skipped = 0;
+        var sameItems = 0;
+        var newerItems = 0;
+        var olderItems = 0;
+        var conflictItems = 0;
 
         foreach (var file in result.ValidatedFiles)
         {
@@ -289,41 +346,24 @@ public sealed class ImportPackageService : IImportPackageService
                 ? file.FileName
                 : Path.Combine(file.RelativePath, file.FileName).Replace('\\', '/');
 
-            ImportItemStatus status;
-            string? reason = null;
-
-            if (existingById.TryGetValue(file.FileId, out var existingByIdEntry))
-            {
-                status = Classify(existingByIdEntry.LastWriteUtc.ToDateTimeOffset(), existingByIdEntry.Hash, file, out reason);
-            }
-            else
-            {
-                var hashMatch = existingByHash.FirstOrDefault(e => string.Equals(e.Hash, file.ContentHash, StringComparison.OrdinalIgnoreCase));
-                if (hashMatch is not null)
-                {
-                    status = Classify(hashMatch.LastWriteUtc.ToDateTimeOffset(), hashMatch.Hash, file, out reason);
-                }
-                else if (existingByPath.TryGetValue(pathKey, out var pathEntry))
-                {
-                    status = ImportItemStatus.ConflictOther;
-                    reason = "A file exists at the same path with different content.";
-                }
-                else
-                {
-                    status = ImportItemStatus.New;
-                }
-            }
+            var (status, reason) = Classify(existingById, existingByHash, existingByPath, pathKey, file);
 
             switch (status)
             {
                 case ImportItemStatus.New:
                     newItems++;
                     break;
-                case ImportItemStatus.DuplicateOlderInDb:
-                    updatable++;
+                case ImportItemStatus.Same:
+                    sameItems++;
+                    break;
+                case ImportItemStatus.NewerInPackage:
+                    newerItems++;
+                    break;
+                case ImportItemStatus.OlderInPackage:
+                    olderItems++;
                     break;
                 default:
-                    skipped++;
+                    conflictItems++;
                     break;
             }
 
@@ -347,44 +387,73 @@ public sealed class ImportPackageService : IImportPackageService
             result.ValidatedFiles,
             previews,
             newItems,
-            updatable,
-            skipped);
+            sameItems,
+            newerItems,
+            olderItems,
+            conflictItems);
     }
 
-    private static ImportItemStatus Classify(
+    private static (ImportItemStatus Status, string? Reason) Classify(
+        IReadOnlyDictionary<Guid, LocalExistingFile> existingById,
+        IReadOnlyList<LocalExistingFile> existingByHash,
+        IReadOnlyDictionary<string, LocalExistingFile> existingByPath,
+        string pathKey,
+        ValidatedImportFile file)
+    {
+        if (existingById.TryGetValue(file.FileId, out var existingByIdEntry))
+        {
+            return Compare(existingByIdEntry.LastWriteUtc, existingByIdEntry.Hash, file);
+        }
+
+        var hashMatch = existingByHash.FirstOrDefault(e => string.Equals(e.Hash, file.ContentHash, StringComparison.OrdinalIgnoreCase));
+        if (hashMatch is not null)
+        {
+            return Compare(hashMatch.LastWriteUtc, hashMatch.Hash, file);
+        }
+
+        if (existingByPath.TryGetValue(pathKey, out var pathEntry))
+        {
+            return (ImportItemStatus.Conflict, "A file exists at the same path with different content.");
+        }
+
+        return (ImportItemStatus.New, null);
+    }
+
+    private static (ImportItemStatus Status, string? Reason) Compare(
         DateTimeOffset existingLastWrite,
         string existingHash,
-        ValidatedImportFile file,
-        out string? reason)
+        ValidatedImportFile file)
     {
-        reason = null;
         var hashEqual = string.Equals(existingHash, file.ContentHash, StringComparison.OrdinalIgnoreCase);
 
         if (hashEqual && existingLastWrite == file.LastModifiedAtUtc)
         {
-            return ImportItemStatus.DuplicateSameVersion;
+            return (ImportItemStatus.Same, null);
         }
 
         if (file.LastModifiedAtUtc > existingLastWrite)
         {
-            reason = "Package contains a newer version than the target database.";
-            return ImportItemStatus.DuplicateOlderInDb;
+            return (ImportItemStatus.NewerInPackage, "Package contains a newer version.");
         }
 
         if (file.LastModifiedAtUtc < existingLastWrite)
         {
-            reason = "Target database contains a newer version.";
-            return ImportItemStatus.DuplicateNewerInDb;
+            return (ImportItemStatus.OlderInPackage, "Target database contains a newer version.");
         }
 
         if (!hashEqual)
         {
-            reason = "Content hash differs while timestamps are equal.";
-            return ImportItemStatus.ConflictOther;
+            return (ImportItemStatus.Conflict, "Content hash differs while timestamps are equal.");
         }
 
-        return ImportItemStatus.DuplicateSameVersion;
+        return (ImportItemStatus.Same, null);
     }
+
+    private sealed record LocalExistingFile(
+        Guid Id,
+        string Hash,
+        string RelativePath,
+        DateTimeOffset LastWriteUtc);
 
     private static string CombineRelative(string relativePath, string fileName)
     {
@@ -405,6 +474,56 @@ public sealed class ImportPackageService : IImportPackageService
         return Path.Combine(directory, deduped);
     }
 
+    private async Task<(string TempRoot, ImportValidationIssue? Issue)> ExtractVPackAsync(
+        string packagePath,
+        ImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"veriado-import-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempRoot);
+
+        await using var input = File.OpenRead(packagePath);
+        var open = await _vpackService.OpenContainerAsync(
+                input,
+                new VPackOpenOptions { Password = request.Password },
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!open.Success || open.PayloadStream is null)
+        {
+            return (tempRoot, new ImportValidationIssue(
+                ImportIssueType.MetadataUnsupported,
+                ImportIssueSeverity.Error,
+                null,
+                open.Error ?? "VPack container could not be opened."));
+        }
+
+        await using (open.PayloadStream)
+        using (var archive = new ZipArchive(open.PayloadStream, ZipArchiveMode.Read, leaveOpen: false))
+        {
+            archive.ExtractToDirectory(tempRoot);
+        }
+
+        return (tempRoot, null);
+    }
+
+    private static void CleanupTemp(string tempRoot)
+    {
+        if (string.IsNullOrWhiteSpace(tempRoot) || !Directory.Exists(tempRoot))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+        catch
+        {
+            // best effort cleanup
+        }
+    }
+
     private static bool ShouldImport(
         ImportItemStatus status,
         ImportConflictStrategy strategy,
@@ -415,14 +534,14 @@ public sealed class ImportPackageService : IImportPackageService
         {
             case ImportItemStatus.New:
                 return true;
-            case ImportItemStatus.DuplicateOlderInDb:
+            case ImportItemStatus.Same:
+                return strategy is ImportConflictStrategy.AlwaysOverwrite or ImportConflictStrategy.CreateDuplicate;
+            case ImportItemStatus.NewerInPackage:
                 return strategy is ImportConflictStrategy.UpdateIfNewer
                     or ImportConflictStrategy.AlwaysOverwrite
                     or ImportConflictStrategy.CreateDuplicate;
-            case ImportItemStatus.DuplicateSameVersion:
-                return strategy == ImportConflictStrategy.AlwaysOverwrite;
-            case ImportItemStatus.DuplicateNewerInDb:
-                if (strategy == ImportConflictStrategy.AlwaysOverwrite || strategy == ImportConflictStrategy.CreateDuplicate)
+            case ImportItemStatus.OlderInPackage:
+                if (strategy is ImportConflictStrategy.AlwaysOverwrite or ImportConflictStrategy.CreateDuplicate)
                 {
                     return true;
                 }
@@ -431,9 +550,14 @@ public sealed class ImportPackageService : IImportPackageService
                     ImportIssueType.ConflictExistingFile,
                     ImportIssueSeverity.Warning,
                     item.RelativePath,
-                    item.ConflictReason ?? "Newer version exists in database."));
+                    item.ConflictReason ?? "Target has newer version."));
                 return false;
             default:
+                if (strategy is ImportConflictStrategy.AlwaysOverwrite or ImportConflictStrategy.CreateDuplicate)
+                {
+                    return true;
+                }
+
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.ConflictExistingFile,
                     ImportIssueSeverity.Warning,

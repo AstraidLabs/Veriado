@@ -22,6 +22,9 @@ public sealed record ImportRequest
     /// <summary>Optional default conflict strategy to use for commit when caller does not pass one explicitly.</summary>
     public ImportConflictStrategy? DefaultConflictStrategy { get; init; }
         = null;
+
+    public string? Password { get; init; }
+        = null;
 }
 
 public sealed record ImportValidationIssue(
@@ -59,8 +62,10 @@ public sealed record ImportValidationResult(
     IReadOnlyList<ValidatedImportFile> ValidatedFiles,
     IReadOnlyList<ImportItemPreview> Items,
     int NewItems,
-    int UpdatableItems,
-    int SkippedItems)
+    int SameItems,
+    int NewerItems,
+    int OlderItems,
+    int ConflictItems)
 {
     public static ImportValidationResult FromIssues(IReadOnlyList<ImportValidationIssue> issues)
         => new(
@@ -71,6 +76,8 @@ public sealed record ImportValidationResult(
             0,
             Array.Empty<ValidatedImportFile>(),
             Array.Empty<ImportItemPreview>(),
+            0,
+            0,
             0,
             0,
             0);
