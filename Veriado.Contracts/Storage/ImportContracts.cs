@@ -109,6 +109,8 @@ public sealed record ImportCommitResultDto
     public int ConflictedFiles { get; init; }
     public IReadOnlyList<ImportValidationIssueDto> Issues { get; init; } = Array.Empty<ImportValidationIssueDto>();
     public IReadOnlyList<ImportItemPreviewDto> Items { get; init; } = Array.Empty<ImportItemPreviewDto>();
+    public VtpImportResultCode VtpResultCode { get; init; }
+    public Guid? CorrelationId { get; init; }
 }
 
 public sealed record ImportItemPreviewDto

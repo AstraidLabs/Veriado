@@ -92,4 +92,6 @@ public sealed record ImportCommitResult(
     int SkippedFiles,
     int ConflictedFiles,
     IReadOnlyList<ImportValidationIssue> Issues,
-    IReadOnlyList<ImportItemPreview> Items);
+    IReadOnlyList<ImportItemPreview> Items,
+    VtpImportResultCode VtpResultCode,
+    Guid? CorrelationId);

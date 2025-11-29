@@ -181,13 +181,24 @@ public sealed class ImportPackageService : IImportPackageService
         var validation = await ValidateLogicalPackageAsync(request, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
-            return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues, validation.Items);
+            var vtpResult = DetermineVtpImportResultCode(ImportCommitStatus.Failed, validation.Issues);
+            return new ImportCommitResult(
+                ImportCommitStatus.Failed,
+                0,
+                0,
+                0,
+                validation.Issues,
+                validation.Items,
+                vtpResult,
+                validation.Vtp?.CorrelationId);
         }
 
         var issues = new List<ImportValidationIssue>(validation.Issues);
         var imported = 0;
         var skipped = 0;
         var conflicted = 0;
+        var items = CloneItemsWithVtpStatuses(validation.Items);
+        var itemIndexById = CreateItemIndex(items);
 
         var targetRoot = SafePathUtilities.NormalizeAndValidateRoot(
             request.TargetStorageRoot ?? _pathResolver.GetStorageRoot(),
@@ -213,12 +224,14 @@ public sealed class ImportPackageService : IImportPackageService
                         item.RelativePath,
                         "Validated descriptor missing during commit."));
                     conflicted++;
+                    SetVtpStatus(itemIndexById, items, item.FileId, VtpImportItemStatus.Conflicted);
                     continue;
                 }
 
                 if (!ShouldImport(item.Status, conflictStrategy, issues, item))
                 {
                     skipped++;
+                    SetVtpStatus(itemIndexById, items, item.FileId, VtpImportItemStatus.Skipped);
                     continue;
                 }
 
@@ -244,6 +257,7 @@ public sealed class ImportPackageService : IImportPackageService
                         .ConfigureAwait(false);
 
                     imported++;
+                    SetVtpStatus(itemIndexById, items, item.FileId, VtpImportItemStatus.Imported);
                 }
                 catch (Exception ex)
                 {
@@ -253,6 +267,7 @@ public sealed class ImportPackageService : IImportPackageService
                         ImportIssueSeverity.Error,
                         relativePath,
                         $"Failed to copy file: {ex.Message}"));
+                    SetVtpStatus(itemIndexById, items, item.FileId, VtpImportItemStatus.Conflicted);
                     _logger.LogError(ex, "Failed to commit import for {RelativePath}", relativePath);
                 }
             }
@@ -272,7 +287,17 @@ public sealed class ImportPackageService : IImportPackageService
             status = ImportCommitStatus.PartialSuccess;
         }
 
-        return new ImportCommitResult(status, imported, skipped, conflicted, issues, validation.Items);
+        var vtpResult = DetermineVtpImportResultCode(status, issues);
+
+        return new ImportCommitResult(
+            status,
+            imported,
+            skipped,
+            conflicted,
+            issues,
+            items,
+            vtpResult,
+            validation.Vtp?.CorrelationId);
     }
 
     public async Task<ImportValidationResult> ValidateImportAsync(
@@ -317,7 +342,16 @@ public sealed class ImportPackageService : IImportPackageService
         if (issue is not null)
         {
             var validation = ImportValidationResult.FromIssues(new[] { issue });
-            return new ImportCommitResult(ImportCommitStatus.Failed, 0, 0, 0, validation.Issues, Array.Empty<ImportItemPreview>());
+            var vtpResult = DetermineVtpImportResultCode(ImportCommitStatus.Failed, validation.Issues);
+            return new ImportCommitResult(
+                ImportCommitStatus.Failed,
+                0,
+                0,
+                0,
+                validation.Issues,
+                Array.Empty<ImportItemPreview>(),
+                vtpResult,
+                validation.Vtp?.CorrelationId);
         }
 
         try
@@ -421,7 +455,7 @@ public sealed class ImportPackageService : IImportPackageService
                 file.SizeBytes,
                 file.LastModifiedAtUtc,
                 status,
-                VtpImportItemStatus.Unknown,
+                MapVtpStatus(status),
                 reason));
         }
 
@@ -689,6 +723,66 @@ public sealed class ImportPackageService : IImportPackageService
                     item.ConflictReason ?? "Conflicting entry detected."));
                 return false;
         }
+    }
+
+    private static Dictionary<Guid, int> CreateItemIndex(IReadOnlyList<ImportItemPreview> items)
+    {
+        var map = new Dictionary<Guid, int>(items.Count);
+        for (var i = 0; i < items.Count; i++)
+        {
+            map[items[i].FileId] = i;
+        }
+
+        return map;
+    }
+
+    private static List<ImportItemPreview> CloneItemsWithVtpStatuses(IReadOnlyList<ImportItemPreview> source)
+        => source.Select(i => i with { VtpStatus = MapVtpStatus(i.Status) }).ToList();
+
+    private static void SetVtpStatus(
+        IReadOnlyDictionary<Guid, int> itemIndex,
+        IList<ImportItemPreview> items,
+        Guid fileId,
+        VtpImportItemStatus status)
+    {
+        if (itemIndex.TryGetValue(fileId, out var index) && index >= 0 && index < items.Count)
+        {
+            items[index] = items[index] with { VtpStatus = status };
+        }
+    }
+
+    private static VtpImportItemStatus MapVtpStatus(ImportItemStatus status)
+        => status switch
+        {
+            ImportItemStatus.Conflict => VtpImportItemStatus.Conflicted,
+            ImportItemStatus.Same => VtpImportItemStatus.Skipped,
+            ImportItemStatus.OlderInPackage => VtpImportItemStatus.Skipped,
+            ImportItemStatus.New => VtpImportItemStatus.Imported,
+            ImportItemStatus.NewerInPackage => VtpImportItemStatus.Imported,
+            _ => VtpImportItemStatus.Unknown,
+        };
+
+    private static VtpImportResultCode DetermineVtpImportResultCode(
+        ImportCommitStatus status,
+        IReadOnlyCollection<ImportValidationIssue> issues)
+    {
+        if (issues.Any(i => i.Severity == ImportIssueSeverity.Error))
+        {
+            return VtpImportResultCode.Failed;
+        }
+
+        if (issues.Any(i => i.Severity == ImportIssueSeverity.Warning))
+        {
+            return VtpImportResultCode.PartialSuccess;
+        }
+
+        return status switch
+        {
+            ImportCommitStatus.Success => VtpImportResultCode.Success,
+            ImportCommitStatus.PartialSuccess => VtpImportResultCode.PartialSuccess,
+            ImportCommitStatus.Failed => VtpImportResultCode.Failed,
+            _ => VtpImportResultCode.Unknown,
+        };
     }
 
     private static async Task<StoragePackageMetadata> ReadMetadataAsync(string metadataPath, CancellationToken cancellationToken)

@@ -237,6 +237,8 @@ public sealed class StorageManagementService : IStorageManagementService
             ConflictedFiles = result.ConflictedFiles,
             Issues = result.Issues.Select(Map).ToArray(),
             Items = result.Items.Select(Map).ToArray(),
+            VtpResultCode = result.VtpResultCode.ToContract(),
+            CorrelationId = result.CorrelationId,
         };
     }
 
