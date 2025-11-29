@@ -257,9 +257,21 @@ public sealed class ExportPackageService : IExportPackageService
             }
         }
 
+        var packageId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
+
+        var vtpInfo = new VtpPackageInfo
+        {
+            PackageId = packageId,
+            CorrelationId = correlationId,
+            SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
+            TargetInstanceId = Guid.Empty,
+            PayloadType = VtpPayloadType.VpfPackage,
+        };
+
         var manifest = new PackageJsonModel
         {
-            PackageId = Guid.NewGuid(),
+            PackageId = packageId,
             Name = request.PackageName ?? "Veriado Package",
             Description = request.Description,
             CreatedAtUtc = DateTimeOffset.UtcNow,
@@ -267,6 +279,7 @@ public sealed class ExportPackageService : IExportPackageService
             SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
             SourceInstanceName = request.SourceInstanceName,
             ExportMode = "LogicalPerFile",
+            Vtp = vtpInfo,
         };
 
         var metadata = new MetadataJsonModel
@@ -280,6 +293,7 @@ public sealed class ExportPackageService : IExportPackageService
             TotalFilesBytes = totalBytes,
             HashAlgorithm = "SHA256",
             FileDescriptorSchemaVersion = 1,
+            Vtp = vtpInfo,
         };
 
         await WriteJsonAsync(Path.Combine(normalizedPackageRoot, VpfPackagePaths.PackageManifestFile), manifest, cancellationToken).ConfigureAwait(false);
