@@ -31,6 +31,9 @@ public sealed record VpfPackageManifest
     public string? Description { get; init; }
         = string.Empty;
 
+    [JsonPropertyName("vtp")]
+    public VtpPackageInfo Vtp { get; init; } = new();
+
     [JsonPropertyName("createdAtUtc")]
     public DateTimeOffset CreatedAtUtc { get; init; }
         = DateTimeOffset.UtcNow;
@@ -65,6 +68,9 @@ public sealed record VpfTechnicalMetadata
     [JsonPropertyName("databaseSchemaVersion")]
     public string? DatabaseSchemaVersion { get; init; }
         = string.Empty;
+
+    [JsonPropertyName("vtp")]
+    public VtpPackageInfo Vtp { get; init; } = new();
 
     [JsonPropertyName("exportMode")]
     public string ExportMode { get; init; } = "LogicalPerFile";

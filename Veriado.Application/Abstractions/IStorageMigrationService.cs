@@ -141,15 +141,25 @@ public sealed record StorageOperationResult
 
     public string? Message { get; init; }
 
+    public VtpPackageInfo? Vtp { get; init; }
+
     public IReadOnlyList<string> MissingFiles { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> FailedFiles { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
     public bool DatabaseHashMatched { get; init; }
 
     public int VerifiedFilesCount { get; init; }
 
     public int FailedVerificationCount { get; init; }
+
+    public int MissingFilesCount { get; init; }
+
+    public int FailedFilesCount { get; init; }
+
+    public int WarningCount { get; init; }
 
     public long? RequiredBytes { get; init; }
 

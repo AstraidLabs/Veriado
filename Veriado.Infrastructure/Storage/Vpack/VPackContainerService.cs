@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Veriado.Application.Abstractions;
 
 namespace Veriado.Infrastructure.Storage.Vpack;
 
@@ -29,6 +30,8 @@ public sealed record VPackCreateOptions
     public string PayloadFormat { get; init; } = "VPF-1.0";
 
     public string PayloadEncoding { get; init; } = "zip";
+
+    public VtpPackageInfo? Vtp { get; init; }
 }
 
 public sealed record VPackOpenOptions
@@ -65,6 +68,8 @@ public sealed record VPackHeader
 
     public string? Signature { get; init; }
         = null;
+
+    public VtpPackageInfo? Vtp { get; init; }
 }
 
 public sealed record EncryptionHeader
@@ -131,6 +136,7 @@ public sealed class VPackContainerService : IVPackContainerService
             IsEncrypted = options.EncryptPayload,
             Encryption = encryptionHeader,
             IsSigned = options.SignPayload,
+            Vtp = options.Vtp,
         };
 
         var headerJson = JsonSerializer.SerializeToUtf8Bytes(header, new JsonSerializerOptions
