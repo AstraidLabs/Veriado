@@ -209,6 +209,7 @@ public sealed class StorageManagementService : IStorageManagementService
             DiscoveredDescriptors = result.DiscoveredDescriptors,
             DiscoveredFiles = result.DiscoveredFiles,
             TotalBytes = result.TotalBytes,
+            Vtp = result.Vtp?.ToContract(),
             Issues = result.Issues
                 .Select(Map)
                 .ToArray(),
@@ -271,6 +272,7 @@ public sealed class StorageManagementService : IStorageManagementService
             SizeBytes = preview.SizeBytes,
             LastModifiedAtUtc = preview.LastModifiedAtUtc,
             Status = preview.Status,
+            VtpStatus = preview.VtpStatus.ToContract(),
             ConflictReason = preview.ConflictReason,
         };
 

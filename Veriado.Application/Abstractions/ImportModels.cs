@@ -51,6 +51,7 @@ public sealed record ImportItemPreview(
     long SizeBytes,
     DateTimeOffset LastModifiedAtUtc,
     ImportItemStatus Status,
+    VtpImportItemStatus VtpStatus,
     string? ConflictReason);
 
 public sealed record ImportValidationResult(
@@ -65,7 +66,8 @@ public sealed record ImportValidationResult(
     int SameItems,
     int NewerItems,
     int OlderItems,
-    int ConflictItems)
+    int ConflictItems,
+    VtpPackageInfo? Vtp)
 {
     public static ImportValidationResult FromIssues(IReadOnlyList<ImportValidationIssue> issues)
         => new(
@@ -80,7 +82,8 @@ public sealed record ImportValidationResult(
             0,
             0,
             0,
-            0);
+            0,
+            null);
 }
 
 public sealed record ImportCommitResult(
