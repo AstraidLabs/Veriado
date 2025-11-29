@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
-using Veriado.Contracts.Storage;
+using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
+using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Storage.Vpf;
@@ -267,17 +268,16 @@ public sealed class ExportPackageService : IExportPackageService
         var packageId = Guid.NewGuid();
         var correlationId = Guid.NewGuid();
 
-        var vtpInfo = new VtpPackageInfo
-        {
-            Protocol = "Veriado.Transfer",
-            ProtocolVersion = "1.0",
-            PackageId = packageId,
-            CorrelationId = correlationId,
-            SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
-            SourceInstanceName = request.SourceInstanceName,
-            TargetInstanceId = Guid.Empty,
-            PayloadType = VtpPayloadType.FullExport,
-        };
+        var vtpInfo = new AppVtpPackageInfo(
+            "Veriado.Transfer",
+            "1.0",
+            AppVtpPayloadType.FullExport,
+            packageId,
+            correlationId,
+            request.SourceInstanceId ?? Guid.Empty,
+            request.SourceInstanceName,
+            Guid.Empty,
+            targetInstanceName: null);
 
         var manifest = new PackageJsonModel
         {
@@ -289,7 +289,7 @@ public sealed class ExportPackageService : IExportPackageService
             SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
             SourceInstanceName = request.SourceInstanceName,
             ExportMode = "LogicalPerFile",
-            Vtp = vtpInfo,
+            Vtp = vtpInfo.ToContract(),
         };
 
         var metadata = new MetadataJsonModel
@@ -303,7 +303,7 @@ public sealed class ExportPackageService : IExportPackageService
             TotalFilesBytes = totalBytes,
             HashAlgorithm = "SHA256",
             FileDescriptorSchemaVersion = 1,
-            Vtp = vtpInfo,
+            Vtp = vtpInfo.ToContract(),
         };
 
         await WriteJsonAsync(Path.Combine(normalizedPackageRoot, VpfPackagePaths.PackageManifestFile), manifest, cancellationToken).ConfigureAwait(false);
