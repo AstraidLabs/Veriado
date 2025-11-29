@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
 using Veriado.Application.Abstractions;
-using Veriado.Contracts.Storage;
+using Contracts = Veriado.Contracts.Storage;
 using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
 using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
 using Veriado.Infrastructure.Persistence;
@@ -277,6 +277,8 @@ public sealed class ExportPackageService : IExportPackageService
                 SourceInstanceName = request.SourceInstanceName,
             };
 
+        Contracts.VtpPackageInfo vtpContract = vtpInfo.ToContract();
+
         var manifest = new PackageJsonModel
         {
             PackageId = packageId,
@@ -287,7 +289,7 @@ public sealed class ExportPackageService : IExportPackageService
             SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
             SourceInstanceName = request.SourceInstanceName,
             ExportMode = "LogicalPerFile",
-            Vtp = vtpInfo.ToContract(),
+            Vtp = vtpContract,
         };
 
         var metadata = new MetadataJsonModel
@@ -301,7 +303,7 @@ public sealed class ExportPackageService : IExportPackageService
             TotalFilesBytes = totalBytes,
             HashAlgorithm = "SHA256",
             FileDescriptorSchemaVersion = 1,
-            Vtp = vtpInfo.ToContract(),
+            Vtp = vtpContract,
         };
 
         await WriteJsonAsync(Path.Combine(normalizedPackageRoot, VpfPackagePaths.PackageManifestFile), manifest, cancellationToken).ConfigureAwait(false);
