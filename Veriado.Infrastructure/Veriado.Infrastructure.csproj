@@ -32,5 +32,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Veriado.Domain\Veriado.Domain.csproj" />
     <ProjectReference Include="..\Veriado.Application\Veriado.Appl.csproj" />
+    <ProjectReference Include="..\Veriado.Contracts\Veriado.Contracts.csproj" />
   </ItemGroup>
 </Project>
