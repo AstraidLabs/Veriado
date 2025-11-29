@@ -86,6 +86,7 @@ public sealed record ImportValidationResultDto
     public int NewerItems { get; init; }
     public int OlderItems { get; init; }
     public int ConflictItems { get; init; }
+    public VtpPackageInfo? Vtp { get; init; }
 }
 
 public sealed record ValidatedImportFileDto
@@ -119,5 +120,6 @@ public sealed record ImportItemPreviewDto
     public long SizeBytes { get; init; }
     public DateTimeOffset LastModifiedAtUtc { get; init; }
     public ImportItemStatus Status { get; init; }
+    public VtpImportItemStatus VtpStatus { get; init; }
     public string? ConflictReason { get; init; }
 }

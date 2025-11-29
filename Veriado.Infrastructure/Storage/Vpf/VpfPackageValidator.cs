@@ -59,6 +59,7 @@ public sealed class VpfPackageValidator
 
         PackageJsonModel? manifest = null;
         MetadataJsonModel? metadata = null;
+        VtpPackageInfo? vtp = null;
 
         if (File.Exists(manifestPath))
         {
@@ -76,10 +77,12 @@ public sealed class VpfPackageValidator
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.ManifestUnsupported,
-                    ImportIssueSeverity.Error,
-                    null,
-                    $"Unsupported manifest specVersion '{manifest.SpecVersion}'."));
+                ImportIssueSeverity.Error,
+                null,
+                $"Unsupported manifest specVersion '{manifest.SpecVersion}'."));
             }
+
+            ValidateVtp(manifest.Vtp, "package.json", ImportIssueType.ManifestUnsupported, issues);
         }
 
         if (File.Exists(metadataPath))
@@ -98,11 +101,38 @@ public sealed class VpfPackageValidator
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.MetadataUnsupported,
+                ImportIssueSeverity.Error,
+                null,
+                "Only SHA256 hashAlgorithm is supported."));
+            }
+
+            ValidateVtp(metadata.Vtp, "metadata.json", ImportIssueType.MetadataUnsupported, issues);
+        }
+
+        var manifestVtp = manifest?.Vtp;
+        var metadataVtp = metadata?.Vtp;
+        if (manifestVtp is not null && metadataVtp is not null)
+        {
+            if (!string.Equals(manifestVtp.ProtocolVersion, metadataVtp.ProtocolVersion, StringComparison.Ordinal))
+            {
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.MetadataUnsupported,
                     ImportIssueSeverity.Error,
                     null,
-                    "Only SHA256 hashAlgorithm is supported."));
+                    "VTP protocolVersion mismatch between package.json and metadata.json."));
+            }
+
+            if (manifestVtp.PayloadType != metadataVtp.PayloadType)
+            {
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.MetadataUnsupported,
+                    ImportIssueSeverity.Error,
+                    null,
+                    "VTP payloadType mismatch between package.json and metadata.json."));
             }
         }
+
+        vtp = manifestVtp ?? metadataVtp;
 
         var filesRoot = Path.Combine(normalized, VpfPackagePaths.FilesDirectory);
         if (!Directory.Exists(filesRoot))
@@ -113,7 +143,7 @@ public sealed class VpfPackageValidator
                 null,
                 "Package does not contain a files directory."));
 
-            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0, 0, 0);
+            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0, 0, 0, vtp);
         }
 
         var totalFiles = 0;
@@ -252,7 +282,41 @@ public sealed class VpfPackageValidator
             }
         }
 
-        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0, 0, 0);
+        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0, 0, 0, vtp);
+    }
+
+    private static void ValidateVtp(
+        VtpPackageInfo vtp,
+        string source,
+        ImportIssueType issueType,
+        ICollection<ImportValidationIssue> issues)
+    {
+        if (!string.Equals(vtp.Protocol, "VTP", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new ImportValidationIssue(
+                issueType,
+                ImportIssueSeverity.Error,
+                null,
+                $"{source} declares unsupported VTP protocol '{vtp.Protocol}'."));
+        }
+
+        if (!string.Equals(vtp.ProtocolVersion, "1.0", StringComparison.Ordinal))
+        {
+            issues.Add(new ImportValidationIssue(
+                issueType,
+                ImportIssueSeverity.Error,
+                null,
+                $"{source} declares unsupported VTP protocolVersion '{vtp.ProtocolVersion}'."));
+        }
+
+        if (vtp.PayloadType != VtpPayloadType.VpfPackage)
+        {
+            issues.Add(new ImportValidationIssue(
+                issueType,
+                ImportIssueSeverity.Error,
+                null,
+                $"{source} payloadType '{vtp.PayloadType}' is not supported."));
+        }
     }
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)

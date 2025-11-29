@@ -289,7 +289,7 @@ public sealed class ImportPackageService : IImportPackageService
             });
         }
 
-        var (tempRoot, issue) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
+        var (tempRoot, issue, header) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
         if (issue is not null)
         {
             return ImportValidationResult.FromIssues(new[] { issue });
@@ -298,7 +298,8 @@ public sealed class ImportPackageService : IImportPackageService
         try
         {
             var logicalRequest = request with { PackagePath = tempRoot };
-            return await ValidateLogicalPackageAsync(logicalRequest, cancellationToken).ConfigureAwait(false);
+            var validation = await ValidateLogicalPackageAsync(logicalRequest, cancellationToken).ConfigureAwait(false);
+            return MergeVtpMetadata(validation, header?.Vtp);
         }
         finally
         {
@@ -312,7 +313,7 @@ public sealed class ImportPackageService : IImportPackageService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var (tempRoot, issue) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
+        var (tempRoot, issue, _) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
         if (issue is not null)
         {
             var validation = ImportValidationResult.FromIssues(new[] { issue });
@@ -420,6 +421,7 @@ public sealed class ImportPackageService : IImportPackageService
                 file.SizeBytes,
                 file.LastModifiedAtUtc,
                 status,
+                VtpImportItemStatus.Unknown,
                 reason));
         }
 
@@ -435,7 +437,8 @@ public sealed class ImportPackageService : IImportPackageService
             sameItems,
             newerItems,
             olderItems,
-            conflictItems);
+            conflictItems,
+            result.Vtp);
     }
 
     private static (ImportItemStatus Status, string? Reason) Classify(
@@ -519,7 +522,7 @@ public sealed class ImportPackageService : IImportPackageService
         return Path.Combine(directory, deduped);
     }
 
-    private async Task<(string TempRoot, ImportValidationIssue? Issue)> ExtractVPackAsync(
+    private async Task<(string TempRoot, ImportValidationIssue? Issue, VPackHeader? Header)> ExtractVPackAsync(
         string packagePath,
         ImportRequest request,
         CancellationToken cancellationToken)
@@ -540,7 +543,7 @@ public sealed class ImportPackageService : IImportPackageService
                 ImportIssueType.MetadataUnsupported,
                 ImportIssueSeverity.Error,
                 null,
-                open.Error ?? "VPack container could not be opened."));
+                open.Error ?? "VPack container could not be opened."), open.Header);
         }
 
         await using (open.PayloadStream)
@@ -549,7 +552,7 @@ public sealed class ImportPackageService : IImportPackageService
             archive.ExtractToDirectory(tempRoot);
         }
 
-        return (tempRoot, null);
+        return (tempRoot, null, open.Header);
     }
 
     private static void CleanupTemp(string tempRoot)
@@ -566,6 +569,82 @@ public sealed class ImportPackageService : IImportPackageService
         catch
         {
             // best effort cleanup
+        }
+    }
+
+    private static ImportValidationResult MergeVtpMetadata(
+        ImportValidationResult validation,
+        VtpPackageInfo? headerVtp)
+    {
+        if (headerVtp is null)
+        {
+            return validation;
+        }
+
+        var issues = new List<ImportValidationIssue>(validation.Issues);
+        ValidateHeaderVtp(headerVtp, issues);
+
+        if (validation.Vtp is not null)
+        {
+            if (!string.Equals(validation.Vtp.ProtocolVersion, headerVtp.ProtocolVersion, StringComparison.Ordinal))
+            {
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.MetadataUnsupported,
+                    ImportIssueSeverity.Error,
+                    null,
+                    $"VTP protocolVersion mismatch between package metadata and VPack header ({validation.Vtp.ProtocolVersion} vs {headerVtp.ProtocolVersion})."));
+            }
+
+            if (validation.Vtp.PayloadType != headerVtp.PayloadType)
+            {
+                issues.Add(new ImportValidationIssue(
+                    ImportIssueType.MetadataUnsupported,
+                    ImportIssueSeverity.Error,
+                    null,
+                    $"VTP payloadType mismatch between package metadata and VPack header ({validation.Vtp.PayloadType} vs {headerVtp.PayloadType})."));
+            }
+        }
+
+        var vtp = validation.Vtp ?? headerVtp;
+        var isValid = validation.IsValid && issues.Count == 0;
+
+        return validation with
+        {
+            Issues = issues,
+            IsValid = isValid,
+            Vtp = vtp,
+        };
+    }
+
+    private static void ValidateHeaderVtp(
+        VtpPackageInfo headerVtp,
+        ICollection<ImportValidationIssue> issues)
+    {
+        if (!string.Equals(headerVtp.Protocol, "VTP", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new ImportValidationIssue(
+                ImportIssueType.MetadataUnsupported,
+                ImportIssueSeverity.Error,
+                null,
+                $"VPack header declares unsupported VTP protocol '{headerVtp.Protocol}'."));
+        }
+
+        if (!string.Equals(headerVtp.ProtocolVersion, "1.0", StringComparison.Ordinal))
+        {
+            issues.Add(new ImportValidationIssue(
+                ImportIssueType.MetadataUnsupported,
+                ImportIssueSeverity.Error,
+                null,
+                $"VPack header declares unsupported VTP protocolVersion '{headerVtp.ProtocolVersion}'."));
+        }
+
+        if (headerVtp.PayloadType != VtpPayloadType.VpfPackage)
+        {
+            issues.Add(new ImportValidationIssue(
+                ImportIssueType.MetadataUnsupported,
+                ImportIssueSeverity.Error,
+                null,
+                $"VPack header payloadType '{headerVtp.PayloadType}' is not supported."));
         }
     }
 
