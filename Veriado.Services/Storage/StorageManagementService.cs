@@ -60,6 +60,17 @@ public sealed class StorageManagementService : IStorageManagementService
         return Map(result);
     }
 
+    public async Task<StorageOperationResultDto> ExportAsync(
+        ExportRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _exportService
+            .ExportPackageAsync(Map(request), cancellationToken)
+            .ConfigureAwait(false);
+
+        return Map(result);
+    }
+
     public async Task<StorageOperationResultDto> ImportAsync(
         string packageRoot,
         string targetStorageRoot,
@@ -78,7 +89,7 @@ public sealed class StorageManagementService : IStorageManagementService
         CancellationToken cancellationToken)
     {
         var validation = await _importService
-            .ValidateLogicalPackageAsync(Map(request), cancellationToken)
+            .ValidateImportAsync(Map(request), cancellationToken)
             .ConfigureAwait(false);
 
         return Map(validation);
@@ -90,7 +101,7 @@ public sealed class StorageManagementService : IStorageManagementService
         CancellationToken cancellationToken)
     {
         var commit = await _importService
-            .CommitLogicalPackageAsync(Map(request), conflictStrategy, cancellationToken)
+            .CommitImportAsync(Map(request), conflictStrategy, cancellationToken)
             .ConfigureAwait(false);
 
         return Map(commit);
@@ -140,6 +151,20 @@ public sealed class StorageManagementService : IStorageManagementService
         };
     }
 
+    private static ExportRequest Map(ExportRequestDto dto)
+        => new()
+        {
+            DestinationPath = dto.DestinationPath,
+            PackageName = dto.PackageName,
+            Description = dto.Description,
+            OverwriteExisting = dto.OverwriteExisting,
+            EncryptPayload = dto.EncryptPayload,
+            Password = dto.Password,
+            SignPayload = dto.SignPayload,
+            SourceInstanceId = dto.SourceInstanceId,
+            SourceInstanceName = dto.SourceInstanceName,
+        };
+
     private static ImportRequest Map(ImportRequestDto dto)
         => new()
         {
@@ -147,6 +172,7 @@ public sealed class StorageManagementService : IStorageManagementService
             ScopeFilter = dto.ScopeFilter,
             TargetStorageRoot = dto.TargetStorageRoot,
             DefaultConflictStrategy = dto.DefaultConflictStrategy,
+            Password = dto.Password,
         };
 
     private static StorageOperationResultDto Map(StorageOperationResult result)
@@ -188,8 +214,10 @@ public sealed class StorageManagementService : IStorageManagementService
                 .Select(Map)
                 .ToArray(),
             NewItems = result.NewItems,
-            UpdatableItems = result.UpdatableItems,
-            SkippedItems = result.SkippedItems,
+            SameItems = result.SameItems,
+            NewerItems = result.NewerItems,
+            OlderItems = result.OlderItems,
+            ConflictItems = result.ConflictItems,
         };
     }
 

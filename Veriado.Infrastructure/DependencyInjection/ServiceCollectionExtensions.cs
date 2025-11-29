@@ -31,6 +31,7 @@ using Veriado.Infrastructure.Repositories;
 using Veriado.Infrastructure.Search;
 using Veriado.Infrastructure.Time;
 using Veriado.Infrastructure.Storage;
+using Veriado.Infrastructure.Storage.Vpack;
 using Veriado.Domain.Primitives;
 using Veriado.Domain.Search.Events;
 using Veriado.Appl.Pipeline.Idempotency;
@@ -204,6 +205,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStorageMigrationService, StorageMigrationService>();
         services.AddScoped<IExportPackageService, ExportPackageService>();
         services.AddScoped<IImportPackageService, ImportPackageService>();
+        services.AddSingleton<IVPackContainerService, VPackContainerService>();
         services.AddSingleton<IStorageSpaceAnalyzer, StorageSpaceAnalyzer>();
         services.AddSingleton<IFileHashCalculator, FileHashCalculator>();
         services.AddSingleton<IFileSystemMonitoringService, FileSystemMonitoringService>();

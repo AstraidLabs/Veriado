@@ -38,10 +38,10 @@ public enum ImportIssueSeverity
 public enum ImportItemStatus
 {
     New,
-    DuplicateSameVersion,
-    DuplicateOlderInDb,
-    DuplicateNewerInDb,
-    ConflictOther,
+    Same,
+    NewerInPackage,
+    OlderInPackage,
+    Conflict,
 }
 
 public enum ImportCommitStatus
@@ -59,6 +59,8 @@ public sealed record ImportRequestDto
     public string? TargetStorageRoot { get; init; }
         = null;
     public ImportConflictStrategy? DefaultConflictStrategy { get; init; }
+        = null;
+    public string? Password { get; init; }
         = null;
 }
 
@@ -80,8 +82,10 @@ public sealed record ImportValidationResultDto
     public IReadOnlyList<ValidatedImportFileDto> ValidatedFiles { get; init; } = Array.Empty<ValidatedImportFileDto>();
     public IReadOnlyList<ImportItemPreviewDto> Items { get; init; } = Array.Empty<ImportItemPreviewDto>();
     public int NewItems { get; init; }
-    public int UpdatableItems { get; init; }
-    public int SkippedItems { get; init; }
+    public int SameItems { get; init; }
+    public int NewerItems { get; init; }
+    public int OlderItems { get; init; }
+    public int ConflictItems { get; init; }
 }
 
 public sealed record ValidatedImportFileDto

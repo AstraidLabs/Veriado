@@ -25,6 +25,10 @@ public interface IStorageManagementService
         StorageExportOptionsDto? options,
         CancellationToken cancellationToken);
 
+    Task<StorageOperationResultDto> ExportAsync(
+        ExportRequestDto request,
+        CancellationToken cancellationToken);
+
     Task<StorageOperationResultDto> ImportAsync(
         string packageRoot,
         string targetStorageRoot,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -14,6 +15,7 @@ using Veriado.Contracts.Storage;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Storage.Vpf;
+using Veriado.Infrastructure.Storage.Vpack;
 
 namespace Veriado.Infrastructure.Storage;
 
@@ -26,19 +28,22 @@ public sealed class ExportPackageService : IExportPackageService
     private readonly IFileHashCalculator _hashCalculator;
     private readonly IStorageSpaceAnalyzer _spaceAnalyzer;
     private readonly ILogger<ExportPackageService> _logger;
+    private readonly IVPackContainerService _vpackService;
 
     public ExportPackageService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         IConnectionStringProvider connectionStringProvider,
         IFileHashCalculator hashCalculator,
         IStorageSpaceAnalyzer spaceAnalyzer,
-        ILogger<ExportPackageService> logger)
+        ILogger<ExportPackageService> logger,
+        IVPackContainerService vpackService)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
         _hashCalculator = hashCalculator ?? throw new ArgumentNullException(nameof(hashCalculator));
         _spaceAnalyzer = spaceAnalyzer ?? throw new ArgumentNullException(nameof(spaceAnalyzer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _vpackService = vpackService ?? throw new ArgumentNullException(nameof(vpackService));
     }
 
     public async Task<StorageOperationResult> ExportPackageAsync(
@@ -53,17 +58,100 @@ public sealed class ExportPackageService : IExportPackageService
             _logger.LogWarning("Physical exports are no longer supported; running logical per-file export instead.");
         }
 
-        return await ExportLogicalPackageAsync(packageRoot, options with { ExportMode = StorageExportMode.LogicalPerFile }, cancellationToken)
-            .ConfigureAwait(false);
+        var request = new ExportRequest
+        {
+            DestinationPath = packageRoot,
+            OverwriteExisting = options.OverwriteExisting,
+        };
+
+        return await ExportPackageAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<StorageOperationResult> ExportPackageAsync(ExportRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var normalizedDestination = Path.GetFullPath(request.DestinationPath);
+        var destinationDirectory = Path.GetDirectoryName(normalizedDestination);
+        if (string.IsNullOrWhiteSpace(destinationDirectory))
+        {
+            throw new InvalidOperationException("Destination directory cannot be determined for export.");
+        }
+
+        Directory.CreateDirectory(destinationDirectory);
+        if (File.Exists(normalizedDestination) && !request.OverwriteExisting)
+        {
+            return new StorageOperationResult
+            {
+                Status = StorageOperationStatus.Failed,
+                Message = $"Destination '{normalizedDestination}' already exists.",
+                PackageRoot = normalizedDestination,
+            };
+        }
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"veriado-export-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempRoot);
+
+        var cleanup = true;
+        try
+        {
+            var vpfRoot = Path.Combine(tempRoot, "vpf");
+            Directory.CreateDirectory(vpfRoot);
+
+            var result = await ExportLogicalPackageAsync(vpfRoot, request, cancellationToken).ConfigureAwait(false);
+            if (result.Status is StorageOperationStatus.Failed or StorageOperationStatus.InsufficientSpace)
+            {
+                return result with { PackageRoot = normalizedDestination };
+            }
+
+            var zipPath = Path.Combine(tempRoot, "payload.zip");
+            ZipFile.CreateFromDirectory(vpfRoot, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
+
+            var tempVpack = Path.Combine(tempRoot, "payload.vpack");
+            await using (var payloadStream = File.OpenRead(zipPath))
+            await using (var output = File.Create(tempVpack))
+            {
+                var vpackOptions = new VPackCreateOptions
+                {
+                    EncryptPayload = request.EncryptPayload,
+                    Password = request.Password,
+                    SignPayload = request.SignPayload,
+                };
+
+                await _vpackService.CreateContainerAsync(payloadStream, output, vpackOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            File.Move(tempVpack, normalizedDestination, overwrite: request.OverwriteExisting);
+            cleanup = false;
+
+            return result with
+            {
+                PackageRoot = normalizedDestination,
+                Message = "Export completed.",
+            };
+        }
+        finally
+        {
+            if (cleanup && Directory.Exists(tempRoot))
+            {
+                try
+                {
+                    Directory.Delete(tempRoot, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to cleanup temporary export folder {TempRoot}", tempRoot);
+                }
+            }
+        }
     }
 
     private async Task<StorageOperationResult> ExportLogicalPackageAsync(
         string packageRoot,
-        StorageExportOptions options,
+        ExportRequest request,
         CancellationToken cancellationToken)
     {
         var normalizedPackageRoot = Path.GetFullPath(packageRoot);
-        PreparePackageDirectory(normalizedPackageRoot, options.OverwriteExisting);
+        PreparePackageDirectory(normalizedPackageRoot, overwriteExisting: true);
 
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var pendingMigrations = await dbContext.Database
@@ -139,17 +227,20 @@ public sealed class ExportPackageService : IExportPackageService
                 exportedFiles++;
 
                 var hash = await _hashCalculator.ComputeSha256Async(sourcePath, cancellationToken).ConfigureAwait(false);
-                var descriptor = new VpfFileDescriptor
+                var descriptor = new ExportedFileDescriptor
                 {
                     FileId = file.Id,
-                    OriginalInstanceId = Guid.Empty,
+                    OriginalInstanceId = request.SourceInstanceId ?? Guid.Empty,
                     RelativePath = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? string.Empty,
                     FileName = Path.GetFileName(relativePath),
                     ContentHash = hash.Value,
                     SizeBytes = file.Size.Value,
                     MimeType = file.Mime.Value,
                     CreatedAtUtc = file.CreatedUtc.ToDateTimeOffset(),
+                    CreatedBy = Environment.UserName,
                     LastModifiedAtUtc = file.LastWriteUtc.ToDateTimeOffset(),
+                    LastModifiedBy = Environment.UserName,
+                    IsReadOnly = false,
                 };
 
                 await WriteJsonAsync(destinationPath + ".json", descriptor, cancellationToken).ConfigureAwait(false);
@@ -166,15 +257,19 @@ public sealed class ExportPackageService : IExportPackageService
             }
         }
 
-        var manifest = new VpfPackageManifest
+        var manifest = new PackageJsonModel
         {
             PackageId = Guid.NewGuid(),
+            Name = request.PackageName ?? "Veriado Package",
+            Description = request.Description,
             CreatedAtUtc = DateTimeOffset.UtcNow,
             CreatedBy = Environment.UserName,
+            SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
+            SourceInstanceName = request.SourceInstanceName,
             ExportMode = "LogicalPerFile",
         };
 
-        var metadata = new VpfTechnicalMetadata
+        var metadata = new MetadataJsonModel
         {
             FormatVersion = 1,
             ApplicationVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown",

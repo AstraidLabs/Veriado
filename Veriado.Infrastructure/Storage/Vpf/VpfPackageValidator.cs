@@ -57,13 +57,13 @@ public sealed class VpfPackageValidator
                 "Package is missing metadata.json."));
         }
 
-        VpfPackageManifest? manifest = null;
-        VpfTechnicalMetadata? metadata = null;
+        PackageJsonModel? manifest = null;
+        MetadataJsonModel? metadata = null;
 
         if (File.Exists(manifestPath))
         {
-            manifest = await DeserializeAsync<VpfPackageManifest>(manifestPath, cancellationToken).ConfigureAwait(false);
-            if (!string.Equals(manifest.Spec, VpfPackageManifest.ExpectedSpec, StringComparison.Ordinal))
+            manifest = await DeserializeAsync<PackageJsonModel>(manifestPath, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(manifest.Spec, PackageJsonModel.ExpectedSpec, StringComparison.Ordinal))
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.ManifestUnsupported,
@@ -72,7 +72,7 @@ public sealed class VpfPackageValidator
                     $"Unsupported manifest spec '{manifest.Spec}'."));
             }
 
-            if (!string.Equals(manifest.SpecVersion, VpfPackageManifest.ExpectedSpecVersion, StringComparison.Ordinal))
+            if (!string.Equals(manifest.SpecVersion, PackageJsonModel.ExpectedSpecVersion, StringComparison.Ordinal))
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.ManifestUnsupported,
@@ -84,7 +84,7 @@ public sealed class VpfPackageValidator
 
         if (File.Exists(metadataPath))
         {
-            metadata = await DeserializeAsync<VpfTechnicalMetadata>(metadataPath, cancellationToken).ConfigureAwait(false);
+            metadata = await DeserializeAsync<MetadataJsonModel>(metadataPath, cancellationToken).ConfigureAwait(false);
             if (metadata.FormatVersion != 1)
             {
                 issues.Add(new ImportValidationIssue(
@@ -113,7 +113,7 @@ public sealed class VpfPackageValidator
                 null,
                 "Package does not contain a files directory."));
 
-            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0);
+            return new ImportValidationResult(false, issues, 0, 0, 0, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0, 0, 0);
         }
 
         var totalFiles = 0;
@@ -146,7 +146,7 @@ public sealed class VpfPackageValidator
             }
 
             descriptorCount++;
-            var descriptor = await DeserializeAsync<VpfFileDescriptor>(descriptorPath, cancellationToken).ConfigureAwait(false);
+            var descriptor = await DeserializeAsync<ExportedFileDescriptor>(descriptorPath, cancellationToken).ConfigureAwait(false);
             seenDescriptors.Add(descriptorPath);
 
             if (!string.Equals(descriptor.Schema, "Veriado.FileDescriptor", StringComparison.Ordinal))
@@ -252,7 +252,7 @@ public sealed class VpfPackageValidator
             }
         }
 
-        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0);
+        return new ImportValidationResult(issues.Count == 0, issues, totalFiles, descriptorCount, totalBytes, validatedFiles, Array.Empty<ImportItemPreview>(), 0, 0, 0, 0, 0);
     }
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)

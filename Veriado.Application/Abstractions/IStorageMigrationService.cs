@@ -43,6 +43,10 @@ public interface IExportPackageService
         string packageRoot,
         StorageExportOptions? options,
         CancellationToken cancellationToken);
+
+    Task<StorageOperationResult> ExportPackageAsync(
+        ExportRequest request,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>Provides operations for importing a portable package into the current environment.</summary>
@@ -59,6 +63,15 @@ public interface IImportPackageService
         CancellationToken cancellationToken);
 
     Task<ImportCommitResult> CommitLogicalPackageAsync(
+        ImportRequest request,
+        ImportConflictStrategy conflictStrategy,
+        CancellationToken cancellationToken);
+
+    Task<ImportValidationResult> ValidateImportAsync(
+        ImportRequest request,
+        CancellationToken cancellationToken);
+
+    Task<ImportCommitResult> CommitImportAsync(
         ImportRequest request,
         ImportConflictStrategy conflictStrategy,
         CancellationToken cancellationToken);
