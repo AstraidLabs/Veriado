@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
+using Veriado.Contracts.Storage;
 using Contracts = Veriado.Contracts.Storage;
 using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
 using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
