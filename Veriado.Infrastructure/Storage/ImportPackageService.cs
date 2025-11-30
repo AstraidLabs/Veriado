@@ -188,7 +188,10 @@ public sealed class ImportPackageService : IImportPackageService
         var validation = await ValidateLogicalPackageAsync(request, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
         {
-            var vtpResult = DetermineVtpImportResultCode(ImportCommitStatus.Failed, validation.Issues, validation.Items);
+            var failedVtpResult = DetermineVtpImportResultCode(
+                ImportCommitStatus.Failed,
+                validation.Issues,
+                validation.Items);
             return new ImportCommitResult(
                 ImportCommitStatus.Failed,
                 0,
@@ -196,7 +199,7 @@ public sealed class ImportPackageService : IImportPackageService
                 0,
                 validation.Issues,
                 validation.Items,
-                vtpResult,
+                failedVtpResult,
                 validation.Vtp?.CorrelationId);
         }
 
