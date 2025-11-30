@@ -161,7 +161,7 @@ public sealed class ImportPackageService : IImportPackageService
             var manifest = await JsonSerializer
                 .DeserializeAsync<PackageJsonModel>(stream, VpfSerialization.Options, cancellationToken)
                 .ConfigureAwait(false);
-            return manifest?.Vtp;
+            return manifest?.Vtp.ToModel();
         }
         catch
         {
@@ -443,12 +443,10 @@ public sealed class ImportPackageService : IImportPackageService
                 case ImportItemStatus.Same:
                     sameItems++;
                     break;
-                case ImportItemStatus.Updated:
-                case ImportItemStatus.NewerInPackage:
+                case ImportItemStatus.Updated or ImportItemStatus.NewerInPackage:
                     newerItems++;
                     break;
-                case ImportItemStatus.SkippedOlder:
-                case ImportItemStatus.OlderInPackage:
+                case ImportItemStatus.SkippedOlder or ImportItemStatus.OlderInPackage:
                     olderItems++;
                     break;
                 case ImportItemStatus.Failed:
@@ -706,13 +704,11 @@ public sealed class ImportPackageService : IImportPackageService
                 return true;
             case ImportItemStatus.Same:
                 return strategy is ImportConflictStrategy.AlwaysOverwrite or ImportConflictStrategy.CreateDuplicate;
-            case ImportItemStatus.Updated:
-            case ImportItemStatus.NewerInPackage:
+            case ImportItemStatus.Updated or ImportItemStatus.NewerInPackage:
                 return strategy is ImportConflictStrategy.UpdateIfNewer
                     or ImportConflictStrategy.AlwaysOverwrite
                     or ImportConflictStrategy.CreateDuplicate;
-            case ImportItemStatus.SkippedOlder:
-            case ImportItemStatus.OlderInPackage:
+            case ImportItemStatus.SkippedOlder or ImportItemStatus.OlderInPackage:
                 if (strategy is ImportConflictStrategy.AlwaysOverwrite or ImportConflictStrategy.CreateDuplicate)
                 {
                     return true;
