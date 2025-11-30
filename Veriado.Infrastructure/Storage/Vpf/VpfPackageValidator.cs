@@ -6,8 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Abstractions;
 using Veriado.Contracts.Storage;
-using VtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
-using VtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
+using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
+using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
 
 namespace Veriado.Infrastructure.Storage.Vpf;
 
@@ -61,7 +61,7 @@ public sealed class VpfPackageValidator
 
         PackageJsonModel? manifest = null;
         MetadataJsonModel? metadata = null;
-        VtpPackageInfo? vtp = null;
+        AppVtpPackageInfo? vtp = null;
 
         if (File.Exists(manifestPath))
         {
@@ -84,7 +84,7 @@ public sealed class VpfPackageValidator
                 $"Unsupported manifest specVersion '{manifest.SpecVersion}'."));
             }
 
-            ValidateVtp(manifest.Vtp, "package.json", ImportIssueType.ManifestUnsupported, issues);
+            ValidateVtp(manifest.Vtp.ToModel(), "package.json", ImportIssueType.ManifestUnsupported, issues);
         }
 
         if (File.Exists(metadataPath))
@@ -108,11 +108,11 @@ public sealed class VpfPackageValidator
                 "Only SHA256 hashAlgorithm is supported."));
             }
 
-            ValidateVtp(metadata.Vtp, "metadata.json", ImportIssueType.MetadataUnsupported, issues);
+            ValidateVtp(metadata.Vtp.ToModel(), "metadata.json", ImportIssueType.MetadataUnsupported, issues);
         }
 
-        var manifestVtp = manifest?.Vtp;
-        var metadataVtp = metadata?.Vtp;
+        var manifestVtp = manifest?.Vtp.ToModel();
+        var metadataVtp = metadata?.Vtp.ToModel();
         if (manifestVtp is not null && metadataVtp is not null)
         {
             if (!string.Equals(manifestVtp.ProtocolVersion, metadataVtp.ProtocolVersion, StringComparison.Ordinal))
@@ -288,7 +288,7 @@ public sealed class VpfPackageValidator
     }
 
     private static void ValidateVtp(
-        VtpPackageInfo vtp,
+        AppVtpPackageInfo vtp,
         string source,
         ImportIssueType issueType,
         ICollection<ImportValidationIssue> issues)
@@ -321,11 +321,11 @@ public sealed class VpfPackageValidator
         }
     }
 
-    private static bool IsSupportedPayload(VtpPayloadType payloadType)
-        => payloadType is VtpPayloadType.VpfPackage
-            or VtpPayloadType.FullExport
-            or VtpPayloadType.DeltaExport
-            or VtpPayloadType.Backup;
+    private static bool IsSupportedPayload(AppVtpPayloadType payloadType)
+        => payloadType is AppVtpPayloadType.VpfPackage
+            or AppVtpPayloadType.FullExport
+            or AppVtpPayloadType.DeltaExport
+            or AppVtpPayloadType.Backup;
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)
     {

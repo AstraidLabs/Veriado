@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using VtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
+using VtpPackageInfo = Veriado.Contracts.Storage.VtpPackageInfo;
 
 namespace Veriado.Infrastructure.Storage.Vpf;
 
