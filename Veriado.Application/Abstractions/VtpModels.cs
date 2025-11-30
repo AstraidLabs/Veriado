@@ -1,5 +1,9 @@
 using System;
-using Contracts = Veriado.Contracts.Storage;
+using Veriado.Contracts.Storage;
+using ContractsVtpImportItemStatus = Veriado.Contracts.Storage.VtpImportItemStatus;
+using ContractsVtpImportResultCode = Veriado.Contracts.Storage.VtpImportResultCode;
+using ContractsVtpPackageInfo = Veriado.Contracts.Storage.VtpPackageInfo;
+using ContractsVtpPayloadType = Veriado.Contracts.Storage.VtpPayloadType;
 
 namespace Veriado.Application.Abstractions;
 
@@ -58,7 +62,7 @@ public sealed record VtpPackageInfo(
 
 public static class VtpMappings
 {
-    public static VtpPackageInfo ToModel(this Contracts.VtpPackageInfo dto)
+    public static VtpPackageInfo ToModel(this ContractsVtpPackageInfo dto)
         => new(
             dto.Protocol,
             dto.ProtocolVersion,
@@ -70,12 +74,12 @@ public static class VtpMappings
             dto.TargetInstanceId,
             dto.TargetInstanceName);
 
-    public static Contracts.VtpPackageInfo ToContract(this VtpPackageInfo model)
+    public static ContractsVtpPackageInfo ToContract(this VtpPackageInfo model)
         => new()
         {
             Protocol = model.Protocol,
             ProtocolVersion = model.ProtocolVersion,
-            PayloadType = (Contracts.VtpPayloadType)model.PayloadType,
+            PayloadType = (ContractsVtpPayloadType)model.PayloadType,
             PackageId = model.PackageId,
             CorrelationId = model.CorrelationId,
             SourceInstanceId = model.SourceInstanceId,
@@ -84,15 +88,15 @@ public static class VtpMappings
             TargetInstanceName = model.TargetInstanceName,
         };
 
-    public static VtpImportItemStatus ToModel(this Contracts.VtpImportItemStatus status)
+    public static VtpImportItemStatus ToModel(this ContractsVtpImportItemStatus status)
         => (VtpImportItemStatus)status;
 
-    public static Contracts.VtpImportItemStatus ToContract(this VtpImportItemStatus status)
-        => (Contracts.VtpImportItemStatus)status;
+    public static ContractsVtpImportItemStatus ToContract(this VtpImportItemStatus status)
+        => (ContractsVtpImportItemStatus)status;
 
-    public static VtpImportResultCode ToModel(this Contracts.VtpImportResultCode status)
+    public static VtpImportResultCode ToModel(this ContractsVtpImportResultCode status)
         => (VtpImportResultCode)status;
 
-    public static Contracts.VtpImportResultCode ToContract(this VtpImportResultCode status)
-        => (Contracts.VtpImportResultCode)status;
+    public static ContractsVtpImportResultCode ToContract(this VtpImportResultCode status)
+        => (ContractsVtpImportResultCode)status;
 }
