@@ -10,9 +10,10 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Application.Abstractions;
-using Veriado.Contracts.Storage;
 using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
 using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
+using Veriado.Contracts.Storage;
+using ContractVtpPackageInfo = Veriado.Contracts.Storage.VtpPackageInfo;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Connections;
 using Veriado.Infrastructure.Storage.Vpf;
@@ -276,7 +277,7 @@ public sealed class ExportPackageService : IExportPackageService
                 SourceInstanceName = request.SourceInstanceName,
             };
 
-        VtpPackageInfo vtpContract = vtpInfo.ToContract();
+        ContractVtpPackageInfo vtpContract = vtpInfo.ToContract();
 
         var manifest = new PackageJsonModel
         {
