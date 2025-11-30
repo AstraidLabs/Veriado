@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Veriado.Application.Abstractions;
 using Veriado.Contracts.Storage;
+using VtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
+using VtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
 
 namespace Veriado.Infrastructure.Storage.Vpf;
 
