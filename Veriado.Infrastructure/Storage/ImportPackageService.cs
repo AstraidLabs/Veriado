@@ -425,9 +425,14 @@ public sealed class ImportPackageService : IImportPackageService
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var ids = result.ValidatedFiles.Select(v => v.FileId).ToArray();
         var hashes = result.ValidatedFiles
-            .Select(v => FileHash.From(v.ContentHash))
+            .Select(v => v.ContentHash)
+            .Where(hash => !string.IsNullOrWhiteSpace(hash))
+            .Select(FileHash.From)
             .Distinct()
             .ToArray();
+        var hashLookup = hashes.Length > 0
+            ? hashes.ToHashSet()
+            : new HashSet<FileHash>();
 
         var existingById = await dbContext.FileSystems
             .AsNoTracking()
@@ -440,16 +445,18 @@ public sealed class ImportPackageService : IImportPackageService
             .ToDictionaryAsync(f => f.Id, cancellationToken)
             .ConfigureAwait(false);
 
-        var existingByHash = await dbContext.FileSystems
-            .AsNoTracking()
-            .Where(f => hashes.Contains(f.Hash))
-            .Select(f => new LocalExistingFile(
-                f.Id,
-                f.Hash.Value,
-                f.RelativePath.Value,
-                f.LastWriteUtc.ToDateTimeOffset()))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        var existingByHash = hashLookup.Count == 0
+            ? new List<LocalExistingFile>()
+            : await dbContext.FileSystems
+                .AsNoTracking()
+                .Where(f => hashLookup.Contains(f.Hash))
+                .Select(f => new LocalExistingFile(
+                    f.Id,
+                    f.Hash.Value,
+                    f.RelativePath.Value,
+                    f.LastWriteUtc.ToDateTimeOffset()))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
 
         var existingByPath = await dbContext.FileSystems
             .AsNoTracking()
@@ -535,15 +542,19 @@ public sealed class ImportPackageService : IImportPackageService
         string pathKey,
         ValidatedImportFile file)
     {
+        var hasHash = !string.IsNullOrWhiteSpace(file.ContentHash);
+
         if (existingById.TryGetValue(file.FileId, out var existingByIdEntry))
         {
-            return Compare(existingByIdEntry.LastWriteUtc, existingByIdEntry.Hash, file);
+            return Compare(existingByIdEntry.LastWriteUtc, existingByIdEntry.Hash, file, hasHash);
         }
 
-        var hashMatch = existingByHash.FirstOrDefault(e => string.Equals(e.Hash, file.ContentHash, StringComparison.OrdinalIgnoreCase));
+        var hashMatch = hasHash
+            ? existingByHash.FirstOrDefault(e => string.Equals(e.Hash, file.ContentHash, StringComparison.OrdinalIgnoreCase))
+            : null;
         if (hashMatch is not null)
         {
-            return Compare(hashMatch.LastWriteUtc, hashMatch.Hash, file);
+            return Compare(hashMatch.LastWriteUtc, hashMatch.Hash, file, hasHash);
         }
 
         if (existingByPath.TryGetValue(pathKey, out var pathEntry))
@@ -557,28 +568,44 @@ public sealed class ImportPackageService : IImportPackageService
     private static (ImportItemStatus Status, string? Reason) Compare(
         DateTimeOffset existingLastWrite,
         string existingHash,
-        ValidatedImportFile file)
+        ValidatedImportFile file,
+        bool hasHash)
     {
-        var hashEqual = string.Equals(existingHash, file.ContentHash, StringComparison.OrdinalIgnoreCase);
-
-        if (hashEqual && existingLastWrite == file.LastModifiedAtUtc)
+        if (hasHash)
         {
+            var hashEqual = string.Equals(existingHash, file.ContentHash, StringComparison.OrdinalIgnoreCase);
+
+            if (hashEqual && existingLastWrite == file.LastModifiedAtUtc)
+            {
+                return (ImportItemStatus.Same, null);
+            }
+
+            if (file.LastModifiedAtUtc > existingLastWrite)
+            {
+                return (ImportItemStatus.Updated, "Package contains a newer version.");
+            }
+
+            if (file.LastModifiedAtUtc < existingLastWrite)
+            {
+                return (ImportItemStatus.SkippedOlder, "Target database contains a newer version.");
+            }
+
+            if (!hashEqual)
+            {
+                return (ImportItemStatus.Conflict, "Content hash differs while timestamps are equal.");
+            }
+
             return (ImportItemStatus.Same, null);
         }
 
         if (file.LastModifiedAtUtc > existingLastWrite)
         {
-            return (ImportItemStatus.Updated, "Package contains a newer version.");
+            return (ImportItemStatus.Updated, "Package contains a newer version (hash not provided).");
         }
 
         if (file.LastModifiedAtUtc < existingLastWrite)
         {
-            return (ImportItemStatus.SkippedOlder, "Target database contains a newer version.");
-        }
-
-        if (!hashEqual)
-        {
-            return (ImportItemStatus.Conflict, "Content hash differs while timestamps are equal.");
+            return (ImportItemStatus.SkippedOlder, "Target database contains a newer version (hash not provided).");
         }
 
         return (ImportItemStatus.Same, null);
