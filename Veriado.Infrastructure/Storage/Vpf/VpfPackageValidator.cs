@@ -87,6 +87,9 @@ public sealed class VpfPackageValidator
             ValidateVtp(manifest.Vtp.ToModel(), "package.json", ImportIssueType.ManifestUnsupported, issues);
         }
 
+        var hashAlgorithmDeclared = false;
+        var hashAlgorithmSupported = false;
+
         if (File.Exists(metadataPath))
         {
             metadata = await DeserializeAsync<MetadataJsonModel>(metadataPath, cancellationToken).ConfigureAwait(false);
@@ -99,12 +102,15 @@ public sealed class VpfPackageValidator
                     $"Unsupported metadata format version '{metadata.FormatVersion}'."));
             }
 
-            if (!string.Equals(metadata.HashAlgorithm, "SHA256", StringComparison.OrdinalIgnoreCase))
+            hashAlgorithmDeclared = !string.IsNullOrWhiteSpace(metadata.HashAlgorithm);
+            hashAlgorithmSupported = string.Equals(metadata.HashAlgorithm, "SHA256", StringComparison.OrdinalIgnoreCase);
+
+            if (hashAlgorithmDeclared && !hashAlgorithmSupported)
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.MetadataUnsupported,
-                ImportIssueSeverity.Error,
-                null,
+                    ImportIssueSeverity.Error,
+                    null,
                 "Only SHA256 hashAlgorithm is supported."));
             }
 
@@ -209,7 +215,7 @@ public sealed class VpfPackageValidator
                     $"Descriptor sizeBytes {descriptor.SizeBytes} does not match file size {size}."));
             }
 
-            if (metadata is not null && metadata.HashAlgorithm.Equals("SHA256", StringComparison.OrdinalIgnoreCase))
+            if (hashAlgorithmSupported)
             {
                 var hash = await _hashCalculator.ComputeSha256Async(filePath, cancellationToken).ConfigureAwait(false);
                 if (!string.Equals(hash.Value, descriptor.ContentHash, StringComparison.OrdinalIgnoreCase))
