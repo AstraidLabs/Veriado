@@ -21,6 +21,11 @@ public sealed record ExportRequestDto
         = null;
     public string? SourceInstanceName { get; init; }
         = null;
+
+    public StorageExportMode ExportMode { get; init; }
+        = StorageExportMode.PhysicalWithDatabase;
+
+    public bool IncludeFileHashes { get; init; } = true;
 }
 
 public sealed record ExportResultDto

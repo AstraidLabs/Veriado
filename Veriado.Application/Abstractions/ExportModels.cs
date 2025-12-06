@@ -1,4 +1,5 @@
 using System;
+using Veriado.Contracts.Storage;
 
 namespace Veriado.Application.Abstractions;
 
@@ -21,4 +22,9 @@ public sealed record ExportRequest
         = null;
     public string? SourceInstanceName { get; init; }
         = null;
+
+    public StorageExportMode ExportMode { get; init; }
+        = StorageExportMode.LogicalPerFile;
+
+    public bool IncludeFileHashes { get; init; } = true;
 }

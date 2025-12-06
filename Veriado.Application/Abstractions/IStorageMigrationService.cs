@@ -106,6 +106,7 @@ public sealed record StorageExportOptions
 
     /// <summary>Gets a value indicating whether per-file hashes should be computed during export.</summary>
     public bool IncludeFileHashes { get; init; }
+        = true;
 
     /// <summary>Verification configuration for exported assets.</summary>
     public StorageVerificationOptions Verification { get; init; } = new();
