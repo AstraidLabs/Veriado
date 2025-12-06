@@ -1,5 +1,5 @@
 // File: Veriado.Services/Storage/IStorageManagementService.cs
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Contracts.Storage;
 
 namespace Veriado.Services.Storage;

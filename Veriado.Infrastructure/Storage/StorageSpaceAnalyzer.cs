@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 
 namespace Veriado.Infrastructure.Storage;
 

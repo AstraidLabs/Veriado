@@ -4,7 +4,7 @@ using Veriado.Contracts.Storage;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Coordinates pausing of background operations that may interfere with critical file operations.

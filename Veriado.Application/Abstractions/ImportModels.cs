@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Veriado.Contracts.Storage;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 /// <summary>
 /// Two-phase import request information.

@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 
 namespace Veriado.Infrastructure.Storage.Vpack;
 

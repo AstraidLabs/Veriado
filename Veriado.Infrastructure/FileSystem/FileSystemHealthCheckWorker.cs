@@ -11,7 +11,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Veriado.Appl.Abstractions;
-using Veriado.Application.Abstractions;
 using FileSystemSyncService = Veriado.Appl.Abstractions.IFileSystemSyncService;
 using Veriado.Domain.FileSystem;
 using Veriado.Domain.Primitives;
@@ -72,7 +71,7 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    // normální ukonèení workeru – žádný error
+                    // normï¿½lnï¿½ ukonï¿½enï¿½ workeru ï¿½ ï¿½ï¿½dnï¿½ error
                     _logger.LogDebug("File system health check worker cancelled during iteration.");
                     break;
                 }
@@ -94,13 +93,13 @@ internal sealed class FileSystemHealthCheckWorker : BackgroundService
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // fallback – kdyby nìco vyletìlo mimo vnitøní try,
-            // tady to rozlišíme jako normální stop, ne jako chybu
+            // fallback ï¿½ kdyby nï¿½co vyletï¿½lo mimo vnitï¿½nï¿½ try,
+            // tady to rozliï¿½ï¿½me jako normï¿½lnï¿½ stop, ne jako chybu
             _logger.LogDebug("File system health check worker cancelled (outer catch).");
         }
         catch (TaskCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // pokud nìkdo hodí pøímo TaskCanceledException, poøád to bereme jako cancel
+            // pokud nï¿½kdo hodï¿½ pï¿½ï¿½mo TaskCanceledException, poï¿½ï¿½d to bereme jako cancel
             _logger.LogDebug("File system health check worker task cancelled (outer catch).");
         }
     }
