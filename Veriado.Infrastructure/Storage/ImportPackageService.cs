@@ -61,8 +61,6 @@ public sealed class ImportPackageService : IImportPackageService
     {
         options ??= new StorageImportOptions();
 
-        var vtp = await TryReadVtpAsync(packageRoot, cancellationToken).ConfigureAwait(false);
-
         var request = new ImportRequest
         {
             PackagePath = packageRoot,
@@ -71,6 +69,8 @@ public sealed class ImportPackageService : IImportPackageService
                 ? ImportConflictStrategy.AlwaysOverwrite
                 : ImportConflictStrategy.UpdateIfNewer,
         };
+
+        var vtp = await TryReadVtpAsync(request, cancellationToken).ConfigureAwait(false);
 
         var validation = await ValidateImportAsync(request, cancellationToken).ConfigureAwait(false);
         if (!validation.IsValid)
@@ -147,21 +147,41 @@ public sealed class ImportPackageService : IImportPackageService
         };
     }
 
-    private static async Task<VtpPackageInfo?> TryReadVtpAsync(string packageRoot, CancellationToken cancellationToken)
+    private async Task<VtpPackageInfo?> TryReadVtpAsync(ImportRequest request, CancellationToken cancellationToken)
     {
-        var manifestPath = Path.Combine(Path.GetFullPath(packageRoot), VpfPackagePaths.PackageManifestFile);
-        if (!File.Exists(manifestPath))
+        var fullPath = Path.GetFullPath(request.PackagePath);
+        var manifestPath = Path.Combine(fullPath, VpfPackagePaths.PackageManifestFile);
+        if (Directory.Exists(fullPath) && File.Exists(manifestPath))
+        {
+            try
+            {
+                await using var stream = File.OpenRead(manifestPath);
+                var manifest = await JsonSerializer
+                    .DeserializeAsync<PackageJsonModel>(stream, VpfSerialization.Options, cancellationToken)
+                    .ConfigureAwait(false);
+                return manifest?.Vtp.ToModel();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        if (!File.Exists(fullPath))
         {
             return null;
         }
 
         try
         {
-            await using var stream = File.OpenRead(manifestPath);
-            var manifest = await JsonSerializer
-                .DeserializeAsync<PackageJsonModel>(stream, VpfSerialization.Options, cancellationToken)
+            await using var input = File.OpenRead(fullPath);
+            var open = await _vpackService.OpenContainerAsync(
+                    input,
+                    new VPackOpenOptions { Password = request.Password },
+                    cancellationToken)
                 .ConfigureAwait(false);
-            return manifest?.Vtp.ToModel();
+
+            return open.Header?.Vtp;
         }
         catch
         {
@@ -316,15 +336,24 @@ public sealed class ImportPackageService : IImportPackageService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!File.Exists(request.PackagePath))
+        var packagePath = Path.GetFullPath(request.PackagePath);
+        var isDirectory = Directory.Exists(packagePath);
+        var isFile = File.Exists(packagePath);
+
+        if (!isDirectory && !isFile)
         {
             return ImportValidationResult.FromIssues(new[]
             {
-                new ImportValidationIssue(ImportIssueType.PackageMissing, ImportIssueSeverity.Error, null, "VPack package not found."),
+                new ImportValidationIssue(ImportIssueType.PackageMissing, ImportIssueSeverity.Error, null, "Package not found."),
             });
         }
 
-        var (tempRoot, issue, header) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
+        if (isDirectory)
+        {
+            return await ValidateLogicalPackageAsync(request with { PackagePath = packagePath }, cancellationToken).ConfigureAwait(false);
+        }
+
+        var (tempRoot, issue, header) = await ExtractVPackAsync(packagePath, request, cancellationToken).ConfigureAwait(false);
         if (issue is not null)
         {
             return ImportValidationResult.FromIssues(new[] { issue });
@@ -348,7 +377,14 @@ public sealed class ImportPackageService : IImportPackageService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var (tempRoot, issue, _) = await ExtractVPackAsync(request.PackagePath, request, cancellationToken).ConfigureAwait(false);
+
+        var packagePath = Path.GetFullPath(request.PackagePath);
+        if (Directory.Exists(packagePath))
+        {
+            return await CommitLogicalPackageAsync(request with { PackagePath = packagePath }, conflictStrategy, cancellationToken).ConfigureAwait(false);
+        }
+
+        var (tempRoot, issue, _) = await ExtractVPackAsync(packagePath, request, cancellationToken).ConfigureAwait(false);
         if (issue is not null)
         {
             var validation = ImportValidationResult.FromIssues(new[] { issue });

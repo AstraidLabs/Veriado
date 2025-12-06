@@ -55,11 +55,6 @@ public sealed class ExportPackageService : IExportPackageService
     {
         options ??= new StorageExportOptions();
 
-        if (options.ExportMode != StorageExportMode.LogicalPerFile)
-        {
-            _logger.LogWarning("Physical exports are no longer supported; running logical per-file export instead.");
-        }
-
         var request = new ExportRequest
         {
             DestinationPath = packageRoot,
@@ -80,17 +75,26 @@ public sealed class ExportPackageService : IExportPackageService
         }
 
         Directory.CreateDirectory(destinationDirectory);
-        if (File.Exists(normalizedDestination) && !request.OverwriteExisting)
+
+        if (File.Exists(normalizedDestination))
         {
-            return new StorageOperationResult
+            if (!request.OverwriteExisting)
             {
-                Status = StorageOperationStatus.Failed,
-                Message = $"Destination '{normalizedDestination}' already exists.",
-                PackageRoot = normalizedDestination,
-                WarningCount = 0,
-                MissingFilesCount = 0,
-            };
+                return new StorageOperationResult
+                {
+                    Status = StorageOperationStatus.Failed,
+                    Message = $"Destination '{normalizedDestination}' already exists.",
+                    PackageRoot = normalizedDestination,
+                    WarningCount = 0,
+                    MissingFilesCount = 0,
+                };
+            }
+
+            File.Delete(normalizedDestination);
         }
+
+        var packageRoot = normalizedDestination;
+        PreparePackageDirectory(packageRoot, request.OverwriteExisting);
 
         var tempRoot = Path.Combine(Path.GetTempPath(), $"veriado-export-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempRoot);
@@ -98,18 +102,16 @@ public sealed class ExportPackageService : IExportPackageService
         var cleanup = true;
         try
         {
-            var vpfRoot = Path.Combine(tempRoot, "vpf");
-            Directory.CreateDirectory(vpfRoot);
-
-            var result = await ExportLogicalPackageAsync(vpfRoot, request, cancellationToken).ConfigureAwait(false);
+            var result = await ExportLogicalPackageAsync(packageRoot, request, cancellationToken).ConfigureAwait(false);
             if (result.Status is StorageOperationStatus.Failed or StorageOperationStatus.InsufficientSpace)
             {
-                return result with { PackageRoot = normalizedDestination };
+                return result with { PackageRoot = packageRoot };
             }
 
             var zipPath = Path.Combine(tempRoot, "payload.zip");
-            ZipFile.CreateFromDirectory(vpfRoot, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
+            ZipFile.CreateFromDirectory(packageRoot, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
 
+            var vpackPath = Path.Combine(packageRoot, "package.vpack");
             var tempVpack = Path.Combine(tempRoot, "payload.vpack");
             await using (var payloadStream = File.OpenRead(zipPath))
             await using (var output = File.Create(tempVpack))
@@ -125,12 +127,12 @@ public sealed class ExportPackageService : IExportPackageService
                 await _vpackService.CreateContainerAsync(payloadStream, output, vpackOptions, cancellationToken).ConfigureAwait(false);
             }
 
-            File.Move(tempVpack, normalizedDestination, overwrite: request.OverwriteExisting);
+            File.Move(tempVpack, vpackPath, overwrite: true);
             cleanup = false;
 
             return result with
             {
-                PackageRoot = normalizedDestination,
+                PackageRoot = packageRoot,
                 Message = "Export completed.",
             };
         }
@@ -338,12 +340,28 @@ public sealed class ExportPackageService : IExportPackageService
 
     private static void PreparePackageDirectory(string packageRoot, bool overwriteExisting)
     {
-        Directory.CreateDirectory(packageRoot);
-
-        if (!overwriteExisting && Directory.EnumerateFileSystemEntries(packageRoot).Any())
+        if (Directory.Exists(packageRoot))
         {
-            throw new InvalidOperationException($"Package directory '{packageRoot}' is not empty.");
+            var entries = Directory.EnumerateFileSystemEntries(packageRoot).ToList();
+            if (!overwriteExisting && entries.Count != 0)
+            {
+                throw new InvalidOperationException($"Package directory '{packageRoot}' is not empty.");
+            }
+
+            foreach (var entry in entries)
+            {
+                if (File.Exists(entry))
+                {
+                    File.Delete(entry);
+                }
+                else
+                {
+                    Directory.Delete(entry, recursive: true);
+                }
+            }
         }
+
+        Directory.CreateDirectory(packageRoot);
     }
 
 }
