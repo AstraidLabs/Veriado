@@ -305,6 +305,25 @@ public static class ServiceCollectionExtensions
 
             if (dbContext.Database.IsSqlite())
             {
+                const string createAuditFilesystemTableSql = """
+                    CREATE TABLE IF NOT EXISTS "audit_filesystem" (
+                        "filesystem_id" BLOB NOT NULL,
+                        "action" TEXT NOT NULL,
+                        "path" TEXT,
+                        "hash" TEXT,
+                        "size" INTEGER,
+                        "mime" TEXT,
+                        "attrs" INTEGER,
+                        "owner_sid" TEXT,
+                        "is_encrypted" INTEGER,
+                        "occurred_utc" TEXT NOT NULL,
+                        CONSTRAINT "PK_audit_filesystem" PRIMARY KEY ("filesystem_id", "occurred_utc")
+                    );
+                    """;
+
+                await dbContext.Database.ExecuteSqlRawAsync(createAuditFilesystemTableSql, cancellationToken)
+                    .ConfigureAwait(false);
+
                 await using (var connection = connectionProvider.CreateConnection())
                 {
                     await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
