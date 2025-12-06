@@ -163,6 +163,8 @@ public sealed class StorageManagementService : IStorageManagementService
             SignPayload = dto.SignPayload,
             SourceInstanceId = dto.SourceInstanceId,
             SourceInstanceName = dto.SourceInstanceName,
+            ExportMode = dto.ExportMode,
+            IncludeFileHashes = dto.IncludeFileHashes,
         };
 
     private static ImportRequest Map(ImportRequestDto dto)

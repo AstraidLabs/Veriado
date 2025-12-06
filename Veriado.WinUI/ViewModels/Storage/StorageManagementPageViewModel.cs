@@ -162,6 +162,8 @@ public partial class StorageManagementPageViewModel : ViewModelBase
             var options = new StorageExportOptionsDto
             {
                 OverwriteExisting = ExportOverwriteExisting,
+                ExportMode = StorageExportMode.PhysicalWithDatabase,
+                IncludeFileHashes = true,
             };
 
             var result = await _storageService

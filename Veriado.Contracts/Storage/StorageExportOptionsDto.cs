@@ -21,6 +21,7 @@ public sealed record StorageExportOptionsDto
 
     /// <summary>Gets a value indicating whether file hashes should be included in the package.</summary>
     public bool IncludeFileHashes { get; init; }
+        = true;
 
     /// <summary>Defines the logical export mode used for the package.</summary>
     public StorageExportMode ExportMode { get; init; }

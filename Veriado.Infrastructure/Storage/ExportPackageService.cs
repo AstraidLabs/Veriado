@@ -59,6 +59,8 @@ public sealed class ExportPackageService : IExportPackageService
         {
             DestinationPath = packageRoot,
             OverwriteExisting = options.OverwriteExisting,
+            ExportMode = options.ExportMode,
+            IncludeFileHashes = options.IncludeFileHashes,
         };
 
         return await ExportPackageAsync(request, cancellationToken).ConfigureAwait(false);
@@ -102,10 +104,48 @@ public sealed class ExportPackageService : IExportPackageService
         var cleanup = true;
         try
         {
-            var result = await ExportLogicalPackageAsync(packageRoot, request, cancellationToken).ConfigureAwait(false);
+            var databaseSize = request.ExportMode == StorageExportMode.PhysicalWithDatabase
+                ? GetDatabaseSize()
+                : 0;
+
+            var result = await ExportLogicalPackageAsync(packageRoot, request, databaseSize, cancellationToken)
+                .ConfigureAwait(false);
             if (result.Status is StorageOperationStatus.Failed or StorageOperationStatus.InsufficientSpace)
             {
                 return result with { PackageRoot = packageRoot };
+            }
+
+            if (request.ExportMode == StorageExportMode.PhysicalWithDatabase)
+            {
+                var databaseDestination = Path.Combine(packageRoot, Path.GetFileName(_connectionStringProvider.DatabasePath));
+                try
+                {
+                    await AtomicFileOperations.CopyAsync(
+                            _connectionStringProvider.DatabasePath,
+                            databaseDestination,
+                            overwrite: true,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    result = result with
+                    {
+                        DatabasePath = databaseDestination,
+                        Message = result.Message ?? "Export completed.",
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to copy database to export package.");
+                    return new StorageOperationResult
+                    {
+                        Status = StorageOperationStatus.Failed,
+                        Message = "Failed to copy database to export package.",
+                        PackageRoot = packageRoot,
+                        MissingFiles = result.MissingFiles,
+                        MissingFilesCount = result.MissingFilesCount,
+                        WarningCount = result.WarningCount,
+                    };
+                }
             }
 
             var zipPath = Path.Combine(tempRoot, "payload.zip");
@@ -155,6 +195,7 @@ public sealed class ExportPackageService : IExportPackageService
     private async Task<StorageOperationResult> ExportLogicalPackageAsync(
         string packageRoot,
         ExportRequest request,
+        long additionalBytes,
         CancellationToken cancellationToken)
     {
         var normalizedPackageRoot = Path.GetFullPath(packageRoot);
@@ -213,7 +254,7 @@ public sealed class ExportPackageService : IExportPackageService
         var totalBytes = files.Sum(f => f.Size.Value);
         var available = await _spaceAnalyzer.GetAvailableBytesAsync(normalizedPackageRoot, cancellationToken)
             .ConfigureAwait(false);
-        var required = (long)Math.Ceiling(totalBytes * SafetyMargin);
+        var required = (long)Math.Ceiling((totalBytes + additionalBytes) * SafetyMargin);
         if (available < required)
         {
             return new StorageOperationResult
@@ -248,7 +289,11 @@ public sealed class ExportPackageService : IExportPackageService
                     .ConfigureAwait(false);
                 exportedFiles++;
 
-                var hash = await _hashCalculator.ComputeSha256Async(sourcePath, cancellationToken).ConfigureAwait(false);
+                string? hash = null;
+                if (request.IncludeFileHashes)
+                {
+                    hash = (await _hashCalculator.ComputeSha256Async(sourcePath, cancellationToken).ConfigureAwait(false)).Value;
+                }
                 var validity = file.Validity is null
                     ? null
                     : new ExportedFileValidity
@@ -280,7 +325,7 @@ public sealed class ExportPackageService : IExportPackageService
                     StorageAlias = "default",
                     LogicalPathHint = (Path.Combine(Path.GetDirectoryName(relativePath) ?? string.Empty, Path.GetFileName(relativePath))
                         .Replace('\\', '/')),
-                    ContentHash = hash.Value,
+                    ContentHash = hash ?? string.Empty,
                     SizeBytes = file.Size.Value,
                     MimeType = file.Mime.Value,
                     CreatedAtUtc = file.CreatedUtc.ToDateTimeOffset(),
@@ -330,10 +375,10 @@ public sealed class ExportPackageService : IExportPackageService
             CreatedBy = Environment.UserName,
             SourceInstanceId = request.SourceInstanceId?.ToString(),
             SourceInstanceName = request.SourceInstanceName,
-            ExportMode = "LogicalPerFile",
-            ExportStorageRootAlias = "default",
-            ManifestVersion = 1,
-            Vtp = vtpContract,
+                ExportMode = request.ExportMode.ToString(),
+                ExportStorageRootAlias = "default",
+                ManifestVersion = 1,
+                Vtp = vtpContract,
         };
 
         var metadata = new MetadataJsonModel
@@ -341,11 +386,11 @@ public sealed class ExportPackageService : IExportPackageService
             FormatVersion = 1,
             ApplicationVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown",
             DatabaseSchemaVersion = (await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken).ConfigureAwait(false)).LastOrDefault(),
-            ExportMode = "LogicalPerFile",
+            ExportMode = request.ExportMode.ToString(),
             OriginalStorageRootPath = normalizedRoot,
             TotalFilesCount = files.Count,
             TotalFilesBytes = totalBytes,
-            HashAlgorithm = "SHA256",
+            HashAlgorithm = request.IncludeFileHashes ? "SHA256" : string.Empty,
             FileDescriptorSchemaVersion = 2,
             PathMappings = new List<PathMapping>
             {
@@ -382,6 +427,20 @@ public sealed class ExportPackageService : IExportPackageService
     {
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, payload, VpfSerialization.Options, cancellationToken).ConfigureAwait(false);
+    }
+
+    private long GetDatabaseSize()
+    {
+        try
+        {
+            var info = new FileInfo(_connectionStringProvider.DatabasePath);
+            return info.Exists ? info.Length : 0;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to determine database size for export; continuing without reservation.");
+            return 0;
+        }
     }
 
     private static void PreparePackageDirectory(string packageRoot, bool overwriteExisting)
