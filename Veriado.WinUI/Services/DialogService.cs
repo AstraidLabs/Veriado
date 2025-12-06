@@ -102,6 +102,25 @@ public sealed class DialogService : IDialogService
         ArgumentNullException.ThrowIfNull(dialog);
 
         var window = _window.GetActiveWindow();
+        if (!window.DispatcherQueue.HasThreadAccess)
+        {
+            var tcs = new TaskCompletionSource<ContentDialogResult>();
+
+            _ = window.DispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    tcs.SetResult(await ShowDialogAsync(dialog, cancellationToken).ConfigureAwait(false));
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            });
+
+            return await tcs.Task.ConfigureAwait(false);
+        }
+
         if (window.Content is not FrameworkElement rootElement)
         {
             throw new InvalidOperationException("Cannot resolve XamlRoot from window.");
