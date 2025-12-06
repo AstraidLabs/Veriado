@@ -63,15 +63,6 @@ public sealed record VpfPackageManifest
     public string ExportMode { get; init; } = "LogicalPerFile";
 }
 
-public sealed record PathMapping
-{
-    [JsonPropertyName("storageAlias")]
-    public string StorageAlias { get; init; } = "default";
-
-    [JsonPropertyName("relativeRoot")]
-    public string RelativeRoot { get; init; } = string.Empty;
-}
-
 /// <summary>
 /// Technical metadata describing application and schema versions captured during export.
 /// </summary>
