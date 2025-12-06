@@ -272,10 +272,14 @@ public sealed class ExportPackageService : IExportPackageService
 
                 var descriptor = new ExportedFileDescriptor
                 {
+                    SchemaVersion = 2,
                     FileId = file.Id,
                     OriginalInstanceId = request.SourceInstanceId ?? Guid.Empty,
                     RelativePath = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? string.Empty,
                     FileName = Path.GetFileName(relativePath),
+                    StorageAlias = "default",
+                    LogicalPathHint = (Path.Combine(Path.GetDirectoryName(relativePath) ?? string.Empty, Path.GetFileName(relativePath))
+                        .Replace('\\', '/')),
                     ContentHash = hash.Value,
                     SizeBytes = file.Size.Value,
                     MimeType = file.Mime.Value,
@@ -324,9 +328,11 @@ public sealed class ExportPackageService : IExportPackageService
             Description = request.Description,
             CreatedAtUtc = DateTimeOffset.UtcNow,
             CreatedBy = Environment.UserName,
-            SourceInstanceId = request.SourceInstanceId ?? Guid.Empty,
+            SourceInstanceId = request.SourceInstanceId?.ToString(),
             SourceInstanceName = request.SourceInstanceName,
             ExportMode = "LogicalPerFile",
+            ExportStorageRootAlias = "default",
+            ManifestVersion = 1,
             Vtp = vtpContract,
         };
 
@@ -340,7 +346,11 @@ public sealed class ExportPackageService : IExportPackageService
             TotalFilesCount = files.Count,
             TotalFilesBytes = totalBytes,
             HashAlgorithm = "SHA256",
-            FileDescriptorSchemaVersion = 1,
+            FileDescriptorSchemaVersion = 2,
+            PathMappings = new List<PathMapping>
+            {
+                new() { StorageAlias = "default", RelativeRoot = string.Empty },
+            },
             Vtp = vtpContract,
         };
 

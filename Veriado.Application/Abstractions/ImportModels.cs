@@ -41,7 +41,10 @@ public sealed record ValidatedImportFile(
     string ContentHash,
     long SizeBytes,
     string? MimeType,
-    DateTimeOffset LastModifiedAtUtc);
+    DateTimeOffset LastModifiedAtUtc,
+    string StorageAlias,
+    string LogicalPathHint,
+    Guid? OriginalInstanceId);
 
 public sealed record ImportItemPreview(
     Guid FileId,

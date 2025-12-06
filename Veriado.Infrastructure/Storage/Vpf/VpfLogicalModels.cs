@@ -38,7 +38,22 @@ public sealed record PackageJsonModel
         = null;
 
     [JsonPropertyName("sourceInstanceId")]
-    public Guid SourceInstanceId { get; init; } = Guid.Empty;
+    public string? SourceInstanceId { get; init; }
+        = null;
+
+    /// <summary>
+    /// Name of the storage root used during export (alias). Defaults to "default" for legacy packages.
+    /// </summary>
+    [JsonPropertyName("exportStorageRootAlias")]
+    public string? ExportStorageRootAlias { get; init; }
+        = null;
+
+    /// <summary>
+    /// Optional manifest version to allow future evolution without breaking current readers.
+    /// </summary>
+    [JsonPropertyName("manifestVersion")]
+    public int? ManifestVersion { get; init; }
+        = null;
 
     [JsonPropertyName("sourceInstanceName")]
     public string? SourceInstanceName { get; init; }
@@ -46,6 +61,15 @@ public sealed record PackageJsonModel
 
     [JsonPropertyName("exportMode")]
     public string ExportMode { get; init; } = "LogicalPerFile";
+}
+
+public sealed record PathMapping
+{
+    [JsonPropertyName("storageAlias")]
+    public string StorageAlias { get; init; } = "default";
+
+    [JsonPropertyName("relativeRoot")]
+    public string RelativeRoot { get; init; } = string.Empty;
 }
 
 public sealed record MetadataJsonModel
@@ -81,10 +105,13 @@ public sealed record MetadataJsonModel
     public string HashAlgorithm { get; init; } = "SHA256";
 
     [JsonPropertyName("fileDescriptorSchemaVersion")]
-    public int FileDescriptorSchemaVersion { get; init; } = 1;
+    public int FileDescriptorSchemaVersion { get; init; } = 2;
 
     [JsonPropertyName("extensions")]
     public IReadOnlyList<string> Extensions { get; init; } = Array.Empty<string>();
+
+    [JsonPropertyName("pathMappings")]
+    public IReadOnlyList<PathMapping>? PathMappings { get; init; } = null;
 }
 
 public sealed record ExportedFileDescriptor
@@ -93,15 +120,15 @@ public sealed record ExportedFileDescriptor
     public string Schema { get; init; } = "Veriado.FileDescriptor";
 
     [JsonPropertyName("schemaVersion")]
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
 
     [JsonPropertyName("fileId")]
-    public Guid FileId { get; init; }
-        = Guid.Empty;
+    public Guid? FileId { get; init; }
+        = null;
 
     [JsonPropertyName("originalInstanceId")]
-    public Guid OriginalInstanceId { get; init; }
-        = Guid.Empty;
+    public Guid? OriginalInstanceId { get; init; }
+        = null;
 
     [JsonPropertyName("relativePath")]
     public string RelativePath { get; init; } = string.Empty;
@@ -119,6 +146,19 @@ public sealed record ExportedFileDescriptor
     [JsonPropertyName("mimeType")]
     public string? MimeType { get; init; }
         = string.Empty;
+
+    /// <summary>
+    /// Logical storage alias from which the file was exported. Defaults to "default" for legacy packages.
+    /// </summary>
+    [JsonPropertyName("storageAlias")]
+    public string? StorageAlias { get; init; } = "default";
+
+    /// <summary>
+    /// Relative path hint that can be re-mapped on import when FileId cannot be reused.
+    /// </summary>
+    [JsonPropertyName("logicalPathHint")]
+    public string? LogicalPathHint { get; init; }
+        = null;
 
     [JsonPropertyName("createdAtUtc")]
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.MinValue;

@@ -190,7 +190,7 @@ public sealed class VpfPackageValidator
                     $"Unsupported descriptor schema '{descriptor.Schema}'."));
             }
 
-            if (descriptor.SchemaVersion != 1)
+            if (descriptor.SchemaVersion is < 1 or > 2)
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.SchemaUnsupported,
@@ -226,11 +226,16 @@ public sealed class VpfPackageValidator
                 relativePath,
                 descriptor.FileName,
                 Path.GetRelativePath(normalized, descriptorPath),
-                descriptor.FileId,
+                descriptor.FileId ?? Guid.Empty,
                 descriptor.ContentHash,
                 descriptor.SizeBytes,
                 descriptor.MimeType,
-                descriptor.LastModifiedAtUtc));
+                descriptor.LastModifiedAtUtc,
+                descriptor.StorageAlias ?? "default",
+                string.IsNullOrWhiteSpace(descriptor.LogicalPathHint)
+                    ? CombineRelative(relativePath)
+                    : descriptor.LogicalPathHint,
+                descriptor.OriginalInstanceId));
         }
 
         foreach (var descriptorPath in Directory.EnumerateFiles(filesRoot, "*.json", SearchOption.AllDirectories))
@@ -274,7 +279,7 @@ public sealed class VpfPackageValidator
                     $"metadata.json totalFilesBytes={metadata.TotalFilesBytes} differs from detected {totalBytes}."));
             }
 
-            if (metadata.FileDescriptorSchemaVersion != 1)
+            if (metadata.FileDescriptorSchemaVersion is < 1 or > 2)
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.SchemaUnsupported,
@@ -326,6 +331,9 @@ public sealed class VpfPackageValidator
             or AppVtpPayloadType.FullExport
             or AppVtpPayloadType.DeltaExport
             or AppVtpPayloadType.Backup;
+
+    private static string CombineRelative(string relativePath)
+        => relativePath.Replace("\\", "/");
 
     private static async Task<T> DeserializeAsync<T>(string path, CancellationToken cancellationToken)
     {

@@ -263,6 +263,9 @@ public sealed class StorageManagementService : IStorageManagementService
             SizeBytes = file.SizeBytes,
             MimeType = file.MimeType,
             LastModifiedAtUtc = file.LastModifiedAtUtc,
+            StorageAlias = file.StorageAlias,
+            LogicalPathHint = file.LogicalPathHint,
+            OriginalInstanceId = file.OriginalInstanceId,
         };
 
     private static ImportItemPreviewDto Map(ImportItemPreview preview)
