@@ -1,7 +1,7 @@
 using System;
 using Veriado.Contracts.Storage;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 public sealed record ExportRequest
 {

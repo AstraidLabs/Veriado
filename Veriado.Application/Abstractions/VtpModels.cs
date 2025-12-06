@@ -5,7 +5,7 @@ using ContractsVtpImportResultCode = Veriado.Contracts.Storage.VtpImportResultCo
 using ContractsVtpPackageInfo = Veriado.Contracts.Storage.VtpPackageInfo;
 using ContractsVtpPayloadType = Veriado.Contracts.Storage.VtpPayloadType;
 
-namespace Veriado.Application.Abstractions;
+namespace Veriado.Appl.Abstractions;
 
 public enum VtpPayloadType
 {

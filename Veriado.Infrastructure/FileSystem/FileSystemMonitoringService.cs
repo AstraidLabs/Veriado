@@ -16,7 +16,6 @@ using Veriado.Domain.ValueObjects;
 using Veriado.Infrastructure.Persistence;
 using ApplicationClock = Veriado.Appl.Abstractions.IClock;
 using DomainClock = Veriado.Domain.Primitives.IClock;
-using Veriado.Application.Abstractions;
 
 namespace Veriado.Infrastructure.FileSystem;
 
@@ -104,7 +103,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             _watcher.Changed += OnChanged;
             _watcher.EnableRaisingEvents = true;
 
-            // žádný Task.Run s tokenem – bìží to normálnì jako background Task
+            // ï¿½ï¿½dnï¿½ Task.Run s tokenem ï¿½ bï¿½ï¿½ to normï¿½lnï¿½ jako background Task
             _processingTask = ProcessEventsAsync(token);
 
             _started = true;
@@ -152,10 +151,10 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
             watcherToDispose.Dispose();
         }
 
-        // ukonèíme kanál – ètení skonèí ChannelClosedException
+        // ukonï¿½ï¿½me kanï¿½l ï¿½ ï¿½tenï¿½ skonï¿½ï¿½ ChannelClosedException
         _eventChannel.Writer.TryComplete();
 
-        // zrušíme interní token – kdo èeká na delay / pause / maintenance, skonèí OCE
+        // zruï¿½ï¿½me internï¿½ token ï¿½ kdo ï¿½ekï¿½ na delay / pause / maintenance, skonï¿½ï¿½ OCE
         ctsToCancel?.Cancel();
 
         if (processingTask is not null)
@@ -276,7 +275,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
                 await _maintenanceCoordinator.WaitForResumeAsync(cancellationToken).ConfigureAwait(false);
                 await _pauseCoordinator.WaitIfPausedAsync(cancellationToken).ConfigureAwait(false);
 
-                // èteme bez tokenu; pøi shutdownu se kanál zavøe a skonèíme pomocí ChannelClosedException
+                // ï¿½teme bez tokenu; pï¿½i shutdownu se kanï¿½l zavï¿½e a skonï¿½ï¿½me pomocï¿½ ChannelClosedException
                 var initialEvent = await _eventChannel.Reader.ReadAsync().ConfigureAwait(false);
 
                 var buffer = new List<FileSystemEvent> { initialEvent };
@@ -416,7 +415,7 @@ internal sealed class FileSystemMonitoringService : IFileSystemMonitoringService
     }
 
     // HandleCreatedAsync, HandleDeletedAsync, HandleRenamedAsync, HandleChangedAsync, TryGetRelativePath
-    // a DispatchSyncActionsAsync nechávám beze zmìny – už správnì propagují cancellationToken.
+    // a DispatchSyncActionsAsync nechï¿½vï¿½m beze zmï¿½ny ï¿½ uï¿½ sprï¿½vnï¿½ propagujï¿½ cancellationToken.
 
     private async Task HandleCreatedAsync(
         string fullPath,

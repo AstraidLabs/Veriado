@@ -1,6 +1,6 @@
 // File: Veriado.Services/Storage/StorageManagementService.cs
 using System.Linq;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Contracts.Storage;
 
 namespace Veriado.Services.Storage;

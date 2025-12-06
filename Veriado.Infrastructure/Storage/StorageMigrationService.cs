@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Veriado.Appl.Abstractions;
-using Veriado.Application.Abstractions;
 using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Entities;

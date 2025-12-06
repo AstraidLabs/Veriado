@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Veriado.Application.Abstractions;
 using Veriado.Appl.Abstractions;
 using Veriado.Appl.Common.Exceptions;
 using Veriado.Application.Import;

@@ -4,10 +4,10 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Application.Abstractions;
+using Veriado.Appl.Abstractions;
 using Veriado.Contracts.Storage;
-using AppVtpPackageInfo = Veriado.Application.Abstractions.VtpPackageInfo;
-using AppVtpPayloadType = Veriado.Application.Abstractions.VtpPayloadType;
+using AppVtpPackageInfo = Veriado.Appl.Abstractions.VtpPackageInfo;
+using AppVtpPayloadType = Veriado.Appl.Abstractions.VtpPayloadType;
 
 namespace Veriado.Infrastructure.Storage.Vpf;
 
