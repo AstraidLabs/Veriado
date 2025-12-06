@@ -6,6 +6,11 @@ namespace Veriado.Appl.Abstractions;
 /// <summary>
 /// Coordinates application-wide maintenance periods by pausing and resuming
 /// background processing so that long-running jobs can complete safely.
+///
+/// Implementations are expected to block background operations when
+/// <see cref="PauseBackgroundWorkAsync"/> is invoked, and release the block once
+/// <see cref="ResumeBackgroundWorkAsync"/> is called. Consumers can await
+/// <see cref="WaitForResumeAsync"/> to be notified when maintenance is over.
 /// </summary>
 public interface IApplicationMaintenanceCoordinator
 {
