@@ -17,7 +17,7 @@ public sealed record PackageJsonModel
     public string SpecVersion { get; init; } = ExpectedSpecVersion;
 
     [JsonPropertyName("vtp")]
-    public VtpPackageInfo Vtp { get; init; } = new();
+    public Contracts.Storage.VtpPackageInfo Vtp { get; init; } = new();
 
     [JsonPropertyName("packageId")]
     public Guid PackageId { get; init; } = Guid.NewGuid();
@@ -81,7 +81,7 @@ public sealed record MetadataJsonModel
     public string ApplicationVersion { get; init; } = string.Empty;
 
     [JsonPropertyName("vtp")]
-    public VtpPackageInfo Vtp { get; init; } = new();
+    public Contracts.Storage.VtpPackageInfo Vtp { get; init; } = new();
 
     [JsonPropertyName("databaseSchemaVersion")]
     public string? DatabaseSchemaVersion { get; init; }
