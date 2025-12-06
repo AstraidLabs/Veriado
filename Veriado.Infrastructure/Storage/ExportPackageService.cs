@@ -266,8 +266,8 @@ public sealed class ExportPackageService : IExportPackageService
                     LastWriteUtc = file.SystemMetadata.LastWriteUtc.ToDateTimeOffset(),
                     LastAccessUtc = file.SystemMetadata.LastAccessUtc.ToDateTimeOffset(),
                     OwnerSid = file.SystemMetadata.OwnerSid,
-                    HardLinkCount = file.SystemMetadata.HardLinkCount,
-                    AlternateDataStreamCount = file.SystemMetadata.AlternateDataStreamCount,
+                    HardLinkCount = (int?)file.SystemMetadata.HardLinkCount,
+                    AlternateDataStreamCount = (int?)file.SystemMetadata.AlternateDataStreamCount,
                 };
 
                 var descriptor = new ExportedFileDescriptor
@@ -288,7 +288,7 @@ public sealed class ExportPackageService : IExportPackageService
                     LastModifiedAtUtc = file.LastModifiedUtc.ToDateTimeOffset(),
                     LastModifiedBy = file.Author,
                     IsReadOnly = file.IsReadOnly,
-                    Title = file.Title?.Value,
+                    Title = file.Title,
                     Author = file.Author,
                     Validity = validity,
                     SystemMetadata = systemMetadata,
