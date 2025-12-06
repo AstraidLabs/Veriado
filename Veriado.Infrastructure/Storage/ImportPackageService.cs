@@ -20,6 +20,7 @@ using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Entities;
 using Veriado.Infrastructure.Storage.Vpf;
 using Veriado.Infrastructure.Storage.Vpack;
+using Veriado.Domain.ValueObjects;
 
 namespace Veriado.Infrastructure.Storage;
 
@@ -423,7 +424,10 @@ public sealed class ImportPackageService : IImportPackageService
 
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var ids = result.ValidatedFiles.Select(v => v.FileId).ToArray();
-        var hashes = result.ValidatedFiles.Select(v => v.ContentHash).Distinct().ToArray();
+        var hashes = result.ValidatedFiles
+            .Select(v => FileHash.From(v.ContentHash))
+            .Distinct()
+            .ToArray();
 
         var existingById = await dbContext.FileSystems
             .AsNoTracking()
@@ -438,7 +442,7 @@ public sealed class ImportPackageService : IImportPackageService
 
         var existingByHash = await dbContext.FileSystems
             .AsNoTracking()
-            .Where(f => hashes.Contains(f.Hash.Value))
+            .Where(f => hashes.Contains(f.Hash))
             .Select(f => new LocalExistingFile(
                 f.Id,
                 f.Hash.Value,
