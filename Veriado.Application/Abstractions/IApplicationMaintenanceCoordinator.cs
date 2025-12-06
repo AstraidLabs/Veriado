@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Veriado.Appl.Abstractions;
+namespace Veriado.Application.Abstractions;
 
 /// <summary>
 /// Coordinates application-wide maintenance periods by pausing and resuming
