@@ -19,6 +19,11 @@ internal static class AtomicFileOperations
 
         try
         {
+            if (!File.Exists(source))
+            {
+                throw new FileNotFoundException($"Source file not found: {source}", source);
+            }
+
             using var sourceStream = File.Open(source, FileMode.Open, FileAccess.Read, FileShare.Read);
             await using (var tempStream = File.Open(tempDestination, FileMode.Create, FileAccess.Write, FileShare.None))
             {
