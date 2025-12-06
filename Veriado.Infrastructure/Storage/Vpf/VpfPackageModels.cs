@@ -44,8 +44,16 @@ public sealed record VpfPackageManifest
         = Environment.UserName;
 
     [JsonPropertyName("sourceInstanceId")]
-    public Guid SourceInstanceId { get; init; }
-        = Guid.Empty;
+    public string? SourceInstanceId { get; init; }
+        = null;
+
+    [JsonPropertyName("exportStorageRootAlias")]
+    public string? ExportStorageRootAlias { get; init; }
+        = null;
+
+    [JsonPropertyName("manifestVersion")]
+    public int? ManifestVersion { get; init; }
+        = null;
 
     [JsonPropertyName("sourceInstanceName")]
     public string? SourceInstanceName { get; init; }
@@ -53,6 +61,15 @@ public sealed record VpfPackageManifest
 
     [JsonPropertyName("exportMode")]
     public string ExportMode { get; init; } = "LogicalPerFile";
+}
+
+public sealed record PathMapping
+{
+    [JsonPropertyName("storageAlias")]
+    public string StorageAlias { get; init; } = "default";
+
+    [JsonPropertyName("relativeRoot")]
+    public string RelativeRoot { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -79,6 +96,9 @@ public sealed record VpfTechnicalMetadata
     [JsonPropertyName("originalStorageRootPath")]
     public string OriginalStorageRootPath { get; init; } = string.Empty;
 
+    [JsonPropertyName("pathMappings")]
+    public IReadOnlyList<PathMapping>? PathMappings { get; init; } = null;
+
     [JsonPropertyName("totalFilesCount")]
     public int TotalFilesCount { get; init; }
         = 0;
@@ -91,7 +111,7 @@ public sealed record VpfTechnicalMetadata
     public string HashAlgorithm { get; init; } = "SHA256";
 
     [JsonPropertyName("fileDescriptorSchemaVersion")]
-    public int FileDescriptorSchemaVersion { get; init; } = 1;
+    public int FileDescriptorSchemaVersion { get; init; } = 2;
 
     [JsonPropertyName("extensions")]
     public IReadOnlyList<string> Extensions { get; init; } = Array.Empty<string>();
@@ -106,15 +126,15 @@ public sealed record VpfFileDescriptor
     public string Schema { get; init; } = "Veriado.FileDescriptor";
 
     [JsonPropertyName("schemaVersion")]
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
 
     [JsonPropertyName("fileId")]
-    public Guid FileId { get; init; }
-        = Guid.Empty;
+    public Guid? FileId { get; init; }
+        = null;
 
     [JsonPropertyName("originalInstanceId")]
-    public Guid OriginalInstanceId { get; init; }
-        = Guid.Empty;
+    public Guid? OriginalInstanceId { get; init; }
+        = null;
 
     [JsonPropertyName("relativePath")]
     public string RelativePath { get; init; } = string.Empty;
@@ -128,6 +148,12 @@ public sealed record VpfFileDescriptor
     [JsonPropertyName("sizeBytes")]
     public long SizeBytes { get; init; }
         = 0;
+
+    [JsonPropertyName("storageAlias")]
+    public string? StorageAlias { get; init; } = "default";
+
+    [JsonPropertyName("logicalPathHint")]
+    public string? LogicalPathHint { get; init; } = null;
 
     [JsonPropertyName("mimeType")]
     public string? MimeType { get; init; }

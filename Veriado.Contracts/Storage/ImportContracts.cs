@@ -102,6 +102,10 @@ public sealed record ValidatedImportFileDto
     public long SizeBytes { get; init; }
     public string? MimeType { get; init; }
     public DateTimeOffset LastModifiedAtUtc { get; init; }
+    public string StorageAlias { get; init; } = "default";
+    public string LogicalPathHint { get; init; } = string.Empty;
+    public Guid? OriginalInstanceId { get; init; }
+        = null;
 }
 
 public sealed record ImportCommitResultDto
