@@ -1,6 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Veriado.Appl.Abstractions;
+using Veriado.Application.Abstractions;
 
 namespace Veriado.Infrastructure.Maintenance;
 

@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Veriado.Appl.Abstractions;
+using Veriado.Application.Abstractions;
 using Veriado.Application.Abstractions;
 using Veriado.Application.Import;
 using Veriado.Infrastructure.Events;
