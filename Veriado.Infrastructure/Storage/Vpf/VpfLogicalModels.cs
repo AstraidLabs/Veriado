@@ -138,6 +138,22 @@ public sealed record ExportedFileDescriptor
     public bool IsReadOnly { get; init; }
         = false;
 
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
+        = null;
+
+    [JsonPropertyName("author")]
+    public string? Author { get; init; }
+        = null;
+
+    [JsonPropertyName("validity")]
+    public ExportedFileValidity? Validity { get; init; }
+        = null;
+
+    [JsonPropertyName("systemMetadata")]
+    public ExportedSystemMetadata? SystemMetadata { get; init; }
+        = null;
+
     [JsonPropertyName("labels")]
     public IReadOnlyList<string> Labels { get; init; } = Array.Empty<string>();
 
@@ -148,4 +164,54 @@ public sealed record ExportedFileDescriptor
     [JsonPropertyName("extensions")]
     public IDictionary<string, object?> Extensions { get; init; }
         = new Dictionary<string, object?>();
+}
+
+public sealed record ExportedFileValidity
+{
+    [JsonPropertyName("issuedAtUtc")]
+    public DateTimeOffset IssuedAtUtc { get; init; }
+        = DateTimeOffset.MinValue;
+
+    [JsonPropertyName("validUntilUtc")]
+    public DateTimeOffset ValidUntilUtc { get; init; }
+        = DateTimeOffset.MinValue;
+
+    [JsonPropertyName("hasPhysicalCopy")]
+    public bool HasPhysicalCopy { get; init; }
+        = false;
+
+    [JsonPropertyName("hasElectronicCopy")]
+    public bool HasElectronicCopy { get; init; }
+        = false;
+}
+
+public sealed record ExportedSystemMetadata
+{
+    [JsonPropertyName("attributes")]
+    public int Attributes { get; init; }
+        = 0;
+
+    [JsonPropertyName("createdUtc")]
+    public DateTimeOffset CreatedUtc { get; init; }
+        = DateTimeOffset.MinValue;
+
+    [JsonPropertyName("lastWriteUtc")]
+    public DateTimeOffset LastWriteUtc { get; init; }
+        = DateTimeOffset.MinValue;
+
+    [JsonPropertyName("lastAccessUtc")]
+    public DateTimeOffset LastAccessUtc { get; init; }
+        = DateTimeOffset.MinValue;
+
+    [JsonPropertyName("ownerSid")]
+    public string? OwnerSid { get; init; }
+        = null;
+
+    [JsonPropertyName("hardLinkCount")]
+    public int? HardLinkCount { get; init; }
+        = null;
+
+    [JsonPropertyName("alternateDataStreamCount")]
+    public int? AlternateDataStreamCount { get; init; }
+        = null;
 }

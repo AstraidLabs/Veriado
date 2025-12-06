@@ -184,18 +184,29 @@ public sealed class ExportPackageService : IExportPackageService
             ?? throw new InvalidOperationException("Storage root is not configured.");
 
         var normalizedRoot = SafePathUtilities.NormalizeAndValidateRoot(storageRoot.RootPath, _logger);
-        var files = await dbContext.FileSystems
+        var files = await dbContext.Files
             .AsNoTracking()
-            .Select(f => new
-            {
-                f.Id,
-                f.RelativePath,
-                f.Size,
-                f.Hash,
-                f.Mime,
-                f.CreatedUtc,
-                f.LastWriteUtc,
-            })
+            .Join(
+                dbContext.FileSystems.AsNoTracking(),
+                file => file.FileSystemId,
+                system => system.Id,
+                (file, system) => new
+                {
+                    file.Id,
+                    file.Name,
+                    file.Title,
+                    file.Extension,
+                    file.Mime,
+                    file.Author,
+                    file.CreatedUtc,
+                    file.LastModifiedUtc,
+                    file.IsReadOnly,
+                    file.Validity,
+                    file.SystemMetadata,
+                    RelativePath = system.RelativePath,
+                    system.Size,
+                    system.Hash,
+                })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -238,6 +249,27 @@ public sealed class ExportPackageService : IExportPackageService
                 exportedFiles++;
 
                 var hash = await _hashCalculator.ComputeSha256Async(sourcePath, cancellationToken).ConfigureAwait(false);
+                var validity = file.Validity is null
+                    ? null
+                    : new ExportedFileValidity
+                    {
+                        IssuedAtUtc = file.Validity.IssuedAt.ToDateTimeOffset(),
+                        ValidUntilUtc = file.Validity.ValidUntil.ToDateTimeOffset(),
+                        HasPhysicalCopy = file.Validity.HasPhysicalCopy,
+                        HasElectronicCopy = file.Validity.HasElectronicCopy,
+                    };
+
+                var systemMetadata = new ExportedSystemMetadata
+                {
+                    Attributes = (int)file.SystemMetadata.Attributes,
+                    CreatedUtc = file.SystemMetadata.CreatedUtc.ToDateTimeOffset(),
+                    LastWriteUtc = file.SystemMetadata.LastWriteUtc.ToDateTimeOffset(),
+                    LastAccessUtc = file.SystemMetadata.LastAccessUtc.ToDateTimeOffset(),
+                    OwnerSid = file.SystemMetadata.OwnerSid,
+                    HardLinkCount = file.SystemMetadata.HardLinkCount,
+                    AlternateDataStreamCount = file.SystemMetadata.AlternateDataStreamCount,
+                };
+
                 var descriptor = new ExportedFileDescriptor
                 {
                     FileId = file.Id,
@@ -248,10 +280,14 @@ public sealed class ExportPackageService : IExportPackageService
                     SizeBytes = file.Size.Value,
                     MimeType = file.Mime.Value,
                     CreatedAtUtc = file.CreatedUtc.ToDateTimeOffset(),
-                    CreatedBy = Environment.UserName,
-                    LastModifiedAtUtc = file.LastWriteUtc.ToDateTimeOffset(),
-                    LastModifiedBy = Environment.UserName,
-                    IsReadOnly = false,
+                    CreatedBy = file.Author,
+                    LastModifiedAtUtc = file.LastModifiedUtc.ToDateTimeOffset(),
+                    LastModifiedBy = file.Author,
+                    IsReadOnly = file.IsReadOnly,
+                    Title = file.Title?.Value,
+                    Author = file.Author,
+                    Validity = validity,
+                    SystemMetadata = systemMetadata,
                 };
 
                 await WriteJsonAsync(destinationPath + ".json", descriptor, cancellationToken).ConfigureAwait(false);
