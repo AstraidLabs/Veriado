@@ -190,7 +190,7 @@ public sealed class VpfPackageValidator
                     $"Unsupported descriptor schema '{descriptor.Schema}'."));
             }
 
-            if (descriptor.SchemaVersion is < 1 or > 2)
+            if (descriptor.SchemaVersion is < 1 or > 3)
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.SchemaUnsupported,
@@ -279,7 +279,7 @@ public sealed class VpfPackageValidator
                     $"metadata.json totalFilesBytes={metadata.TotalFilesBytes} differs from detected {totalBytes}."));
             }
 
-            if (metadata.FileDescriptorSchemaVersion is < 1 or > 2)
+            if (metadata.FileDescriptorSchemaVersion is < 1 or > 3)
             {
                 issues.Add(new ImportValidationIssue(
                     ImportIssueType.SchemaUnsupported,
