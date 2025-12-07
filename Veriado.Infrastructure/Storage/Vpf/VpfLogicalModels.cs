@@ -105,7 +105,7 @@ public sealed record MetadataJsonModel
     public string HashAlgorithm { get; init; } = "SHA256";
 
     [JsonPropertyName("fileDescriptorSchemaVersion")]
-    public int FileDescriptorSchemaVersion { get; init; } = 2;
+    public int FileDescriptorSchemaVersion { get; init; } = 3;
 
     [JsonPropertyName("extensions")]
     public IReadOnlyList<string> Extensions { get; init; } = Array.Empty<string>();
@@ -120,7 +120,7 @@ public sealed record ExportedFileDescriptor
     public string Schema { get; init; } = "Veriado.FileDescriptor";
 
     [JsonPropertyName("schemaVersion")]
-    public int SchemaVersion { get; init; } = 2;
+    public int SchemaVersion { get; init; } = 3;
 
     [JsonPropertyName("fileId")]
     public Guid? FileId { get; init; }
@@ -135,6 +135,9 @@ public sealed record ExportedFileDescriptor
 
     [JsonPropertyName("fileName")]
     public string FileName { get; init; } = string.Empty;
+
+    [JsonPropertyName("extension")]
+    public string Extension { get; init; } = string.Empty;
 
     [JsonPropertyName("contentHash")]
     public string ContentHash { get; init; } = string.Empty;
@@ -178,6 +181,10 @@ public sealed record ExportedFileDescriptor
     public bool IsReadOnly { get; init; }
         = false;
 
+    [JsonPropertyName("version")]
+    public int Version { get; init; }
+        = 0;
+
     [JsonPropertyName("title")]
     public string? Title { get; init; }
         = null;
@@ -192,6 +199,10 @@ public sealed record ExportedFileDescriptor
 
     [JsonPropertyName("systemMetadata")]
     public ExportedSystemMetadata? SystemMetadata { get; init; }
+        = null;
+
+    [JsonPropertyName("physicalState")]
+    public string? PhysicalState { get; init; }
         = null;
 
     [JsonPropertyName("labels")]

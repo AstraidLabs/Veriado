@@ -239,12 +239,14 @@ public sealed class ExportPackageService : IExportPackageService
                     file.Extension,
                     file.Mime,
                     file.Author,
+                    Version = file.ContentRevision,
                     file.CreatedUtc,
                     file.LastModifiedUtc,
                     file.IsReadOnly,
                     file.Validity,
                     file.SystemMetadata,
                     RelativePath = system.RelativePath,
+                    PhysicalState = system.PhysicalState,
                     system.Size,
                     system.Hash,
                 })
@@ -294,6 +296,10 @@ public sealed class ExportPackageService : IExportPackageService
                 {
                     hash = (await _hashCalculator.ComputeSha256Async(sourcePath, cancellationToken).ConfigureAwait(false)).Value;
                 }
+                else if (file.Hash is { } existingHash && !string.IsNullOrWhiteSpace(existingHash.Value))
+                {
+                    hash = existingHash.Value;
+                }
                 var validity = file.Validity is null
                     ? null
                     : new ExportedFileValidity
@@ -317,11 +323,12 @@ public sealed class ExportPackageService : IExportPackageService
 
                 var descriptor = new ExportedFileDescriptor
                 {
-                    SchemaVersion = 2,
+                    SchemaVersion = 3,
                     FileId = file.Id,
                     OriginalInstanceId = request.SourceInstanceId ?? Guid.Empty,
                     RelativePath = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? string.Empty,
                     FileName = Path.GetFileName(relativePath),
+                    Extension = file.Extension.Value,
                     StorageAlias = "default",
                     LogicalPathHint = (Path.Combine(Path.GetDirectoryName(relativePath) ?? string.Empty, Path.GetFileName(relativePath))
                         .Replace('\\', '/')),
@@ -333,10 +340,12 @@ public sealed class ExportPackageService : IExportPackageService
                     LastModifiedAtUtc = file.LastModifiedUtc.ToDateTimeOffset(),
                     LastModifiedBy = file.Author,
                     IsReadOnly = file.IsReadOnly,
+                    Version = file.Version,
                     Title = file.Title,
                     Author = file.Author,
                     Validity = validity,
                     SystemMetadata = systemMetadata,
+                    PhysicalState = file.PhysicalState.ToString(),
                 };
 
                 await WriteJsonAsync(destinationPath + ".json", descriptor, cancellationToken).ConfigureAwait(false);
@@ -391,7 +400,7 @@ public sealed class ExportPackageService : IExportPackageService
             TotalFilesCount = files.Count,
             TotalFilesBytes = totalBytes,
             HashAlgorithm = request.IncludeFileHashes ? "SHA256" : string.Empty,
-            FileDescriptorSchemaVersion = 2,
+            FileDescriptorSchemaVersion = 3,
             PathMappings = new List<PathMapping>
             {
                 new() { StorageAlias = "default", RelativeRoot = string.Empty },
