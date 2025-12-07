@@ -281,7 +281,8 @@ public partial class App : WinUIApplication
         await DisposeHostAsync().ConfigureAwait(false);
 
         var restartResult = AppInstance.Restart(string.Empty);
-        if (restartResult != Microsoft.Windows.AppLifecycle.AppRestartFailureReason.Ok)
+        var restartSucceeded = IsRestartSuccess(restartResult);
+        if (!restartSucceeded)
         {
             var processPath = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(processPath))
@@ -303,6 +304,28 @@ public partial class App : WinUIApplication
         }
 
         WinUIApplication.Current.Exit();
+    }
+
+    private static bool IsRestartSuccess(object? restartResult)
+    {
+        if (restartResult is null)
+        {
+            return false;
+        }
+
+        var statusProperty = restartResult.GetType().GetProperty("Status");
+        if (statusProperty is not null)
+        {
+            restartResult = statusProperty.GetValue(restartResult);
+        }
+
+        if (restartResult.ToString() is string restartStatus)
+        {
+            return string.Equals(restartStatus, "Ok", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(restartStatus, "Success", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 
     private async Task DisposeHostAsync()
