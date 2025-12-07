@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.UI.Windowing;
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.UI.Dispatching;
@@ -14,6 +15,7 @@ using Veriado.WinUI.Views.Shell;
 using Microsoft.UI.Xaml;
 using WinUIApplication = Microsoft.UI.Xaml.Application;
 using WinUIWindow = Microsoft.UI.Xaml.Window;
+using WinRT.Interop;
 
 namespace Veriado.WinUI;
 
@@ -178,7 +180,7 @@ public partial class App : WinUIApplication
                     shell.HideShell();
                     break;
                 case not null:
-                    MainWindow.Hide();
+                    HideWindow(MainWindow);
                     break;
             }
         });
@@ -197,7 +199,7 @@ public partial class App : WinUIApplication
                     shell.ShowShell();
                     break;
                 case not null:
-                    window.Activate();
+                    ShowWindow(window);
                     break;
             }
         });
@@ -279,7 +281,7 @@ public partial class App : WinUIApplication
         await DisposeHostAsync().ConfigureAwait(false);
 
         var restartResult = AppInstance.Restart(string.Empty);
-        if (restartResult != AppRestartFailureReason.Ok)
+        if (restartResult != Microsoft.Windows.AppLifecycle.AppRestartFailureReason.Ok)
         {
             var processPath = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(processPath))
@@ -318,6 +320,38 @@ public partial class App : WinUIApplication
     {
         _trayIconService?.Dispose();
         _trayIconService = null;
+    }
+
+    private static void HideWindow(Window window)
+    {
+        var appWindow = GetAppWindow(window);
+        appWindow?.Hide();
+    }
+
+    private static void ShowWindow(Window window)
+    {
+        var appWindow = GetAppWindow(window);
+        if (appWindow is not null)
+        {
+            appWindow.Show();
+            return;
+        }
+
+        window.Activate();
+    }
+
+    private static AppWindow? GetAppWindow(Window window)
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(window);
+            var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+            return AppWindow.GetFromWindowId(windowId);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void EnsureAppNotificationsRegistered()
