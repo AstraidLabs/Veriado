@@ -145,6 +145,24 @@
                         <CheckBox Content="Ověřit po kopii" IsChecked="{Binding ImportVerifyAfterCopy, Mode=TwoWay}" />
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <TextBlock VerticalAlignment="Center" Text="Strategie konfliktů" />
+                        <ComboBox
+                            Width="220"
+                            ItemsSource="{Binding ImportStrategies}"
+                            SelectedItem="{Binding SelectedImportStrategy, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Přehled validace" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ValidationSummary}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Shrnutí importu" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ImportSummary}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
                     <Button Content="Spustit import" Command="{Binding RunImportCommand}" />
                 </StackPanel>
             </muxc:Expander>

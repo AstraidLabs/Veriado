@@ -41,10 +41,36 @@ public sealed record ValidatedImportFile(
     string ContentHash,
     long SizeBytes,
     string? MimeType,
+    string? Extension,
+    DateTimeOffset CreatedAtUtc,
+    string? CreatedBy,
     DateTimeOffset LastModifiedAtUtc,
+    string? LastModifiedBy,
     string StorageAlias,
     string LogicalPathHint,
-    Guid? OriginalInstanceId);
+    Guid? OriginalInstanceId,
+    bool IsReadOnly,
+    int Version,
+    string? Title,
+    string? Author,
+    ImportValidityInfo? Validity,
+    ImportSystemMetadataInfo? SystemMetadata,
+    string? PhysicalState);
+
+public sealed record ImportValidityInfo(
+    DateTimeOffset IssuedAtUtc,
+    DateTimeOffset ValidUntilUtc,
+    bool HasPhysicalCopy,
+    bool HasElectronicCopy);
+
+public sealed record ImportSystemMetadataInfo(
+    int Attributes,
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset LastWriteUtc,
+    DateTimeOffset LastAccessUtc,
+    string? OwnerSid,
+    int? HardLinkCount,
+    int? AlternateDataStreamCount);
 
 public sealed record ImportItemPreview(
     Guid FileId,
@@ -97,4 +123,5 @@ public sealed record ImportCommitResult(
     IReadOnlyList<ImportValidationIssue> Issues,
     IReadOnlyList<ImportItemPreview> Items,
     VtpImportResultCode VtpResultCode,
-    Guid? CorrelationId);
+    Guid? CorrelationId,
+    IReadOnlyDictionary<Guid, Guid>? FileIdMap = null);

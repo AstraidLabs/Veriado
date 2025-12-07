@@ -230,12 +230,38 @@ public sealed class VpfPackageValidator
                 descriptor.ContentHash,
                 descriptor.SizeBytes,
                 descriptor.MimeType,
+                descriptor.Extension,
+                descriptor.CreatedAtUtc,
+                descriptor.CreatedBy,
                 descriptor.LastModifiedAtUtc,
+                descriptor.LastModifiedBy,
                 descriptor.StorageAlias ?? "default",
                 string.IsNullOrWhiteSpace(descriptor.LogicalPathHint)
                     ? CombineRelative(relativePath)
                     : descriptor.LogicalPathHint,
-                descriptor.OriginalInstanceId));
+                descriptor.OriginalInstanceId,
+                descriptor.IsReadOnly,
+                descriptor.Version,
+                descriptor.Title,
+                descriptor.Author,
+                descriptor.Validity is null
+                    ? null
+                    : new ImportValidityInfo(
+                        descriptor.Validity.IssuedAtUtc,
+                        descriptor.Validity.ValidUntilUtc,
+                        descriptor.Validity.HasPhysicalCopy,
+                        descriptor.Validity.HasElectronicCopy),
+                descriptor.SystemMetadata is null
+                    ? null
+                    : new ImportSystemMetadataInfo(
+                        descriptor.SystemMetadata.Attributes,
+                        descriptor.SystemMetadata.CreatedUtc,
+                        descriptor.SystemMetadata.LastWriteUtc,
+                        descriptor.SystemMetadata.LastAccessUtc,
+                        descriptor.SystemMetadata.OwnerSid,
+                        descriptor.SystemMetadata.HardLinkCount,
+                        descriptor.SystemMetadata.AlternateDataStreamCount),
+                descriptor.PhysicalState));
         }
 
         foreach (var descriptorPath in Directory.EnumerateFiles(filesRoot, "*.json", SearchOption.AllDirectories))
