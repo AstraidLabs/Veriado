@@ -1,13 +1,14 @@
 using System.Diagnostics;
-using System.Drawing;
 using System.Globalization;
 using System.IO;
-using Microsoft.UI.Dispatching;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
-using Forms = System.Windows.Forms;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
+using H.NotifyIcon;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
@@ -25,7 +26,7 @@ public partial class App : WinUIApplication
         .CreateLogger<App>();
 
     private AppHost? _appHost;
-    private Forms.NotifyIcon? _notifyIcon;
+    private TaskbarIcon? _taskbarIcon;
     private bool _isShuttingDown;
     private bool _notificationsRegistered;
 
@@ -170,7 +171,8 @@ public partial class App : WinUIApplication
 
     internal void HideMainWindow()
     {
-        DispatcherQueue.TryEnqueue(() =>
+        var dispatcher = MainWindow?.DispatcherQueue ?? DispatcherQueue.GetForCurrentThread();
+        dispatcher?.TryEnqueue(() =>
         {
             switch (MainWindow)
             {
@@ -186,7 +188,8 @@ public partial class App : WinUIApplication
 
     private void ShowMainWindow()
     {
-        DispatcherQueue.TryEnqueue(async () =>
+        var dispatcher = MainWindow?.DispatcherQueue ?? DispatcherQueue.GetForCurrentThread();
+        dispatcher?.TryEnqueue(async () =>
         {
             var window = await EnsureMainWindowAsync().ConfigureAwait(false);
 
@@ -233,46 +236,45 @@ public partial class App : WinUIApplication
 
     private void InitializeTrayIcon()
     {
-        if (_notifyIcon is not null)
+        if (_taskbarIcon is not null)
         {
             return;
         }
 
-        var contextMenu = new Forms.ContextMenuStrip();
-        contextMenu.Items.Add("Otevřít Veriado", null, (_, _) => ShowMainWindow());
-        contextMenu.Items.Add("Restartovat", null, (_, _) => RestartApplication());
-        contextMenu.Items.Add("Ukončit", null, (_, _) => ExitApplication());
+        var contextMenu = new MenuFlyout();
+        contextMenu.Items.Add(new MenuFlyoutItem { Text = "Otevřít Veriado" });
+        contextMenu.Items.Add(new MenuFlyoutItem { Text = "Restartovat" });
+        contextMenu.Items.Add(new MenuFlyoutItem { Text = "Ukončit" });
 
-        var icon = LoadTrayIcon() ?? SystemIcons.Application;
+        contextMenu.Items[0].Click += (_, _) => ShowMainWindow();
+        contextMenu.Items[1].Click += (_, _) => RestartApplication();
+        contextMenu.Items[2].Click += (_, _) => ExitApplication();
 
-        _notifyIcon = new Forms.NotifyIcon
+        var icon = LoadTrayIcon();
+
+        _taskbarIcon = new TaskbarIcon
         {
-            Icon = icon,
-            Visible = true,
-            Text = "Veriado – správce dokumentů",
-            ContextMenuStrip = contextMenu,
+            IconSource = icon,
+            ToolTipText = "Veriado – správce dokumentů",
+            ContextFlyout = contextMenu,
         };
 
-        _notifyIcon.DoubleClick += (_, _) => ShowMainWindow();
+        _taskbarIcon.DoubleClick += (_, _) => ShowMainWindow();
     }
 
-    private static Icon? LoadTrayIcon()
+    private static BitmapImage LoadTrayIcon()
     {
         var iconPath = Path.Combine(AppContext.BaseDirectory, "favicon.ico");
+        var bitmap = new BitmapImage();
 
         if (File.Exists(iconPath))
         {
-            try
-            {
-                return new Icon(iconPath);
-            }
-            catch
-            {
-                // Ignore icon loading failures; a fallback icon will be used.
-            }
+            bitmap.UriSource = new Uri(iconPath);
+            return bitmap;
         }
 
-        return null;
+        bitmap.UriSource = new Uri("ms-appx:///Assets/Square44x44Logo.scale-200.png");
+        return bitmap;
     }
 
     private async void ExitApplication()
@@ -340,14 +342,13 @@ public partial class App : WinUIApplication
 
     private void DisposeTrayIcon()
     {
-        if (_notifyIcon is null)
+        if (_taskbarIcon is null)
         {
             return;
         }
 
-        _notifyIcon.Visible = false;
-        _notifyIcon.Dispose();
-        _notifyIcon = null;
+        _taskbarIcon.Dispose();
+        _taskbarIcon = null;
     }
 
     private void EnsureAppNotificationsRegistered()
