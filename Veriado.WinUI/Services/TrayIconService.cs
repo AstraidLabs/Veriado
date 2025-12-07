@@ -246,13 +246,18 @@ internal sealed class TrayIconService : IDisposable
         }
 
         Win32Values.SetForegroundWindow(_windowHandle);
-        _ = Win32Values.TrackPopupMenuEx(
+        var commandId = Win32Values.TrackPopupMenuEx(
             _menuHandle,
             Win32Values.TPM_RETURNCMD | Win32Values.TPM_RIGHTBUTTON,
             point.X,
             point.Y,
             _windowHandle,
             0);
+
+        if (commandId != 0)
+        {
+            HandleCommand((nint)commandId);
+        }
     }
 }
 
