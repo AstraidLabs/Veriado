@@ -842,7 +842,7 @@ public sealed class ImportPackageService : IImportPackageService
             : new ImportFileSystemMetadata(
                 validatedFile.SystemMetadata.Attributes,
                 validatedFile.SystemMetadata.OwnerSid,
-                isEncrypted: false,
+                IsEncrypted: false,
                 validatedFile.SystemMetadata.CreatedUtc,
                 validatedFile.SystemMetadata.LastWriteUtc,
                 validatedFile.SystemMetadata.LastAccessUtc,
