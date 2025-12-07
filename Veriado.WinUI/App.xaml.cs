@@ -6,9 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
-using H.NotifyIcon;
+using Veriado.WinUI.Services;
 using Veriado.WinUI.ViewModels.Startup;
 using Veriado.WinUI.Views;
 using Veriado.WinUI.Views.Shell;
@@ -26,7 +24,7 @@ public partial class App : WinUIApplication
         .CreateLogger<App>();
 
     private AppHost? _appHost;
-    private TaskbarIcon? _taskbarIcon;
+    private TrayIconService? _trayIconService;
     private bool _isShuttingDown;
     private bool _notificationsRegistered;
 
@@ -236,45 +234,21 @@ public partial class App : WinUIApplication
 
     private void InitializeTrayIcon()
     {
-        if (_taskbarIcon is not null)
+        if (_trayIconService is not null)
         {
             return;
         }
 
-        var contextMenu = new MenuFlyout();
-        contextMenu.Items.Add(new MenuFlyoutItem { Text = "Otevřít Veriado" });
-        contextMenu.Items.Add(new MenuFlyoutItem { Text = "Restartovat" });
-        contextMenu.Items.Add(new MenuFlyoutItem { Text = "Ukončit" });
-
-        contextMenu.Items[0].Click += (_, _) => ShowMainWindow();
-        contextMenu.Items[1].Click += (_, _) => RestartApplication();
-        contextMenu.Items[2].Click += (_, _) => ExitApplication();
-
-        var icon = LoadTrayIcon();
-
-        _taskbarIcon = new TaskbarIcon
-        {
-            IconSource = icon,
-            ToolTipText = "Veriado – správce dokumentů",
-            ContextFlyout = contextMenu,
-        };
-
-        _taskbarIcon.DoubleClick += (_, _) => ShowMainWindow();
-    }
-
-    private static BitmapImage LoadTrayIcon()
-    {
         var iconPath = Path.Combine(AppContext.BaseDirectory, "favicon.ico");
-        var bitmap = new BitmapImage();
+        var options = new TrayIconOptions(iconPath, "Veriado – správce dokumentů");
 
-        if (File.Exists(iconPath))
-        {
-            bitmap.UriSource = new Uri(iconPath);
-            return bitmap;
-        }
+        _trayIconService = new TrayIconService(
+            options,
+            ShowMainWindow,
+            RestartApplication,
+            ExitApplication);
 
-        bitmap.UriSource = new Uri("ms-appx:///Assets/Square44x44Logo.scale-200.png");
-        return bitmap;
+        _trayIconService.Initialize();
     }
 
     private async void ExitApplication()
@@ -342,13 +316,8 @@ public partial class App : WinUIApplication
 
     private void DisposeTrayIcon()
     {
-        if (_taskbarIcon is null)
-        {
-            return;
-        }
-
-        _taskbarIcon.Dispose();
-        _taskbarIcon = null;
+        _trayIconService?.Dispose();
+        _trayIconService = null;
     }
 
     private void EnsureAppNotificationsRegistered()
