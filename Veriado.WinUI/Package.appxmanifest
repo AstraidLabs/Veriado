@@ -10,7 +10,7 @@
   <Identity
     Name="AstraidLabs.Veriado"
     Publisher="CN=983D5877-1D98-43A0-B663-359B22C57B56"
-    Version="0.4.5.0" />
+    Version="0.4.7.0" />
 
   <mp:PhoneIdentity PhoneProductId="94356163-ff57-447b-86f1-67392cca0fcf" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
