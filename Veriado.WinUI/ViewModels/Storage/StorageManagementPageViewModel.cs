@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using Veriado.Contracts.Storage;
 using Veriado.Services.Storage;
 using Veriado.WinUI.ViewModels.Base;
@@ -18,6 +19,10 @@ public partial class StorageManagementPageViewModel : ViewModelBase
     private readonly AsyncRelayCommand _pickExportRootCommand;
     private readonly AsyncRelayCommand _pickImportPackageRootCommand;
     private readonly AsyncRelayCommand _pickImportTargetRootCommand;
+    private readonly IReadOnlyList<ImportConflictStrategy> _importStrategies = Enum
+        .GetValues<ImportConflictStrategy>()
+        .OrderBy(v => v)
+        .ToArray();
 
     public StorageManagementPageViewModel(
         IStorageManagementService storageService,
@@ -74,6 +79,18 @@ public partial class StorageManagementPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool importVerifyAfterCopy;
 
+    [ObservableProperty]
+    private ImportConflictStrategy selectedImportStrategy = ImportConflictStrategy.UpdateIfNewer;
+
+    [ObservableProperty]
+    private string? validationSummary;
+
+    [ObservableProperty]
+    private string? importSummary;
+
+    [ObservableProperty]
+    private ImportValidationResultDto? lastValidation;
+
     public IAsyncRelayCommand RefreshCommand => _refreshCommand;
 
     public IAsyncRelayCommand RunMigrationCommand => _runMigrationCommand;
@@ -89,6 +106,8 @@ public partial class StorageManagementPageViewModel : ViewModelBase
     public IAsyncRelayCommand PickImportPackageRootCommand => _pickImportPackageRootCommand;
 
     public IAsyncRelayCommand PickImportTargetRootCommand => _pickImportTargetRootCommand;
+
+    public IReadOnlyList<ImportConflictStrategy> ImportStrategies => _importStrategies;
 
     [RelayCommand]
     private void Cancel()
@@ -190,31 +209,45 @@ public partial class StorageManagementPageViewModel : ViewModelBase
                 return;
             }
 
-            var options = new StorageImportOptionsDto
+            var request = new ImportRequestDto
             {
-                OverwriteExisting = ImportOverwriteExisting,
-                Verification = new StorageVerificationOptionsDto
-                {
-                    VerifyFilesBySize = ImportVerifyAfterCopy,
-                    VerifyFilesByHash = ImportVerifyAfterCopy,
-                    VerifyDatabaseHash = true,
-                },
+                PackagePath = ImportPackageRoot,
+                TargetStorageRoot = ImportTargetRoot,
+                DefaultConflictStrategy = SelectedImportStrategy,
             };
 
-            var result = await _storageService
-                .ImportAsync(ImportPackageRoot, ImportTargetRoot, options, cancellationToken)
+            var validation = await _storageService
+                .ValidateImportAsync(request, cancellationToken)
                 .ConfigureAwait(false);
 
             await Dispatcher.Enqueue(() =>
             {
-                if (result.TargetStorageRoot is not null)
+                LastValidation = validation;
+                ValidationSummary = BuildValidationSummary(validation);
+            });
+
+            if (!validation.IsValid)
+            {
+                StatusService.Error("Balíček neprošel validací. Detaily najdete ve výpisu.");
+                return;
+            }
+
+            var commit = await _storageService
+                .CommitImportAsync(request, SelectedImportStrategy, cancellationToken)
+                .ConfigureAwait(false);
+
+            await Dispatcher.Enqueue(() =>
+            {
+                ImportSummary = $"Importováno: {commit.ImportedFiles}, přeskočeno: {commit.SkippedFiles}, konfliktní: {commit.ConflictedFiles}";
+                if (validation.Vtp?.CorrelationId is not null && commit.CorrelationId == validation.Vtp.CorrelationId)
                 {
-                    CurrentRoot = result.TargetStorageRoot;
-                    EffectiveRoot = result.TargetStorageRoot;
+                    ValidationSummary = (ValidationSummary ?? string.Empty) + $" (VTP {commit.VtpResultCode})";
                 }
             });
 
-            StatusService.Info(result.Message ?? "Import dokončen.");
+            StatusService.Info(commit.Status == ImportCommitStatus.Success
+                ? "Import dokončen."
+                : "Import dokončen s varováními nebo konflikty.");
         }, "Importuji databázi a dokumenty...");
     }
 
@@ -236,6 +269,20 @@ public partial class StorageManagementPageViewModel : ViewModelBase
     private Task PickImportTargetRootAsync()
     {
         return PickFolderAsync(value => ImportTargetRoot = value);
+    }
+
+    private static string BuildValidationSummary(ImportValidationResultDto validation)
+    {
+        var summary =
+            $"Nové: {validation.NewItems}, stejné: {validation.SameItems}, novější: {validation.NewerItems}, starší: {validation.OlderItems}, konfliktní: {validation.ConflictItems}";
+
+        if (!validation.IsValid && validation.Issues.Count > 0)
+        {
+            var errors = validation.Issues.Count(i => i.Severity == ImportIssueSeverity.Error);
+            summary += $" (chyby: {errors})";
+        }
+
+        return summary;
     }
 
     private Task PickFolderAsync(Action<string?> setter)

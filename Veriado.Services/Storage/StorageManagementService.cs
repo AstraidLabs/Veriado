@@ -242,6 +242,7 @@ public sealed class StorageManagementService : IStorageManagementService
             Items = result.Items.Select(Map).ToArray(),
             VtpResultCode = result.VtpResultCode.ToContract(),
             CorrelationId = result.CorrelationId,
+            FileIdMap = result.FileIdMap,
         };
     }
 
@@ -264,10 +265,21 @@ public sealed class StorageManagementService : IStorageManagementService
             ContentHash = file.ContentHash,
             SizeBytes = file.SizeBytes,
             MimeType = file.MimeType,
+            Extension = file.Extension,
+            CreatedAtUtc = file.CreatedAtUtc,
+            CreatedBy = file.CreatedBy,
             LastModifiedAtUtc = file.LastModifiedAtUtc,
+            LastModifiedBy = file.LastModifiedBy,
             StorageAlias = file.StorageAlias,
             LogicalPathHint = file.LogicalPathHint,
             OriginalInstanceId = file.OriginalInstanceId,
+            IsReadOnly = file.IsReadOnly,
+            Version = file.Version,
+            Title = file.Title,
+            Author = file.Author,
+            Validity = Map(file.Validity),
+            SystemMetadata = Map(file.SystemMetadata),
+            PhysicalState = file.PhysicalState,
         };
 
     private static ImportItemPreviewDto Map(ImportItemPreview preview)
@@ -296,6 +308,41 @@ public sealed class StorageManagementService : IStorageManagementService
             VerifyDatabaseHash = dto.VerifyDatabaseHash,
             VerifyFilesByHash = dto.VerifyFilesByHash,
             VerifyFilesBySize = dto.VerifyFilesBySize,
+        };
+    }
+
+    private static ImportValidityDto? Map(ImportValidityInfo? validity)
+    {
+        if (validity is null)
+        {
+            return null;
+        }
+
+        return new ImportValidityDto
+        {
+            IssuedAtUtc = validity.IssuedAtUtc,
+            ValidUntilUtc = validity.ValidUntilUtc,
+            HasElectronicCopy = validity.HasElectronicCopy,
+            HasPhysicalCopy = validity.HasPhysicalCopy,
+        };
+    }
+
+    private static ImportSystemMetadataDto? Map(ImportSystemMetadataInfo? metadata)
+    {
+        if (metadata is null)
+        {
+            return null;
+        }
+
+        return new ImportSystemMetadataDto
+        {
+            Attributes = metadata.Attributes,
+            CreatedUtc = metadata.CreatedUtc,
+            LastWriteUtc = metadata.LastWriteUtc,
+            LastAccessUtc = metadata.LastAccessUtc,
+            OwnerSid = metadata.OwnerSid,
+            HardLinkCount = metadata.HardLinkCount,
+            AlternateDataStreamCount = metadata.AlternateDataStreamCount,
         };
     }
 

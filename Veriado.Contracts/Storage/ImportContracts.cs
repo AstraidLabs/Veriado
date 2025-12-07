@@ -101,11 +101,41 @@ public sealed record ValidatedImportFileDto
     public string ContentHash { get; init; } = string.Empty;
     public long SizeBytes { get; init; }
     public string? MimeType { get; init; }
+    public string? Extension { get; init; }
+    public DateTimeOffset CreatedAtUtc { get; init; }
+    public string? CreatedBy { get; init; }
     public DateTimeOffset LastModifiedAtUtc { get; init; }
+    public string? LastModifiedBy { get; init; }
     public string StorageAlias { get; init; } = "default";
     public string LogicalPathHint { get; init; } = string.Empty;
     public Guid? OriginalInstanceId { get; init; }
         = null;
+    public bool IsReadOnly { get; init; }
+    public int Version { get; init; }
+    public string? Title { get; init; }
+    public string? Author { get; init; }
+    public ImportValidityDto? Validity { get; init; }
+    public ImportSystemMetadataDto? SystemMetadata { get; init; }
+    public string? PhysicalState { get; init; }
+}
+
+public sealed record ImportValidityDto
+{
+    public DateTimeOffset IssuedAtUtc { get; init; }
+    public DateTimeOffset ValidUntilUtc { get; init; }
+    public bool HasPhysicalCopy { get; init; }
+    public bool HasElectronicCopy { get; init; }
+}
+
+public sealed record ImportSystemMetadataDto
+{
+    public int Attributes { get; init; }
+    public DateTimeOffset CreatedUtc { get; init; }
+    public DateTimeOffset LastWriteUtc { get; init; }
+    public DateTimeOffset LastAccessUtc { get; init; }
+    public string? OwnerSid { get; init; }
+    public int? HardLinkCount { get; init; }
+    public int? AlternateDataStreamCount { get; init; }
 }
 
 public sealed record ImportCommitResultDto
@@ -118,6 +148,7 @@ public sealed record ImportCommitResultDto
     public IReadOnlyList<ImportItemPreviewDto> Items { get; init; } = Array.Empty<ImportItemPreviewDto>();
     public VtpImportResultCode VtpResultCode { get; init; }
     public Guid? CorrelationId { get; init; }
+    public IReadOnlyDictionary<Guid, Guid>? FileIdMap { get; init; }
 }
 
 public sealed record ImportItemPreviewDto
