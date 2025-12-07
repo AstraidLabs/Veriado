@@ -26,7 +26,6 @@
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="favicon.ico" />
     <Manifest Include="app.manifest" />
@@ -73,8 +72,7 @@
     <PublishTrimmed Condition="'$(Configuration)'!='Debug'">False</PublishTrimmed>
     <ApplicationIcon>favicon.ico</ApplicationIcon>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
-    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
-    <PackageCertificateThumbprint>51C5563D2EF80F461170759EB4DF5B8240BF48C4</PackageCertificateThumbprint>
+    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
     <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
@@ -82,6 +80,7 @@
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
     <PackageIcon>pix3l_ai_Abstract_high-tech_vector_logo_for_a_corporate_DMS_s_3bc7159a-97e3-44d7-90e8-7eb36ebb4ff6_0.png</PackageIcon>
-    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
+    <GenerateTemporaryStoreCertificate>False</GenerateTemporaryStoreCertificate>
+    <DefaultLanguage>cs-CZ</DefaultLanguage>
   </PropertyGroup>
 </Project>
