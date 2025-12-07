@@ -48,7 +48,7 @@ public sealed partial class MainShell : Window, INavigationHost
     public void HideShell()
     {
         _appWindow?.Hide();
-        Hide();
+        
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
