@@ -8,12 +8,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Veriado.Application.Import;
 using Veriado.Appl.Abstractions;
 using Veriado.Contracts.Storage;
 using VtpImportItemStatus = Veriado.Appl.Abstractions.VtpImportItemStatus;
 using VtpImportResultCode = Veriado.Appl.Abstractions.VtpImportResultCode;
 using VtpPackageInfo = Veriado.Appl.Abstractions.VtpPackageInfo;
 using VtpPayloadType = Veriado.Appl.Abstractions.VtpPayloadType;
+using Veriado.Domain.FileSystem;
 using Veriado.Infrastructure.FileSystem;
 using Veriado.Infrastructure.Persistence;
 using Veriado.Infrastructure.Persistence.Entities;
@@ -33,6 +35,7 @@ public sealed class ImportPackageService : IImportPackageService
     private readonly ILogger<ImportPackageService> _logger;
     private readonly VpfPackageValidator _vpfValidator;
     private readonly IVPackContainerService _vpackService;
+    private readonly IFileImportWriter _importWriter;
 
     public ImportPackageService(
         IDbContextFactory<AppDbContext> dbContextFactory,
@@ -41,7 +44,8 @@ public sealed class ImportPackageService : IImportPackageService
         IOperationalPauseCoordinator pauseCoordinator,
         IStorageSpaceAnalyzer spaceAnalyzer,
         ILogger<ImportPackageService> logger,
-        IVPackContainerService vpackService)
+        IVPackContainerService vpackService,
+        IFileImportWriter importWriter)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _hashCalculator = hashCalculator ?? throw new ArgumentNullException(nameof(hashCalculator));
@@ -51,6 +55,7 @@ public sealed class ImportPackageService : IImportPackageService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _vpfValidator = new VpfPackageValidator(_hashCalculator);
         _vpackService = vpackService ?? throw new ArgumentNullException(nameof(vpackService));
+        _importWriter = importWriter ?? throw new ArgumentNullException(nameof(importWriter));
     }
 
     public async Task<StorageOperationResult> ImportPackageAsync(
@@ -223,21 +228,23 @@ public sealed class ImportPackageService : IImportPackageService
                 validation.Vtp?.CorrelationId);
         }
 
+        _logger.LogInformation(
+            "Starting VPF commit for {PackageRoot} with strategy {Strategy}",
+            request.PackagePath,
+            conflictStrategy);
+
         var issues = new List<ImportValidationIssue>(validation.Issues);
-        var imported = 0;
-        var skipped = 0;
-        var conflicted = 0;
         var items = CloneItemsWithVtpStatuses(validation.Items);
         var itemIndexById = CreateItemIndex(items);
-
+        var descriptorLookup = validation.ValidatedFiles.ToDictionary(f => f.FileId, f => f);
         var targetRoot = SafePathUtilities.NormalizeAndValidateRoot(
             request.TargetStorageRoot ?? _pathResolver.GetStorageRoot(),
             _logger);
-
         var filesRoot = Path.Combine(Path.GetFullPath(request.PackagePath), VpfPackagePaths.FilesDirectory);
-        var descriptorLookup = validation.ValidatedFiles.ToDictionary(
-            f => f.FileId,
-            f => f);
+        var importItems = new List<ImportItem>();
+        var fileIdMap = new Dictionary<Guid, Guid>();
+        var skipped = 0;
+        var conflicted = 0;
 
         await _pauseCoordinator.PauseAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -266,14 +273,30 @@ public sealed class ImportPackageService : IImportPackageService
                 }
 
                 var relativePath = CombineRelative(validatedFile.RelativePath, validatedFile.FileName);
-                var sourcePath = Path.Combine(filesRoot, relativePath);
-                var destinationPath = Path.Combine(targetRoot, SafePathUtilities.NormalizeRelative(relativePath, _logger));
+                var normalizedRelative = SafePathUtilities.NormalizeRelative(relativePath, _logger);
+                var destinationPath = Path.Combine(targetRoot, normalizedRelative);
+                var targetFileId = validatedFile.FileId;
+                var requiresNewIdentity = conflictStrategy == ImportConflictStrategy.CreateDuplicate
+                    && item.Status != ImportItemStatus.New;
 
-                if (conflictStrategy == ImportConflictStrategy.CreateDuplicate && item.Status != ImportItemStatus.New)
+                if (validatedFile.OriginalInstanceId.HasValue
+                    && validatedFile.OriginalInstanceId != Guid.Empty
+                    && validatedFile.FileId == Guid.Empty)
                 {
-                    destinationPath = GetDuplicatePath(destinationPath, validatedFile.FileId);
+                    requiresNewIdentity = true;
                 }
 
+                if (requiresNewIdentity)
+                {
+                    targetFileId = Guid.NewGuid();
+                    fileIdMap[item.FileId] = targetFileId;
+                    destinationPath = GetDuplicatePath(destinationPath, targetFileId);
+                    normalizedRelative = SafePathUtilities.NormalizeRelative(
+                        Path.GetRelativePath(targetRoot, destinationPath),
+                        _logger);
+                }
+
+                var sourcePath = Path.Combine(filesRoot, relativePath);
                 SafePathUtilities.EnsureDirectoryForFile(destinationPath);
 
                 try
@@ -286,7 +309,7 @@ public sealed class ImportPackageService : IImportPackageService
                             cancellationToken)
                         .ConfigureAwait(false);
 
-                    imported++;
+                    importItems.Add(CreateImportItem(validatedFile, targetFileId, normalizedRelative));
                     SetVtpStatus(itemIndexById, items, item.FileId, MapVtpStatus(item.Status));
                 }
                 catch (Exception ex)
@@ -307,6 +330,30 @@ public sealed class ImportPackageService : IImportPackageService
             _pauseCoordinator.Resume();
         }
 
+        var imported = 0;
+        try
+        {
+            if (importItems.Count > 0)
+            {
+                var importResult = await _importWriter
+                    .ImportAsync(importItems, new ImportOptions(), cancellationToken)
+                    .ConfigureAwait(false);
+
+                imported = importResult.Imported + importResult.Updated;
+                skipped += importResult.Skipped;
+            }
+        }
+        catch (Exception ex)
+        {
+            conflicted += importItems.Count;
+            issues.Add(new ImportValidationIssue(
+                ImportIssueType.ConflictExistingFile,
+                ImportIssueSeverity.Error,
+                null,
+                $"Failed to persist import batch: {ex.Message}"));
+            _logger.LogError(ex, "Failed to persist VPF import batch");
+        }
+
         var status = ImportCommitStatus.Success;
         if (issues.Any(i => i.Severity == ImportIssueSeverity.Error))
         {
@@ -319,6 +366,13 @@ public sealed class ImportPackageService : IImportPackageService
 
         var vtpResult = DetermineVtpImportResultCode(status, issues, items);
 
+        _logger.LogInformation(
+            "Completed VPF commit: status={Status}, imported={Imported}, skipped={Skipped}, conflicted={Conflicted}",
+            status,
+            imported,
+            skipped,
+            conflicted);
+
         return new ImportCommitResult(
             status,
             imported,
@@ -327,7 +381,8 @@ public sealed class ImportPackageService : IImportPackageService
             issues,
             items,
             vtpResult,
-            validation.Vtp?.CorrelationId);
+            validation.Vtp?.CorrelationId,
+            fileIdMap.Count == 0 ? null : fileIdMap);
     }
 
     public async Task<ImportValidationResult> ValidateImportAsync(
@@ -775,6 +830,64 @@ public sealed class ImportPackageService : IImportPackageService
                     item.ConflictReason ?? "Conflicting entry detected."));
                 return false;
         }
+    }
+
+    private static ImportItem CreateImportItem(
+        ValidatedImportFile validatedFile,
+        Guid targetFileId,
+        string normalizedRelativePath)
+    {
+        var fsMetadata = validatedFile.SystemMetadata is null
+            ? null
+            : new ImportFileSystemMetadata(
+                validatedFile.SystemMetadata.Attributes,
+                validatedFile.SystemMetadata.OwnerSid,
+                isEncrypted: false,
+                validatedFile.SystemMetadata.CreatedUtc,
+                validatedFile.SystemMetadata.LastWriteUtc,
+                validatedFile.SystemMetadata.LastAccessUtc,
+                (uint?)validatedFile.SystemMetadata.HardLinkCount,
+                (uint?)validatedFile.SystemMetadata.AlternateDataStreamCount);
+
+        var validity = validatedFile.Validity is null
+            ? null
+            : new ImportValidity(
+                validatedFile.Validity.IssuedAtUtc,
+                validatedFile.Validity.ValidUntilUtc,
+                validatedFile.Validity.HasPhysicalCopy,
+                validatedFile.Validity.HasElectronicCopy);
+
+        var metadata = new ImportMetadata(
+            validatedFile.Author ?? validatedFile.CreatedBy ?? "Unknown",
+            validatedFile.Title,
+            validatedFile.IsReadOnly,
+            validatedFile.Version <= 0 ? 1 : validatedFile.Version,
+            validatedFile.Version <= 0 ? 1 : validatedFile.Version,
+            null,
+            fsMetadata,
+            validity,
+            null,
+            null);
+
+        var createdUtc = validatedFile.CreatedAtUtc == DateTimeOffset.MinValue
+            ? (DateTimeOffset?)null
+            : validatedFile.CreatedAtUtc;
+        var modifiedUtc = validatedFile.LastModifiedAtUtc == DateTimeOffset.MinValue
+            ? (DateTimeOffset?)null
+            : validatedFile.LastModifiedAtUtc;
+
+        return new ImportItem(
+            targetFileId,
+            Path.GetFileNameWithoutExtension(validatedFile.FileName),
+            validatedFile.Extension ?? Path.GetExtension(validatedFile.FileName),
+            validatedFile.MimeType ?? "application/octet-stream",
+            validatedFile.SizeBytes,
+            validatedFile.ContentHash,
+            StorageProvider.Local.ToString(),
+            normalizedRelativePath.Replace('\\', '/'),
+            createdUtc,
+            modifiedUtc,
+            metadata);
     }
 
     private static Dictionary<Guid, int> CreateItemIndex(IReadOnlyList<ImportItemPreview> items)
