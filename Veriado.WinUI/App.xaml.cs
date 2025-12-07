@@ -345,7 +345,7 @@ public partial class App : WinUIApplication
         try
         {
             var hwnd = WindowNative.GetWindowHandle(window);
-            var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             return AppWindow.GetFromWindowId(windowId);
         }
         catch
