@@ -39,6 +39,18 @@ public sealed partial class MainShell : Window, INavigationHost
         set => ContentHost.Content = value;
     }
 
+    public void ShowShell()
+    {
+        _appWindow?.Show();
+        Activate();
+    }
+
+    public void HideShell()
+    {
+        _appWindow?.Hide();
+        Hide();
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         RootNavigation.Loaded -= OnLoaded;
@@ -84,28 +96,23 @@ public sealed partial class MainShell : Window, INavigationHost
         }
     }
 
-    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        if (App.Current.IsShuttingDown)
+        {
+            args.Cancel = false;
+
+            if (_appWindow is not null)
+            {
+                _appWindow.Closing -= OnAppWindowClosing;
+            }
+
+            return;
+        }
+
         args.Cancel = true;
 
-        if (_appWindow is null)
-        {
-            return;
-        }
-
-        _appWindow.Closing -= OnAppWindowClosing;
-
-        var confirmed = await _dialogService
-            .ConfirmAsync("Ukončit aplikaci?", "Opravdu si přejete ukončit aplikaci?", "Ukončit", "Zůstat")
-            .ConfigureAwait(true);
-
-        if (confirmed)
-        {
-            Close();
-            return;
-        }
-
-        _appWindow.Closing += OnAppWindowClosing;
+        App.Current.HideMainWindow();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
