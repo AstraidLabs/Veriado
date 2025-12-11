@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppDisplayName" xml:space="preserve">
+    <value>Veriado</value>
+  </data>
+  <data name="PublisherDisplayName" xml:space="preserve">
+    <value>AstraidLabs</value>
+  </data>
+  <data name="AppDescription" xml:space="preserve">
+    <value>Veriado is a desktop application for corporate document cataloging that combines full-text search with careful metadata and validity management. It is built for teams that need important contracts, policies, and records at their fingertips. The app saves time with fast search and saved filters, monitors document validity to minimize risks, and thanks to local serverless operation offers low operating costs and quick deployment.</value>
+  </data>
+</root>
