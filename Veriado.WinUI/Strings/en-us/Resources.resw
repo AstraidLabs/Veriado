@@ -21,4 +21,85 @@
   <data name="AppDescription" xml:space="preserve">
     <value>Veriado is a desktop application for corporate document cataloging that combines full-text search with careful metadata and validity management. It is built for teams that need important contracts, policies, and records at their fingertips. The app saves time with fast search and saved filters, monitors document validity to minimize risks, and thanks to local serverless operation offers low operating costs and quick deployment.</value>
   </data>
+  <data name="DeleteAllCatalogDialog_Input.PlaceholderText" xml:space="preserve">
+    <value>Enter the verification code here</value>
+  </data>
+  <data name="DeleteAllCatalogDialog_Instructions.Text" xml:space="preserve">
+    <value>To confirm the action, type the following verification code:</value>
+  </data>
+  <data name="DeleteAllCatalogDialog_Title.Text" xml:space="preserve">
+    <value>Do you really want to delete the entire catalog?</value>
+  </data>
+  <data name="FileDetailDialog.PrimaryButtonText" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="FileDetailDialog.SecondaryButtonText" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="FileDetailDialog.Title" xml:space="preserve">
+    <value>File detail</value>
+  </data>
+  <data name="FilesPage_DeleteAllButtonText.Text" xml:space="preserve">
+    <value>Delete catalog</value>
+  </data>
+  <data name="FilesPage_ErrorInfoBar.Message" xml:space="preserve">
+    <value>Unable to load results.</value>
+  </data>
+  <data name="FilesPage_ErrorInfoBar.Title" xml:space="preserve">
+    <value>Loading error</value>
+  </data>
+  <data name="FilesPage_HeaderSubtitle.Text" xml:space="preserve">
+    <value>Manage, validate, and monitor files</value>
+  </data>
+  <data name="FilesPage_HeaderTitle.Text" xml:space="preserve">
+    <value>Document catalog</value>
+  </data>
+  <data name="FilesPage_IndexingInfoBar.Title" xml:space="preserve">
+    <value>Indexing in progress</value>
+  </data>
+  <data name="FilesPage_ItemDeleteButtonText.Text" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="FilesPage_ItemDetailButtonText.Text" xml:space="preserve">
+    <value>Detail</value>
+  </data>
+  <data name="FilesPage_ItemOpenButtonText.Text" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="FilesPage_ItemShowInFolderButtonText.Text" xml:space="preserve">
+    <value>Show in folder</value>
+  </data>
+  <data name="FilesPage_ItemUpdateButtonText.Text" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="FilesPage_NextPageButton.Content" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="FilesPage_PageNumberSeparator.Text" xml:space="preserve">
+    <value>/</value>
+  </data>
+  <data name="FilesPage_PageSizeLabel.Text" xml:space="preserve">
+    <value>Per page</value>
+  </data>
+  <data name="FilesPage_PreviousPageButton.Content" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="FilesPage_SearchBox.PlaceholderText" xml:space="preserve">
+    <value>Search files</value>
+  </data>
+  <data name="MainShell_FilesNavItem.Content" xml:space="preserve">
+    <value>File management</value>
+  </data>
+  <data name="MainShell_ImportNavItem.Content" xml:space="preserve">
+    <value>Upload files</value>
+  </data>
+  <data name="MainShell_SettingsNavItem.Content" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="MainShell_StorageNavItem.Content" xml:space="preserve">
+    <value>Migration and packages</value>
+  </data>
+  <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
+    <value>Try again</value>
+  </data>
 </root>

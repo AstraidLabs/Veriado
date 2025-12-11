@@ -29,7 +29,7 @@
                     <FontIcon FontFamily="Segoe Fluent Icons"
                               Glyph="&#xE8A5;"
                               FontSize="28" />
-                    <TextBlock Text="Katalog dokumentů"
+                    <TextBlock x:Uid="FilesPage_HeaderTitle"
                                FontSize="28"
                                FontWeight="SemiBold" />
                 </StackPanel>
@@ -38,7 +38,7 @@
                            Fill="{ThemeResource SystemControlForegroundBaseLowBrush}"
                            Margin="0,6,0,6" />
 
-                <TextBlock Text="Správa, validace a monitoring souborů"
+                <TextBlock x:Uid="FilesPage_HeaderSubtitle"
                            FontSize="14"
                            Opacity="0.72"
                            Margin="2,0,0,12" />
@@ -47,7 +47,6 @@
                 <AutoSuggestBox
                     x:Name="SearchAutoSuggestBox"
                     x:Uid="FilesPage_SearchBox"
-                    PlaceholderText="Hledat soubory"
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     QuerySubmitted="OnSearchQuerySubmitted"
                     TextChanged="OnSearchTextChanged">
@@ -66,7 +65,6 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button
                         x:Uid="FilesPage_PreviousPageButton"
-                        Content="Předchozí"
                         Command="{x:Bind ViewModel.PreviousPageCommand}" />
                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <controls:NumberBox
@@ -77,16 +75,15 @@
                             Maximum="{x:Bind ViewModel.TargetPageMaximum, Mode=OneWay}"
                             SmallChange="1"
                             Value="{x:Bind ViewModel.TargetPage, Mode=TwoWay}" />
-                        <TextBlock Text="/" VerticalAlignment="Center" />
+                        <TextBlock x:Uid="FilesPage_PageNumberSeparator" VerticalAlignment="Center" />
                         <TextBlock Text="{x:Bind ViewModel.TotalPages, Mode=OneWay}" VerticalAlignment="Center" />
                     </StackPanel>
                     <Button
                         x:Uid="FilesPage_NextPageButton"
-                        Content="Další"
                         Command="{x:Bind ViewModel.NextPageCommand}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" Text="Na stránce" />
+                    <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" />
                     <ComboBox
                         x:Uid="FilesPage_PageSizeComboBox"
                         Width="90"
@@ -94,12 +91,12 @@
                         ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
                         SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
                 </StackPanel>
-                <Button HorizontalAlignment="Right"
+                <Button x:Uid="FilesPage_DeleteAllButton" HorizontalAlignment="Right"
                         Margin="8,0,0,0"
                         Command="{Binding DeleteAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;"/>
-                        <TextBlock Text="Smazat katalog"/>
+                        <TextBlock x:Uid="FilesPage_DeleteAllButtonText" />
                     </StackPanel>
                 </Button>
             </StackPanel>
@@ -108,15 +105,12 @@
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.IsIndexingPending, Mode=OneWay}"
                 Severity="Warning"
-                Title="Probíhá indexace"
                 Message="{x:Bind ViewModel.IndexingWarningMessage, Mode=OneWay}" />
             <controls:InfoBar
                 x:Uid="FilesPage_ErrorInfoBar"
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
-                Severity="Error"
-                Title="Chyba načítání"
-                Message="Nepodařilo se načíst výsledky." />
+                Severity="Error" />
         </StackPanel>
 
         <controls:ItemsRepeaterScrollHost Grid.Row="1">
@@ -220,7 +214,7 @@
                                             CommandParameter="{x:Bind}">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8E5;" />
-                                                <TextBlock Text="Otevřít" />
+                                                <TextBlock x:Uid="FilesPage_ItemOpenButtonText" />
                                             </StackPanel>
                                         </Button>
                                         <Button
@@ -230,7 +224,7 @@
                                             CommandParameter="{x:Bind}">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" />
-                                                <TextBlock Text="Ukázat ve složce" />
+                                                <TextBlock x:Uid="FilesPage_ItemShowInFolderButtonText" />
                                             </StackPanel>
                                         </Button>
                                         <Button
@@ -239,7 +233,7 @@
                                             CommandParameter="{x:Bind}">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE72C;" />
-                                                <TextBlock Text="Aktualizovat" />
+                                                <TextBlock x:Uid="FilesPage_ItemUpdateButtonText" />
                                             </StackPanel>
                                         </Button>
                                         <Button
@@ -248,7 +242,7 @@
                                             CommandParameter="{x:Bind Dto}">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE946;" />
-                                                <TextBlock Text="Detail" />
+                                                <TextBlock x:Uid="FilesPage_ItemDetailButtonText" />
                                             </StackPanel>
                                         </Button>
                                         <Button
@@ -257,7 +251,7 @@
                                             CommandParameter="{x:Bind Dto}">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;" />
-                                                <TextBlock Text="Smazat" />
+                                                <TextBlock x:Uid="FilesPage_ItemDeleteButtonText" />
                                             </StackPanel>
                                         </Button>
                                     </StackPanel>

@@ -42,10 +42,10 @@
                 Color="{ThemeResource AppAccentColor}" />
         </controls:NavigationView.Resources>
         <controls:NavigationView.MenuItems>
-            <controls:NavigationViewItem Tag="files" Content="Správa souborů" Icon="Document" />
-            <controls:NavigationViewItem Tag="import" Content="Nahrát soubory" Icon="OpenFile" />
-            <controls:NavigationViewItem Tag="storage" Content="Migrace a balíčky" Icon="Sync" />
-            <controls:NavigationViewItem Tag="settings" Content="Nastavení" Icon="Setting" />
+            <controls:NavigationViewItem x:Uid="MainShell_FilesNavItem" Tag="files" Icon="Document" />
+            <controls:NavigationViewItem x:Uid="MainShell_ImportNavItem" Tag="import" Icon="OpenFile" />
+            <controls:NavigationViewItem x:Uid="MainShell_StorageNavItem" Tag="storage" Icon="Sync" />
+            <controls:NavigationViewItem x:Uid="MainShell_SettingsNavItem" Tag="settings" Icon="Setting" />
         </controls:NavigationView.MenuItems>
         <controls:NavigationView.Content>
             <Grid Background="{ThemeResource AppBackgroundBrush}">

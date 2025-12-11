@@ -7,10 +7,10 @@
     mc:Ignorable="d">
 
     <StackPanel Spacing="8">
-        <TextBlock Text="Opravdu chcete smazat celý katalog?"
+        <TextBlock x:Uid="DeleteAllCatalogDialog_Title"
                    TextWrapping="Wrap" />
 
-        <TextBlock Text="Pro potvrzení akce opište následující ověřovací kód:"
+        <TextBlock x:Uid="DeleteAllCatalogDialog_Instructions"
                    TextWrapping="Wrap"
                    Margin="0,8,0,0"/>
 
@@ -23,7 +23,7 @@
                        FontWeight="SemiBold"/>
         </Border>
 
-        <TextBox Text="{Binding DeleteAllUserInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                 PlaceholderText="Sem opište ověřovací kód" />
+        <TextBox x:Uid="DeleteAllCatalogDialog_Input"
+                 Text="{Binding DeleteAllUserInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
     </StackPanel>
 </UserControl>
