@@ -12,6 +12,7 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+	<SelfContained>true</SelfContained>
     <LangVersion>12</LangVersion>
 
     <!-- Nech to vypnuté: generované .g.cs nejsou nutné a padají na cestách -->
@@ -19,6 +20,11 @@
     <!-- Když bys to někdy zapnul, piš do obj\Generated -->
     <CompilerGeneratedFilesOutputPath Condition="'$(EmitCompilerGeneratedFiles)'=='true'">$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Assets\BadgeLogo.scale-100.png" />
+    <None Remove="Assets\BadgeLogo.scale-125.png" />
+    <None Remove="Assets\BadgeLogo.scale-150.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
