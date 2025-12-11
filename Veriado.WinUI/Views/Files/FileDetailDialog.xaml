@@ -7,11 +7,9 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     x:Name="RootDialog"
+    x:Uid="FileDetailDialog"
     MinWidth="360"
     MaxWidth="920"
-    Title="Detail souboru"
-    PrimaryButtonText="Uložit"
-    SecondaryButtonText="Zrušit"
     DefaultButton="Primary"
     IsPrimaryButtonEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}">
     <ContentDialog.Resources>

@@ -21,4 +21,85 @@
   <data name="AppDescription" xml:space="preserve">
     <value>Veriado je desktopová aplikace pro firemní katalogizaci dokumentů, která kombinuje fulltextové vyhledávání s pečlivou správou metadat a platnosti. Je určena pro týmy, které potřebují mít důležité smlouvy, směrnice a záznamy okamžitě k dispozici. Aplikace šetří čas díky rychlému vyhledávání a uloženým filtrům, hlídá platnost dokumentů a tím minimalizuje rizika. Díky lokálnímu provozu bez serveru přináší nízké provozní náklady a rychlé nasazení.</value>
   </data>
+  <data name="DeleteAllCatalogDialog_Input.PlaceholderText" xml:space="preserve">
+    <value>Sem opište ověřovací kód</value>
+  </data>
+  <data name="DeleteAllCatalogDialog_Instructions.Text" xml:space="preserve">
+    <value>Pro potvrzení akce opište následující ověřovací kód:</value>
+  </data>
+  <data name="DeleteAllCatalogDialog_Title.Text" xml:space="preserve">
+    <value>Opravdu chcete smazat celý katalog?</value>
+  </data>
+  <data name="FileDetailDialog.PrimaryButtonText" xml:space="preserve">
+    <value>Uložit</value>
+  </data>
+  <data name="FileDetailDialog.SecondaryButtonText" xml:space="preserve">
+    <value>Zrušit</value>
+  </data>
+  <data name="FileDetailDialog.Title" xml:space="preserve">
+    <value>Detail souboru</value>
+  </data>
+  <data name="FilesPage_DeleteAllButtonText.Text" xml:space="preserve">
+    <value>Smazat katalog</value>
+  </data>
+  <data name="FilesPage_ErrorInfoBar.Message" xml:space="preserve">
+    <value>Nepodařilo se načíst výsledky.</value>
+  </data>
+  <data name="FilesPage_ErrorInfoBar.Title" xml:space="preserve">
+    <value>Chyba načítání</value>
+  </data>
+  <data name="FilesPage_HeaderSubtitle.Text" xml:space="preserve">
+    <value>Správa, validace a monitoring souborů</value>
+  </data>
+  <data name="FilesPage_HeaderTitle.Text" xml:space="preserve">
+    <value>Katalog dokumentů</value>
+  </data>
+  <data name="FilesPage_IndexingInfoBar.Title" xml:space="preserve">
+    <value>Probíhá indexace</value>
+  </data>
+  <data name="FilesPage_ItemDeleteButtonText.Text" xml:space="preserve">
+    <value>Smazat</value>
+  </data>
+  <data name="FilesPage_ItemDetailButtonText.Text" xml:space="preserve">
+    <value>Detail</value>
+  </data>
+  <data name="FilesPage_ItemOpenButtonText.Text" xml:space="preserve">
+    <value>Otevřít</value>
+  </data>
+  <data name="FilesPage_ItemShowInFolderButtonText.Text" xml:space="preserve">
+    <value>Ukázat ve složce</value>
+  </data>
+  <data name="FilesPage_ItemUpdateButtonText.Text" xml:space="preserve">
+    <value>Aktualizovat</value>
+  </data>
+  <data name="FilesPage_NextPageButton.Content" xml:space="preserve">
+    <value>Další</value>
+  </data>
+  <data name="FilesPage_PageNumberSeparator.Text" xml:space="preserve">
+    <value>/</value>
+  </data>
+  <data name="FilesPage_PageSizeLabel.Text" xml:space="preserve">
+    <value>Na stránce</value>
+  </data>
+  <data name="FilesPage_PreviousPageButton.Content" xml:space="preserve">
+    <value>Předchozí</value>
+  </data>
+  <data name="FilesPage_SearchBox.PlaceholderText" xml:space="preserve">
+    <value>Hledat soubory</value>
+  </data>
+  <data name="MainShell_FilesNavItem.Content" xml:space="preserve">
+    <value>Správa souborů</value>
+  </data>
+  <data name="MainShell_ImportNavItem.Content" xml:space="preserve">
+    <value>Nahrát soubory</value>
+  </data>
+  <data name="MainShell_SettingsNavItem.Content" xml:space="preserve">
+    <value>Nastavení</value>
+  </data>
+  <data name="MainShell_StorageNavItem.Content" xml:space="preserve">
+    <value>Migrace a balíčky</value>
+  </data>
+  <data name="StartupWindow_RetryButton.Content" xml:space="preserve">
+    <value>Zkusit znovu</value>
+  </data>
 </root>
