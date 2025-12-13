@@ -111,7 +111,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Tlačítka vlevo -->
-                <StackPanel Orientation="Horizontal" Spacing="12">
+                <toolkit:WrapPanel Spacing="12">
                     <Button Command="{Binding RunImportCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE898;" FontSize="16" />
@@ -126,7 +126,7 @@
                                 <TextBlock Text="Zastavit nahrávání" />
                         </StackPanel>
                     </Button>
-                </StackPanel>
+                </toolkit:WrapPanel>
             </Grid>
 
             <!-- Progres přes celou šířku -->
