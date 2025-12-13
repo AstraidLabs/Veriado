@@ -356,6 +356,7 @@
                     CanUserSortColumns="False"
                     HeadersVisibility="Column"
                     IsReadOnly="True"
+                    MaxHeight="420"
                     SelectionMode="Single"
                     GridLinesVisibility="All"
                     ScrollViewer.VerticalScrollBarVisibility="Auto"
