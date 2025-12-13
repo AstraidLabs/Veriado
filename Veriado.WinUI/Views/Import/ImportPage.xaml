@@ -208,7 +208,7 @@
                     <animations:EntranceThemeTransition IsStaggeringEnabled="True" />
                 </TransitionCollection>
             </StackPanel.Transitions>
-            <TextBlock Text="Volby importu" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="Volby nahrávání" FontSize="20" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <StackPanel Orientation="Vertical" Spacing="8">
                     <CheckBox Content="Rekurzivně" IsChecked="{Binding Recursive, Mode=TwoWay}" />
