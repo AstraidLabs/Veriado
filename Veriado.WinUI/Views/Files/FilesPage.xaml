@@ -57,17 +57,19 @@
                 </AutoSuggestBox>
             </Grid>
 
-        <toolkit:WrapPanel Spacing="8" VerticalAlignment="Center">
-            <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsBusy}" />
+        <toolkit:WrapPanel VerticalAlignment="Center">
+            <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsBusy}" Margin="0,0,8,0" />
             <TextBlock
                 x:Uid="FilesPage_StatusText"
                 VerticalAlignment="Center"
+                Margin="0,0,8,0"
                 Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
-            <toolkit:WrapPanel Spacing="8" VerticalAlignment="Center">
+            <toolkit:WrapPanel VerticalAlignment="Center">
                 <Button
                     x:Uid="FilesPage_PreviousPageButton"
-                    Command="{x:Bind ViewModel.PreviousPageCommand}" />
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    Command="{x:Bind ViewModel.PreviousPageCommand}"
+                    Margin="0,0,8,0" />
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,8,0">
                     <controls:NumberBox
                             x:Uid="FilesPage_PageNumberBox"
                             Width="80"
@@ -81,16 +83,18 @@
                     </StackPanel>
                     <Button
                         x:Uid="FilesPage_NextPageButton"
-                        Command="{x:Bind ViewModel.NextPageCommand}" />
+                        Command="{x:Bind ViewModel.NextPageCommand}"
+                        Margin="0,0,8,0" />
             </toolkit:WrapPanel>
-            <toolkit:WrapPanel Spacing="4" VerticalAlignment="Center">
-                <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" />
+            <toolkit:WrapPanel VerticalAlignment="Center">
+                <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
                 <ComboBox
                     x:Uid="FilesPage_PageSizeComboBox"
                     Width="90"
                     HorizontalAlignment="Left"
                     ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
-                    SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
+                    SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}"
+                    Margin="0,0,4,0" />
             </toolkit:WrapPanel>
             <Button x:Uid="FilesPage_DeleteAllButton" HorizontalAlignment="Right"
                     Margin="8,0,0,0"
