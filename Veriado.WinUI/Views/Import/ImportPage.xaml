@@ -330,6 +330,16 @@
                 <Button Content="Vymazat výsledky" Command="{Binding ClearResultsCommand}" />
                 <Button Content="Exportovat protokol" Command="{Binding ExportLogCommand}" />
             </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock VerticalAlignment="Center" Text="Max. záznamů:" />
+                <Slider
+                    Width="220"
+                    Minimum="50"
+                    Maximum="1000"
+                    StepFrequency="50"
+                    Value="{Binding MaxLogEntries, Mode=TwoWay}" />
+                <TextBlock VerticalAlignment="Center" Text="{Binding MaxLogEntries}" />
+            </StackPanel>
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />

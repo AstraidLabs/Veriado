@@ -16,7 +16,7 @@ namespace Veriado.WinUI.ViewModels.Import;
 
 public partial class ImportPageViewModel : ViewModelBase
 {
-    private const int MaxLogEntries = 250;
+    private const int DefaultMaxLogEntries = 250;
 
     private readonly IImportService _importService;
     private readonly IHotStateService? _hotStateService;
@@ -111,6 +111,9 @@ public partial class ImportPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _autoExportLog;
+
+    [ObservableProperty]
+    private int _maxLogEntries = DefaultMaxLogEntries;
 
     [ObservableProperty]
     private bool _isImporting;
@@ -1631,6 +1634,17 @@ public partial class ImportPageViewModel : ViewModelBase
         {
             _hotStateService.ImportAutoExportLog = value;
         }
+    }
+
+    partial void OnMaxLogEntriesChanged(int value)
+    {
+        if (value < 1)
+        {
+            MaxLogEntries = 1;
+            return;
+        }
+
+        TrimLog();
     }
 
     partial void OnSelectedErrorFilterChanged(ImportErrorSeverity value)
