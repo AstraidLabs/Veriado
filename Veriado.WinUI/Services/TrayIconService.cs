@@ -217,8 +217,11 @@ internal sealed class TrayIconService : IDisposable
 
     private void HandleCommand(nint wParam)
     {
-        var commandId = (int)(wParam.ToInt64() & 0xFFFF);
+        HandleCommand((int)(wParam.ToInt64() & 0xFFFF));
+    }
 
+    private void HandleCommand(int commandId)
+    {
         switch (commandId)
         {
             case CommandOpen:
@@ -246,13 +249,18 @@ internal sealed class TrayIconService : IDisposable
         }
 
         Win32Values.SetForegroundWindow(_windowHandle);
-        _ = Win32Values.TrackPopupMenuEx(
+        var commandId = Win32Values.TrackPopupMenuEx(
             _menuHandle,
             Win32Values.TPM_RETURNCMD | Win32Values.TPM_RIGHTBUTTON,
             point.X,
             point.Y,
             _windowHandle,
             0);
+
+        if (commandId != 0)
+        {
+            HandleCommand(commandId);
+        }
     }
 }
 
