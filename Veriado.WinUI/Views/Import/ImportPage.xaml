@@ -111,8 +111,8 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Tlačítka vlevo -->
-                <toolkit:WrapPanel Spacing="12">
-                    <Button Command="{Binding RunImportCommand}">
+                <toolkit:WrapPanel>
+                    <Button Command="{Binding RunImportCommand}" Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE898;" FontSize="16" />
                                 <TextBlock Text="Nahrát" />
@@ -120,7 +120,7 @@
                     </Button>
 
                     <Button Command="{Binding StopImportCommand}"
-                IsEnabled="{Binding IsImporting}">
+                IsEnabled="{Binding IsImporting}" Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71A;" FontSize="16" />
                                 <TextBlock Text="Zastavit nahrávání" />
