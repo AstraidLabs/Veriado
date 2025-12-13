@@ -7,6 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:views="using:Veriado.WinUI.Views.Files"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:converters="using:Veriado.WinUI.Converters"
     xmlns:viewModels="using:Veriado.WinUI.ViewModels.Files"
     mc:Ignorable="d">
@@ -56,18 +57,18 @@
                 </AutoSuggestBox>
             </Grid>
 
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsBusy}" />
-                <TextBlock
-                    x:Uid="FilesPage_StatusText"
-                    VerticalAlignment="Center"
-                    Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button
-                        x:Uid="FilesPage_PreviousPageButton"
-                        Command="{x:Bind ViewModel.PreviousPageCommand}" />
-                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <controls:NumberBox
+        <toolkit:WrapPanel Spacing="8" VerticalAlignment="Center">
+            <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsBusy}" />
+            <TextBlock
+                x:Uid="FilesPage_StatusText"
+                VerticalAlignment="Center"
+                Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+            <toolkit:WrapPanel Spacing="8" VerticalAlignment="Center">
+                <Button
+                    x:Uid="FilesPage_PreviousPageButton"
+                    Command="{x:Bind ViewModel.PreviousPageCommand}" />
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <controls:NumberBox
                             x:Uid="FilesPage_PageNumberBox"
                             Width="80"
                             HorizontalAlignment="Left"
@@ -81,25 +82,25 @@
                     <Button
                         x:Uid="FilesPage_NextPageButton"
                         Command="{x:Bind ViewModel.NextPageCommand}" />
+            </toolkit:WrapPanel>
+            <toolkit:WrapPanel Spacing="4" VerticalAlignment="Center">
+                <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" />
+                <ComboBox
+                    x:Uid="FilesPage_PageSizeComboBox"
+                    Width="90"
+                    HorizontalAlignment="Left"
+                    ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
+            </toolkit:WrapPanel>
+            <Button x:Uid="FilesPage_DeleteAllButton" HorizontalAlignment="Right"
+                    Margin="8,0,0,0"
+                    Command="{Binding DeleteAllCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;"/>
+                    <TextBlock x:Uid="FilesPage_DeleteAllButtonText" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock x:Uid="FilesPage_PageSizeLabel" VerticalAlignment="Center" />
-                    <ComboBox
-                        x:Uid="FilesPage_PageSizeComboBox"
-                        Width="90"
-                        HorizontalAlignment="Left"
-                        ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
-                        SelectedItem="{x:Bind ViewModel.PageSize, Mode=TwoWay}" />
-                </StackPanel>
-                <Button x:Uid="FilesPage_DeleteAllButton" HorizontalAlignment="Right"
-                        Margin="8,0,0,0"
-                        Command="{Binding DeleteAllCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74D;"/>
-                        <TextBlock x:Uid="FilesPage_DeleteAllButtonText" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
+            </Button>
+        </toolkit:WrapPanel>
             <controls:InfoBar
                 x:Uid="FilesPage_IndexingInfoBar"
                 IsClosable="False"
